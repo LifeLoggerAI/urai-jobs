@@ -7,6 +7,7 @@
   packages = [
     pkgs.nodejs_22  # Using Node.js 22 as specified in urai-jobs-codebase/package.json
     pkgs.nodePackages.genkit
+    pkgs.firebase-tools # Added for Firebase CLI commands
   ];
   # Sets environment variables in the workspace
   env = {
