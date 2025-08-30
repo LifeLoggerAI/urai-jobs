@@ -1,0 +1,55 @@
+type Company @table {
+  companyName: String!
+  industry: String!
+  createdAt: Timestamp!
+  isActive: Boolean!
+  contactPersonName: String
+  contactEmail: String
+  contactPhone: String
+  description: String
+  websiteURL: String
+  logoURL: String
+}
+
+type ProductService @table {
+  company: Company!
+  name: String!
+  type: String!
+  price: Float!
+  createdAt: Timestamp!
+  description: String
+  SKU: String
+  imageUrl: String
+  availabilityStatus: String
+}
+
+type Order @table {
+  buyerCompany: Company!
+  sellerCompany: Company!
+  orderDate: Date!
+  status: String!
+  totalAmount: Float!
+  createdAt: Timestamp!
+  shippingAddress: String
+  billingAddress: String
+  notes: String
+}
+
+type OrderItem @table {
+  order: Order!
+  productService: ProductService!
+  quantity: Int!
+  unitPrice: Float!
+  createdAt: Timestamp!
+  itemDescription: String
+}
+
+type Message @table {
+  senderCompany: Company!
+  receiverCompany: Company!
+  subject: String!
+  body: String!
+  sentAt: Timestamp!
+  isRead: Boolean!
+  parentMessage: Message
+}

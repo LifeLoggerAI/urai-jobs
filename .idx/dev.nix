@@ -5,48 +5,36 @@
   channel = "stable-24.05"; # or "unstable"
   # Use https://search.nixos.org/packages to find packages
   packages = [
-    # pkgs.go
-    # pkgs.python311
-    # pkgs.python311Packages.pip
-    # pkgs.nodejs_20
-    # pkgs.nodePackages.nodemon
+    pkgs.nodejs_22  # Using Node.js 22 as specified in urai-jobs-codebase/package.json
+    pkgs.nodePackages.genkit
   ];
   # Sets environment variables in the workspace
-  env = {};
+  env = {
+    # Replace with your Google Cloud project ID
+    GCLOUD_PROJECT = "your-gcloud-project-id";
+    # Replace with your actual API key or secret name in IDX
+    API_KEY = "your-api-key-secret";
+  };
   idx = {
     # Search for the extensions you want on https://open-vsx.org/ and use "publisher.id"
     extensions = [
-      # "vscodevim.vim"
+      "dbaeumer.vscode-eslint" # For linting TypeScript and JavaScript
     ];
     # Enable previews
     previews = {
       enable = true;
-      previews = {
-        # web = {
-        #   # Example: run "npm run dev" with PORT set to IDX's defined port for previews,
-        #   # and show it in IDX's web preview panel
-        #   command = ["npm" "run" "dev"];
-        #   manager = "web";
-        #   env = {
-        #     # Environment variables to set for your server
-        #     PORT = "$PORT";
-        #   };
-        # };
-      };
     };
     # Workspace lifecycle hooks
     workspace = {
       # Runs when a workspace is first created
       onCreate = {
-        # Example: install JS dependencies from NPM
-        # npm-install = "npm install";
-        # Open editors for the following files by default, if they exist:
-        default.openFiles = [ ".idx/dev.nix" "README.md" ];
+        # Install dependencies for both functions and urai-jobs-codebase
+        install-deps = "(cd functions && npm install) && (cd urai-jobs-codebase && npm install)";
       };
       # Runs when the workspace is (re)started
       onStart = {
-        # Example: start a background task to watch and re-build backend code
-        # watch-backend = "npm run watch-backend";
+        # Start the Genkit development server
+        genkit-start = "(cd urai-jobs-codebase && npm run genkit:start)";
       };
     };
   };

@@ -1,0 +1,1 @@
+{ "name":"functions","private":true,"engines":{"node":"20"},"main":"lib/index.js","scripts":{"build":"tsc -p ."},"dependencies":{"firebase-admin":"^12.5.0","firebase-functions":"^5.0.1"},"devDependencies":{"typescript":"^5.5.4"} }
