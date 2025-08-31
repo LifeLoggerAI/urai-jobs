@@ -1,0 +1,11 @@
+{
+  "javascript": ["js", "es6", "ecmascript"],
+  "react": ["react.js", "reactjs"],
+  "typescript": ["ts"],
+  "python": ["py"],
+  "pytorch": ["torch"],
+  "nlp": ["natural language processing"],
+  "aws": ["amazon web services"],
+  "gcp": ["google cloud platform"],
+  "nextjs": ["next.js"]
+}
