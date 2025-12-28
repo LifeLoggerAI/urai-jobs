@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "urai-4dc1d"
+    "default": "urai-jobs",
+    "staging": "urai-web-frontend",
+    "production": "urai-4dc1d"
   }
 }

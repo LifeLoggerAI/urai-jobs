@@ -1,0 +1,5 @@
+{
+  "schedules": [
+    { "id": "weekly_scroll", "type": "weekly-scroll-generate", "payload": {"userId": "demo"}, "nextRunAt": {"_ts": true}, "cron": "*/30 * * * *" }
+  ]
+}

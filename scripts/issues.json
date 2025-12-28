@@ -1,0 +1,12 @@
+[
+  {
+    "title": "Fix /home route (ensure app/home/page.tsx exists)",
+    "body": "- Confirm route exists\n- Ensure HomeView renders\n- Verify build + dev\n",
+    "labels": ["bug", "web"]
+  },
+  {
+    "title": "Add waitlist capture + email confirmation",
+    "body": "- /api/waitlist endpoint\n- Firestore write\n- Basic success UI\n",
+    "labels": ["feature", "launch"]
+  }
+]

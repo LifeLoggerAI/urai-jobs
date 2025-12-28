@@ -1,0 +1,52 @@
+{
+  "jobs": [
+    {
+      "id": "founding_frontend",
+      "title": "Founding Frontend Engineer (Next.js + Rive)",
+      "status": "open",
+      "team": "Engineering",
+      "location": "Remote",
+      "compensation": "$140k\u2013$200k + meaningful equity",
+      "createdAt": {
+        "_ts": true
+      },
+      "description": "Own the URAI HomeView, starfield Life Map, and cinematic UI. Ship pixel-perfect Next.js + Tailwind + Framer Motion + Rive."
+    },
+    {
+      "id": "founding_ml_engineer",
+      "title": "Founding ML Engineer (Forecast + Insight Graph)",
+      "status": "open",
+      "team": "AI/ML",
+      "location": "Remote",
+      "compensation": "$160k\u2013$230k + equity",
+      "createdAt": {
+        "_ts": true
+      },
+      "description": "Build the Emotion Forecast model, Cognitive Mirror signals, and passive insight engines."
+    },
+    {
+      "id": "rive_animator",
+      "title": "Realtime Animator / Rive Artist",
+      "status": "open",
+      "team": "Design",
+      "location": "Remote",
+      "compensation": "$90k\u2013$140k + equity",
+      "createdAt": {
+        "_ts": true
+      },
+      "description": "Craft mood-reactive particle systems and transitions in Rive/Lottie."
+    },
+    {
+      "id": "growth_lead",
+      "title": "Head of Growth (Creator + Community)",
+      "status": "open",
+      "team": "Growth",
+      "location": "Remote",
+      "compensation": "$120k\u2013$180k + equity",
+      "createdAt": {
+        "_ts": true
+      },
+      "description": "Own top-of-funnel, social/influencer ops, and referral flywheels."
+    }
+  ]
+}

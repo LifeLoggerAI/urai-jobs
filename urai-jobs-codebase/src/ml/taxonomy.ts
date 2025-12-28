@@ -1,7 +1,7 @@
 import * as taxonomyData from "./skills-taxonomy.json";
 import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
-import {firebase} from "@genkit-ai/firebase";
+import {getFirebaseStorage} from "@genkit-ai/firebase/storage";
 
 // Handle cases where the JSON is imported with a `default` property
 const taxonomy = (taxonomyData as any).default || taxonomyData;
@@ -48,7 +48,7 @@ export function extractSkills(text: string): string[] {
  * @return {Promise<string>} The text content of the file.
  */
 export async function readFileAsText(storagePath: string): Promise<string> {
-  const file = firebase.storage().bucket().file(storagePath);
+  const file = getFirebaseStorage().bucket().file(storagePath);
   const [buffer] = await file.download();
   const extension = storagePath.split(".").pop()?.toLowerCase();
 

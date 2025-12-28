@@ -1,24 +1,52 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow authenticated users to read/write their own user document
-    match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    function isAuth() {
+      return request.auth != null;
     }
 
-    // Deny all client read/write access to the 'leads' collection
-    match /leads/{id} {
-      allow read, write: if false;
+    function isUser(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+ 
+    function getRole() {
+      return request.auth.token.role;
     }
 
-    // Deny all client read/write access to the 'mail' collection
-    match /mail/{id} {
-      allow read, write: if false;
+    function isRole(role) {
+      return isAuth() && getRole() == role;
     }
 
-    // Default deny rule for all other collections
-    match /{document=**} {
-      allow read, write: if false;
+    function isOneOfRoles(roles) {
+      return isAuth() && getRole() in roles;
+    }
+
+    match /jobs/{jobId} {
+      allow read: if true;
+      allow write: if isOneOfRoles(['admin', 'recruiter']);
+    }
+
+    match /applications/{applicationId} {
+      allow read, update: if isOneOfRoles(['admin', 'recruiter']);
+      allow create: if isAuth();
+    }
+
+    match /companies/{companyId} {
+      allow read: if true;
+      allow write: if isOneOfRoles(['admin', 'recruiter']);
+    }
+
+    match /jobEvents/{eventId} {
+      allow read, write: if isRole('admin');
+    }
+
+    match /webhooks/{webhookId} {
+      allow read, write: if isRole('admin');
+    }
+
+    match /scheduledTasks/{taskId} {
+      allow read, write: if isRole('admin');
     }
   }
 }

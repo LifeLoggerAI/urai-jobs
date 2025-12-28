@@ -1,0 +1,22 @@
+name: deploy-urai-jobs
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "functions/**"
+      - "firestore.rules"
+      - "storage.rules"
+      - "firestore.indexes.json"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: cd functions && npm ci
+      - run: npm i -g firebase-tools
+      - run: firebase deploy --only functions,firestore:indexes,storage:rules,firestore:rules --project ${{ secrets.FB_PROJECT }}
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}

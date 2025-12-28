@@ -1,1 +1,23 @@
-{ "name":"functions","private":true,"engines":{"node":"20"},"main":"lib/index.js","scripts":{"build":"tsc -p ."},"dependencies":{"firebase-admin":"^12.5.0","firebase-functions":"^5.0.1"},"devDependencies":{"typescript":"^5.5.4"} }
+{
+  "name": "urai-jobs-functions",
+  "private": true,
+  "engines": {
+    "node": "20"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "serve": "firebase emulators:start",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "firebase-admin": "^12.5.0",
+    "firebase-functions": "^4.8.0",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "typescript": "^5.6.3"
+  }
+}

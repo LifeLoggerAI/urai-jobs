@@ -1,4 +1,5 @@
-import { gemini10Pro } from "@genkit-ai/googleai";
+import { geminiPro } from "@genkit-ai/googleai";
+import { generate } from '@genkit-ai/ai';
 import { extractSkills } from "../ml/taxonomy";
 import * as z from "zod";
 
@@ -10,8 +11,6 @@ const SalarySchema = z.object({
   max: z.number(),
   currency: z.string(),
 });
-type Salary = z.infer<typeof SalarySchema>;
-
 
 /**
  * Represents the response from the LLM.
@@ -31,7 +30,8 @@ type LLMResponse = z.infer<typeof LLMResponseSchema>;
  * @return {Promise<LLMResponse>} The response from the LLM.
  */
 async function callLLM(prompt: string): Promise<LLMResponse> {
-  const llmResponse = await gemini10Pro.generate({
+  const llmResponse = await generate({
+    model: geminiPro,
     prompt: prompt,
     output: { schema: LLMResponseSchema },
   });
