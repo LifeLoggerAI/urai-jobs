@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import { getFirestore, collection, addDoc, getDocs, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
-import { app } from '../../lib/firebase';
+import { app } from '../../../lib/firebase';
 export default function Campaigns(){
   const db = getFirestore(app);
   const [rows,setRows]=useState<any[]>([]);

@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import { getFirestore, collection, query, orderBy, getDocs } from 'firebase/firestore';
-import { app } from '../../lib/firebase';
+import { app } from '../../../lib/firebase';
 export default function Applications(){
   const [rows,setRows]=useState<any[]>([]);
   useEffect(()=>{(async()=>{const db=getFirestore(app);const q=query(collection(db,'applications'), orderBy('createdAt','desc'));const s=await getDocs(q);setRows(s.docs.map(d=>({id:d.id,...d.data()})));})()},[]);

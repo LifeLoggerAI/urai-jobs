@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import { getFirestore, collection, query, orderBy, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { app } from '../../lib/firebase';
+import { app } from '../../../lib/firebase';
 
 export default function AdminJobs() {
   const [jobs, setJobs] = useState<any[]>([]);

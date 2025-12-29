@@ -1,7 +1,7 @@
 'use client';
 import React, { useState } from 'react';
 import { getFirestore, collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { app } from '../../lib/firebase';
+import { app } from '../../../lib/firebase';
 export default function QueueAdmin(){
   const [type, setType] = useState('weekly-scroll-generate');
   const [payload, setPayload] = useState('{\n  \"userId\": \"demo\"\n}');
