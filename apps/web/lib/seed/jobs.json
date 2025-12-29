@@ -1,0 +1,28 @@
+
+[
+  {
+    "id": "send-follow-up-email",
+    "jobType": "email.send",
+    "cron": "0 9 * * *",
+    "retryPolicy": {
+      "maxAttempts": 3
+    }
+  },
+  {
+    "id": "generate-weekly-report",
+    "jobType": "reports.generate",
+    "cron": "0 0 * * 1"
+  },
+  {
+    "id": "sync-contacts",
+    "jobType": "crm.sync",
+    "cron": "*/30 * * * *"
+  },
+  {
+    "id": "resume-analysis-job",
+    "jobType": "resume.analysis",
+    "retryPolicy": {
+      "maxAttempts": 2
+    }
+  }
+]
