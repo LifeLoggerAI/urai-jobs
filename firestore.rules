@@ -1,25 +1,57 @@
+
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check for admin role
-    function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles.hasAny(['admin']);
+    // Security Functions
+    function isAppAdmin() {
+      return request.auth.token.admin == true;
     }
 
-    // Deny all reads and writes by default
+    function isJobOwner(jobId) {
+      return request.auth.uid == get(/databases/$(database)/documents/jobs/$(jobId)).data.createdBy.uid;
+    }
+
+    // Default deny all
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Allow admins to read the applications collection
-    match /applications/{applicationId} {
-      allow read: if isAdmin();
+    // Configuration is read-only for authenticated users, writable for admins
+    match /config/jobs {
+      allow read: if request.auth != null;
+      allow write: if isAppAdmin();
     }
 
-    // Allow anyone to read the jobs collection
+    // Jobs can be created by authenticated users.
+    // They can only be read by their creator or by an admin.
+    // They can only be updated/deleted by an admin.
     match /jobs/{jobId} {
-      allow read: if true;
+      allow create: if request.auth != null;
+      allow read: if isAppAdmin() || isJobOwner(jobId);
+      allow update, delete: if isAppAdmin();
+    }
+
+    // Job Runs can be created by the service.
+    // They can be read by admins.
+    match /jobRuns/{runId} {
+      allow create: if get(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.createdBy.uid == request.auth.uid; // Service account
+      allow read: if isAppAdmin();
+      allow update, delete: if false; // Immutable
+    }
+
+    // Audit logs are write-only for the service, and read-only for admins.
+    match /auditLogs/{logId} {
+        allow create: if request.auth.token.admin == true; // Functions are admin
+        allow read: if isAppAdmin();
+        allow update, delete: if false;
+    }
+
+    // Idempotency keys are write-only for the service.
+    match /idempotency/{key} {
+        allow create: if request.auth.token.admin == true; // Functions are admin
+        allow read, update, delete: if false;
     }
   }
 }
