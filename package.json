@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "node ./lib/seed/seed.js",
-    "test:rules": "firebase emulators:exec --only firestore \"./node_modules/mocha/bin/mocha --require ts-node/register --timeout 5000 functions/src/rules.test.ts\""
+    "test:rules": "firebase emulators:exec --only firestore \"../../node_modules/mocha/bin/mocha --require ts-node/register --timeout 5000 functions/src/rules.test.ts\"",
+    "postinstall": "node -e \"process.exit(process.env.SKIP_PRISMA==='1'?0:1)\" || prisma generate"
   },
   "dependencies": {
     "@google-cloud/vertexai": "^0.1.3",

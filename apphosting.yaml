@@ -1,0 +1,7 @@
+runConfig:
+  environmentVariables:
+    NODE_ENV: production
+
+buildConfig:
+  environmentVariables:
+    SKIP_PRISMA: "1"
