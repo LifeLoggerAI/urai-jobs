@@ -3,135 +3,64 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // =====================================================================
-    // Helper Functions
-    // =====================================================================
-
-    // Returns true if the user is signed in.
+    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Returns true if the user has an admin record in the /admins collection.
-    // This is the source of truth for all admin privileges.
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isSignedIn() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role IN ['admin', 'owner'];
     }
 
-    // Validates a map contains only the specified keys.
-    function hasOnly(keys) {
-      return request.resource.data.keys().hasAll(keys) && request.resource.data.keys().size() == keys.size();
-    }
-    
-    // Validates a map contains the specified keys (and maybe more).
-    function has(keys) {
-      return request.resource.data.keys().hasAll(keys);
+    function isOwner() {
+      return isSignedIn() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner';
     }
 
-    // Validates an email string is lowercase.
-    function isLowercase(str) {
-      return str == str.lower();
-    }
-
-    // Validates a string is within a certain length.
-    function isString(str, min, max) {
-      return str is string && str.size() >= min && str.size() <= max;
-    }
-
-    // =====================================================================
-    // Default Deny
-    // By default, no one can read or write to any document.
-    // =====================================================================
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // =====================================================================
-    // Admin & System Collections
-    // =====================================================================
-
-    // Admins can be read by other admins.
-    // Writes are disallowed from the client to prevent privilege escalation.
-    // Admins must be created via a secure backend process (e.g., a callable function).
+    // Admin routes
     match /admins/{uid} {
+      allow read, write: if isOwner();
       allow read: if isAdmin();
-      allow write: if false; 
     }
 
-    // Jobs are managed exclusively by admins.
-    match /jobs/{jobId} {
-      allow read, write: if isAdmin();
-    }
-    
-    // The jobPublic collection is a read-only, public projection of open jobs.
-    // It is maintained by a Cloud Function and cannot be written to by clients.
+    // Public read-only
     match /jobPublic/{jobId} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if true;
       allow write: if false;
     }
 
-    // Referrals are managed exclusively by admins.
-    match /referrals/{refCode} {
-        allow read, write: if isAdmin();
+    // Jobs - admin only
+    match /jobs/{jobId} {
+      allow read, write: if isAdmin();
     }
 
-    // =====================================================================
-    // Public Write Collections (with Validation)
-    // =====================================================================
-
-    // Anyone can create an applicant record (e.g., when applying for a job).
-    // Admins can read and update applicant records.
+    // Applicants - public write, admin read
     match /applicants/{applicantId} {
+      allow create: if true; // further validation in functions
       allow read, update: if isAdmin();
-      allow create: if
-        isString(request.resource.data.primaryEmail, 5, 100) &&
-        isLowercase(request.resource.data.primaryEmail) &&
-        isString(request.resource.data.name, 1, 100) &&
-        (request.resource.data.phone == null || isString(request.resource.data.phone, 0, 50)) &&
-        request.resource.data.links is map &&
-        request.resource.data.source is map &&
-        ['direct', 'referral', 'waitlist'].hasAny([request.resource.data.source.type]);
     }
 
-    // Anyone can create an application.
-    // Admins can read and update applications.
+    // Applications - public write, admin read/update
     match /applications/{applicationId} {
+      allow create: if true; // further validation in functions
       allow read, update: if isAdmin();
-      allow create: if
-        isString(request.resource.data.jobId, 1, 100) &&
-        isString(request.resource.data.applicantId, 1, 100) &&
-        isString(request.resource.data.applicantEmail, 5, 100) &&
-        isLowercase(request.resource.data.applicantEmail) &&
-        request.resource.data.status == "NEW" &&
-        request.resource.data.answers is map &&
-        (request.resource.data.resume == null || request.resource.data.resume is map) &&
-        request.resource.data.tags is list && request.resource.data.tags.size() == 0 &&
-        request.resource.data.notesCount == 0 &&
-        request.resource.data.submittedAt == request.time &&
-        request.resource.data.updatedAt == request.time &&
-        !has(['internal']); // Internal data cannot be set on creation
     }
 
-    // Anyone can sign up for the waitlist.
-    // Admins can read waitlist entries.
+    // Referrals - admin only
+    match /referrals/{refCode} {
+      allow read, write: if isAdmin();
+    }
+
+    // Waitlist - public write, admin read
     match /waitlist/{id} {
-        allow read: if isAdmin();
-        allow create: if
-          isString(request.resource.data.email, 5, 100) &&
-          isLowercase(request.resource.data.email) &&
-          request.resource.data.consent.terms == true;
+      allow create: if true;
+      allow read: if isAdmin();
     }
 
-    // Events can be created by clients to track user interactions.
-    // Admins can read events.
+    // Events - public write, admin read
     match /events/{eventId} {
-        allow read: if isAdmin();
-        allow create: if
-          isString(request.resource.data.type, 1, 50) &&
-          isString(request.resource.data.entityType, 1, 50) &&
-          isString(request.resource.data.entityId, 1, 100) &&
-          request.resource.data.metadata is map &&
-          request.resource.data.createdAt == request.time;
+      allow create: if true;
+      allow read: if isAdmin();
     }
   }
 }

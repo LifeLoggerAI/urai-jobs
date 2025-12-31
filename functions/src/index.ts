@@ -1,17 +1,15 @@
-import * as admin from "firebase-admin";
+import { adminSetApplicationStatus } from "./callables/adminSetApplicationStatus";
+import { createResumeUpload } from "./callables/createResumeUpload";
+import { health } from "./http/health";
+import { dailyDigest } from "./scheduled/dailyDigest";
+import { onApplicationCreate } from "./triggers/onApplicationCreate";
+import { onJobWrite } from "./triggers/onJobWrite";
 
-admin.initializeApp();
-
-// Triggers
-export * from "./triggers/onJobWrite";
-export * from "./triggers/onApplicationCreate";
-
-// Callables
-export * from "./callables/createResumeUpload";
-export * from "./callables/adminSetApplicationStatus";
-
-// Scheduled
-export * from "./scheduled/dailyDigest";
-
-// HTTP
-export * from "./http/health";
+export {
+  adminSetApplicationStatus,
+  createResumeUpload,
+  health,
+  dailyDigest,
+  onApplicationCreate,
+  onJobWrite,
+};

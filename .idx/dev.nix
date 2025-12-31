@@ -2,7 +2,7 @@
   pkgs, ...
 }: {
   # Which nixpkgs channel to use.
-  channel = "stable-23.11"; # or "unstable"
+  channel = "stable-24.05"; # or "unstable"
 
   # Collection of packages that will be installed
   # in your environment.
