@@ -1,64 +1,74 @@
 # URAI-Jobs
 
-This project is a hiring, applicant tracking, waitlist, and referrals system for URAI Labs / URAI.
+A full-stack hiring and applicant tracking system built with Firebase.
+
+## Project Overview
+
+This project provides a complete solution for managing job openings, accepting applications, and tracking candidates through the hiring process. It includes a public-facing job board, a private admin console, and a secure backend built with Cloud Functions and Firestore.
+
+## Features
+
+- **Job Board:** A public-facing list of open positions.
+- **Application Form:** A simple and user-friendly application form with resume upload.
+- **Admin Console:** A protected area for managing jobs, applicants, and applications.
+- **Secure Backend:** Cloud Functions and Firestore are used to provide a secure and scalable backend.
+- **Automated Workflows:** Cloud Functions are used to automate tasks such as creating public job postings and sending notifications.
 
 ## Local Setup
 
-1.  **Install Dependencies:**
+1. **Clone the repository:**
 
-    ```bash
-    npm install
-    cd functions && npm install && cd ..
-    cd web && npm install && cd ..
-    ```
+   ```bash
+   git clone <repository-url>
+   ```
 
-2.  **Set up Firebase Emulators:**
+2. **Install dependencies:**
 
-    Make sure you have the Firebase CLI installed. If not, run:
+   ```bash
+   npm install
+   ```
 
-    ```bash
-    npm install -g firebase-tools
-    ```
+3. **Set up Firebase:**
 
-    Then, set up the emulators:
+   - Create a new Firebase project.
+   - Copy `.firebaserc.example` to `.firebaserc` and replace `your-project-id` with your Firebase project ID.
 
-    ```bash
-    firebase setup:emulators:firestore
-    firebase setup:emulators:storage
-    firebase setup:emulators:auth
-    firebase setup:emulators:functions
-    ```
+## Running the Emulators
 
-## Running the Project
+To run the Firebase emulators, use the following command:
 
-1.  **Start the Emulators:**
+```bash
+npm run emulators
+```
 
-    ```bash
-    firebase emulators:start
-    ```
+This will start the Firestore, Functions, and Hosting emulators.
 
-2.  **Run the Seed Script:**
+## Seeding the Database
 
-    In a new terminal, run:
+To seed the database with sample data, use the following command:
 
-    ```bash
-    npm run seed
-    ```
+```bash
+npm run seed
+```
 
-3.  **Start the Web Server:**
+This will populate the Firestore database with a set of jobs, applicants, applications, referral codes, and waitlist entries.
 
-    In another new terminal, run:
+## Running the Web App
 
-    ```bash
-    cd web && npm run dev
-    ```
+To run the web app in development mode, use the following command:
 
-    The application will be available at `http://localhost:5173`.
+```bash
+npm run dev
+```
 
-## Deployment
+This will start the Vite development server and the Firebase emulators.
 
-To deploy the project to Firebase, run:
+## Deploying the Application
+
+To deploy the application to Firebase, use the following command:
 
 ```bash
 firebase deploy
 ```
+
+This will deploy the Hosting, Functions, and Firestore rules to your Firebase project.

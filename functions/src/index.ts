@@ -1,17 +1,17 @@
-import * as admin from "firebase-admin";
+import {initializeApp} from "firebase-admin/app";
 
-admin.initializeApp();
+initializeApp();
 
-// Callable Functions
-export { createResumeUpload } from "./callable/createResumeUpload";
-export { adminSetApplicationStatus } from "./callable/adminSetApplicationStatus";
+// Triggers
+export {onJobWrite} from "./triggers/onJobWrite";
+export {onApplicationCreate} from "./triggers/onApplicationCreate";
 
-// HTTP Functions
-export { health } from "./http/health";
+// Callable
+export {createResumeUpload} from "./callable/createResumeUpload";
+export {adminSetApplicationStatus} from "./callable/adminSetApplicationStatus";
 
-// Scheduled Functions
-export { scheduledDailyDigest } from "./scheduled/dailyDigest";
+// Scheduled
+export {dailyDigest} from "./scheduled/dailyDigest";
 
-// Firestore Triggers
-export { onJobWrite } from "./triggers/onJobWrite";
-export { onApplicationCreate } from "./triggers/onApplicationCreate";
+// HTTP
+export {health} from "./http/health";

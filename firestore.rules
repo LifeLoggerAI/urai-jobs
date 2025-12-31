@@ -3,71 +3,85 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper Functions
+    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
     function isAdmin() {
-      return isSignedIn() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ['admin', 'owner'];
+      return isSignedIn() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ['owner', 'admin'];
     }
 
-    function hasOnly(keys) {
-      return request.resource.data.keys().hasOnly(keys);
+    function isReviewer() {
+        return isSignedIn() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ['owner', 'admin', 'reviewer'];
     }
 
-    // Admins: Only other admins can see who is an admin. Only owners can add/remove admins.
-    match /admins/{uid} {
-      allow read: if isAdmin();
-      allow write: if get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner';
+    function isOwner() {
+        return isSignedIn() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner';
     }
 
-    // Jobs: Publicly readable projection, admin-only write.
+    //
+    // Public collections
+    //
+    match /jobPublic/{jobId} {
+      allow get: if true;
+      allow list: if true;
+      allow write: if false;
+    }
+
+    match /waitlist/{waitlistId} {
+      allow read: if isReviewer();
+      allow create: if request.resource.data.email.matches('^[^@]+@[^@]+\.[^@]+$')
+                      && request.resource.data.consent.terms == true
+                      && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /events/{eventId} {
+      allow read: if isReviewer();
+      allow create: if true; // Simple for now, can be tightened
+      allow update, delete: if false;
+    }
+
+
+    //
+    // Application process (public write, admin read)
+    //
+    match /applicants/{applicantId} {
+      allow read, update, delete: if isReviewer();
+      // Allow creation with some basic validation
+      allow create: if request.resource.data.primaryEmail.matches('^[^@]+@[^@]+\.[^@]+$')
+                      && request.resource.data.name is string
+                      && request.resource.data.name.size() < 100
+                      && request.resource.data.createdAt == request.time;
+    }
+
+    match /applications/{applicationId} {
+      allow read, update, delete: if isReviewer();
+      allow create: if request.resource.data.jobId is string
+                      && request.resource.data.applicantEmail.matches('^[^@]+@[^@]+\.[^@]+$')
+                      && request.resource.data.submittedAt == request.time;
+    }
+
+    //
+    // Admin-only collections
+    //
     match /jobs/{jobId} {
       allow read, write: if isAdmin();
     }
 
-    match /jobPublic/{jobId} {
-      allow read: if true;
-      allow write: if false; // Managed by Cloud Function
-    }
-
-    // Applicants: Write-only for creates, admin-only for reads/updates.
-    match /applicants/{applicantId} {
-      allow read, update: if isAdmin();
-      allow create: if request.resource.data.primaryEmail.toLowerCase() == request.resource.data.primaryEmail; // Enforce lowercase email
-    }
-
-    // Applications: Write-only for creates, admin-only for reads/updates.
-    match /applications/{applicationId} {
-      allow read, update: if isAdmin();
-      allow create: if hasOnly(['jobId', 'applicantId', 'applicantEmail', 'answers', 'resume', 'source']) && request.resource.data.applicantEmail.toLowerCase() == request.resource.data.applicantEmail;
-    }
-
-    // Referrals: Readable by admins, writable only by admins
     match /referrals/{refCode} {
-        allow read, write: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
-    // Waitlist: Write-only for creates, admin-only for reads.
-    match /waitlist/{id} {
-      allow read: if isAdmin();
-      allow create: if request.resource.data.email.toLowerCase() == request.resource.data.email;
+    match /admins/{uid} {
+      allow read: if isReviewer();
+      // Only owners can create/update admins, but cannot delete themselves.
+      allow write: if isOwner() && request.auth.uid != uid;
+      allow create: if isOwner();
     }
 
-    // Events: Write-only for creates, admin-only for reads.
-    match /events/{eventId} {
-      allow read: if isAdmin();
-      allow create: if true;
-    }
-
-    // Digests: Admin-only read
-    match /digests/{digestId} {
-        allow read: if isAdmin();
-        allow write: if false; // Managed by Cloud Function
-    }
-
-    // Default deny
+    // Default deny all other access
     match /{document=**} {
       allow read, write: if false;
     }

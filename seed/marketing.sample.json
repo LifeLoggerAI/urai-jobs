@@ -1,8 +1,0 @@
-{
-  "marketing_campaigns": [
-    { "id": "launch_001", "subject": "URAI is live — your emotional OS", "html": "<h1>URAI</h1><p>We’re launching worldwide.</p>", "emails": ["friend@example.com", "ally@example.com"] }
-  ],
-  "marketing_recipients": [
-    { "id": "ally@example.com", "email": "ally@example.com", "tags": ["press", "beta"] }
-  ]
-}
