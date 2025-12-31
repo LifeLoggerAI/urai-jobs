@@ -1,46 +1,62 @@
+{
+  pkgs, ...
+}: {
+  # Which nixpkgs channel to use.
+  channel = "stable-23.11"; # or "unstable"
 
-# .idx/dev.nix
-#
-# This file defines the development environment for the urai-jobs project.
-# It ensures that all developers have the same versions of tools and packages,
-# leading to a consistent and reproducible setup.
-#
-# For more information, see: https://firebase.google.com/docs/studio/customize-environment
-{ pkgs, ... }: {
-  # Specifies the Nix channel to use. 'stable-24.05' provides a recent,
-  # stable set of packages.
-  channel = "stable-24.05";
-
-  # A list of packages to install in the environment.
+  # Collection of packages that will be installed
+  # in your environment.
   packages = [
-    # The project's package.json specifies Node.js v22. This ensures the
-    # environment matches the requirement.
-    pkgs.nodejs_22
-
-    # The project uses pnpm for package management.
-    pkgs.pnpm
-
-    # The Firebase CLI is essential for deploying and managing the project.
+    pkgs.nodejs_20
     pkgs.firebase-tools
-
-    # The Google Cloud CLI is used for authentication, especially for
-    # Application Default Credentials (ADC).
-    pkgs.gcloud
+    pkgs.google-cloud-sdk
   ];
 
-  # Workspace lifecycle hooks.
-  idx = {
-    workspace = {
-      # Runs when the workspace is first created.
-      onCreate = {
-        # Installs all dependencies across the monorepo.
-        install-deps = "pnpm install -w";
-      };
-      # Runs every time the workspace is (re)started.
-      onStart = {
-        # Provides a hint to the user on how to log in for ADC.
-        login-prompt = "echo \"Run 'gcloud auth application-default login' if you need to re-authenticate.\"";
-      };
+  # Collection of environment variables that will be
+  # available in your shell.
+  env = {};
+
+  # VS Code extensions that will be automatically installed.
+  idx.extensions = [
+    "dbaeumer.vscode-eslint"
+    "esbenp.prettier-vscode"
+  ];
+
+  # Defines the workspace lifecycle hooks.
+  idx.workspace = {
+    # Runs when a workspace is first created.
+    onCreate = {
+      install-deps = "npm install";
+    };
+
+    # Runs every time the workspace is (re)started.
+    onStart = {
+      # start-dev-server = "npm run dev";
     };
   };
+
+  # Defines a preview of your application.
+  idx.previews = {
+    enable = true;
+    previews = [
+      {
+        # The name that will be displayed in the web preview
+        # anme = "Web";
+        # The command that will be run to start your application
+        command = ["npm" "run" "dev"];
+        # Whether to keep the process running after the initial startup
+        # has completed. This is useful for servers and other
+        # long-running processes.
+        # keep_alive = true;
+        # The directory that will be used as the root of the
+        # web server. This is useful for static sites.
+        # root = "dist";
+        manager = "web";
+      }
+    ];
+  };
+
+  # The list of ports that should be exposed to the
+  # internet.
+  # ports = [];
 }

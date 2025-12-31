@@ -1,12 +1,35 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    match /job-payloads/{file=**} {
-      allow read, write: if request.auth.token.admin == true;
+
+    // By default, deny all reads and writes.
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
-    match /job-logs/{file=**} {
+
+    // Resumes are stored in a path scoped by applicant and application ID.
+    // e.g., /resumes/USER_ID_123/APP_ID_456/resume.pdf
+    match /resumes/{applicantId}/{applicationId}/{fileName} {
+
+      // WRITE access is granted to the authenticated user who is the applicant.
+      // This rule validates:
+      // 1. The user is signed in.
+      // 2. The user's UID matches the applicantId in the path.
+      // 3. The file is a valid document type (PDF, DOC, DOCX).
+      // 4. The file size is under the 10MB limit.
+      allow write: if request.auth != null
+                    && request.auth.uid == applicantId
+                    && (
+                      request.resource.contentType == 'application/pdf' ||
+                      request.resource.contentType == 'application/msword' ||
+                      request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                    )
+                    && request.resource.size < 10 * 1024 * 1024; // 10MB
+
+      // READ access is granted only to users with an admin custom claim.
+      // This ensures applicant resumes remain private and secure.
       allow read: if request.auth.token.admin == true;
-      allow write: if request.time < timestamp.date(9999, 1, 1);
     }
   }
 }
