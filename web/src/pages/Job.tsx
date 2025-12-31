@@ -1,16 +1,15 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
 
-const Apply: React.FC = () => {
+const Job: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
 
   return (
     <div>
-      <h1>Apply for Job</h1>
+      <h1>Job Details</h1>
       <p>Job ID: {jobId}</p>
-      {/* Add application form here */}
     </div>
   );
 };
 
-export default Apply;
+export default Job;

@@ -1,8 +1,7 @@
-import { useParams } from 'react-router-dom';
+import React from 'react';
 
-function JobDetail() {
-  const { jobId } = useParams();
-  return <h1>Job Detail for {jobId}</h1>;
-}
+const JobDetail: React.FC = () => {
+  return <div>Job Detail Page</div>;
+};
 
 export default JobDetail;

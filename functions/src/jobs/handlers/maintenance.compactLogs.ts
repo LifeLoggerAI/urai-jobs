@@ -1,60 +1,49 @@
 
-import { z } from 'zod';
-import * as admin from 'firebase-admin';
-import * as functions from 'firebase-functions';
+import {z} from "zod";
+import * as admin from "firebase-admin";
+import {Timestamp} from "firebase-admin/firestore";
+import {logger} from "firebase-functions";
+import {Handler} from "../../../types";
 
-const CompactLogsPayload = z.object({
-  jobRunsDaysToKeep: z.number().int().min(1).optional(),
-  auditLogsDaysToKeep: z.number().int().min(1).optional(),
+const CompactLogsPayloadSchema = z.object({
+  daysToKeep: z.number().int().min(1).default(30),
+  batchSize: z.number().int().min(1).max(500).default(100),
 });
 
-export const maintenanceCompactLogs = async (payload: unknown) => {
-  const validation = CompactLogsPayload.safeParse(payload);
-  if (!validation.success) {
-    throw new Error(`Invalid payload: ${validation.error.message}`);
+export const compactLogs: Handler = async (payload) => {
+  const {daysToKeep, batchSize} = CompactLogsPayloadSchema.parse(payload);
+  const cutoff = Timestamp.fromMillis(Date.now() - daysToKeep * 24 * 60 * 60 * 1000);
+
+  let deletedCount = 0;
+  let batches = 0;
+
+  const collections = ["jobRuns", "auditLogs"];
+
+  for (const collection of collections) {
+    while (true) {
+      const query = admin.firestore().collection(collection)
+          .where("at", "<", cutoff)
+          .limit(batchSize);
+
+      const snap = await query.get();
+      if (snap.empty) {
+        break;
+      }
+
+      const batch = admin.firestore().batch();
+      snap.docs.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+
+      deletedCount += snap.size;
+      batches++;
+
+      if (snap.size < batchSize) {
+        break; // Last batch for this collection
+      }
+    }
   }
 
-  const { jobRunsDaysToKeep = 30, auditLogsDaysToKeep = 90 } = validation.data;
-  const now = new Date();
-
-  let deletedJobRuns = 0;
-  let deletedAuditLogs = 0;
-
-  // Compact Job Runs
-  const jobRunsCutoff = new Date(now.setDate(now.getDate() - jobRunsDaysToKeep));
-  const oldJobRuns = await admin.firestore().collection('jobRuns')
-    .where('endedAt', '<', jobRunsCutoff)
-    .limit(500) // Process in batches to avoid high memory usage
-    .get();
-
-  if (!oldJobRuns.empty) {
-    const batch = admin.firestore().batch();
-    oldJobRuns.docs.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-    deletedJobRuns = oldJobRuns.size;
-    functions.logger.info(`Deleted ${deletedJobRuns} old job runs.`);
-  }
-
-  // Compact Audit Logs
-  const auditLogsCutoff = new Date(now.setDate(now.getDate() - auditLogsDaysToKeep));
-  const oldAuditLogs = await admin.firestore().collection('auditLogs')
-    .where('at', '<', auditLogsCutoff)
-    .limit(500)
-    .get();
-
-  if (!oldAuditLogs.empty) {
-    const batch = admin.firestore().batch();
-    oldAuditLogs.docs.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-    deletedAuditLogs = oldAuditLogs.size;
-    functions.logger.info(`Deleted ${deletedAuditLogs} old audit logs.`);
-  }
-
-  return {
-    success: true,
-    deleted: {
-      jobRuns: deletedJobRuns,
-      auditLogs: deletedAuditLogs,
-    },
-  };
+  const result = {deletedCount, batches, daysToKeep};
+  logger.info("Log compaction complete", result);
+  return result;
 };

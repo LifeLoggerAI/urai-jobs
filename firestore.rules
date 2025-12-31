@@ -3,64 +3,73 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // Helper Functions
     function isSignedIn() {
       return request.auth != null;
     }
 
     function isAdmin() {
-      return isSignedIn() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role IN ['admin', 'owner'];
+      return isSignedIn() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ['admin', 'owner'];
     }
 
-    function isOwner() {
-      return isSignedIn() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner';
+    function hasOnly(keys) {
+      return request.resource.data.keys().hasOnly(keys);
     }
 
-    // Admin routes
+    // Admins: Only other admins can see who is an admin. Only owners can add/remove admins.
     match /admins/{uid} {
-      allow read, write: if isOwner();
       allow read: if isAdmin();
+      allow write: if get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner';
     }
 
-    // Public read-only
-    match /jobPublic/{jobId} {
-      allow get: if true;
-      allow list: if true;
-      allow write: if false;
-    }
-
-    // Jobs - admin only
+    // Jobs: Publicly readable projection, admin-only write.
     match /jobs/{jobId} {
       allow read, write: if isAdmin();
     }
 
-    // Applicants - public write, admin read
+    match /jobPublic/{jobId} {
+      allow read: if true;
+      allow write: if false; // Managed by Cloud Function
+    }
+
+    // Applicants: Write-only for creates, admin-only for reads/updates.
     match /applicants/{applicantId} {
-      allow create: if request.resource.data.primaryEmail == request.auth.token.email;
       allow read, update: if isAdmin();
+      allow create: if request.resource.data.primaryEmail.toLowerCase() == request.resource.data.primaryEmail; // Enforce lowercase email
     }
 
-    // Applications - public write, admin read/update
+    // Applications: Write-only for creates, admin-only for reads/updates.
     match /applications/{applicationId} {
-      allow create: if request.resource.data.applicantEmail == request.auth.token.email;
       allow read, update: if isAdmin();
+      allow create: if hasOnly(['jobId', 'applicantId', 'applicantEmail', 'answers', 'resume', 'source']) && request.resource.data.applicantEmail.toLowerCase() == request.resource.data.applicantEmail;
     }
 
-    // Referrals - admin only
+    // Referrals: Readable by admins, writable only by admins
     match /referrals/{refCode} {
-      allow read, write: if isAdmin();
+        allow read, write: if isAdmin();
     }
 
-    // Waitlist - public write, admin read
+    // Waitlist: Write-only for creates, admin-only for reads.
     match /waitlist/{id} {
-      allow create: if isSignedIn();
       allow read: if isAdmin();
+      allow create: if request.resource.data.email.toLowerCase() == request.resource.data.email;
     }
 
-    // Events - public write, admin read
+    // Events: Write-only for creates, admin-only for reads.
     match /events/{eventId} {
-      allow create: if true;
       allow read: if isAdmin();
+      allow create: if true;
+    }
+
+    // Digests: Admin-only read
+    match /digests/{digestId} {
+        allow read: if isAdmin();
+        allow write: if false; // Managed by Cloud Function
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

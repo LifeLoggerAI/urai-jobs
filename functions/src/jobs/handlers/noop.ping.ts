@@ -1,15 +1,10 @@
 
-import { z } from 'zod';
+import {z} from "zod";
+import {Handler} from "../../../types";
 
-const PingPayload = z.object({
-  message: z.string().optional(),
-});
+const PingPayloadSchema = z.object({});
 
-export const noopPing = async (payload: unknown) => {
-  const validation = PingPayload.safeParse(payload);
-  if (!validation.success) {
-    throw new Error(`Invalid payload: ${validation.error.message}`);
-  }
-
-  return { pong: true, received: validation.data.message || 'pong' };
+export const ping: Handler = async (payload) => {
+  PingPayloadSchema.parse(payload);
+  return {pong: true, received: payload};
 };

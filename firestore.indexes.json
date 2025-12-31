@@ -91,6 +91,16 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "applicants",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "primaryEmail",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

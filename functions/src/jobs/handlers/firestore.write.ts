@@ -1,31 +1,32 @@
 
-import { z } from 'zod';
-import * as admin from 'firebase-admin';
-import { Job } from '../../types';
+import {z} from "zod";
+import * as admin from "firebase-admin";
+import {FieldValue} from "firebase-admin/firestore";
+import {Handler} from "../../../types";
 
-const FirestoreWritePayload = z.object({
-  path: z.string().min(1),
-  data: z.object({}).passthrough(),
-  options: z.object({ merge: z.boolean().optional() }).optional(),
+const FirestoreWritePayloadSchema = z.object({
+  path: z.string(),
+  data: z.record(z.unknown()),
+  options: z.object({merge: z.boolean().optional()}).optional(),
 });
 
-export const firestoreWrite = async (payload: unknown, job: Job) => {
-  // Security check: Only admins should be able to run this.
-  if (!job.createdBy?.uid || !job.createdBy.uid.startsWith('admin:')) {
-      const user = await admin.auth().getUser(job.createdBy.uid!)
-      if(!user.customClaims?.admin) {
-          throw new Error('Permission denied: firestore.write can only be triggered by an admin.');
-      }
+export const firestoreWrite: Handler = async (payload, job) => {
+  const {path, data, options} = FirestoreWritePayloadSchema.parse(payload);
+
+  // Security: You might want to add allow-listing of paths here
+  // based on job creator or other criteria.
+  if (job.createdBy.uid) {
+    // Can add user-specific logic here
   }
 
-  const validation = FirestoreWritePayload.safeParse(payload);
-  if (!validation.success) {
-    throw new Error(`Invalid payload: ${validation.error.message}`);
-  }
+  const docRef = admin.firestore().doc(path);
+  const writeData = {
+    ...data,
+    _updatedAt: FieldValue.serverTimestamp(),
+    _updatedByJob: job.id,
+  };
 
-  const { path, data, options } = validation.data;
+  await docRef.set(writeData, {merge: options?.merge || false});
 
-  await admin.firestore().doc(path).set(data, { merge: options?.merge === true });
-
-  return { success: true, path, data };
+  return {success: true, path, data: writeData};
 };

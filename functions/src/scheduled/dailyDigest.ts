@@ -1,38 +1,43 @@
 import * as functions from "firebase-functions";
-import { firestore } from "firebase-admin";
-import {FieldValue} from "firebase-admin/firestore";
+import * as admin from "firebase-admin";
 
-export const dailyDigest = functions.pubsub.schedule("every 24 hours").onRun(async (context) => {
+const db = admin.firestore();
+
+export const scheduledDailyDigest = functions.pubsub.schedule("every 24 hours").onRun(async (context) => {
   const now = new Date();
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const yyyymmdd = now.toISOString().slice(0, 10);
 
-  const newApplications = await firestore()
+  const twentyFourHoursAgo = admin.firestore.Timestamp.fromMillis(
+    now.getTime() - 24 * 60 * 60 * 1000
+  );
+
+  const newApplications = await db
     .collection("applications")
-    .where("submittedAt", ">=", yesterday)
+    .where("submittedAt", ">=", twentyFourHoursAgo)
     .get();
 
-  const jobs = await firestore().collection("jobs").get();
-  const jobsById = new Map(jobs.docs.map(doc => [doc.id, doc.data()]));
+  const pendingApplications = await db
+    .collection("applications")
+    .where("status", "in", ["NEW", "SCREEN"])
+    .get();
 
-  const summary = newApplications.docs.map(doc => {
-    const app = doc.data();
-    const job = jobsById.get(app.jobId);
-    return {
-      applicationId: doc.id,
-      applicantEmail: app.applicantEmail,
-      jobTitle: job?.title,
-      submittedAt: app.submittedAt.toDate().toISOString(),
-    };
-  });
+  const jobs = await db.collection("jobs").get();
+  const topJobs = jobs.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .sort((a, b) => (b.stats?.applicantsCount || 0) - (a.stats?.applicantsCount || 0))
+    .slice(0, 5);
 
-  if (summary.length > 0) {
-    const webhookUrl = functions.config().digest.webhook_url;
-    if (webhookUrl) {
-      await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ summary }),
-      });
-    }
-  }
+  const digest = {
+    date: yyyymmdd,
+    newApplications: newApplications.size,
+    pendingApplications: pendingApplications.size,
+    topJobs: topJobs.map((job) => ({ 
+      id: job.id, 
+      title: job.title,
+      applicantsCount: job.stats?.applicantsCount || 0
+    })),
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  await db.collection("digests").doc(yyyymmdd).set(digest);
 });

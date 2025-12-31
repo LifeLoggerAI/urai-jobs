@@ -1,106 +1,132 @@
 
-import {z} from "zod";
-import {Timestamp} from "firebase-admin/firestore";
+import { z } from 'zod';
 
-// Shared Schemas
-export const JobStatusSchema = z.enum([
-  "queued",
-  "running",
-  "succeeded",
-  "failed",
-  "canceled",
-  "dead",
-]);
-export type JobStatus = z.infer<typeof JobStatusSchema>;
-
-export const CreatedBySchema = z.object({
-  uid: z.string().optional(),
-  service: z.string().optional(),
+// C7: admins/{uid}
+export const AdminDataSchema = z.object({
+  role: z.enum(['owner', 'admin', 'reviewer']),
+  createdAt: z.any(), // server timestamp
 });
+export type AdminData = z.infer<typeof AdminDataSchema>;
 
-export const ErrorSchema = z.object({
-  message: z.string(),
-  code: z.string().optional(),
-  stack: z.string().optional(),
-  at: z.custom<Timestamp>(),
+// C1: jobs/{jobId}
+export const JobDataSchema = z.object({
+  title: z.string().min(1).max(100),
+  department: z.string().min(1).max(100),
+  locationType: z.enum(['remote', 'hybrid', 'onsite']),
+  locationText: z.string().min(1).max(100),
+  employmentType: z.enum(['full_time', 'part_time', 'contract', 'intern']),
+  descriptionMarkdown: z.string().min(1).max(5000),
+  requirements: z.array(z.string().max(200)).max(20),
+  niceToHave: z.array(z.string().max(200)).max(20),
+  compensationRange: z.object({
+    min: z.number().optional(),
+    max: z.number().optional(),
+    currency: z.string().optional(),
+  }).optional(),
+  status: z.enum(['draft', 'open', 'paused', 'closed']),
+  createdBy: z.string(), // UID
+  createdAt: z.any(), // server timestamp
+  updatedAt: z.any(), // server timestamp
 });
+export type JobData = z.infer<typeof JobDataSchema>;
 
-export const LockSchema = z.object({
-  owner: z.string(),
-  expiresAt: z.custom<Timestamp>(),
-});
+// C2: jobPublic/{jobId}
+// This is a projection of JobData, so no schema needed for validation here.
+// We'll define the type for convenience.
+export type JobPublicData = Pick<JobData,
+  | 'title'
+  | 'department'
+  | 'locationType'
+  | 'locationText'
+  | 'employmentType'
+  | 'descriptionMarkdown'
+  | 'requirements'
+  | 'niceToHave'
+  | 'compensationRange'
+  | 'status'
+> & {
+  createdAt: any;
+  updatedAt: any;
+};
 
-// /jobs/{jobId}
-export const JobSchema = z.object({
-  type: z.string(),
-  status: JobStatusSchema,
-  priority: z.number().default(0),
-  createdAt: z.custom<Timestamp>(),
-  updatedAt: z.custom<Timestamp>(),
-  createdBy: CreatedBySchema,
-  payload: z.record(z.unknown()),
-  result: z.record(z.unknown()).optional(),
-  error: ErrorSchema.optional(),
-  attempts: z.number().default(0),
-  maxAttempts: z.number().default(5),
-  nextRunAt: z.custom<Timestamp>(),
-  timeoutSeconds: z.number().optional(),
-  lock: LockSchema.optional(),
-  idempotencyKey: z.string().optional(),
-  traceId: z.string().optional(),
-});
-export type Job = z.infer<typeof JobSchema>;
 
-// /jobRuns/{runId}
-export const JobRunSchema = z.object({
-  jobId: z.string(),
-  startedAt: z.custom<Timestamp>(),
-  endedAt: z.custom<Timestamp>().optional(),
-  workerId: z.string(),
-  outcome: z.enum(["succeeded", "failed", "canceled"]),
-  attempt: z.number(),
-acatena: z.record(z.unknown()).optional(),
-  error: ErrorSchema.optional(),
-  metrics: z.object({durationMs: z.number()}).optional(),
-});
-export type JobRun = z.infer<typeof JobRunSchema>;
-
-// /auditLogs/{logId}
-export const AuditLogSchema = z.object({
-  at: z.custom<Timestamp>(),
-  actorUid: z.string().optional(),
-  action: zstring(),
-  target: z.string(),
-  meta: z.record(z.unknown()).optional(),
-});
-export type AuditLog = z.infer<typeof AuditLogSchema>;
-
-// /config/jobs
-export const ConfigSchema = z.object({
-  sealedAdminBootstrap: z.boolean().default(false),
-  workerLeaseSeconds: z.number().default(60),
-  tickBatchSize: z.number().default(10),
-  defaultMaxAttempts: z.number().default(5),
-  backoff: z.object({
-    baseSeconds: z.number().default(15),
-    maxSeconds: z.number().default(3600),
-    jitter: z.number().default(0.2),
+// C3: applicants/{applicantId}
+export const ApplicantDataSchema = z.object({
+  primaryEmail: z.string().email().toLowerCase(),
+  name: z.string().min(1).max(100),
+  phone: z.string().optional(),
+  links: z.object({
+    portfolio: z.string().url().optional(),
+    linkedin: z.string().url().optional(),
+    github: z.string().url().optional(),
+    other: z.array(z.string().url()).max(5).optional(),
+  }).optional(),
+  source: z.object({
+    type: z.enum(['direct', 'referral', 'waitlist']),
+    refCode: z.string().optional(),
+    campaign: z.string().optional(),
   }),
-  allowHttpFetch: z.boolean().default(false),
-  httpFetchAllowlist: z.array(z.string()).default([]),
+  createdAt: z.any(), // server timestamp
+  updatedAt: z.any(), // server timestamp
+  lastActivityAt: z.any(), // server timestamp
 });
-export type Config = z.infer<typeof ConfigSchema>;
+export type ApplicantData = z.infer<typeof ApplicantDataSchema>;
 
-// API Schemas
-export const CreateJobRequestSchema = z.object({
+// C4: applications/{applicationId}
+export const ApplicationDataSchema = z.object({
+  jobId: z.string(),
+  applicantId: z.string(),
+  applicantEmail: z.string().email().toLowerCase(),
+  status: z.enum(['NEW', 'SCREEN', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED']),
+  answers: z.record(z.string(), z.string().max(5000)).optional(), // simple map for q->a
+  resume: z.object({
+    storagePath: z.string(),
+    filename: z.string(),
+    contentType: z.string(),
+    size: z.number(),
+  }).optional(),
+  tags: z.array(z.string().max(50)).max(10).optional(),
+  notesCount: z.number().default(0),
+  submittedAt: z.any(), // server timestamp
+  updatedAt: z.any(), // server timestamp
+  internal: z.object({
+    rating: z.number().min(1).max(5).optional(),
+    reviewerId: z.string().optional(),
+    reviewedAt: z.any().optional(),
+  }).optional(),
+});
+export type ApplicationData = z.infer<typeof ApplicationDataSchema>;
+
+// C5: referrals/{refCode}
+export const ReferralDataSchema = z.object({
+  code: z.string(),
+  createdBy: z.string(), // UID
+  createdAt: z.any(), // server timestamp
+  clicksCount: z.number().default(0),
+  submitsCount: z.number().default(0),
+  active: z.boolean().default(true),
+});
+export type ReferralData = z.infer<typeof ReferralDataSchema>;
+
+// C6: waitlist/{id}
+export const WaitlistDataSchema = z.object({
+  email: z.string().email().toLowerCase(),
+  name: z.string().optional(),
+  interests: z.array(z.string().max(100)).max(10),
+  consent: z.object({
+    terms: z.boolean(),
+    marketing: z.boolean(),
+  }),
+  createdAt: z.any(), // server timestamp
+});
+export type WaitlistData = z.infer<typeof WaitlistDataSchema>;
+
+// C8: events/{eventId}
+export const EventDataSchema = z.object({
   type: z.string(),
-  payload: z.record(z.unknown()),
-  priority: z.number().optional(),
-  maxAttempts: z.number().optional(),
-  timeoutSeconds: z.number().optional(),
-  idempotencyKey: z.string().optional(),
+  entityType: z.enum(['job', 'applicant', 'application', 'referral', 'waitlist', 'page']),
+  entityId: z.string(),
+  metadata: z.record(z.string(), z.any()).optional(),
+  createdAt: z.any(), // server timestamp
 });
-export type CreateJobRequest = z.infer<typeof CreateJobRequestSchema>;
-
-// Handler type
-export type Handler = (payload: unknown, job: Job) => Promise<unknown>;
+export type EventData = z.infer<typeof EventDataSchema>;

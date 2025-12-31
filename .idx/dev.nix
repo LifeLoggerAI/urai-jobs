@@ -1,61 +1,55 @@
 { pkgs, ... }: {
-  # Specifies the Nixpkgs channel to use for package lookups.
-  # "stable-24.05" offers reliability, while "unstable" provides the latest packages.
+  # Nix channel, determines available package versions.
   channel = "stable-24.05";
 
-  # A list of packages to be installed in the development environment.
+  # List of packages to install.
   packages = [
-    # Provides the Node.js 20.x runtime, essential for running the web app and Firebase Functions.
-    pkgs.nodejs_20
-    # Installs the Firebase CLI for deploying and managing Firebase projects.
-    pkgs.firebase-tools
-    # Installs the Google Cloud SDK, needed for interacting with Google Cloud services.
-    pkgs.google-cloud-sdk
+    pkgs.nodejs_20  # For functions and frontend.
+    pkgs.firebase-tools # For emulators and deployment.
+    pkgs.nodePackages.pnpm # For package management.
   ];
 
-  # Environment variables available in the workspace.
-  env = {};
+  # VS Code extensions to install.
+  idx.extensions = [
+    "dbaeumer.vscode-eslint" # For linting.
+    "esbenp.prettier-vscode" # For code formatting.
+  ];
 
-  # Configuration for the IDE.
-  idx = {
-    # A list of VS Code extensions to install from the Open VSX Registry.
-    extensions = [
-      # Linter for JavaScript and TypeScript.
-      "dbaeumer.vscode-eslint"
-      # Code formatter.
-      "esbenp.prettier-vscode"
-      # Provides Firebase integration for VS Code.
-      "firebase.firebase-vscode"
-    ];
-
-    # Workspace lifecycle hooks.
-    workspace = {
-      # Commands to run when the workspace is first created.
-      onCreate = {
-        # Installs all npm dependencies defined in package.json, including for web and functions workspaces.
-        install-deps = "npm install";
-      };
-
-      # Commands to run every time the workspace starts.
-      onStart = {
-        # Starts the development server, which typically includes the frontend and backend.
-        start-dev-server = "npm run dev";
-      };
+  # Workspace lifecycle hooks.
+  idx.workspace = {
+    # Runs when a workspace is first created.
+    onCreate = {
+      install-deps = "pnpm install --prefer-offline"; # Installs all dependencies.
     };
+    # Runs every time the workspace is (re)started.
+    onStart = {
+      # Starts Firebase emulators in the background.
+      emulators = "firebase emulators:start --import=./firebase-data --export-on-exit";
+    };
+  };
 
-    # Configures web previews for the application.
+  # Web preview configuration.
+  idx.previews = {
+    enable = true;
     previews = {
-      enable = true;
-      previews = {
-        # Defines a preview for the web application.
-        web = {
-          # Command to start the development server.
-          # The '$PORT' variable is dynamically assigned by the environment.
-          command = ["npm" "run" "dev" "--" "--port" "$PORT"];
-          # Specifies the manager for this preview, in this case, a web browser.
-          manager = "web";
-        };
+      # The web app dev server.
+      web = {
+        command = ["pnpm", "--filter", "web", "run", "dev"];
+        manager = "web";
+      };
+      # The Firebase emulator UI.
+      emulators-ui = {
+        # This is a dummy command, the port is what matters.
+        command = ["echo", "Emulator UI running on port 4000"];
+        manager = "web";
+        port = 4000;
       };
     };
+  };
+
+  # Environment variables.
+  env = {
+    # This is picked up by the firebase-tools.
+    GCLOUD_PROJECT = "urai-jobs";
   };
 }
