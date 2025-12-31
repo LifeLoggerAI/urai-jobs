@@ -1,62 +1,61 @@
-{
-  pkgs, ...
-}: {
-  # Which nixpkgs channel to use.
-  channel = "stable-24.05"; # or "unstable"
+{ pkgs, ... }: {
+  # Specifies the Nixpkgs channel to use for package lookups.
+  # "stable-24.05" offers reliability, while "unstable" provides the latest packages.
+  channel = "stable-24.05";
 
-  # Collection of packages that will be installed
-  # in your environment.
+  # A list of packages to be installed in the development environment.
   packages = [
+    # Provides the Node.js 20.x runtime, essential for running the web app and Firebase Functions.
     pkgs.nodejs_20
+    # Installs the Firebase CLI for deploying and managing Firebase projects.
     pkgs.firebase-tools
+    # Installs the Google Cloud SDK, needed for interacting with Google Cloud services.
     pkgs.google-cloud-sdk
   ];
 
-  # Collection of environment variables that will be
-  # available in your shell.
+  # Environment variables available in the workspace.
   env = {};
 
-  # VS Code extensions that will be automatically installed.
-  idx.extensions = [
-    "dbaeumer.vscode-eslint"
-    "esbenp.prettier-vscode"
-  ];
-
-  # Defines the workspace lifecycle hooks.
-  idx.workspace = {
-    # Runs when a workspace is first created.
-    onCreate = {
-      install-deps = "npm install";
-    };
-
-    # Runs every time the workspace is (re)started.
-    onStart = {
-      # start-dev-server = "npm run dev";
-    };
-  };
-
-  # Defines a preview of your application.
-  idx.previews = {
-    enable = true;
-    previews = [
-      {
-        # The name that will be displayed in the web preview
-        # anme = "Web";
-        # The command that will be run to start your application
-        command = ["npm" "run" "dev"];
-        # Whether to keep the process running after the initial startup
-        # has completed. This is useful for servers and other
-        # long-running processes.
-        # keep_alive = true;
-        # The directory that will be used as the root of the
-        # web server. This is useful for static sites.
-        # root = "dist";
-        manager = "web";
-      }
+  # Configuration for the IDE.
+  idx = {
+    # A list of VS Code extensions to install from the Open VSX Registry.
+    extensions = [
+      # Linter for JavaScript and TypeScript.
+      "dbaeumer.vscode-eslint"
+      # Code formatter.
+      "esbenp.prettier-vscode"
+      # Provides Firebase integration for VS Code.
+      "firebase.firebase-vscode"
     ];
-  };
 
-  # The list of ports that should be exposed to the
-  # internet.
-  # ports = [];
+    # Workspace lifecycle hooks.
+    workspace = {
+      # Commands to run when the workspace is first created.
+      onCreate = {
+        # Installs all npm dependencies defined in package.json, including for web and functions workspaces.
+        install-deps = "npm install";
+      };
+
+      # Commands to run every time the workspace starts.
+      onStart = {
+        # Starts the development server, which typically includes the frontend and backend.
+        start-dev-server = "npm run dev";
+      };
+    };
+
+    # Configures web previews for the application.
+    previews = {
+      enable = true;
+      previews = {
+        # Defines a preview for the web application.
+        web = {
+          # Command to start the development server.
+          # The '$PORT' variable is dynamically assigned by the environment.
+          command = ["npm" "run" "dev" "--" "--port" "$PORT"];
+          # Specifies the manager for this preview, in this case, a web browser.
+          manager = "web";
+        };
+      };
+    };
+  };
 }

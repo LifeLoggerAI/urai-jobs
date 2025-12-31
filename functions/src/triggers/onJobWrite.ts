@@ -1,17 +1,18 @@
 import * as functions from "firebase-functions";
 import { firestore } from "firebase-admin";
+import { Job, JobPublic } from "../types";
 
 export const onJobWrite = functions.firestore
   .document("jobs/{jobId}")
   .onWrite(async (change, context) => {
     const { jobId } = context.params;
-    const job = change.after.data();
+    const job = change.after.data() as Job;
 
     const publicJobRef = firestore().collection("jobPublic").doc(jobId);
 
     if (job?.status === "open") {
       // If the job is open, create or update the public projection
-      const publicJob = {
+      const publicJob: JobPublic = {
         title: job.title,
         department: job.department,
         locationType: job.locationType,

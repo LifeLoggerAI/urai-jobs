@@ -36,13 +36,13 @@ service cloud.firestore {
 
     // Applicants - public write, admin read
     match /applicants/{applicantId} {
-      allow create: if true; // further validation in functions
+      allow create: if request.resource.data.primaryEmail == request.auth.token.email;
       allow read, update: if isAdmin();
     }
 
     // Applications - public write, admin read/update
     match /applications/{applicationId} {
-      allow create: if true; // further validation in functions
+      allow create: if request.resource.data.applicantEmail == request.auth.token.email;
       allow read, update: if isAdmin();
     }
 
@@ -53,7 +53,7 @@ service cloud.firestore {
 
     // Waitlist - public write, admin read
     match /waitlist/{id} {
-      allow create: if true;
+      allow create: if isSignedIn();
       allow read: if isAdmin();
     }
 
