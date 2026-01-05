@@ -1,7 +1,6 @@
-
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { getAuth } from 'firebase-admin/auth';
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
 
 // Use this to connect to the emulators
 process.env['FIRESTORE_EMULATOR_HOST'] = '127.0.0.1:8080';
@@ -18,12 +17,21 @@ initializeApp({
   projectId: 'urai-jobs-dev',
 });
 
-
 const db = getFirestore();
 const auth = getAuth();
 
 async function main() {
   console.log('Seeding database...');
+
+  // Clear existing data
+  const collections = ['jobs', 'jobPublic', 'applicants', 'waitlist', 'admins'];
+  for (const col of collections) {
+    const snapshot = await db.collection(col).get();
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    console.log(`Cleared collection: ${col}`);
+  }
 
   // Create Jobs
   const jobs = [
@@ -33,8 +41,8 @@ async function main() {
       locationType: 'remote',
       employmentType: 'full_time',
       descriptionMarkdown: '## About the role\n\nWe are looking for a senior frontend engineer to join our team.',
-      requirements: ['React', 'TypeScript', 'Next.js'],
-      niceToHave: ['GraphQL', 'Apollo'],
+      requirements: ['React', 'TypeScript', 'Vite'],
+      niceToHave: ['GraphQL', 'Firebase'],
       compensationRange: { min: 120000, max: 150000, currency: 'USD' },
       status: 'open',
       createdAt: new Date(),
@@ -74,7 +82,8 @@ async function main() {
   ];
 
   for (const job of jobs) {
-    await db.collection('jobs').add(job);
+    const ref = await db.collection('jobs').add(job);
+    console.log(`Added job: ${job.title} (${ref.id})`)
   }
 
   // Create Applicants
@@ -128,10 +137,13 @@ async function main() {
   }
 
   // Create Admins
-  await db.collection('admins').doc('seed-admin').set({
+  const adminUid = 'the_admin_uid'; // a deterministic UID for testing
+  await db.collection('admins').doc(adminUid).set({
     role: 'owner',
     createdAt: new Date(),
   });
+  console.log(`Added admin user with UID: ${adminUid}`);
+
 
   console.log('Database seeded!');
 }

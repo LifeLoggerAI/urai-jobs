@@ -3,19 +3,20 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-    "functions",
-    "web"
+    "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev --workspace=web\" \"npm run emulators\"",
-    "build": "npm run build --workspace=web && npm run build --workspace=functions",
-    "emulators": "firebase emulators:start",
-    "seed": "ts-node scripts/seed.ts",
-    "test": "npm test --workspace=functions"
+    "dev": "concurrently "npm run emulators" "npm run -w web dev"",
+    "build": "npm run -w web build && npm run -w functions build",
+    "emulators": "firebase emulators:start --import=./firebase-data --export-on-exit",
+    "seed": "cd scripts && ts-node seed.ts",
+    "deploy": "firebase deploy",
+    "test": "cd packages/functions && npm test"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
     "firebase-tools": "^13.0.2",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
   }
 }
