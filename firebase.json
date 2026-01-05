@@ -14,9 +14,7 @@
         "firebase-debug.log",
         "firebase-debug.*.log"
       ],
-      "predeploy": [
-        "npm --prefix $RESOURCE_DIR run lint"
-      ]
+      "predeploy": []
     }
   ],
   "hosting": {
@@ -31,7 +29,8 @@
         "source": "**",
         "destination": "/index.html"
       }
-    ]
+    ],
+    "target": "jobs"
   },
   "storage": {
     "rules": "storage.rules"
@@ -53,11 +52,5 @@
       "enabled": true
     },
     "singleProjectMode": true
-  },
-  "remoteconfig": {
-    "template": "remoteconfig.template.json"
-  },
-  "database": {
-    "rules": "database.rules.json"
   }
 }

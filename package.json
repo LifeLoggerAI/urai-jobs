@@ -10,7 +10,7 @@
     "dev": "concurrently \"npm run dev --workspace=web\" \"npm run emulators\"",
     "build": "npm run build --workspace=web && npm run build --workspace=functions",
     "emulators": "firebase emulators:start",
-    "seed": "npm run seed --workspace=functions",
+    "seed": "ts-node scripts/seed.ts",
     "test": "npm test --workspace=functions"
   },
   "devDependencies": {

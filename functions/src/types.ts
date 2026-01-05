@@ -5,7 +5,13 @@ export type Timestamp = admin.firestore.Timestamp;
 export type JobStatus = "draft" | "open" | "paused" | "closed";
 export type EmploymentType = "full_time" | "part_time" | "contract" | "intern";
 export type LocationType = "remote" | "hybrid" | "onsite";
-export type ApplicationStatus = "NEW" | "SCREEN" | "INTERVIEW" | "OFFER" | "HIRED" | "REJECTED";
+export type ApplicationStatus =
+  | "NEW"
+  | "SCREEN"
+  | "INTERVIEW"
+  | "OFFER"
+  | "HIRED"
+  | "REJECTED";
 
 export interface Job {
   title: string;
@@ -114,10 +120,18 @@ export interface Admin {
   createdAt: Timestamp;
 }
 
+export type EventEntityType =
+  | "job"
+  | "applicant"
+  | "application"
+  | "referral"
+  | "waitlist"
+  | "page";
+
 export interface Event {
   type: string;
-  entityType: "job" | "applicant" | "application" | "referral" | "waitlist" | "page";
+  entityType: EventEntityType;
   entityId: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Timestamp;
 }
