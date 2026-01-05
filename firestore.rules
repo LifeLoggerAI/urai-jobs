@@ -1,7 +1,71 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /jobs/{jobId} { allow read: if true; allow write: if false; }
-    match /{document=**} { allow read, write: if false; }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function hasOnly(keys) {
+      return request.resource.data.keys().hasOnly(keys);
+    }
+
+    // Jobs
+    match /jobs/{jobId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Job Public
+    match /jobPublic/{jobId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Applicants
+    match /applicants/{applicantId} {
+      allow create: if request.resource.data.primaryEmail.toLowerCase() == request.resource.data.primaryEmail;
+      allow read, update: if isAdmin() || isOwner(applicantId);
+      allow delete: if isAdmin();
+    }
+
+    // Applications
+    match /applications/{applicationId} {
+      allow create: if request.resource.data.applicantEmail.toLowerCase() == request.resource.data.applicantEmail;
+      allow read, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Referrals
+    match /referrals/{refCode} {
+      allow read, write: if isAdmin();
+    }
+
+    // Waitlist
+    match /waitlist/{waitlistId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Admins
+    match /admins/{adminId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Events
+    match /events/{eventId} {
+        allow create: if true;
+        allow read, update, delete: if isAdmin();
+    }
   }
 }

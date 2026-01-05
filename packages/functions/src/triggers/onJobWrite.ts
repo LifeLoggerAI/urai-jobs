@@ -1,33 +1,28 @@
-// @ts-nocheck
-import {firestore} from "firebase-functions";
-import {db} from "../firebase";
-import {Job, JobPublic} from "../types";
+import { getFirestore } from "firebase-admin/firestore";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
+import { Job } from "../../../types";
 
-export const onJobWrite = firestore.document("jobs/{jobId}")
-  .onWrite(async (change, context) => {
-    const {jobId} = context.params;
-    const job = change.after.exists ? (change.after.data() as Job) : null;
+const db = getFirestore();
 
-    const publicJobRef = db.collection("jobPublic").doc(jobId);
+export const onjobwrite = onDocumentWritten("jobs/{jobId}", async (event) => {
+  const job = event.data?.after.data() as Job | undefined;
+  const jobId = event.params.jobId;
 
-    if (job && job.status === "open") {
-      console.log(`Job ${jobId} is open, updating public listing.`);
-      const publicJob: JobPublic = {
-        title: job.title,
-        department: job.department,
-        locationType: job.locationType,
-        locationText: job.locationText,
-        employmentType: job.employmentType,
-        descriptionMarkdown: job.descriptionMarkdown,
-        requirements: job.requirements,
-        niceToHave: job.niceToHave,
-        compensationRange: job.compensationRange,
-        status: "open",
-        updatedAt: job.updatedAt,
-      };
-      await publicJobRef.set(publicJob, {merge: true});
-    } else {
-      console.log(`Job ${jobId} is not open, deleting public listing.`);
-      await publicJobRef.delete();
-    }
-  });
+  if (job && job.status === "open") {
+    const { 
+      // Fields to exclude from the public projection
+      status,
+      internal, 
+      notesCount,
+      compensationRange,
+      createdBy,
+      ...publicJob 
+    } = job;
+
+    await db.collection("jobPublic").doc(jobId).set(publicJob, { merge: true });
+
+  } else {
+    // If the job is not open, delete the public doc.
+    await db.collection("jobPublic").doc(jobId).delete();
+  }
+});

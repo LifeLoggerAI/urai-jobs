@@ -6,12 +6,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently "npm run emulators" "npm run -w web dev"",
+    "dev": "concurrently \"npm run emulators\" \"npm run -w web dev\"",
     "build": "npm run -w web build && npm run -w functions build",
     "emulators": "firebase emulators:start --import=./firebase-data --export-on-exit",
     "seed": "cd scripts && ts-node seed.ts",
     "deploy": "firebase deploy",
-    "test": "cd packages/functions && npm test"
+    "test": "npm test -w functions"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

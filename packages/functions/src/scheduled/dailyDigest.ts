@@ -1,11 +1,11 @@
-// @ts-nocheck
-import {pubsub} from "firebase-functions";
-import {db} from "../firebase";
-import * as admin from "firebase-admin";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 
-export const scheduledDailyDigest = pubsub.schedule("every 24 hours").onRun(async () => {
-  const now = admin.firestore.Timestamp.now();
-  const yesterday = admin.firestore.Timestamp.fromMillis(
+const db = getFirestore();
+
+export const scheduleddailydigest = onSchedule("every 24 hours", async () => {
+  const now = Timestamp.now();
+  const yesterday = Timestamp.fromMillis(
     now.toMillis() - 24 * 60 * 60 * 1000
   );
 

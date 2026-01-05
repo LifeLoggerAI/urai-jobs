@@ -2,26 +2,30 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
 
     function isAdmin() {
-      return request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return exists(/databases/(default)/documents/admins/$(request.auth.uid));
     }
 
-    // Resumes are stored at: resumes/{applicantId}/{applicationId}/{filename}
+    // Resumes: resumes/{applicantId}/{applicationId}/{filename}
     match /resumes/{applicantId}/{applicationId}/{filename} {
-      // Admins can read any resume.
+
+      // Admins can read and write all resumes
       allow read: if isAdmin();
 
-      // Applicants can write to their own application folder only.
-      // This rule is coupled with a callable function that generates an upload token/URL.
-      // We verify the upload came from the applicant and has valid metadata.
-      allow write: if request.auth != null
-                    && request.auth.uid == applicantId
-                    && resource.size < 10 * 1024 * 1024 // 10 MB limit
-                    && resource.contentType.matches('application/pdf|application/msword|application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      // Applicants can only write to their own application's resume path
+      allow write: if isSignedIn() && isOwner(applicantId) && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('application/pdf|application/msword|application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     }
 
-    // Deny all other read/write operations on storage.
+    // Deny all other access
     match /{allPaths=**} {
       allow read, write: if false;
     }
