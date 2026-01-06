@@ -1,22 +1,23 @@
 {
   "name": "urai-jobs",
-  "version": "1.0.0",
   "private": true,
+  "version": "1.0.0",
   "workspaces": [
-    "packages/*"
+    "functions",
+    "web"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run emulators\" \"npm run -w web dev\"",
-    "build": "npm run -w web build && npm run -w functions build",
+    "dev": "concurrently \"npm:dev:web\" \"npm:emulators\"",
+    "dev:web": "npm run dev -w web",
     "emulators": "firebase emulators:start --import=./firebase-data --export-on-exit",
-    "seed": "cd scripts && ts-node seed.ts",
-    "deploy": "firebase deploy",
-    "test": "npm test -w functions"
+    "build": "npm run build -w web && npm run build -w functions",
+    "deploy": "npm run build && firebase deploy --only hosting,functions",
+    "lint": "npm run lint -ws --if-present",
+    "test": "npm test -ws --if-present",
+    "seed": "npm run seed -w functions"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "firebase-tools": "^13.0.2",
-    "ts-node": "^10.9.1",
-    "typescript": "^5.2.2"
+    "firebase-tools": "^13.8.0"
   }
 }

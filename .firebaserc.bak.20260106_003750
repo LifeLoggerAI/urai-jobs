@@ -1,6 +1,8 @@
 {
   "projects": {
-    "default": "urai-4dc1d"
+    "default": "monospace-15",
+    "jobs": "urai-4dc1d",
+    "urai-jobs": "urai-4dc1d"
   },
   "targets": {
     "urai-4dc1d": {
@@ -10,5 +12,6 @@
         ]
       }
     }
-  }
+  },
+  "etags": {}
 }
