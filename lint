@@ -1,2 +1,0 @@
-==[1/4] Ensure firestore.rules is valid==
-==[2/4] Disable functions lint predeploy (so deploy won’t fail)==

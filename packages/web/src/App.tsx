@@ -1,8 +1,27 @@
-import React from 'react';
-import Router from './Router';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import Jobs from './pages/Jobs';
+import JobDetail from './pages/JobDetail';
+import Apply from './pages/Apply';
+import ApplySuccess from './pages/ApplySuccess';
+import Waitlist from './pages/Waitlist';
+import Referral from './pages/Referral';
+import Admin from './pages/Admin';
 
-const App: React.FC = () => {
-  return <Router />;
-};
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/jobs" />} />
+        <Route path="/jobs" element={<Jobs />} />
+        <Route path="/jobs/:jobId" element={<JobDetail />} />
+        <Route path="/apply/:jobId" element={<Apply />} />
+        <Route path="/apply/success" element={<ApplySuccess />} />
+        <Route path="/waitlist" element={<Waitlist />} />
+        <Route path="/ref/:code" element={<Referral />} />
+        <Route path="/admin" element={<Admin />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
 
 export default App;

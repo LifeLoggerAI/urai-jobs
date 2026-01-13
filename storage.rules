@@ -1,31 +1,17 @@
 rules_version = '2';
-
 service firebase.storage {
   match /b/{bucket}/o {
-    // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    function isAdmin() {
-      return exists(/databases/(default)/documents/admins/$(request.auth.uid));
-    }
-
-    // Resumes: resumes/{applicantId}/{applicationId}/{filename}
     match /resumes/{applicantId}/{applicationId}/{filename} {
+      // Only authenticated users can upload resumes
+      allow write: if request.auth != null &&
+                      request.resource.size < 10 * 1024 * 1024 &&
+                      request.resource.contentType.matches('application/pdf|application/msword|application/vnd.openxmlformats-officedocument.wordprocessingml.document');
 
-      // Admins can read and write all resumes
-      allow read: if isAdmin();
-
-      // Applicants can only write to their own application's resume path
-      allow write: if isSignedIn() && isOwner(applicantId) && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('application/pdf|application/msword|application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      // Only admins can read resumes
+      allow read: if exists(/databases/(default)/documents/admins/$(request.auth.uid));
     }
 
-    // Deny all other access
+    // Deny all other storage access
     match /{allPaths=**} {
       allow read, write: if false;
     }
