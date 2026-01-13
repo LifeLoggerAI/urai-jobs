@@ -1,19 +1,21 @@
-
 {
   "name": "urai-jobs",
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm run dev -w packages/web\" \"npm run emulators\"",
-    "build": "npm run build -w packages/web && npm run build -w packages/functions",
+    "dev": "concurrently \"pnpm --filter web dev\" \"firebase emulators:start\"",
+    "build": "pnpm --filter web build && pnpm --filter functions build",
     "emulators": "firebase emulators:start",
-    "seed": "npm run seed -w packages/functions",
-    "lint": "npm run lint -w packages/web && npm run lint -w packages/functions"
+    "seed": "pnpm --filter functions exec ts-node scripts/seed.ts",
+    "lint": "npm run lint -w packages/web && npm run lint -w packages/functions",
+    "seed:exec": "pnpm exec ts-node scripts/seed.ts",
+    "test": "pnpm --filter functions test"
   },
-  "workspaces": [
-    "packages/*"
-  ],
   "dependencies": {
     "concurrently": "^8.2.2"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "@faker-js/faker": "^8.4.1"
   }
 }

@@ -1,99 +1,47 @@
+import * as admin from 'firebase-admin';
+import { faker } from '@faker-js/faker';
 
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, writeBatch } from 'firebase/firestore';
-
-// TODO: Replace with your project's actual configuration
-const firebaseConfig = {
-  apiKey: 'your-api-key',
-  authDomain: 'your-auth-domain',
-  projectId: 'your-project-id',
-  storageBucket: 'your-storage-bucket',
-  messagingSenderId: 'your-messaging-sender-id',
-  appId: 'your-app-id',
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+admin.initializeApp({ projectId: 'urai-jobs' });
+const db = admin.firestore();
 
 async function seed() {
-  const batch = writeBatch(db);
+  console.log('Seeding database...');
+
+  // Clear existing data
+  const collections = await db.listCollections();
+  for (const collection of collections) {
+    const snapshot = await collection.get();
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+  }
+
+  // Seed Admins
+  const adminUIDs = ['admin-user'];
+  await db.collection('admins').doc(adminUIDs[0]).set({ role: 'owner', createdAt: new Date() });
 
   // Seed Jobs
-  const jobsCol = collection(db, 'jobs');
+  const jobIds = [];
   for (let i = 0; i < 5; i++) {
-    const jobRef = doc(jobsCol);
-    batch.set(jobRef, {
-      title: `Job Title ${i}`,
-      department: 'Engineering',
+    const jobId = faker.string.uuid();
+    jobIds.push(jobId);
+    await db.collection('jobs').doc(jobId).set({
+      title: faker.person.jobTitle(),
+      department: faker.company.name(),
       locationType: 'remote',
+      locationText: 'Remote',
       employmentType: 'full_time',
-      descriptionMarkdown: `This is job ${i}`,
-      requirements: ['Requirement 1', 'Requirement 2'],
-      niceToHave: ['Nice to have 1', 'Nice to have 2'],
-      status: i < 3 ? 'open' : 'draft',
+      descriptionMarkdown: faker.lorem.paragraphs(3),
+      requirements: [faker.lorem.sentence()],
+      niceToHave: [faker.lorem.sentence()],
+      status: 'open',
       createdAt: new Date(),
       updatedAt: new Date(),
+      createdBy: adminUIDs[0],
     });
   }
 
-  // Seed Applicants
-  const applicantsCol = collection(db, 'applicants');
-  for (let i = 0; i < 30; i++) {
-    const applicantRef = doc(applicantsCol);
-    batch.set(applicantRef, {
-      primaryEmail: `applicant${i}@example.com`,
-      name: `Applicant ${i}`,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      lastActivityAt: new Date(),
-    });
-  }
-
-  // Seed Applications
-  const applicationsCol = collection(db, 'applications');
-  for (let i = 0; i < 40; i++) {
-    const applicationRef = doc(applicationsCol);
-    batch.set(applicationRef, {
-      jobId: `job${i % 5}`,
-      applicantId: `applicant${i % 30}`,
-      applicantEmail: `applicant${i % 30}@example.com`,
-      status: 'NEW',
-      submittedAt: new Date(),
-      updatedAt: new Date(),
-    });
-  }
-
-  // Seed Referral Codes
-  const referralsCol = collection(db, 'referrals');
-  for (let i = 0; i < 5; i++) {
-    const referralRef = doc(referralsCol);
-    batch.set(referralRef, {
-      code: `REF${i}`,
-      createdBy: 'admin',
-      createdAt: new Date(),
-      clicksCount: 0,
-      submitsCount: 0,
-      active: true,
-    });
-  }
-
-  // Seed Waitlist Entries
-  const waitlistCol = collection(db, 'waitlist');
-  for (let i = 0; i < 20; i++) {
-    const waitlistRef = doc(waitlistCol);
-    batch.set(waitlistRef, {
-      email: `waitlist${i}@example.com`,
-      name: `Waitlist User ${i}`,
-      interests: ['Engineering', 'Product'],
-      consent: { terms: true, marketing: false },
-      createdAt: new Date(),
-    });
-  }
-
-  await batch.commit();
-  console.log('Seeding complete!');
+  console.log('Database seeded successfully!');
 }
 
-seed().catch((err) => {
-  console.error('Seeding failed:', err);
-});
+seed().catch(console.error);
