@@ -33,19 +33,38 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireAdmin = requireAdmin;
+exports.onJobWrite = void 0;
 const functions = __importStar(require("firebase-functions"));
-/**
- * Throws an error if the user is not authenticated or is not an admin.
- * Uses the presence of a custom claim `admin: true`.
- */
-function requireAdmin(context) {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+const admin = __importStar(require("firebase-admin"));
+const db = admin.firestore();
+exports.onJobWrite = functions.firestore
+    .document("jobs/{jobId}")
+    .onWrite(async (change, context) => {
+    const { jobId } = context.params;
+    const jobPublicRef = db.collection("jobPublic").doc(jobId);
+    const jobAfter = change.after.data();
+    // If job is deleted or status is not 'open', delete the public doc.
+    if (!jobAfter || jobAfter.status !== "open") {
+        try {
+            await jobPublicRef.delete();
+            functions.logger.info(`Deleted public job: ${jobId}`);
+        }
+        catch (error) {
+            // Ignore if the doc doesn't exist
+            if (error.code !== 'not-found') {
+                functions.logger.error(`Error deleting public job ${jobId}:`, error);
+            }
+        }
+        return;
     }
-    if (context.auth.token.admin !== true) {
-        throw new functions.https.HttpsError("permission-denied", "The function must be called by an admin user.");
-    }
-    return context.auth.uid;
-}
-//# sourceMappingURL=admin.js.map
+    // If job is 'open', create/update the public-facing document.
+    const { createdBy, ...restOfJob } = jobAfter;
+    const publicJob = {
+        ...restOfJob,
+        status: "open", // Ensure status is explicitly open
+        updatedAt: jobAfter.updatedAt, // Carry over the update time
+    };
+    functions.logger.info(`Updating public job: ${jobId}`);
+    await jobPublicRef.set(publicJob, { merge: true });
+});
+//# sourceMappingURL=onJobWrite.js.map

@@ -1,26 +1,22 @@
-import admin from "firebase-admin";
+import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
 
-let _inited = false;
-
-export function initAdmin() {
-  if (_inited) return;
-  admin.initializeApp();
-  _inited = true;
+/**
+ * Throws an error if the user is not authenticated or is not an admin.
+ * Uses the presence of a custom claim `admin: true`.
+ */
+export function requireAdmin(context: functions.https.CallableContext) {
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "The function must be called while authenticated."
+    );
+  }
+  if (context.auth.token.admin !== true) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "The function must be called by an admin user."
+    );
+  }
+  return context.auth.uid;
 }
-
-export function db() {
-  initAdmin();
-  return admin.firestore();
-}
-
-export function tsFromMs(ms: number) {
-  initAdmin();
-  return admin.firestore.Timestamp.fromMillis(ms);
-}
-
-export function serverTimestamp() {
-  initAdmin();
-  return admin.firestore.FieldValue.serverTimestamp();
-}
-
-export { admin };

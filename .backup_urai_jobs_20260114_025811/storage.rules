@@ -4,16 +4,15 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     function isAdmin() {
-      return request.auth != null && request.auth.token.admin == true;
+      return exists(firestore.collection('admins').doc(request.auth.uid));
     }
 
-    // Resumes: Only admins can read. Authenticated users can upload to a path matching their UID.
-    // This is the simplest secure model without requiring complex token flows.
+    // Resumes: Only admins can read. Applicants can upload to a path they own.
+    // The upload path is secured by making the applicantId part of the path.
     match /resumes/{applicantId}/{applicationId}/{filename} {
       allow read: if isAdmin();
-      // User must be authenticated and their UID must match the {applicantId} in the path.
       allow write: if request.auth != null && request.auth.uid == applicantId
-                   && request.resource.size < 15 * 1024 * 1024 // 15MB Limit
+                   && request.resource.size < 10 * 1024 * 1024 // 10MB Limit
                    && request.resource.contentType.matches('application/pdf|application/msword|application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     }
 

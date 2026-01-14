@@ -33,19 +33,35 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireAdmin = requireAdmin;
+exports.scheduledDailyDigest = exports.httpHealth = void 0;
 const functions = __importStar(require("firebase-functions"));
-/**
- * Throws an error if the user is not authenticated or is not an admin.
- * Uses the presence of a custom claim `admin: true`.
- */
-function requireAdmin(context) {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
-    }
-    if (context.auth.token.admin !== true) {
-        throw new functions.https.HttpsError("permission-denied", "The function must be called by an admin user.");
-    }
-    return context.auth.uid;
-}
-//# sourceMappingURL=admin.js.map
+const admin = __importStar(require("firebase-admin"));
+const date_fns_1 = require("date-fns");
+const db = admin.firestore();
+exports.httpHealth = functions.https.onRequest((request, response) => {
+    response.status(200).send({ status: "ok", timestamp: new Date().toISOString() });
+});
+exports.scheduledDailyDigest = functions.pubsub
+    .schedule("0 9 * * 1-5") // 9 AM on weekdays
+    .timeZone("America/New_York")
+    .onRun(async (context) => {
+    const today = (0, date_fns_1.startOfDay)(new Date());
+    const yesterday = (0, date_fns_1.sub)(today, { days: 1 });
+    const newAppsSnap = await db
+        .collection("applications")
+        .where("submittedAt", ">=", yesterday)
+        .where("submittedAt", "<", today)
+        .get();
+    const pendingAppsSnap = await db
+        .collection("applications")
+        .where("status", "in", ["NEW", "SCREEN"])
+        .get();
+    const digestId = today.toISOString().split("T")[0]; // YYYY-MM-DD
+    await db.collection("digests").doc(digestId).set({
+        createdAt: context.timestamp,
+        newApplicationsLast24h: newAppsSnap.size,
+        pendingReviewCount: pendingAppsSnap.size,
+    }, { merge: true });
+    functions.logger.info(`Daily digest ${digestId} created successfully.`);
+});
+//# sourceMappingURL=http.js.map

@@ -1,24 +1,76 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() { return request.auth != null; }
-    function isAdmin() { return isSignedIn() && request.auth.token.admin == true; }
 
-    match /jobs/{jobId} {
-      allow read: if isAdmin() || (isSignedIn() && resource.data.createdBy == request.auth.uid);
-      allow write: if false;
-
-      match /events/{eventId} {
-        allow read: if isAdmin() || (isSignedIn() && get(/databases/$(database)/documents/jobs/$(jobId)).data.createdBy == request.auth.uid);
-        allow write: if false;
-      }
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    match /auditLogs/{logId} {
+    // isAdmin is based on a custom claim, not a document read.
+    // This is more secure and efficient. An admin process must set this claim.
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    // --- Collections ---
+
+    // Admins: Read-only for other admins. Only service accounts or initial setup can write.
+    match /admins/{uid} {
       allow read: if isAdmin();
-      allow write: if false;
+      allow write: if false; // Prevent modification from clients
     }
 
-    match /{document=**} { allow read, write: if false; }
+    // Jobs: Full access for admins only.
+    match /jobs/{jobId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Public Jobs: Read-only for everyone, but only if status is 'open'.
+    match /jobPublic/{jobId} {
+      allow write: if false; // Managed by backend function
+      allow get, list: if resource.data.status == 'open';
+    }
+
+    // Applicants: Can be created by anyone. Read/Update only by admins.
+    match /applicants/{applicantId} {
+      allow create: if request.resource.data.primaryEmail is string;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Applications: Can be created by anyone after validation.
+    match /applications/{applicationId} {
+      allow create: if request.resource.data.jobId is string
+                    && request.resource.data.applicantEmail is string
+                    && request.resource.data.applicantEmail.matches('^[^@]+@[^@]+\.[^@]+$');
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Waitlist: Public can create, admins can manage.
+    match /waitlist/{entryId} {
+      allow create: if request.resource.data.email is string
+                    && request.resource.data.consent.terms == true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Referrals: Managed by admins.
+    match /referrals/{refCode} {
+        allow read, write: if isAdmin();
+    }
+
+    // Events: Public can create simple, validated events. Admins can read.
+    match /events/{eventId} {
+        allow create: if request.resource.data.type is string
+                      && request.resource.data.type.size() < 50
+                      && request.resource.data.entityType is string
+                      && request.resource.data.entityId.size() < 128;
+        allow read: if isAdmin();
+    }
+
+    // Deny all other collections by default
+    match /{path=**}/documents/{doc} {
+        allow read, write: if false;
+    }
   }
 }
