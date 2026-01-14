@@ -1,17 +1,9 @@
-import * as admin from "firebase-admin";
+import { https, setGlobalOptions } from 'firebase-functions/v2';
 
-// Initialize Firebase Admin SDK. Must be done once.
-admin.initializeApp();
+setGlobalOptions({ maxInstances: 2 });
 
-// Export all functions from their individual files.
-
-// Firestore Triggers
-export { onJobWrite } from "./onJobWrite";
-export { onApplicationCreate } from "./onApplicationCreate";
-
-// Callable Functions
-export { createResumeUploadUrl } from "./createResumeUpload";
-export { adminSetApplicationStatus } from "./adminSetApplicationStatus";
-
-// HTTP and Scheduled Functions
-export { httpHealth, scheduledDailyDigest } from "./http";
+export * from './triggers/onJobWrite';
+export * from './triggers/onApplicationCreate';
+export * from './api/admin';
+export * from './api/health';
+export * from './scheduled/dailyDigest';

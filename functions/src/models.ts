@@ -14,33 +14,52 @@ export interface Job {
   status: "draft" | "open" | "paused" | "closed";
   createdAt: Timestamp | FieldValue;
   updatedAt: Timestamp | FieldValue;
-  createdBy: string; // Admin UID
+  createdBy: string; // UID
+  stats?: {
+    applicantsCount?: FieldValue | number;
+    statusCounts?: {
+      NEW?: FieldValue | number;
+      SCREEN?: FieldValue | number;
+      INTERVIEW?: FieldValue | number;
+      OFFER?: FieldValue | number;
+      HIRED?: FieldValue | number;
+      REJECTED?: FieldValue | number;
+    };
+  };
 }
 
 // 2. jobPublic/{jobId}
-export type JobPublic = Pick<
-  Job,
-  | "title"
-  | "department"
-  | "locationType"
-  | "locationText"
-  | "employmentType"
-  | "descriptionMarkdown"
-  | "requirements"
-  | "niceToHave"
-  | "compensationRange"
-> & {
+export interface JobPublic {
+  title: string;
+  department: string;
+  locationType: "remote" | "hybrid" | "onsite";
+  locationText: string;
+  employmentType: "full_time" | "part_time" | "contract" | "intern";
+  descriptionMarkdown: string;
+  requirements: string[];
+  niceToHave: string[];
+  compensationRange?: { min?: number; max?: number; currency?: string };
   status: "open";
-  updatedAt: Timestamp | FieldValue;
-};
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
 
 // 3. applicants/{applicantId}
 export interface Applicant {
-  primaryEmail: string; // lowercased
+  primaryEmail: string;
   name: string;
   phone?: string;
-  links?: { portfolio?: string; linkedin?: string; github?: string; other?: string[] };
-  source: { type: "direct" | "referral" | "waitlist"; refCode?: string; campaign?: string };
+  links?: {
+    portfolio?: string;
+    linkedin?: string;
+    github?: string;
+    other?: string[];
+  };
+  source: {
+    type: "direct" | "referral" | "waitlist";
+    refCode?: string;
+    campaign?: string;
+  };
   createdAt: Timestamp | FieldValue;
   updatedAt: Timestamp | FieldValue;
   lastActivityAt: Timestamp | FieldValue;
@@ -50,33 +69,45 @@ export interface Applicant {
 export interface Application {
   jobId: string;
   applicantId: string;
-  applicantEmail: string; // lowercased, denormalized
+  applicantEmail: string;
   status: "NEW" | "SCREEN" | "INTERVIEW" | "OFFER" | "HIRED" | "REJECTED";
   answers: Record<string, string>;
-  resume?: { storagePath: string; filename: string; contentType: string; size: number };
-  tags: string[];
-  notesCount: number;
+  resume?: {
+    storagePath: string;
+    filename: string;
+    contentType: string;
+    size: number;
+  };
+  tags?: string[];
+  notesCount?: number;
   submittedAt: Timestamp | FieldValue;
   updatedAt: Timestamp | FieldValue;
-  internal?: { rating?: number; reviewerId?: string; reviewedAt?: Timestamp };
+  internal?: {
+    rating?: number;
+    reviewerId?: string;
+    reviewedAt?: Timestamp;
+  };
 }
 
 // 5. referrals/{refCode}
 export interface Referral {
   code: string;
-  createdBy: string; // Admin UID
+  createdBy: string; // UID
   createdAt: Timestamp | FieldValue;
-  clicksCount: number;
-  submitsCount: number;
+  clicksCount: FieldValue | number;
+  submitsCount: FieldValue | number;
   active: boolean;
 }
 
 // 6. waitlist/{id}
-export interface WaitlistEntry {
-  email: string; // lowercased
+export interface Waitlist {
+  email: string;
   name?: string;
-  interests: string[];
-  consent: { terms: boolean; marketing: boolean };
+  interests?: string[];
+  consent: {
+    terms: boolean;
+    marketing: boolean;
+  };
   createdAt: Timestamp | FieldValue;
 }
 
@@ -87,10 +118,33 @@ export interface Admin {
 }
 
 // 8. events/{eventId}
-export interface TrackingEvent {
-  type: string; // e.g., page_view, apply_submit
+export interface Event {
+  type: string;
   entityType: "job" | "applicant" | "application" | "referral" | "waitlist" | "page";
   entityId: string;
   metadata?: Record<string, any>;
   createdAt: Timestamp | FieldValue;
+}
+
+// For Job Queue System
+export interface JobQueue {
+  idempotencyKey: string;
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  lease?: {
+    ownerId: string;
+    expiresAt: Timestamp;
+  };
+  attempts: number;
+  lastAttemptAt?: Timestamp;
+  nextAttemptAt?: Timestamp;
+  payload: any;
+  result?: any;
+  error?: string;
+  createdAt: Timestamp | FieldValue;
+  updatedAt: Timestamp | FieldValue;
+}
+
+export interface DeadLetterQueue extends JobQueue {
+  originalJobId: string;
+  failedAt: Timestamp;
 }

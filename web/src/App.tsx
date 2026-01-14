@@ -1,28 +1,28 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Jobs from './pages/Jobs';
+import JobList from './pages/JobList';
 import JobDetail from './pages/JobDetail';
 import Apply from './pages/Apply';
-import ApplySuccess from './pages/ApplySuccess';
-import Waitlist from './pages/Waitlist';
 import Admin from './pages/Admin';
+import Waitlist from './pages/Waitlist';
 import Referral from './pages/Referral';
+import Success from './pages/Success';
 
-function App() {
+const App: React.FC = () => {
   return (
     <Router>
       <Routes>
-        <Route path="/jobs" element={<Jobs />} />
+        <Route path="/jobs" element={<JobList />} />
         <Route path="/jobs/:jobId" element={<JobDetail />} />
         <Route path="/apply/:jobId" element={<Apply />} />
-        <Route path="/apply/success" element={<ApplySuccess />} />
+        <Route path="/apply/success" element={<Success />} />
         <Route path="/waitlist" element={<Waitlist />} />
-        <Route path="/admin" element={<Admin />} />
         <Route path="/ref/:code" element={<Referral />} />
-        <Route path="/" element={<Jobs />} />
+        <Route path="/admin" element={<Admin />} />
+        <Route path="/" element={<JobList />} />
       </Routes>
     </Router>
   );
-}
+};
 
 export default App;
