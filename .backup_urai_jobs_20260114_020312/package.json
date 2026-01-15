@@ -15,8 +15,9 @@
     "concurrently": "^8.2.2"
   },
   "devDependencies": {
-    "ts-node": "^10.9.2",
-    "@faker-js/faker": "^8.4.1"
+    "@faker-js/faker": "^8.4.1",
+    "@types/node": "^25.0.8",
+    "ts-node": "^10.9.2"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

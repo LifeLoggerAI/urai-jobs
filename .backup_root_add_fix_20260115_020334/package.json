@@ -1,0 +1,36 @@
+{
+  "name": "urai-jobs-root",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm --prefix functions run-script dev\" \"npm --prefix web run-script dev\"",
+    "build": "npm --prefix functions run build && npm --prefix web run build",
+    "seed": "ts-node scripts/seed.ts",
+    "test": "echo skip-tests",
+    "deploy": "firebase deploy",
+    "emulators": "firebase emulators:start --import=./emudata --export-on-exit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "node -e \"process.exit(0)\""
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^8.4.1",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^25.0.8",
+    "concurrently": "^8.2.2",
+    "mocha": "^10.4.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "type": "commonjs",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "functions",
+    "web"
+  ]
+}
