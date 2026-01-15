@@ -1,10 +1,11 @@
+
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    match /resumes/{applicationId}/{filename} {
+    match /resumes/{applicantId}/{applicationId}/{filename} {
       allow read: if request.auth != null && exists(/databases/(default)/documents/admins/$(request.auth.uid));
-      allow write: if request.auth != null; // Further validation in callable function
+      allow write: if request.auth != null && request.auth.uid == applicantId;
     }
   }
 }

@@ -1,37 +1,22 @@
 {
-  "name": "urai-jobs-root",
+  "name": "urai-jobs-monorepo",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm --prefix functions run-script dev\" \"npm --prefix web run-script dev\"",
-    "build": "npm --prefix functions run build && npm --prefix web run build",
-    "seed": "ts-node scripts/seed.ts",
-    "test": "echo skip-tests",
+    "install": "pnpm -r install",
+    "build": "pnpm -r build",
+    "build:web": "pnpm --filter web build",
+    "build:functions": "pnpm --filter functions build",
+    "dev": "pnpm -r --parallel dev",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "emulators": "firebase emulators:start --import=./emulators-data --export-on-exit",
     "deploy": "firebase deploy",
-    "emulators": "firebase emulators:start --import=./emudata --export-on-exit",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "node -e \"process.exit(0)\""
+    "deploy:hosting": "firebase deploy --only hosting",
+    "deploy:functions": "firebase deploy --only functions"
   },
   "devDependencies": {
-    "@faker-js/faker": "^8.4.1",
-    "@types/mocha": "^10.0.6",
-    "@types/node": "^25.0.8",
-    "concurrently": "^8.2.2",
-    "mocha": "^10.4.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
-  },
-  "type": "commonjs",
-  "main": "dist/index.cjs",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
-  "workspaces": [
-    "packages/*",
-    "apps/*",
-    "functions",
-    "web"
-  ],
-  "packageManager": "pnpm@9.15.4+sha512.b2dc20e2fc72b3e18848459b37359a32064663e5627a51e4c74b2c29dd8e8e0491483c3abb40789cfd578bf362fb6ba8261b05f0387d76792ed6e23ea3b1b6a0"
+    "firebase-tools": "^13.10.2",
+    "typescript": "^5.4.5",
+    "concurrently": "^8.2.2"
+  }
 }

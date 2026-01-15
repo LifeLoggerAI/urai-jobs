@@ -1,5 +1,7 @@
-import React from 'react';
+import React from "react";
 
-export default function ApplySuccess() {
-  return <div>Application Successful</div>;
-}
+const ApplySuccess: React.FC = () => {
+  return <div>Apply Success</div>;
+};
+
+export default ApplySuccess;

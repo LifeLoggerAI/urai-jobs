@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -12,43 +13,51 @@ service cloud.firestore {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Public read-only access to open jobs
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    function hasOnly(keys) {
+      return request.resource.data.keys().hasOnly(keys);
+    }
+
+    match /jobs/{jobId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /jobPublic/{jobId} {
       allow read: if true;
       allow write: if false;
     }
 
-    // Logged-in users can create applications
-    match /applications/{applicationId} {
-      allow create: if isSignedIn();
-      allow read, update, delete: if isAdmin();
-    }
-
-    // Anyone can join the waitlist
-    match /waitlist/{waitlistId} {
-      allow create: if true;
-      allow read, update, delete: if isAdmin();
-    }
-    
-    match /referrals/{refCode} {
-        allow read, write: if isAdmin();
-    }
-    
-    match /events/{eventId} {
-        allow read, write: if isAdmin();
-    }
-
-    // Admins can manage jobs and applicants
-    match /jobs/{jobId} {
-      allow read, write: if isAdmin();
-    }
-
     match /applicants/{applicantId} {
-      allow read, write: if isAdmin();
+      allow read, update: if isAdmin();
+      allow create: if true;
     }
 
-    match /admins/{adminId} {
-      allow read, write: if isAdmin(); // Or a more restrictive owner role
+    match /applications/{applicationId} {
+      allow read, update: if isAdmin();
+      allow create: if true;
+    }
+
+    match /referrals/{refCode} {
+      allow read, update: if isAdmin();
+      allow create: if true;
+    }
+
+    match /waitlist/{id} {
+      allow read, update: if isAdmin();
+      allow create: if true;
+    }
+
+    match /admins/{uid} {
+      allow read, create, update, delete: if isAdmin() && isOwner(uid);
+    }
+
+    match /events/{eventId} {
+      allow read, update: if isAdmin();
+      allow create: if true;
     }
   }
 }

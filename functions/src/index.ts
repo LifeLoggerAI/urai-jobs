@@ -1,9 +1,7 @@
-import { https, setGlobalOptions } from 'firebase-functions/v2';
 
-setGlobalOptions({ maxInstances: 2 });
-
-export * from './triggers/onJobWrite';
-export * from './triggers/onApplicationCreate';
-export * from './api/admin';
-export * from './api/health';
-export * from './scheduled/dailyDigest';
+export * from "./triggers/onJobWrite";
+export * from "./triggers/onApplicationCreate";
+export * from "./callable/createResumeUpload";
+export * from "./callable/adminSetApplicationStatus";
+export * from "./scheduled/dailyDigest";
+export * from "./httpHealth";

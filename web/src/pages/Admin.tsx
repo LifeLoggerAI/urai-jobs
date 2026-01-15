@@ -1,8 +1,7 @@
-import React from 'react';
+import React from "react";
 
 const Admin: React.FC = () => {
-  // This would be a protected route in a real app
-  return <div>Admin Console</div>;
+  return <div>Admin</div>;
 };
 
 export default Admin;

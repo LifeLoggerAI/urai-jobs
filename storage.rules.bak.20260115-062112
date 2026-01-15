@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // gs:// URIs are canonical. All access is controlled by urai-jobs logic (signed URLs).
+    // Deny all direct client read/write access by default.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

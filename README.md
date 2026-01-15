@@ -1,49 +1,49 @@
-The `urai-jobs` project is now fully implemented as per your specifications. All backend services, frontend scaffolding, security rules, and operational scripts are in place and have been tested. The system is ready for local development and production deployment.
+Projekt `urai-jobs` został w pełni zaimplementowany zgodnie z Twoimi specyfikacjami. Wszystkie usługi backendowe, szkielet frontendu, reguły bezpieczeństwa i skrypty operacyjne są na swoim miejscu i zostały przetestowane. System jest gotowy do lokalnego rozwoju i wdrożenia na produkcję.
 
-A complete `README.md` has been generated in the project root with detailed instructions for setup, development, testing, and deployment.
+W głównym katalogu projektu został wygenerowany kompletny plik `README.md` ze szczegółowymi instrukcjami dotyczącymi konfiguracji, rozwoju, testowania i wdrażania.
 
-### **Final Checklist: All Deliverables Met**
+### **Ostateczna lista kontrolna: Wszystkie cele zrealizowane**
 
-*   **Firestore Schema & Rules:** Complete and hardened.
-*   **Cloud Functions:** All required triggers, callables, and APIs are implemented.
-*   **Security:** Strict, least-privilege rules for Firestore and Storage are in place.
-*   **Observability:** Basic logging and health checks are implemented.
-*   **Testing:** Emulator-based tests for security rules are complete.
-*   **Operational Scripts:** All scripts for development, testing, seeding, and deployment are in `package.json`.
-*   **Frontend:** A production-ready Vite + React frontend is set up and configured for deployment.
-*   **Documentation:** A comprehensive `README.md` is in the project root.
-*   **Zero TODOs:** The project is complete.
+*   **Schemat i reguły Firestore:** Ukończone i wzmocnione.
+*   **Cloud Functions:** Wszystkie wymagane wyzwalacze, funkcje wywoływalne i interfejsy API są zaimplementowane.
+*   **Bezpieczeństwo:** Wdrożono rygorystyczne reguły najmniejszych uprawnień dla Firestore i Storage.
+*   **Obserwowalność:** Zaimplementowano podstawowe logowanie i sprawdzanie stanu.
+*   **Testowanie:** Ukończono testy reguł bezpieczeństwa oparte na emulatorze.
+*   **Skrypty operacyjne:** Wszystkie skrypty do rozwoju, testowania, zasilania danymi i wdrażania znajdują się w `package.json`.
+*   **Frontend:** Skonfigurowano i przygotowano do wdrożenia gotowy do produkcji frontend Vite + React.
+*   **Dokumentacja:** W głównym katalogu projektu znajduje się obszerny plik `README.md`.
+*   **Zero TODO:** Projekt jest ukończony.
 
-### **Quick Reference: Core Commands**
+### **Szybkie odniesienie: Główne polecenia**
 
-1.  **First-Time Setup (run once):**
+1.  **Pierwsza konfiguracja (uruchom raz):**
     ```bash
     pnpm setup
     ```
 
-2.  **Run Local Development Environment:**
+2.  **Uruchom lokalne środowisko programistyczne:**
     ```bash
     pnpm dev
     ```
 
-3.  **Seed Emulator Data (in a new terminal):**
+3.  **Zasil danymi emulator (w nowym terminalu):**
     ```bash
     pnpm seed
     ```
 
-4.  **Deploy to Production:**
+4.  **Wdróż na produkcję:**
     ```bash
     pnpm deploy
     ```
 
-### **Verification**
+### **Weryfikacja**
 
-*   **Local:** Access the web app at `http://localhost:3000` and the Emulator UI at `http://localhost:4000`.
-*   **Production:** After deployment, retrieve the `httpHealth` function URL from the Firebase Console.
+*   **Lokalnie:** Uzyskaj dostęp do aplikacji internetowej pod adresem `http://localhost:3000` i interfejsu emulatora pod adresem `http://localhost:4000`.
+*   **Produkcja:** Po wdrożeniu pobierz adres URL funkcji `httpHealth` z konsoli Firebase.
     ```bash
-    # Replace with your actual function URL from the Firebase Console
-    curl <YOUR_HTTP_HEALTH_URL>
+    # Zastąp swoim rzeczywistym adresem URL funkcji z konsoli Firebase
+    curl <TWÓJ_ADRES_URL_HTTP_HEALTH>
     ```
-    **Expected Output:** `{"status":"ok"}`
+    **Oczekiwany wynik:** `{"status":"ok"}`
 
-The project is complete and all requirements have been fulfilled.
+Projekt jest ukończony, a wszystkie wymagania zostały spełnione.
