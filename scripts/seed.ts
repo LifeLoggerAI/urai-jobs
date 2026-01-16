@@ -1,56 +1,88 @@
-import { initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import * as admin from "firebase-admin";
 
 // Initialize Firebase Admin SDK
-initializeApp();
+admin.initializeApp({
+  credential: admin.credential.applicationDefault(),
+  databaseURL: "https://<YOUR_PROJECT_ID>.firebaseio.com",
+});
 
-const db = getFirestore();
+const db = admin.firestore();
 
 async function seed() {
-  console.log('Seeding database...');
-
-  // Seed Jobs
+  // Create jobs
   const jobs = [
-    { id: 'job1', title: 'Software Engineer', department: 'Engineering', status: 'open' },
-    { id: 'job2', title: 'Product Manager', department: 'Product', status: 'open' },
-    { id: 'job3', title: 'UX Designer', department: 'Design', status: 'draft' },
+    {
+      title: "Frontend Engineer",
+      department: "Engineering",
+      locationType: "remote",
+      employmentType: "full_time",
+      descriptionMarkdown: "...",
+      requirements: ["React", "TypeScript"],
+      niceToHave: ["Firebase"],
+      status: "open",
+    },
+    {
+      title: "Backend Engineer",
+      department: "Engineering",
+      locationType: "remote",
+      employmentType: "full_time",
+      descriptionMarkdown: "...",
+      requirements: ["Node.js", "TypeScript"],
+      niceToHave: ["Firebase"],
+      status: "open",
+    },
+    {
+      title: "Product Manager",
+      department: "Product",
+      locationType: "hybrid",
+      locationText: "New York, NY",
+      employmentType: "full_time",
+      descriptionMarkdown: "...",
+      requirements: ["Agile", "Jira"],
+      niceToHave: ["Firebase"],
+      status: "draft",
+    },
   ];
 
   for (const job of jobs) {
-    await db.collection('jobs').doc(job.id).set(job);
-    if (job.status === 'open') {
-      await db.collection('jobPublic').doc(job.id).set(job);
-    }
+    await db.collection("jobs").add(job);
   }
 
-  // Seed Applicants
+  // Create applicants
   const applicants = [
-    { id: 'app1', name: 'Alice', email: 'alice@example.com' },
-    { id: 'app2', name: 'Bob', email: 'bob@example.com' },
+    {
+      primaryEmail: "applicant1@example.com",
+      name: "Applicant One",
+    },
+    {
+      primaryEmail: "applicant2@example.com",
+      name: "Applicant Two",
+    },
   ];
 
   for (const applicant of applicants) {
-    await db.collection('applicants').doc(applicant.id).set(applicant);
+    await db.collection("applicants").add(applicant);
   }
 
-  // Seed Applications
+  // Create applications
   const applications = [
-    { jobId: 'job1', applicantId: 'app1', status: 'NEW' },
-    { jobId: 'job1', applicantId: 'app2', status: 'SCREEN' },
+    {
+      jobId: "<JOB_ID_1>",
+      applicantId: "<APPLICANT_ID_1>",
+      status: "NEW",
+    },
+    {
+      jobId: "<JOB_ID_2>",
+      applicantId: "<APPLICANT_ID_2>",
+      status: "NEW",
+    },
   ];
 
   for (const application of applications) {
-    await db.collection('applications').add(application);
+    await db.collection("applications").add(application);
   }
 
-  // Seed Waitlist
-  await db.collection('waitlist').add({ email: 'charlie@example.com' });
-
-  // Seed Admins
-  // Replace 'admin-uid' with a real UID from your Firebase project
-  await db.collection('admins').doc('admin-uid').set({ role: 'admin' });
-
-  console.log('Database seeded successfully!');
+  console.log("Seeding complete!");
 }
 
-seed().catch(console.error);
+seed();

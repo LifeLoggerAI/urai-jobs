@@ -1,0 +1,18 @@
+ WARN  The "workspaces" field in package.json is not supported by pnpm. Create a "pnpm-workspace.yaml" file instead.
+
+> urai-jobs@1.0.0 build /home/user/urai-jobs
+> npm run build -w packages/web && npm run build -w packages/functions
+
+
+> web@0.0.0 build
+> tsc && vite build
+
+sh: line 1: tsc: command not found
+npm error Lifecycle script `build` failed with error:
+npm error code 127
+npm error path /home/user/urai-jobs/packages/web
+npm error workspace web@0.0.0
+npm error location /home/user/urai-jobs/packages/web
+npm error command failed
+npm error command sh -c tsc && vite build
+ ELIFECYCLE  Command failed.

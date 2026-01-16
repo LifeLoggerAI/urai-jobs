@@ -1,6 +1,6 @@
-import React from "react";
+import React from 'react';
 
-const ApplySuccess: React.FC = () => {
+const ApplySuccess = () => {
   return <div>Apply Success</div>;
 };
 

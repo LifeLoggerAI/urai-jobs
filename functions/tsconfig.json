@@ -1,9 +1,15 @@
 {
   "compilerOptions": {
-    "module": "commonjs", "moduleResolution": "node", "noImplicitReturns": true,
-    "noUnusedLocals": true, "outDir": "lib", "sourceMap": true, "strict": true,
-    "target": "es2021", "esModuleInterop": true, "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true, "resolveJsonModule": true
+    "module": "commonjs",
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "outDir": "lib",
+    "sourceMap": true,
+    "strict": true,
+    "target": "es2017"
   },
-  "compileOnSave": true, "include": [ "src" ], "exclude": [ "src/**/*.test.ts" ]
+  "compileOnSave": true,
+  "include": [
+    "src"
+  ]
 }

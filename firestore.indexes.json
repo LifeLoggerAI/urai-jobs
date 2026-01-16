@@ -1,39 +1,7 @@
 {
   "indexes": [
     {
-      "collectionGroup": "applications",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "jobId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "submittedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "applications",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "jobId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "submittedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "applications",
+      "collectionGroup": "jobs",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -41,8 +9,8 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "submittedAt",
-          "order": "DESCENDING"
+          "fieldPath": "runAfter",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -55,7 +23,39 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "updatedAt",
+          "fieldPath": "leaseExpiresAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "applications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "jobId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "submittedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "applications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "jobId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "submittedAt",
           "order": "DESCENDING"
         }
       ]
@@ -92,5 +92,6 @@
         }
       ]
     }
-  ]
+  ],
+  "fieldOverrides": []
 }

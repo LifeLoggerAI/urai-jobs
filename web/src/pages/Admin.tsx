@@ -1,6 +1,6 @@
-import React from "react";
+import React from 'react';
 
-const Admin: React.FC = () => {
+const Admin = () => {
   return <div>Admin</div>;
 };
 

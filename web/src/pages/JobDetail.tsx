@@ -1,47 +1,51 @@
-import React from "react";
-import { useParams, Link } from "react-router-dom";
-import { useJob } from "../hooks/useJob";
+import React, { useEffect, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
-const JobDetail: React.FC = () => {
-  const { jobId } = useParams<{ jobId: string }>();
-  const { job, loading } = useJob(jobId!);
+const JobDetail = () => {
+  const { jobId } = useParams();
+  const [job, setJob] = useState(null);
 
-  if (loading) {
-    return <div>Loading...</div>;
-  }
+  useEffect(() => {
+    const fetchJob = async () => {
+      const docRef = doc(db, 'jobPublic', jobId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        setJob(docSnap.data());
+      } else {
+        // doc.data() will be undefined in this case
+        console.log('No such document!');
+      }
+    };
+
+    fetchJob();
+  }, [jobId]);
 
   if (!job) {
-    return <div>Job not found</div>;
+    return <div>Loading...</div>;
   }
 
   return (
     <div>
       <h1>{job.title}</h1>
-      <p>
-        {job.department} - {job.locationText}
-      </p>
+      <p>{job.department}</p>
+      <p>{job.locationType}</p>
       <p>{job.descriptionMarkdown}</p>
       <h2>Requirements</h2>
       <ul>
-        {job.requirements.map((requirement, index) => (
-          <li key={index}>{requirement}</li>
+        {job.requirements.map((req, index) => (
+          <li key={index}>{req}</li>
         ))}
       </ul>
       <h2>Nice to Have</h2>
       <ul>
-        {job.niceToHave.map((item, index) => (
-          <li key={index}>{item}</li>
+        {job.niceToHave.map((req, index) => (
+          <li key={index}>{req}</li>
         ))}
       </ul>
-      {job.compensationRange && (
-        <div>
-          <h2>Compensation</h2>
-          <p>
-            {job.compensationRange.min} - {job.compensationRange.max} {job.compensationRange.currency}
-          </p>
-        </div>
-      )}
-      <Link to={`/apply/${job.id}`}>Apply Now</Link>
+      <Link to={`/apply/${jobId}`}>Apply</Link>
     </div>
   );
 };
