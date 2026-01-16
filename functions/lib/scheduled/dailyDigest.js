@@ -1,41 +1,65 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.dailydigest = void 0;
-const scheduler_1 = require("firebase-functions/v2/scheduler");
-const firestore_1 = require("firebase-admin/firestore");
-const v2_1 = require("firebase-functions/v2");
+exports.scheduledDailyDigest = void 0;
+const functions = __importStar(require("firebase-functions"));
 const firebase_1 = require("../lib/firebase");
-exports.dailydigest = (0, scheduler_1.onSchedule)("every 24 hours", async () => {
-    const now = firestore_1.Timestamp.now();
-    const twentyFourHoursAgo = firestore_1.Timestamp.fromMillis(now.toMillis() - 24 * 60 * 60 * 1000);
-    const newApplications = await firebase_1.db
+exports.scheduledDailyDigest = functions.pubsub
+    .schedule("every 24 hours")
+    .onRun(async (context) => {
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const newApplications = await firebase_1.firestore
         .collection("applications")
-        .where("submittedAt", ">=", twentyFourHoursAgo)
-        .count()
+        .where("submittedAt", ">=", yesterday)
         .get();
-    const pendingNew = await firebase_1.db
+    const pendingApplications = await firebase_1.firestore
         .collection("applications")
-        .where("status", "==", "NEW")
-        .count()
+        .where("status", "in", ["NEW", "SCREEN"])
         .get();
-    const pendingScreen = await firebase_1.db
-        .collection("applications")
-        .where("status", "==", "SCREEN")
-        .count()
-        .get();
-    const topJobs = await firebase_1.db
+    const topJobs = await firebase_1.firestore
         .collection("jobs")
         .orderBy("stats.applicantsCount", "desc")
         .limit(5)
         .get();
     const digest = {
-        createdAt: now,
-        newApplicationsLast24h: newApplications.data().count,
-        pendingNewCount: pendingNew.data().count,
-        pendingScreenCount: pendingScreen.data().count,
-        topJobs: topJobs.docs.map((doc) => ({ id: doc.id, title: doc.data().title, applicants: doc.data().stats.applicantsCount })),
+        date: now.toISOString().split("T")[0],
+        newApplications: newApplications.size,
+        pendingApplications: pendingApplications.size,
+        topJobs: topJobs.docs.map((doc) => doc.data()),
     };
-    const date = new Date().toISOString().split("T")[0];
-    await firebase_1.db.collection("digests").doc(date).set(digest);
-    v2_1.logger.info(`Daily digest for ${date} created successfully.`);
+    await firebase_1.firestore.collection("digests").add(digest);
 });
+//# sourceMappingURL=dailyDigest.js.map

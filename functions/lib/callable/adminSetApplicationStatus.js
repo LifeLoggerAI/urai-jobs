@@ -33,35 +33,30 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onApplicationCreate = void 0;
+exports.adminSetApplicationStatus = void 0;
 const functions = __importStar(require("firebase-functions"));
 const firebase_1 = require("../lib/firebase");
-exports.onApplicationCreate = functions.firestore
-    .document("applications/{applicationId}")
-    .onCreate(async (snap, context) => {
-    const application = snap.data();
-    const { jobId, applicantId, applicantEmail } = application;
-    // TODO: Create/merge applicant
-    // Create event
+exports.adminSetApplicationStatus = functions.https.onCall(async (data, context) => {
+    if (!context.auth || !context.auth.token.admin) {
+        throw new functions.https.HttpsError("permission-denied", "You must be an admin to perform this action.");
+    }
+    const { applicationId, status, tags, rating } = data;
+    const applicationRef = firebase_1.firestore
+        .collection("applications")
+        .doc(applicationId);
+    await applicationRef.update({
+        status,
+        tags,
+        "internal.rating": rating,
+        "internal.reviewerId": context.auth.uid,
+        "internal.reviewedAt": new Date(),
+    });
     await firebase_1.firestore.collection("events").add({
-        type: "application_submitted",
+        type: "status_changed",
         entityType: "application",
-        entityId: context.params.applicationId,
-        metadata: { jobId, applicantId, applicantEmail },
+        entityId: applicationId,
+        metadata: { newStatus: status, reviewerId: context.auth.uid },
         createdAt: new Date(),
     });
-    // Increment job stats
-    const jobRef = firebase_1.firestore.collection("jobs").doc(jobId);
-    const jobDoc = await jobRef.get();
-    if (jobDoc.exists) {
-        const job = jobDoc.data();
-        const newStatus = application.status;
-        const newStatusCount = (job.stats?.statusCounts?.[newStatus] || 0) + 1;
-        await jobRef.update({
-            "stats.applicantsCount": (job.stats?.applicantsCount || 0) + 1,
-            [`stats.statusCounts.${newStatus}`]: newStatusCount,
-        });
-    }
-    // TODO: If referral refCode exists, increment referrals.submitsCount
 });
-//# sourceMappingURL=onApplicationCreate.js.map
+//# sourceMappingURL=adminSetApplicationStatus.js.map

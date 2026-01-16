@@ -1,34 +1,62 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.onjobwrite = void 0;
-const v2_1 = require("firebase-functions/v2");
-const firestore_1 = require("firebase-admin/firestore");
-const db = (0, firestore_1.getFirestore)();
-exports.onjobwrite = v2_1.firestore.onDocumentWritten("jobs/{jobId}", async (event) => {
-    const beforeData = event.data?.before.data();
-    const afterData = event.data?.after.data();
-    const jobId = event.params.jobId;
-    const jobPublicRef = db.collection("jobPublic").doc(jobId);
-    if (afterData?.status === "open") {
-        const jobPublic = {
-            title: afterData.title,
-            department: afterData.department,
-            locationType: afterData.locationType,
-            locationText: afterData.locationText,
-            employmentType: afterData.employmentType,
-            descriptionMarkdown: afterData.descriptionMarkdown,
-            requirements: afterData.requirements,
-            niceToHave: afterData.niceToHave,
-            compensationRange: afterData.compensationRange,
-            status: "open",
-            createdAt: afterData.createdAt,
-            updatedAt: afterData.updatedAt,
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
         };
-        await jobPublicRef.set(jobPublic, { merge: true });
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.onJobWrite = void 0;
+const functions = __importStar(require("firebase-functions"));
+const firebase_1 = require("../lib/firebase");
+exports.onJobWrite = functions.firestore
+    .document("jobs/{jobId}")
+    .onWrite(async (change, context) => {
+    const { jobId } = context.params;
+    const job = change.after.data();
+    if (job && job.status === "open") {
+        const jobPublic = {
+            title: job.title,
+            department: job.department,
+            locationType: job.locationType,
+            locationText: job.locationText,
+            employmentType: job.employmentType,
+            descriptionMarkdown: job.descriptionMarkdown,
+            requirements: job.requirements,
+            niceToHave: job.niceToHave,
+            compensationRange: job.compensationRange,
+        };
+        await firebase_1.firestore.collection("jobPublic").doc(jobId).set(jobPublic);
     }
     else {
-        if (beforeData?.status === "open") {
-            await jobPublicRef.delete();
-        }
+        await firebase_1.firestore.collection("jobPublic").doc(jobId).delete();
     }
 });
+//# sourceMappingURL=onJobWrite.js.map

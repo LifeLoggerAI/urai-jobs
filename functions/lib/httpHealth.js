@@ -33,35 +33,9 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onApplicationCreate = void 0;
+exports.httpHealth = void 0;
 const functions = __importStar(require("firebase-functions"));
-const firebase_1 = require("../lib/firebase");
-exports.onApplicationCreate = functions.firestore
-    .document("applications/{applicationId}")
-    .onCreate(async (snap, context) => {
-    const application = snap.data();
-    const { jobId, applicantId, applicantEmail } = application;
-    // TODO: Create/merge applicant
-    // Create event
-    await firebase_1.firestore.collection("events").add({
-        type: "application_submitted",
-        entityType: "application",
-        entityId: context.params.applicationId,
-        metadata: { jobId, applicantId, applicantEmail },
-        createdAt: new Date(),
-    });
-    // Increment job stats
-    const jobRef = firebase_1.firestore.collection("jobs").doc(jobId);
-    const jobDoc = await jobRef.get();
-    if (jobDoc.exists) {
-        const job = jobDoc.data();
-        const newStatus = application.status;
-        const newStatusCount = (job.stats?.statusCounts?.[newStatus] || 0) + 1;
-        await jobRef.update({
-            "stats.applicantsCount": (job.stats?.applicantsCount || 0) + 1,
-            [`stats.statusCounts.${newStatus}`]: newStatusCount,
-        });
-    }
-    // TODO: If referral refCode exists, increment referrals.submitsCount
+exports.httpHealth = functions.https.onRequest((req, res) => {
+    res.status(200).send("OK");
 });
-//# sourceMappingURL=onApplicationCreate.js.map
+//# sourceMappingURL=httpHealth.js.map
