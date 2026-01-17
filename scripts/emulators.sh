@@ -1,5 +1,7 @@
 #!/bin/bash
-set -euo pipefail
-set +H
 
-firebase emulators:start --import=./fb-emulator-data --export-on-exit
+# Exit immediately if a command exits with a non-zero status.
+set -e
+
+# Start emulators
+firebase emulators:start

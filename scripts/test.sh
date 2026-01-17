@@ -1,5 +1,7 @@
 #!/bin/bash
-set -euo pipefail
-set +H
 
-(cd functions && npm test)
+# Exit immediately if a command exits with a non-zero status.
+set -e
+
+# Run tests
+npm --prefix functions test

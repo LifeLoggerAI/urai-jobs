@@ -1,8 +1,8 @@
 
-import { echo } from './echo';
-import { wait } from './wait';
+import { echoHandler, waitHandler } from "./demo_jobs";
 
-export const handlers: { [key: string]: (payload: any) => Promise<void> } = {
-    echo,
-    wait,
+// A registry of job handlers, mapping job type to a handler function.
+export const jobHandlers: Record<string, (payload: any) => Promise<void>> = {
+    echo: echoHandler,
+    wait: waitHandler,
 };

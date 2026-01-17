@@ -1,1 +1,174 @@
-import React, { useState, useEffect } from \'react\';\nimport { useParams, useNavigate } from \'react-router-dom\';\nimport { collection, addDoc, serverTimestamp } from \'firebase/firestore\';\nimport { ref, uploadBytesResumable, getDownloadURL } from \'firebase/storage\';\nimport { db, storage } from \'../firebase\';\n\nconst Apply = () => {\n  const { jobId } = useParams();\n  const navigate = useNavigate();\n  const [form, setForm] = useState({\n    name: \'\',\n    email: \'\',\n    phone: \'\',\n    portfolio: \'\',\n    linkedin: \'\',\n    github: \'\',\n    other: \'\',\n    answers: {},\n  });\n  const [resume, setResume] = useState(null);\n  const [isUploading, setIsUploading] = useState(false);\n  const localStorageKey = `application-draft-${jobId}-${form.email}`;\n\n  useEffect(() => {\n    const draft = localStorage.getItem(localStorageKey);\n    if (draft) {\n      setForm(JSON.parse(draft));\n    }\n  }, [localStorageKey]);\n\n  const handleChange = (e) => {\n    const { name, value } = e.target;\n    const newForm = { ...form, [name]: value };\n    setForm(newForm);\n    localStorage.setItem(localStorageKey, JSON.stringify(newForm));\n  };\n\n  const handleFileChange = (e) => {\n    setResume(e.target.files[0]);\n  };\n\n  const handleSubmit = async (e) => {\n    e.preventDefault();\n    setIsUploading(true);\n\n    try {\n      const applicationRef = await addDoc(collection(db, \'applications\'), {\n        jobId,\n        applicantEmail: form.email.toLowerCase(),\n        ...form,\n        submittedAt: serverTimestamp(),\n        status: \'NEW\',\n      });\n\n      if (resume) {\n        const storageRef = ref(\n          storage,\n          `resumes/${applicationRef.id}/${resume.name}`\n        );\n        const uploadTask = uploadBytesResumable(storageRef, resume);\n\n        uploadTask.on(\n          \'state_changed\',\n          (snapshot) => {\n            // Progress function ...\n          },\n          (error) => {\n            // Error function ...\n            console.log(error);\n          },\n          () => {\n            getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {\n              console.log(\'File available at\', downloadURL);\n              // TODO: update application with resume info\n            });\n          }\n        );\n      }\n\n      localStorage.removeItem(localStorageKey);\n      navigate(\'/apply/success\');\n    } catch (error) {\n      console.error(\'Error adding document: \', error);\n    }\ finally {\n      setIsUploading(false);\n    }\n  };\n\n  return (\n    <form onSubmit={handleSubmit}>\n      <input\n        type=\"text\"\n        name=\"name\"\n        placeholder=\"Full Name\"\n        value={form.name}\n        onChange={handleChange}\n        required\n      />\n      <input\n        type=\"email\"\n        name=\"email\"\n        placeholder=\"Email\"\n        value={form.email}\n        onChange={handleChange}\n        required\n      />\n            <input\n        type=\"tel\"\n        name=\"phone\"\n        placeholder=\"Phone (Optional)\"\n        value={form.phone}\n        onChange={handleChange}\n      />\n      <input\n        type=\"url\"\n        name=\"portfolio\"\n        placeholder=\"Portfolio URL\"\n        value={form.portfolio}\n        onChange={handleChange}\n      />\n      <input\n        type=\"url\"\n        name=\"linkedin\"\n        placeholder=\"LinkedIn URL\"\n        value={form.linkedin}\n        onChange={handleChange}\n      />\n      <input\n        type=\"url\"\n        name=\"github\"\n        placeholder=\"GitHub URL\"\n        value={form.github}\n        onChange={handleChange}\n      />\n      <input\n        type=\"text\"\n        name=\"other\"\n        placeholder=\"Other Links\"\n        value={form.other}\n        onChange={handleChange}\n      />\n      <input type=\"file\" onChange={handleFileChange} />\n      <button type=\"submit\" disabled={isUploading}>\n        {isUploading ? \'Submitting...\' : \'Submit Application\'}\n      </button>\n    </form>\n  );\n};\n\nexport default Apply;\n
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { collection, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../firebase';
+
+interface ApplyForm {
+  name: string;
+  email: string;
+  phone: string;
+  portfolio: string;
+  linkedin: string;
+  github: string;
+  other: string;
+  answers: Record<string, string>;
+}
+
+const Apply: React.FC = () => {
+  const { jobId } = useParams<{ jobId: string }>();
+  const navigate = useNavigate();
+  const [form, setForm] = useState<ApplyForm>({
+    name: '',
+    email: '',
+    phone: '',
+    portfolio: '',
+    linkedin: '',
+    github: '',
+    other: '',
+    answers: {},
+  });
+  const [resume, setResume] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const localStorageKey = `application-draft-${jobId}`;
+
+  useEffect(() => {
+    if (jobId) {
+      const draft = localStorage.getItem(localStorageKey);
+      if (draft) {
+        setForm(JSON.parse(draft));
+      }
+    }
+  }, [jobId, localStorageKey]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    const newForm = { ...form, [name]: value };
+    setForm(newForm);
+    localStorage.setItem(localStorageKey, JSON.stringify(newForm));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setResume(e.target.files[0]);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+
+    if (!jobId) {
+        setError('Job ID is missing.');
+        setIsSubmitting(false);
+        return;
+    }
+
+    try {
+      const applicationData = {
+        jobId,
+        applicantEmail: form.email.toLowerCase(),
+        name: form.name,
+        phone: form.phone,
+        links: {
+          portfolio: form.portfolio,
+          linkedin: form.linkedin,
+          github: form.github,
+          other: form.other.split(',').map(s => s.trim()).filter(s => s),
+        },
+        answers: form.answers,
+        submittedAt: serverTimestamp(),
+        status: 'NEW',
+      };
+
+      const applicationRef = await addDoc(collection(db, 'applications'), applicationData);
+
+      if (resume) {
+        const storagePath = `resumes/${applicationRef.id}/${resume.name}`;
+        const storageRef = ref(storage, storagePath);
+        const uploadTask = uploadBytesResumable(storageRef, resume);
+
+        await new Promise<void>((resolve, reject) => {
+            uploadTask.on(
+                'state_changed',
+                null,
+                (error) => {
+                    console.error('Upload failed:', error);
+                    setError('Resume upload failed.');
+                    reject(error);
+                },
+                () => {
+                    getDownloadURL(uploadTask.snapshot.ref).then(async (downloadURL) => {
+                        await updateDoc(doc(db, 'applications', applicationRef.id), {
+                            resume: {
+                                storagePath,
+                                filename: resume.name,
+                                contentType: resume.type,
+                                size: resume.size,
+                            }
+                        });
+                        resolve();
+                    }).catch(reject);
+                }
+            );
+        });
+      }
+
+      localStorage.removeItem(localStorageKey);
+      navigate('/apply/success');
+    } catch (err) {
+      console.error('Submission failed:', err);
+      setError('An error occurred during submission. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
+      <h2>Apply for {jobId}</h2>
+      <form onSubmit={handleSubmit}>
+        <div style={{ marginBottom: '10px' }}>
+            <label>Full Name</label>
+            <input type="text" name="name" value={form.name} onChange={handleChange} required style={{ width: '100%', padding: '8px' }} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+            <label>Email</label>
+            <input type="email" name="email" value={form.email} onChange={handleChange} required style={{ width: '100%', padding: '8px' }} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+            <label>Phone (Optional)</label>
+            <input type="tel" name="phone" value={form.phone} onChange={handleChange} style={{ width: '100%', padding: '8px' }} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+            <label>Portfolio URL</label>
+            <input type="url" name="portfolio" value={form.portfolio} onChange={handleChange} style={{ width: '100%', padding: '8px' }} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+            <label>LinkedIn URL</label>
+            <input type="url" name="linkedin" value={form.linkedin} onChange={handleChange} style={{ width: '100%', padding: '8px' }} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+            <label>GitHub URL</label>
+            <input type="url" name="github" value={form.github} onChange={handleChange} style={{ width: '100%', padding: '8px' }} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+            <label>Other Links (comma-separated)</label>
+            <input type="text" name="other" value={form.other} onChange={handleChange} style={{ width: '100%', padding: '8px' }} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+            <label>Resume</label>
+            <input type="file" onChange={handleFileChange} accept=".pdf,.doc,.docx" />
+        </div>
+        {error && <p style={{ color: 'red' }}>{error}</p>}
+        <button type="submit" disabled={isSubmitting} style={{ padding: '10px 15px', cursor: 'pointer' }}>
+          {isSubmitting ? 'Submitting...' : 'Submit Application'}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default Apply;

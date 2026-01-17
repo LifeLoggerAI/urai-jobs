@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../services/firebase";
+import { db } from "../firebase";
 import { Job } from "../types/Job";
 
 export const useJobs = () => {

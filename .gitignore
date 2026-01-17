@@ -1,26 +1,11 @@
+
 # Firebase
-.firebase
-.firebaserc
-firebase-debug.log
-
-# Emulators
-emulators.log
-
-# Service Account Key
 serviceAccountKey.json
+.firebase
 
-# Node
+# Dependencies
 node_modules
-npm-debug.log
-yarn-error.log
 
 # Build
 public
-functions/lib
-
-# IDE
-.idea
-.vscode
-
-# OS
-.DS_Store
+lib

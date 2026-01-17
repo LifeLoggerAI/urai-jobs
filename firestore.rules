@@ -3,46 +3,76 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Deny all access by default
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Default deny
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Public read-only access to open jobs
-    match /jobPublic/{jobId} {
-      allow get: if true;
-      allow list: if true;
+    // Admins collection: only readable by admins, not writable by clients
+    match /admins/{uid} {
+      allow read: if isAdmin();
+      allow write: if false; // Should be managed server-side or via console
     }
 
-    // Allow anyone to create applications, applicants, and waitlist entries
-    match /applicants/{applicantId} {
-      allow create: if true;
-    }
-
-    match /applications/{applicationId} {
-      allow create: if true;
-    }
-
-    match /waitlist/{waitlistId} {
-      allow create: if true;
-    }
-
-    // Allow anyone to create events
-    match /events/{eventId} {
-      allow create: if true;
-    }
-
-    // Admins can do anything
+    // Jobs can be created, read, and updated by admins.
+    // Leasing fields are only mutable by the backend (by not allowing clients to change them)
     match /jobs/{jobId} {
-      allow read, write: if request.auth != null && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
     }
 
+    // Job runs are read-only for admins
+    match /jobs/{jobId}/runs/{runId} {
+      allow read: if isAdmin();
+    }
+    
+    // Public job data is readable by anyone
+    match /jobPublic/{jobId} {
+        allow read: if true;
+    }
+
+    // Applicants can be created by anyone, but only read/updated by admins.
+    match /applicants/{applicantId} {
+      allow read, update: if isAdmin();
+      allow create: if true; // Validation should be done in the function
+    }
+
+    // Applications can be created by anyone, but only read/updated by admins.
+    match /applications/{applicationId} {
+      allow read, update: if isAdmin();
+      allow create: if true; // Validation should be done in the function
+    }
+    
+    // Waitlist can be written by anyone, but only read/updated by admins
+    match /waitlist/{entryId} {
+        allow read, update: if isAdmin();
+        allow create: if true;
+    }
+    
+    // Referrals can be managed by admins
     match /referrals/{refCode} {
-        allow read, write: if request.auth != null && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
+        allow read, write: if isAdmin();
+    }
+    
+    // Events can be created by anyone, but only read by admins.
+    match /events/{eventId} {
+        allow read: if isAdmin();
+        allow create: if true;
     }
 
-    match /admins/{adminId} {
-        allow read, write: if request.auth != null && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
+    // Metrics are admin-only
+    match /jobMetrics/{docId} {
+      allow read, write: if isAdmin();
     }
   }
 }

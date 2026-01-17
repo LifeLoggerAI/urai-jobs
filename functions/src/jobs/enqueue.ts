@@ -1,50 +1,115 @@
 
-import { https } from 'firebase-functions';
-import { db } from '../lib/firebase';
-import { Job } from './types';
-import { serverTimestamp, Timestamp } from 'firebase-admin/firestore';
+import * as admin from "firebase-admin";
+import * as functions from "firebase-functions";
+import { Job } from "./types";
 
-export const enqueue = https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new https.HttpsError('unauthenticated', 'You must be authenticated to enqueue a job.');
+const MAX_PAYLOAD_SIZE_BYTES = 10 * 1024; // 10 KB
+
+/**
+ * Enqueues a new job. This is an admin-only function.
+ *
+ * @param data The job data.
+ * @param context The callable function context.
+ * @returns The ID of the newly created job.
+ */
+export const enqueueJob = functions.https.onCall(async (data, context) => {
+    // 1. Authentication & Authorization
+    if (!context.auth || !context.auth.token.admin) {
+        throw new functions.https.HttpsError(
+            "permission-denied",
+            "You must be an admin to enqueue jobs."
+        );
     }
 
-    const isAdmin = (await db.collection('admins').doc(context.auth.uid).get()).exists;
-    if (!isAdmin) {
-        throw new https.HttpsError('permission-denied', 'You must be an admin to enqueue a job.');
+    const { type, payload, idempotencyKey, priority = 0, maxAttempts = 5 } = data;
+
+    // 2. Input Validation
+    if (!type || typeof type !== "string") {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "'type' must be a non-empty string."
+        );
+    }
+    if (!payload) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "'payload' must be provided."
+        );
+    }
+    const payloadSize = JSON.stringify(payload).length;
+    if (payloadSize > MAX_PAYLOAD_SIZE_BYTES) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            `Payload size (${payloadSize} bytes) exceeds the maximum of ${MAX_PAYLOAD_SIZE_BYTES} bytes.`
+        );
     }
 
-    const { type, payload, priority = 0, maxAttempts = 3, idempotencyKey } = data;
+    const db = admin.firestore();
+    const now = admin.firestore.Timestamp.now();
+    const jobsCollection = db.collection("jobs");
 
-    if (!type) {
-        throw new https.HttpsError('invalid-argument', 'The function must be called with a "type" argument.');
-    }
+    try {
+        let jobId: string;
 
-    if (idempotencyKey) {
-        const existingJobs = await db.collection('jobs').where('idempotencyKey', '==', idempotencyKey).get();
-        if (!existingJobs.empty) {
-            return { jobId: existingJobs.docs[0].id };
+        if (idempotencyKey) {
+            // 3. Idempotency Check within a Transaction
+            jobId = await db.runTransaction(async (transaction) => {
+                const idempotencyQuery = jobsCollection.where("idempotencyKey", "==", idempotencyKey).limit(1);
+                const snapshot = await transaction.get(idempotencyQuery);
+
+                if (!snapshot.empty) {
+                    functions.logger.warn(`Job with idempotency key '${idempotencyKey}' already exists.`, { jobId: snapshot.docs[0].id });
+                    return snapshot.docs[0].id;
+                }
+
+                const newJobRef = jobsCollection.doc();
+                const jobData: Job = {
+                    type,
+                    payload,
+                    status: "PENDING",
+                    priority,
+                    createdAt: now,
+                    updatedAt: now,
+                    runAfter: now,
+                    attempts: 0,
+                    maxAttempts,
+                    leaseOwner: null,
+                    leaseExpiresAt: null,
+                    lastError: null,
+                    idempotencyKey,
+                };
+                transaction.set(newJobRef, jobData);
+                return newJobRef.id;
+            });
+        } else {
+            // 4. Create a new job without idempotency check
+            const newJobRef = jobsCollection.doc();
+            const jobData: Job = {
+                type,
+                payload,
+                status: "PENDING",
+                priority,
+                createdAt: now,
+                updatedAt: now,
+                runAfter: now,
+                attempts: 0,
+                maxAttempts,
+                leaseOwner: null,
+                leaseExpiresAt: null,
+                lastError: null,
+            };
+            await newJobRef.set(jobData);
+            jobId = newJobRef.id;
         }
+
+        functions.logger.log(`Successfully enqueued job of type '${type}'`, { jobId });
+        return { jobId };
+
+    } catch (error) {
+        functions.logger.error("Error enqueuing job:", error);
+        throw new functions.https.HttpsError(
+            "internal",
+            "An unexpected error occurred while enqueuing the job."
+        );
     }
-
-    const now = Timestamp.now();
-    const newJob: Job = {
-        type,
-        status: 'PENDING',
-        priority,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        runAfter: now,
-        attempts: 0,
-        maxAttempts,
-        leaseOwner: null,
-        leaseExpiresAt: null,
-        lastError: null,
-        payload,
-        idempotencyKey,
-    };
-
-    const jobRef = await db.collection('jobs').add(newJob);
-
-    return { jobId: jobRef.id };
 });

@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-REAL="/usr/bin/firebase"
-if [[ "${1:-}" == "deploy" ]]; then
-  # Always force + non-interactive to prevent prompts (index deletions, etc.)
-  exec "$REAL" deploy --non-interactive --force "${@:2}"
-else
-  exec "$REAL" "$@"
-fi

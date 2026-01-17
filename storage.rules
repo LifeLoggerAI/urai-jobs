@@ -2,16 +2,15 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Resumes are private and can only be uploaded by authenticated users to their own scoped path.
-    // Admins have read-only access to all resumes.
-    match /resumes/{applicantId}/{applicationId}/{filename} {
-      allow read: if request.auth != null && exists(/databases/(default)/documents/admins/$(request.auth.uid));
-      allow write: if request.auth != null && request.auth.uid == applicantId;
-    }
-
-    // Deny all other access to storage.
+    // Default deny
     match /{allPaths=**} {
       allow read, write: if false;
+    }
+
+    // Resumes: only admins can read, only applicants can write to their own scoped path
+    match /resumes/{applicantId}/{applicationId}/{filename} {
+      allow read: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      allow write: if request.auth != null && request.auth.uid == applicantId;
     }
   }
 }
