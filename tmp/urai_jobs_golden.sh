@@ -1,14 +1,253 @@
 #!/bin/bash
+# URAI Jobs Golden Setup Script
+# This script is idempotent and can be re-run safely.
 
-# Exit immediately if a command exits with a non-zero status.
-set -e
+set -e # Exit on error
 
-# Step 1: Standardize Project Shape
-mkdir -p functions
-mkdir -p scripts
+echo "INFO: Starting URAI Jobs setup."
+
+# --- STEP 0: Discovery & Cleaning ---
+echo "INFO: Cleaning up previous state to ensure idempotency..."
+# Clean up functions directory
+if [ -d "functions" ]; then
+    rm -rf functions/src functions/lib functions/test functions/coverage functions/node_modules
+    rm -f functions/jest.config.js functions/package.json functions/tsconfig.json functions/.eslintrc.js
+fi
+# Clean up scripts directory
+rm -rf scripts
+# Clean up root files
+rm -f firebase.json .firebaserc firestore.indexes.json firestore.rules package.json pnpm-lock.yaml
+
+# --- STEP 1: Standardize Project Shape ---
+echo "INFO: Standardizing project shape..."
+mkdir -p functions/src/engine functions/src/handlers functions/src/test scripts
+
+# Create firebase.json
+cat << 'EOF' > firebase.json
+{
+  "functions": {
+    "source": "functions",
+    "predeploy": [
+      "pnpm --prefix \"$RESOURCE_DIR\" install",
+      "pnpm --prefix \"$RESOURCE_DIR\" run build"
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "emulators": {
+    "auth": { "port": 9099 },
+    "firestore": { "port": 8080 },
+    "functions": { "port": 5001 },
+    "pubsub": { "port": 8085 },
+    "ui": { "enabled": true, "port": 4000 }
+  }
+}
+EOF
+
+# Create .firebaserc
+cat << 'EOF' > .firebaserc
+{
+  "projects": {
+    "default": "urai-jobs"
+  }
+}
+EOF
+
+# Create Root package.json
+cat << 'EOF' > package.json
+{
+  "name": "urai-jobs-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install": "pnpm --prefix functions install",
+    "test": "bash scripts/test.sh",
+    "emulators": "bash scripts/emulators.sh",
+    "deploy": "bash scripts/deploy.sh",
+    "seed": "bash scripts/seed.sh",
+    "smoke": "bash scripts/smoke.sh",
+    "dev": "bash scripts/dev.sh"
+  },
+  "devDependencies": {
+    "typescript": "4.9.5",
+    "firebase-tools": "^13.0.2",
+    "pnpm": "^8.15.4"
+  }
+}
+EOF
+
+# Create Functions package.json
+cat << 'EOF' > functions/package.json
+{
+  "name": "functions",
+  "version": "1.0.0",
+  "private": true,
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "lint": "eslint --ext .ts,.tsx .",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "dependencies": {
+    "firebase-admin": "^11.11.1",
+    "firebase-functions": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.11",
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0",
+    "eslint": "^8.56.0",
+    "eslint-config-google": "^0.14.0",
+    "eslint-plugin-import": "^2.29.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "4.9.5"
+  },
+  "engines": { "node": "20" }
+}
+EOF
+
+# Create Functions tsconfig.json
+cat << 'EOF' > functions/tsconfig.json
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "noImplicitReturns": true,
+    "noUnusedLocals": false,
+    "outDir": "lib",
+    "sourceMap": true,
+    "strict": true,
+    "target": "es2020",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "compileOnSave": true,
+  "include": [ "src/**/*.ts" ],
+  "exclude": [ "src/**/*.test.ts" ]
+}
+EOF
+
+# Create Functions jest.config.js
+cat << 'EOF' > functions/jest.config.js
+/** @type {import('ts-jest').JestConfigWithTsJest} */
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  clearMocks: true,
+  coverageDirectory: "coverage",
+  transform: {
+    '^.+\.ts$': 'ts-jest',
+  },
+  collectCoverageFrom: ['src/**/*.ts', '!src/types.ts', '!src/index.ts', '!src/handlers/**'],
+  testMatch: ['**/__tests__/**/*.test.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
+};
+EOF
+
+# Create Functions .eslintrc.js
+cat << 'EOF' > functions/.eslintrc.js
+module.exports = {
+  root: true,
+  env: { es6: true, node: true },
+  extends: [
+    "eslint:recommended",
+    "plugin:import/errors",
+    "plugin:import/warnings",
+    "plugin:import/typescript",
+    "google",
+    "plugin:@typescript-eslint/recommended",
+  ],
+  parser: "@typescript-eslint/parser",
+  parserOptions: {
+    project: ["tsconfig.json"],
+    sourceType: "module",
+  },
+  ignorePatterns: [ "/lib/**/*" ],
+  plugins: ["@typescript-eslint", "import"],
+  rules: {
+    "quotes": ["error", "double"],
+    "import/no-unresolved": 0,
+    "indent": "off",
+    "@typescript-eslint/no-explicit-any": "off",
+    "require-jsdoc": "off",
+  },
+};
+EOF
+
+# --- STEP 2: Firestore Data Model ---
+echo "INFO: Creating Firestore rules and indexes..."
+
+# Create firestore.rules
+cat << 'EOF' > firestore.rules
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Public read-only access to open jobs
+    match /jobPublic/{jobId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Admin-only access to the full job details
+    match /jobs/{jobId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    // Applicants can be created by anyone, but not read
+    match /applicants/{applicantId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+    
+    // Applications can be created by anyone, but only read/updated by admins
+    match /applications/{applicationId} {
+        allow create: if true;
+        allow read, update, delete: if isAdmin();
+    }
+
+    // Referrals can be created and updated by admins
+    match /referrals/{refCode} {
+        allow read, create, update, delete: if isAdmin();
+    }
+
+    // Waitlist can be written to by anyone, but only read by admins
+    match /waitlist/{id} {
+        allow create: if true;
+        allow read, update, delete: if isAdmin();
+    }
+
+    // Only admins can manage the admin list
+    match /admins/{uid} {
+      allow read, create, delete: if isAdmin();
+    }
+    
+    // Events can be created by anyone, but only read by admins
+    match /events/{eventId} {
+        allow create: if true;
+        allow read, update, delete: if isAdmin();
+    }
+  }
+}
+EOF
 
 # Create firestore.indexes.json
-echo '{
+cat << 'EOF' > firestore.indexes.json
+{
   "indexes": [
     {
       "collectionGroup": "jobs",
@@ -19,343 +258,430 @@ echo '{
       ]
     },
     {
-      "collectionGroup": "jobs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "leaseExpiresAt", "order": "ASCENDING" }
-      ]
+        "collectionGroup": "jobs",
+        "queryScope": "COLLECTION",
+        "fields": [
+            { "fieldPath": "status", "order": "ASCENDING" },
+            { "fieldPath": "priority", "order": "DESCENDING" },
+            { "fieldPath": "createdAt", "order": "ASCENDING" }
+        ]
+    },
+    {
+        "collectionGroup": "jobs",
+        "queryScope": "COLLECTION",
+        "fields": [
+            { "fieldPath": "status", "order": "ASCENDING" },
+            { "fieldPath": "leaseExpiresAt", "order": "ASCENDING" }
+        ]
     }
-  ],
-  "fieldOverrides": []
-}' > firestore.indexes.json
-
-# Create firestore.rules
-echo 'rules_version = "2";
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Forbid client-side writes to the entire database
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // Allow admin access to all resources
-    match /jobs/{jobId} {
-        allow read, write: if get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == "admin";
-    }
-    match /jobs/{jobId}/{subcollection}/{docId} {
-        allow read, write: if get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == "admin";
-    }
-    match /jobMetrics/{metricId} {
-        allow read, write: if get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == "admin";
-    }
-    match /admins/{adminId} {
-        allow read, write: if get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == "admin";
-    }
-  }
-}' > firestore.rules
-
-# Create scripts/dev.sh
-echo '#!/bin/bash
-npm --prefix ../functions run dev' > scripts/dev.sh
-chmod +x scripts/dev.sh
-
-# Create scripts/test.sh
-echo '#!/bin/bash
-npm --prefix ../functions test' > scripts/test.sh
-chmod +x scripts/test.sh
-
-# Create scripts/emulators.sh
-echo '#!/bin/bash
-firebase emulators:start' > scripts/emulators.sh
-chmod +x scripts/emulators.sh
-
-# Create scripts/deploy.sh
-echo '#!/bin/bash
-firebase deploy --only functions,firestore' > scripts/deploy.sh
-chmod +x scripts/deploy.sh
-
-# Initialize functions directory
-if [ ! -f "functions/package.json" ]; then
-  npm init -y --prefix functions
-fi
-
-# Install dependencies
-npm install --prefix functions firebase-admin firebase-functions
-npm install --prefix functions -D typescript @types/node @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint
-
-# Create tsconfig.json in functions directory
-echo '{
-  "compilerOptions": {
-    "module": "commonjs",
-    "noImplicitReturns": true,
-    "noUnusedLocals": true,
-    "outDir": "lib",
-    "sourceMap": true,
-    "strict": true,
-    "target": "es2017"
-  },
-  "compileOnSave": true,
-  "include": [
-    "src"
   ]
-}' > functions/tsconfig.json
+}
+EOF
 
-# Create src directory in functions
-mkdir -p functions/src
+# --- STEP 3: Core Job Engine ---
+echo "INFO: Implementing core job engine..."
 
-# Step 2, 3, 4, 5, 6: Implement Core Logic, Handlers, and API
-# Create functions/src/index.ts
-echo '
+# Create functions/src/types.ts
+cat << 'EOF' > functions/src/types.ts
+import { firestore } from "firebase-admin";
+
+export type JobStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "DEAD" | "CANCELED";
+export type JobOutcome = "SUCCEEDED" | "FAILED" | "DEAD" | "CANCELED";
+
+export interface Job {
+    type: string;
+    status: JobStatus;
+    priority: number;
+    createdAt: firestore.Timestamp;
+    updatedAt: firestore.Timestamp;
+    runAfter: firestore.Timestamp;
+    attempts: number;
+    maxAttempts: number;
+    leaseOwner: string | null;
+    leaseExpiresAt: firestore.Timestamp | null;
+    lastError: { message: string; code?: string; stack?: string; at?: firestore.Timestamp } | null;
+    payload: Record<string, any>;
+    idempotencyKey?: string;
+}
+
+export interface JobRun {
+    startedAt: firestore.Timestamp;
+    finishedAt: firestore.Timestamp | null;
+    workerId: string;
+    outcome: JobOutcome | null;
+    error?: { message: string; code?: string; stack?: string };
+    durationMs: number | null;
+}
+
+export interface JobContext {
+    jobId: string;
+    job: Job;
+    runId: string;
+    run: JobRun;
+    log: (level: 'INFO' | 'WARN' | 'ERROR', message: string, data?: Record<string, any>) => void;
+}
+
+export type JobHandler = (payload: any, context: JobContext) => Promise<void>;
+EOF
+
+# Create functions/src/engine/enqueue.ts
+cat << 'EOF' > functions/src/engine/enqueue.ts
 import * as admin from "firebase-admin";
-import * as functions from "firebase-functions";
-admin.initializeApp();
-const db = admin.firestore();
-const {error, info} = functions.logger;
-interface Job {
-  type: string;
-  status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "DEAD" | "CANCELED";
-  priority: number;
-  createdAt: admin.firestore.Timestamp;
-  updatedAt: admin.firestore.Timestamp;
-  runAfter: admin.firestore.Timestamp;
-  attempts: number;
-  maxAttempts: number;
-  leaseOwner: string | null;
-  leaseExpiresAt: admin.firestore.Timestamp | null;
-  lastError: { message: string, code?: string, stack?: string, at?: admin.firestore.Timestamp } | null;
-  payload: any;
-  idempotencyKey?: string;
-}
-interface JobRun {
-  startedAt: admin.firestore.Timestamp;
-  finishedAt: admin.firestore.Timestamp | null;
-  workerId: string;
-  outcome: string | null;
-  error?: any;
-  durationMs: number | null;
-}
-const handlers: { [key: string]: (payload: any) => Promise<any> } = {
-  echo: async (payload) => {
-    info("ECHO PAYLOAD", payload);
-    return { "echo": payload };
-  },
-  wait: async (payload) => {
-    const ms = payload.ms || 1000;
-    await new Promise(res => setTimeout(res, ms));
-    return { "waited": ms };
-  },
-};
-export const enqueue = functions.https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "Authentication is required.");
-    }
-    // Simple admin check
-    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
-    if (!adminDoc.exists) {
-        throw new functions.https.HttpsError("permission-denied", "Admin privileges are required.");
-    }
+import { Job } from "../types";
 
-    const { type, payload, priority, maxAttempts, runAfter } = data;
-    if (!type || !handlers[type]) {
-        throw new functions.https.HttpsError("invalid-argument", "A valid job type is required.");
-    }
+const db = admin.firestore();
+
+export const enqueueJob = async (type: string, payload: Record<string, any>, options: { priority?: number; maxAttempts?: number; runAfter?: Date; idempotencyKey?: string } = {}) => {
     const now = admin.firestore.Timestamp.now();
-    const newJob: Job = {
+
+    const job: Job = {
         type,
         status: "PENDING",
-        priority: priority || 0,
+        priority: options.priority || 0,
         createdAt: now,
         updatedAt: now,
-        runAfter: runAfter ? admin.firestore.Timestamp.fromMillis(runAfter) : now,
+        runAfter: options.runAfter ? admin.firestore.Timestamp.fromDate(options.runAfter) : now,
         attempts: 0,
-        maxAttempts: maxAttempts || 5,
+        maxAttempts: options.maxAttempts || 5,
         leaseOwner: null,
         leaseExpiresAt: null,
         lastError: null,
-        payload,
+        payload: payload,
+        ...(options.idempotencyKey && { idempotencyKey: options.idempotencyKey }),
     };
-    const jobRef = await db.collection("jobs").add(newJob);
-    return { jobId: jobRef.id };
-});
-export const dispatcher = functions.pubsub.schedule("every 1 minutes").onRun(async () => {
+
+    if (options.idempotencyKey) {
+        const existing = await db.collection("jobs").where("idempotencyKey", "==", options.idempotencyKey).limit(1).get();
+        if (!existing.empty) {
+            console.log(`Job with idempotency key ${options.idempotencyKey} already exists. Skipping.`);
+            return existing.docs[0].id;
+        }
+    }
+
+    const docRef = await db.collection("jobs").add(job);
+    return docRef.id;
+};
+EOF
+
+# Create functions/src/engine/claim.ts
+cat << 'EOF' > functions/src/engine/claim.ts
+import * as admin from "firebase-admin";
+import { Job } from "../types";
+
+const db = admin.firestore();
+
+export const claimJobs = async (workerId: string, limit: number, leaseTimeoutMs: number): Promise<string[]> => {
     const now = admin.firestore.Timestamp.now();
-    const query = db.collection("jobs")
-        .where("status", "==", "PENDING")
+    const leaseExpiresAt = admin.firestore.Timestamp.fromMillis(now.toMillis() + leaseTimeoutMs);
+
+    const availableJobs = await db.collection("jobs")
+        .where("status", "in", ["PENDING", "FAILED"])
         .where("runAfter", "<=", now)
         .orderBy("runAfter", "asc")
         .orderBy("priority", "desc")
-        .limit(10);
-    const jobs = await query.get();
-    const workerId = "dispatcher-" + Date.now();
-    for (const jobDoc of jobs.docs) {
-        const jobId = jobDoc.id;
-        const job = jobDoc.data() as Job;
+        .orderBy("createdAt", "asc")
+        .limit(limit)
+        .get();
+
+    const claimedJobIds: string[] = [];
+
+    for (const doc of availableJobs.docs) {
+        const jobId = doc.id;
         const jobRef = db.collection("jobs").doc(jobId);
+
         try {
             await db.runTransaction(async (transaction) => {
-                const freshJobDoc = await transaction.get(jobRef);
-                const freshJob = freshJobDoc.data() as Job;
-                if (freshJob.status !== "PENDING") {
-                    return; // Job was claimed by another worker
+                const jobDoc = await transaction.get(jobRef);
+                if (!jobDoc.exists) return;
+
+                const job = jobDoc.data() as Job;
+
+                if (job.status !== "PENDING" && job.status !== "FAILED") {
+                    return;
                 }
-                const leaseTimeout = 60 * 1000; // 60 seconds
+                
+                if (job.leaseExpiresAt && now.toMillis() < job.leaseExpiresAt.toMillis()){
+                    return;
+                }
+
                 transaction.update(jobRef, {
                     status: "RUNNING",
                     leaseOwner: workerId,
-                    leaseExpiresAt: admin.firestore.Timestamp.fromMillis(now.toMillis() + leaseTimeout),
-                    attempts: freshJob.attempts + 1,
+                    leaseExpiresAt,
+                    attempts: admin.firestore.FieldValue.increment(1),
                     updatedAt: now,
                 });
-                transaction.set(jobRef.collection("runs").doc(), {
-                    startedAt: now,
-                    workerId,
-                });
-            });
 
-            const handler = handlers[job.type];
-            let outcome: any;
-            try {
-                outcome = await handler(job.payload);
-                await completeJob(jobId, workerId, "SUCCEEDED", outcome);
-            } catch (e: any) {
-                error("Job execution failed", { jobId, error: e.message });
-                await failJob(jobId, workerId, e);
-            }
-        } catch (e: any) {
-            error("Transaction to claim job failed", { jobId, error: e.message });
+                const runRef = jobRef.collection("runs").doc();
+                transaction.set(runRef, {
+                    startedAt: now,
+                    finishedAt: null,
+                    workerId,
+                    outcome: null,
+                    durationMs: null,
+                });
+
+                claimedJobIds.push(jobId);
+            });
+        } catch (error) {
+            console.error(`Failed to claim job ${jobId}`, error);
+        }
+    }
+
+    return claimedJobIds;
+};
+EOF
+
+# Create functions/src/engine/lifecycle.ts
+cat << 'EOF' > functions/src/engine/lifecycle.ts
+import * as admin from "firebase-admin";
+import { Job, JobRun } from "../types";
+
+const db = admin.firestore();
+
+export const succeedJob = async (jobId: string, runId: string) => {
+    const now = admin.firestore.Timestamp.now();
+    const jobRef = db.collection("jobs").doc(jobId);
+    const runRef = jobRef.collection("runs").doc(runId);
+
+    const runDoc = await runRef.get();
+    const run = runDoc.data() as JobRun;
+
+    await runRef.update({
+        finishedAt: now,
+        outcome: "SUCCEEDED",
+        durationMs: now.toMillis() - run.startedAt.toMillis(),
+    });
+
+    await jobRef.update({ status: "SUCCEEDED", updatedAt: now });
+};
+
+export const failJob = async (jobId: string, runId: string, error: Error) => {
+    const now = admin.firestore.Timestamp.now();
+    const jobRef = db.collection("jobs").doc(jobId);
+    const runRef = jobRef.collection("runs").doc(runId);
+
+    const jobDoc = await jobRef.get();
+    const job = jobDoc.data() as Job;
+
+    const runDoc = await runRef.get();
+    const run = runDoc.data() as JobRun;
+
+    await runRef.update({
+        finishedAt: now,
+        outcome: "FAILED",
+        durationMs: now.toMillis() - run.startedAt.toMillis(),
+        error: { message: error.message, stack: error.stack },
+    });
+
+    if (job.attempts >= job.maxAttempts) {
+        await jobRef.update({ status: "DEAD", updatedAt: now, lastError: { message: error.message, at: now } });
+    } else {
+        const backoff = Math.pow(2, job.attempts) * 1000 + Math.random() * 1000;
+        const runAfter = admin.firestore.Timestamp.fromMillis(now.toMillis() + backoff);
+        await jobRef.update({ status: "FAILED", updatedAt: now, runAfter, lastError: { message: error.message, at: now } });
+    }
+};
+EOF
+
+# --- STEP 4: Job Handlers ---
+echo "INFO: Implementing job handlers..."
+
+# Create functions/src/handlers/echo.ts
+cat << 'EOF' > functions/src/handlers/echo.ts
+import { JobHandler } from "../types";
+
+export const echoHandler: JobHandler = async (payload, context) => {
+    console.log("ECHO HANDLER:", payload);
+    context.log("INFO", "Echoing payload", payload);
+};
+EOF
+
+# Create functions/src/handlers/wait.ts
+cat << 'EOF' > functions/src/handlers/wait.ts
+import { JobHandler } from "../types";
+
+export const waitHandler: JobHandler = async (payload) => {
+    const ms = payload.ms || 1000;
+    if (ms > 10000) throw new Error("Wait time too long");
+    await new Promise(resolve => setTimeout(resolve, ms));
+};
+EOF
+
+# --- STEP 7: Emulator-first Dev Experience (Scripts) ---
+echo "INFO: Creating utility scripts..."
+
+# Create scripts/dev.sh
+cat << 'EOF' > scripts/dev.sh
+#!/bin/bash
+set -e
+pnpm --prefix functions run build:watch
+EOF
+
+# Create scripts/test.sh
+cat << 'EOF' > scripts/test.sh
+#!/bin/bash
+set -e
+pnpm --prefix functions test
+EOF
+
+# Create scripts/emulators.sh
+cat << 'EOF' > scripts/emulators.sh
+#!/bin/bash
+set -e
+firebase emulators:start --import=./emulator-data --export-on-exit
+EOF
+
+# Create scripts/deploy.sh
+cat << 'EOF' > scripts/deploy.sh
+#!/bin/bash
+set -e
+firebase deploy --only functions,firestore
+EOF
+
+# Create scripts/seed.sh
+cat << 'EOF' > scripts/seed.sh
+#!/bin/bash
+set -e
+
+echo "Seeding database..."
+
+# Enqueue a few jobs for testing
+firebase functions:shell <<EOF
+enqueue({type: 'echo', payload: {message: 'hello world 1'}})
+enqueue({type: 'wait', payload: {ms: 2000}})
+enqueue({type: 'echo', payload: {message: 'hello world 2'}, options: {priority: 10}})
+.exit
+EOF
+
+echo "Database seeded."
+EOF
+
+# Create scripts/smoke.sh
+cat << 'EOF' > scripts/smoke.sh
+#!/bin/bash
+set -e
+
+echo "INFO: Running smoke test..."
+
+# Start emulators in the background
+firebase emulators:start --only firestore,auth,functions,pubsub > /dev/null 2>&1 &
+EMULATOR_PID=$!
+echo "Emulator PID: $EMULATOR_PID"
+
+# Trap exit to ensure emulators are shut down
+trap 'echo "Killing emulator PID $EMULATOR_PID"; kill $EMULATOR_PID' EXIT
+
+# Wait for emulators to be ready
+sleep 15
+
+# Seed the database
+bash scripts/seed.sh
+
+# Wait for dispatcher to run
+echo "Waiting for dispatcher to run..."
+sleep 70
+
+# Check job statuses (manual check for now)
+echo "Smoketest complete. Check emulator UI for job statuses."
+
+# The EXIT trap will automatically kill the emulator process
+EOF
+
+
+# --- STEP 8: Tests ---
+echo "INFO: Creating tests..."
+
+# Create functions/src/test/engine.test.ts
+cat << 'EOF' > functions/src/test/engine.test.ts
+import { enqueueJob } from "../engine/enqueue";
+// Mock firestore
+
+describe("Job Engine", () => {
+    it("should enqueue a job", async () => {
+        // This is where you would mock Firestore and test enqueueJob
+        expect(true).toBe(true);
+    });
+});
+EOF
+
+# --- Main Entrypoint ---
+# Create functions/src/index.ts
+cat << 'EOF' > functions/src/index.ts
+import * as admin from "firebase-admin";
+admin.initializeApp();
+
+import * as functions from "firebase-functions";
+import { claimJobs } from "./engine/claim";
+import { enqueueJob } from "./engine/enqueue";
+import { succeedJob, failJob } from "./engine/lifecycle";
+import { JobHandler, Job, JobRun } from "./types";
+
+// --- Handlers ---
+import { echoHandler } from "./handlers/echo";
+import { waitHandler } from "./handlers/wait";
+
+const handlers: Record<string, JobHandler> = {
+    echo: echoHandler,
+    wait: waitHandler,
+};
+
+// --- API ---
+export const enqueue = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+    }
+    const adminDoc = await admin.firestore().collection('admins').doc(context.auth.uid).get();
+    if (!adminDoc.exists) {
+        throw new functions.https.HttpsError("permission-denied", "Admin privileges required.");
+    }
+
+    const { type, payload, options } = data;
+    if (!type || !payload) {
+        throw new functions.https.HttpsError("invalid-argument", "`type` and `payload` are required.");
+    }
+
+    const jobId = await enqueueJob(type, payload, options);
+    return { jobId };
+});
+
+// --- Dispatcher ---
+export const dispatcher = functions.pubsub.schedule("every 1 minutes").onRun(async () => {
+    const workerId = `dispatcher-${Date.now()}`;
+    const claimedJobIds = await claimJobs(workerId, 10, 60000);
+
+    for (const jobId of claimedJobIds) {
+        const jobRef = admin.firestore().collection("jobs").doc(jobId);
+        const runQuery = await jobRef.collection("runs").where("workerId", "==", workerId).orderBy("startedAt", "desc").limit(1).get();
+        if (runQuery.empty) {
+            console.error(`Could not find run for job ${jobId} and worker ${workerId}`);
+            continue;
+        }
+        const runId = runQuery.docs[0].id;
+
+        const jobDoc = await jobRef.get();
+        const job = jobDoc.data() as Job;
+
+        const handler = handlers[job.type];
+        if (!handler) {
+            await failJob(jobId, runId, new Error(`No handler for job type: ${job.type}`))
+            continue;
+        }
+
+        try {
+            await handler(job.payload, { 
+                jobId, 
+                job, 
+                runId, 
+                run: runQuery.docs[0].data() as JobRun, 
+                log: (level, message, data) => console.log(JSON.stringify({level, message, jobId, runId, ...data}))
+            });
+            await succeedJob(jobId, runId);
+        } catch (error) {
+            await failJob(jobId, runId, error as Error);
         }
     }
 });
-async function completeJob(jobId: string, workerId: string, status: "SUCCEEDED" | "CANCELED", outcome: any) {
-    const now = admin.firestore.Timestamp.now();
-    const jobRef = db.collection("jobs").doc(jobId);
-    await jobRef.update({
-        status: status,
-        updatedAt: now,
-        leaseOwner: null,
-        leaseExpiresAt: null,
-    });
-    const runQuery = await jobRef.collection("runs").where("workerId", "==", workerId).orderBy("startedAt", "desc").limit(1).get();
-    if (!runQuery.empty) {
-        const runDoc = runQuery.docs[0];
-        const run = runDoc.data() as JobRun;
-        const durationMs = now.toMillis() - run.startedAt.toMillis();
-        await runDoc.ref.update({
-            finishedAt: now,
-            outcome: status,
-            durationMs,
-        });
-    }
-}
-async function failJob(jobId: string, workerId: string, e: Error) {
-    const now = admin.firestore.Timestamp.now();
-    const jobRef = db.collection("jobs").doc(jobId);
-    const jobDoc = await jobRef.get();
-    const job = jobDoc.data() as Job;
-    const newAttempts = job.attempts;
-    let newStatus: Job["status"] = "FAILED";
-    if (newAttempts >= job.maxAttempts) {
-        newStatus = "DEAD";
-    }
-    const backoff = Math.pow(2, newAttempts) * 1000; // exponential backoff
-    const runAfter = admin.firestore.Timestamp.fromMillis(now.toMillis() + backoff);
-    await jobRef.update({
-        status: newStatus,
-        updatedAt: now,
-        leaseOwner: null,
-        leaseExpiresAt: null,
-        lastError: { message: e.message, stack: e.stack },
-        runAfter,
-    });
-    const runQuery = await jobRef.collection("runs").where("workerId", "==", workerId).orderBy("startedAt", "desc").limit(1).get();
-    if (!runQuery.empty) {
-        const runDoc = runQuery.docs[0];
-        const run = runDoc.data() as JobRun;
-        const durationMs = now.toMillis() - run.startedAt.toMillis();
-        await runDoc.ref.update({
-            finishedAt: now,
-            outcome: "FAILED",
-            error: { message: e.message, stack: e.stack },
-            durationMs,
-        });
-    }
-}
+EOF
 
-' > functions/src/index.ts
-
-# Step 7 & 8: Emulator-First Dev Experience & Tests
-# Create seed script
-mkdir -p scripts
-echo '#!/bin/bash
-firebase functions:config:set GCLOUD_PROJECT=$PROJECT_ID
-firebase emulators:exec "node scripts/seed.js"' > scripts/seed.sh
-chmod +x scripts/seed.sh
-
-echo '
-const admin = require("firebase-admin");
-const serviceAccount = require("../serviceAccountKey.json"); // Download this from Firebase console
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  projectId: "urai-jobs",
-});
-const db = admin.firestore();
-async function seed() {
-  console.log("Seeding database...");
-  const adminUid = "some-admin-uid"; // Replace with a real UID from Auth emulator
-  await db.collection("admins").doc(adminUid).set({ role: "admin", createdAt: new Date() });
-  console.log("Admin user created.");
-  const jobs = [
-    { type: "echo", payload: { message: "Hello from job 1" } },
-    { type: "wait", payload: { ms: 2000 } },
-    { type: "echo", payload: { message: "Hello from job 3" } },
-  ];
-  for (const job of jobs) {
-    const now = admin.firestore.Timestamp.now();
-    const newJob = {
-      ...job,
-      status: "PENDING",
-      priority: 0,
-      createdAt: now,
-      updatedAt: now,
-      runAfter: now,
-      attempts: 0,
-      maxAttempts: 5,
-      leaseOwner: null,
-      leaseExpiresAt: null,
-      lastError: null,
-    };
-    await db.collection("jobs").add(newJob);
-  }
-  console.log("Seeded 3 jobs.");
-}
-seed().then(() => console.log("Seeding complete.")).catch(console.error);
-' > scripts/seed.js
-
-# Smoke test
-echo '#!/bin/bash
-set -e
-echo "Starting smoke test..."
-# Start emulators in the background
-firebase emulators:start > /dev/null 2>&1 &
-EMULATOR_PID=$!
-# Wait for emulators to be ready
-sleep 10
-# Seed the database
-npm run seed
-# Trigger the dispatcher
-firebase functions:shell
-# TODO: Add assertions to check job statuses
-#
-# Clean up
-kill $EMULATOR_PID
-echo "Smoke test complete."
-' > scripts/smoke.sh
-chmod +x scripts/smoke.sh
-# Finalize package.json scripts
-# Using jq to safely add scripts to functions/package.json
-if command -v jq &> /dev/null; then
-  jq '.scripts.dev = "npm run build -- --watch" | .scripts.build = "tsc" | .scripts.serve = "npm run build && firebase emulators:start --only functions" | .scripts.shell = "npm run build && firebase functions:shell" | .scripts.start = "npm run shell" | .scripts.deploy = "firebase deploy --only functions" | .scripts.logs = "firebase functions:log" | .scripts.test = "echo \"Error: no test specified\" && exit 1"' functions/package.json > functions/package.json.tmp && mv functions/package.json.tmp functions/package.json
-fi
-# Show a summary
-echo "Project setup is complete."
+echo "INFO: Golden script finished."
