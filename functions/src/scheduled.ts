@@ -1,48 +1,35 @@
-import { onSchedule } from "firebase-functions/v2/scheduler";
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
-import { logger } from "firebase-functions";
+import * as functions from 'firebase-functions';
+import * as admin from 'firebase-admin';
 
-const db = getFirestore();
+export const scheduledDailyDigest = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {
+  const db = admin.firestore();
+  const now = new Date();
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-export const scheduledDailyDigest = onSchedule({ schedule: "every 24 hours" }, async () => {
-    logger.info("Running daily digest...");
+  const applicationsSnapshot = await db
+    .collection('applications')
+    .where('submittedAt', '>=', yesterday)
+    .get();
 
-    const now = Timestamp.now();
-    const twentyFourHoursAgo = Timestamp.fromMillis(now.toMillis() - 24 * 60 * 60 * 1000);
+  const newApplicationsCount = applicationsSnapshot.size;
 
-    const newApplicationsPromise = db.collection("applications")
-        .where("submittedAt", ">=", twentyFourHoursAgo)
-        .get();
+  const pendingSnapshot = await db
+    .collection('applications')
+    .where('status', 'in', ['NEW', 'SCREEN'])
+    .get();
 
-    const pendingApplicationsPromise = db.collection("applications")
-        .where("status", "in", ["NEW", "SCREEN"])
-        .get();
+  const pendingCount = pendingSnapshot.size;
 
-    const topJobsPromise = db.collection("jobs")
-        .orderBy("stats.applicantsCount", "desc")
-        .limit(5)
-        .get();
+  const jobsSnapshot = await db.collection('jobs').orderBy('stats.applicantsCount', 'desc').limit(5).get();
+  const topJobs = jobsSnapshot.docs.map(doc => ({ id: doc.id, title: doc.data().title, count: doc.data().stats.applicantsCount }));
 
-    const [newApplicationsSnap, pendingApplicationsSnap, topJobsSnap] = await Promise.all([
-        newApplicationsPromise,
-        pendingApplicationsPromise,
-        topJobsPromise,
-    ]);
+  const digest = {
+    date: now.toISOString().split('T')[0],
+    newApplicationsLast24h: newApplicationsCount,
+    pendingApplications: pendingCount,
+    topJobs: topJobs,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
 
-    const digest = {
-        createdAt: now,
-        newApplicationsLast24h: newApplicationsSnap.size,
-        pendingApplications: pendingApplicationsSnap.size,
-        topJobsByApplicantCount: topJobsSnap.docs.map(doc => ({ id: doc.id, title: doc.data().title, count: doc.data().stats.applicantsCount })),
-    };
-
-    const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-    const digestRef = db.collection("digests").doc(date);
-
-    try {
-        await digestRef.set(digest);
-        logger.info(`Daily digest for ${date} created successfully.`);
-    } catch (error) {
-        logger.error(`Error creating daily digest for ${date}`, error);
-    }
+  await db.collection('digests').doc(digest.date).set(digest);
 });

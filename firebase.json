@@ -1,6 +1,8 @@
 {
   "functions": {
-    "predeploy": "npm --prefix $RESOURCE_DIR run lint",
+    "predeploy": [
+      "npm --prefix $RESOURCE_DIR run lint"
+    ],
     "source": "functions"
   },
   "hosting": {
@@ -21,6 +23,9 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "storage": {
+    "rules": "storage.rules"
+  },
   "emulators": {
     "auth": {
       "port": 9099
@@ -33,6 +38,9 @@
     },
     "pubsub": {
       "port": 8085
+    },
+    "storage": {
+      "port": 9199
     },
     "ui": {
       "enabled": true

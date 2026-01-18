@@ -1,86 +1,95 @@
 
 import * as admin from "firebase-admin";
-import * as functions from "firebase-functions";
-import { Job, JobRun } from "./types";
-import { v4 as uuidv4 } from "uuid";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import { handlers } from "../handlers";
+import { Job, JobRun } from "../types";
+import { completeJob, failJob } from "../engine/lifecycle";
 
-const LEASE_TIMEOUT_MS = 60 * 1000; // 60 seconds
+const WORKER_ID = `worker-${process.env.K_REVISION || 'local'}`;
 
-/**
- * Claims a batch of pending jobs and marks them as "RUNNING".
- * This function is designed to be called by a trusted worker/dispatcher.
- * It uses a transaction to ensure atomicity.
- *
- * @param workerId A unique identifier for the worker instance claiming the jobs.
- * @param limit The maximum number of jobs to claim.
- * @returns A list of the jobs that were successfully claimed.
- */
-export async function claimJobs(workerId: string, limit: number): Promise<Job[]> {
-    const db = admin.firestore();
-    const now = admin.firestore.Timestamp.now();
-    const leaseExpiresAt = admin.firestore.Timestamp.fromMillis(now.toMillis() + LEASE_TIMEOUT_MS);
+// --- Scheduled Worker --- //
 
-    const jobsRef = db.collection("jobs");
-    const claimedJobs: Job[] = [];
+export const jobWorker = onSchedule("every 1 minutes", async () => {
+  console.log("Job worker running...");
+  await claimAndRunJobs();
+});
 
-    try {
-        await db.runTransaction(async (transaction) => {
-            // Query for available jobs: PENDING, not leased (or lease expired), and ready to run.
-            // Note: Firestore does not support OR queries in this way, so we query for PENDING
-            // and rely on the runAfter timestamp. A separate "reaper" function will handle expired leases.
-            const pendingJobsQuery = jobsRef
-                .where("status", "==", "PENDING")
-                .where("runAfter", "<=", now)
-                .orderBy("priority", "desc")
-                .orderBy("createdAt", "asc")
-                .limit(limit);
+async function claimAndRunJobs() {
+  const db = admin.firestore();
+  const now = admin.firestore.Timestamp.now();
 
-            const snapshot = await transaction.get(pendingJobsQuery);
+  const eligibleJobsQuery = db
+    .collection("jobs")
+    .where("status", "==", "PENDING")
+    .where("runAfter", "<=", now)
+    .orderBy("runAfter")
+    .orderBy("priority", "desc")
+    .orderBy("createdAt", "asc")
+    .limit(3);
 
-            if (snapshot.empty) {
-                functions.logger.info("No pending jobs to claim.");
-                return;
-            }
+  const snapshot = await eligibleJobsQuery.get();
 
-            for (const doc of snapshot.docs) {
-                const job = doc.data() as Job;
-                const jobId = doc.id;
-                const runId = uuidv4();
+  if (snapshot.empty) {
+    return;
+  }
 
-                // 1. Update the Job: Mark as RUNNING and set lease
-                const jobUpdate: Partial<Job> = {
-                    status: "RUNNING",
-                    leaseOwner: workerId,
-                    leaseExpiresAt,
-                    updatedAt: now,
-                    attempts: admin.firestore.FieldValue.increment(1) as any,
-                };
-                transaction.update(doc.ref, jobUpdate);
+  const promises = snapshot.docs.map(doc => {
+    const job = doc.data() as Job;
+    const jobId = doc.id;
+    return db.runTransaction(async (tx) => {
+        const jobRef = db.collection("jobs").doc(jobId)
+        const freshDoc = await tx.get(jobRef)
+        if (freshDoc.data()?.status !== 'PENDING') return;
 
-                // 2. Create a JobRun document to track this execution
-                const runRef = db.collection("jobs").doc(jobId).collection("runs").doc(runId);
-                const newRun: JobRun = {
-                    jobId,
-                    runId,
-                    workerId,
-                    startedAt: now,
-                    finishedAt: null,
-                    outcome: "SUCCEEDED", // Default to SUCCEEDED, will be updated on failure
-                    durationMs: null,
-                };
-                transaction.set(runRef, newRun);
-                
-                // Add the full job data to the return list
-                claimedJobs.push({ ...job, ...jobUpdate, id: jobId, runId });
-                 functions.logger.log(`Claimed job ${jobId} for worker ${workerId}.`);
-            }
-        });
+        const runId = db.collection("jobs").doc().id;
+        const runRef = jobRef.collection('runs').doc(runId)
 
-        return claimedJobs;
+        const leaseExpiresAt = admin.firestore.Timestamp.fromMillis(
+            now.toMillis() + 60 * 1000 // 60 second lease
+        );
 
-    } catch (error) {
-        functions.logger.error("Error claiming jobs:", error);
-        // If the transaction fails, claimedJobs will be empty, and the caller will know nothing was claimed.
-        return [];
-    }
+        tx.update(jobRef, {
+            status: 'RUNNING',
+            leaseOwner: WORKER_ID,
+            leaseExpiresAt,
+            attempts: admin.firestore.FieldValue.increment(1),
+            updatedAt: now,
+        })
+
+        const run: JobRun = {
+            startedAt: now,
+            finishedAt: null,
+            workerId: WORKER_ID,
+            outcome: "FAILED",
+            durationMs: null
+        }
+        tx.set(runRef, run)
+
+        return { job, runId, jobId };
+    }).then(result => {
+        if(result) {
+            executeJob(result.jobId, result.job, result.runId)
+        }
+    });
+  });
+
+  await Promise.all(promises);
+}
+
+async function executeJob(jobId: string, job: Job, runId: string) {
+  const handler = handlers[job.type as keyof typeof handlers];
+
+  if (!handler) {
+    console.error(`No handler for job type: ${job.type}`);
+    await failJob(jobId, job, runId, new Error(`No handler for job type: ${job.type}`));
+    return;
+  }
+
+  try {
+    await handler(job.payload);
+    await completeJob(jobId, runId);
+  } catch (e: any) {
+    console.error(`Job ${jobId} failed`, e);
+    await failJob(jobId, job, runId, e);
+  }
 }

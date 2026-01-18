@@ -4,9 +4,9 @@ import { Job } from "../types";
 
 const db = admin.firestore();
 
-export async function completeJob(job: Job, runId: string): Promise<void> {
+export async function completeJob(jobId: string, runId: string): Promise<void> {
   const now = admin.firestore.Timestamp.now();
-  const jobRef = db.collection("jobs").doc(job.id!);
+  const jobRef = db.collection("jobs").doc(jobId);
   const runRef = jobRef.collection("runs").doc(runId);
 
   await db.runTransaction(async (transaction) => {
@@ -22,12 +22,13 @@ export async function completeJob(job: Job, runId: string): Promise<void> {
 }
 
 export async function failJob(
+  jobId: string,
   job: Job,
   runId: string,
   error: Error
 ): Promise<void> {
   const now = admin.firestore.Timestamp.now();
-  const jobRef = db.collection("jobs").doc(job.id!);
+  const jobRef = db.collection("jobs").doc(jobId);
   const runRef = jobRef.collection("runs").doc(runId);
 
   await db.runTransaction(async (transaction) => {

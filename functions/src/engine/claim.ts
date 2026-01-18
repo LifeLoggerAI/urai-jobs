@@ -1,6 +1,5 @@
 
 import * as admin from "firebase-admin";
-import { firestore } from "firebase-functions";
 import { Job } from "../types";
 
 const db = admin.firestore();

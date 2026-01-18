@@ -1,32 +1,17 @@
-import * as functions from "firebase-functions";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { JobPosting, JobPublic, Application, Applicant } from "./jobs/types";
-
-const db = getFirestore();
+import * as functions from 'firebase-functions';
+import * as admin from 'firebase-admin';
 
 export const onJobWrite = functions.firestore
-  .document("jobs/{jobId}")
+  .document('jobs/{jobId}')
   .onWrite(async (change, context) => {
-    const { jobId } = context.params;
+    const db = admin.firestore();
+    const jobId = context.params.jobId;
+    const jobPublicRef = db.collection('jobPublic').doc(jobId);
 
-    // If the job is deleted, delete the public job posting
-    if (!change.after.exists) {
-      const publicJobRef = db.collection("jobPublic").doc(jobId);
-      try {
-        await publicJobRef.delete();
-        console.log(`Deleted public job ${jobId} because source job was deleted.`);
-      } catch (error) {
-        console.error(`Error deleting public job ${jobId}`, error);
-      }
-      return;
-    }
+    const job = change.after.data();
 
-    const job = change.after.data() as JobPosting;
-    const publicJobRef = db.collection("jobPublic").doc(jobId);
-
-    if (job.status === "open") {
-      // If the job is open, create or update the public job posting
-      const publicJob: JobPublic = {
+    if (job && job.status === 'open') {
+      const jobPublic = {
         title: job.title,
         department: job.department,
         locationType: job.locationType,
@@ -36,65 +21,79 @@ export const onJobWrite = functions.firestore
         requirements: job.requirements,
         niceToHave: job.niceToHave,
         compensationRange: job.compensationRange,
-        status: "open",
+        status: job.status,
+        createdAt: job.createdAt,
         updatedAt: job.updatedAt,
       };
-
-      try {
-        await publicJobRef.set(publicJob, { merge: true });
-        console.log(`Upserted public job ${jobId}.`);
-      } catch (error) {
-        console.error(`Error upserting public job ${jobId}`, error);
-      }
+      await jobPublicRef.set(jobPublic, { merge: true });
     } else {
-      // If the job is not open, delete the public job posting
-      try {
-        await publicJobRef.delete();
-        console.log(`Deleted public job ${jobId} because status is now '${job.status}'.`);
-      } catch (error) {
-        // It's okay if the delete fails because the doc doesn't exist.
-        if (error.code !== "not-found") {
-          console.error(`Error deleting public job ${jobId}`, error);
-        }
-      }
+      await jobPublicRef.delete();
     }
   });
 
 export const onApplicationCreate = functions.firestore
-  .document("applications/{applicationId}")
+  .document('applications/{applicationId}')
   .onCreate(async (snap, context) => {
-    const application = snap.data() as Application;
-    const { applicationId } = context.params;
-    const { jobId, applicantEmail, applicantId } = application;
+    const db = admin.firestore();
+    const application = snap.data();
+    const { applicantEmail, jobId, source } = application;
 
-    const batch = db.batch();
+    // 1. Find or create applicant
+    let applicantId = application.applicantId;
+    if (!applicantId) {
+      const applicantQuery = await db.collection('applicants').where('primaryEmail', '==', applicantEmail).limit(1).get();
+      if (!applicantQuery.empty) {
+        applicantId = applicantQuery.docs[0].id;
+        await db.collection('applicants').doc(applicantId).update({
+          lastActivityAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      } else {
+        // Create a new applicant
+        const newApplicantRef = db.collection('applicants').doc();
+        await newApplicantRef.set({
+          primaryEmail: applicantEmail,
+          name: '', // Will be updated from application form
+          lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          source: {
+            type: 'direct'
+          }
+        });
+        applicantId = newApplicantRef.id;
+      }
+      // Update the application with the applicantId
+      await snap.ref.update({ applicantId: applicantId });
+    }
 
-    // 1. Create or merge applicant
-    const applicantRef = db.collection("applicants").doc(applicantId);
-    batch.set(applicantRef, { lastActivityAt: snap.createTime }, { merge: true });
 
-    // 2. Log event
-    const eventRef = db.collection("events").doc();
-    batch.set(eventRef, {
-      type: "apply_submit",
-      entityType: "application",
-      entityId: applicationId,
-      createdAt: snap.createTime,
+    // 2. Create event
+    await db.collection('events').add({
+      type: 'application_submitted',
+      entityType: 'application',
+      entityId: context.params.applicationId,
+      metadata: {
+        jobId: jobId,
+        applicantId: applicantId,
+      },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // 3. Update job stats
-    const jobRef = db.collection("jobs").doc(jobId);
-    batch.update(jobRef, {
-        "stats.applicantsCount": FieldValue.increment(1),
-        [`stats.statusCounts.${application.status}`]: FieldValue.increment(1),
-    });
+    // 3. Increment job stats
+    const jobRef = db.collection('jobs').doc(jobId);
+    await jobRef.set({
+      stats: {
+        applicantsCount: admin.firestore.FieldValue.increment(1),
+        statusCounts: {
+          NEW: admin.firestore.FieldValue.increment(1)
+        }
+      }
+    }, { merge: true });
 
-    // 4. Handle referrals
-    // This is a placeholder for the referral logic. 
-    // A more robust implementation would be needed in a real-world scenario.
-
-    console.log(`Application ${applicationId} processed.`);
-
-    await batch.commit();
+    // 4. Update referral stats if applicable
+    if (source && source.type === 'referral' && source.refCode) {
+      const referralRef = db.collection('referrals').doc(source.refCode);
+      await referralRef.update({
+        submitsCount: admin.firestore.FieldValue.increment(1)
+      });
+    }
   });
-

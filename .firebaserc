@@ -1,5 +1,16 @@
 {
   "projects": {
     "default": "urai-jobs"
-  }
+  },
+  "targets": {
+    "urai-4dc1d": {
+      "hosting": {
+        "dummy": [
+          "dummy"
+        ]
+      }
+    }
+  },
+  "etags": {},
+  "dataconnectEmulatorConfig": {}
 }

@@ -2,7 +2,6 @@
   "name": "urai-jobs-monorepo",
   "private": true,
   "scripts": {
-    "postinstall": "pnpm --filter=\"./functions\" install",
     "dev": "./scripts/dev.sh",
     "test": "./scripts/test.sh",
     "emulators": "./scripts/emulators.sh",

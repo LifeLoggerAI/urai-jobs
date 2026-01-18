@@ -32,89 +32,19 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.submitJob = exports.health = void 0;
 const admin = __importStar(require("firebase-admin"));
-const functions = __importStar(require("firebase-functions"));
-const node_fetch_1 = __importDefault(require("node-fetch"));
-function initAdmin() {
-    if (admin.apps.length === 0)
-        admin.initializeApp();
-    return admin;
-}
-initAdmin();
-const db = admin.firestore();
-function now() { return Date.now(); }
-function requiredEnv(name) {
-    const v = process.env[name];
-    if (!v)
-        throw new Error(`Missing required env: ${name}`);
-    return v;
-}
-exports.health = functions.https.onRequest((_req, res) => {
-    res.status(200).send("OK");
-});
-exports.submitJob = functions.https.onRequest(async (req, res) => {
-    try {
-        const payload = (req.body && typeof req.body === "object") ? req.body : {};
-        const jobRef = db.collection("jobs").doc();
-        await jobRef.set({
-            state: "queued",
-            createdAt: now(),
-            updatedAt: now(),
-            request: payload,
-        });
-        await db.collection("jobEvents").add({
-            jobId: jobRef.id,
-            state: "queued",
-            ts: now(),
-        });
-        const assetFactoryUrl = requiredEnv("ASSET_FACTORY_URL");
-        // Transition: queued -> rendering (optimistic)
-        await jobRef.update({ state: "rendering", updatedAt: now() });
-        await db.collection("jobEvents").add({ jobId: jobRef.id, state: "rendering", ts: now() });
-        // Call asset-factory render endpoint
-        const r = await (0, node_fetch_1.default)(assetFactoryUrl, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ jobId: jobRef.id, ...payload }),
-        });
-        const j = (await r.json());
-        if (!r.ok || !j || !j.gs) {
-            throw new Error(`asset-factory failed (${r.status}): ${JSON.stringify(j)}`);
-        }
-        // Transition: rendering -> published
-        await jobRef.update({
-            state: "published",
-            updatedAt: now(),
-            artifact: {
-                gs: String(j.gs),
-                meta: j.meta || null,
-            },
-        });
-        await db.collection("jobEvents").add({
-            jobId: jobRef.id,
-            state: "published",
-            ts: now(),
-            artifactGs: String(j.gs),
-        });
-        res.status(200).json({ ok: true, jobId: jobRef.id, artifact: j });
-    }
-    catch (e) {
-        const msg = e?.message ? String(e.message) : "unknown error";
-        try {
-            // best-effort event log if jobId provided
-            const jobId = req.body?.jobId;
-            if (jobId) {
-                await db.collection("jobEvents").add({ jobId, state: "error", ts: now(), error: msg });
-                await db.collection("jobs").doc(jobId).set({ state: "error", updatedAt: now(), error: msg }, { merge: true });
-            }
-        }
-        catch { }
-        res.status(500).json({ ok: false, error: msg });
-    }
-});
+admin.initializeApp();
+// Export all job-related functions
+__exportStar(require("./jobs/enqueue"), exports);
+__exportStar(require("./jobs/worker"), exports);
+__exportStar(require("./jobs/admin"), exports);
+// Export other functions
+__exportStar(require("./triggers"), exports);
+__exportStar(require("./callable"), exports);
+__exportStar(require("./http"), exports);
+__exportStar(require("./scheduled"), exports);
 //# sourceMappingURL=index.js.map

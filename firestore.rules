@@ -3,76 +3,104 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // Helper Functions
     function isSignedIn() {
       return request.auth != null;
     }
 
     function isAdmin() {
-      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Default deny
-    match /{document=**} {
-      allow read, write: if false;
+    function isOwner() {
+      return isSignedIn() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner';
     }
 
-    // Admins collection: only readable by admins, not writable by clients
+    function isJobWriter() {
+      // In a real app, you might have a more granular role for this.
+      return isAdmin();
+    }
+
+    function isPublicReader() {
+      return true;
+    }
+
+    // Validation Helpers
+    function isString(value, maxLength) {
+      return value is string && value.size() < maxLength;
+    }
+
+    function isOptionalString(value, maxLength) {
+      return value == null || isString(value, maxLength);
+    }
+
+    function isEmail(email) {
+      return isString(email, 255) && email.matches('.+@.+\\..+');
+    }
+
+    function isMap(value) {
+      return value is map;
+    }
+
+    function hasOnly(keys) {
+      return request.resource.data.keys().hasOnly(keys);
+    }
+
+    // Collections
+
     match /admins/{uid} {
-      allow read: if isAdmin();
-      allow write: if false; // Should be managed server-side or via console
+      allow read, write: if isOwner();
+      allow create: if false; // Must be created server-side
     }
 
-    // Jobs can be created, read, and updated by admins.
-    // Leasing fields are only mutable by the backend (by not allowing clients to change them)
     match /jobs/{jobId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
+      allow read, create, update: if isJobWriter();
+      allow delete: if isOwner();
     }
 
-    // Job runs are read-only for admins
-    match /jobs/{jobId}/runs/{runId} {
-      allow read: if isAdmin();
-    }
-    
-    // Public job data is readable by anyone
     match /jobPublic/{jobId} {
-        allow read: if true;
+      allow get, list: if isPublicReader();
+      allow write: if false; // Written by functions only
     }
 
-    // Applicants can be created by anyone, but only read/updated by admins.
     match /applicants/{applicantId} {
+      allow create: if isString(request.resource.data.primaryEmail, 255) &&
+                     request.resource.data.primaryEmail == request.resource.data.primaryEmail.lower() &&
+                     isString(request.resource.data.name, 100) &&
+                     isOptionalString(request.resource.data.phone, 30) &&
+                     isMap(request.resource.data.links) &&
+                     isMap(request.resource.data.source) &&
+                     request.resource.data.source.type in ['direct', 'referral', 'waitlist'];
       allow read, update: if isAdmin();
-      allow create: if true; // Validation should be done in the function
     }
 
-    // Applications can be created by anyone, but only read/updated by admins.
     match /applications/{applicationId} {
+      allow create: if isEmail(request.resource.data.applicantEmail) &&
+                     request.resource.data.applicantEmail == request.resource.data.applicantEmail.lower() &&
+                     isString(request.resource.data.jobId, 64) &&
+                     isMap(request.resource.data.answers);
       allow read, update: if isAdmin();
-      allow create: if true; // Validation should be done in the function
-    }
-    
-    // Waitlist can be written by anyone, but only read/updated by admins
-    match /waitlist/{entryId} {
-        allow read, update: if isAdmin();
-        allow create: if true;
-    }
-    
-    // Referrals can be managed by admins
-    match /referrals/{refCode} {
-        allow read, write: if isAdmin();
-    }
-    
-    // Events can be created by anyone, but only read by admins.
-    match /events/{eventId} {
-        allow read: if isAdmin();
-        allow create: if true;
     }
 
-    // Metrics are admin-only
-    match /jobMetrics/{docId} {
+    match /referrals/{refCode} {
       allow read, write: if isAdmin();
+    }
+
+    match /waitlist/{id} {
+      allow create: if isEmail(request.resource.data.email) &&
+                     request.resource.data.email == request.resource.data.email.lower() &&
+                     request.resource.data.consent.terms == true;
+      allow read: if isAdmin();
+    }
+
+    match /events/{eventId} {
+      allow create: if true; // Public can create events
+      allow read: if isAdmin();
+    }
+
+    match /digests/{digestId} {
+      allow read: if isAdmin();
+      allow write: if false; // Written by functions only
     }
   }
 }
