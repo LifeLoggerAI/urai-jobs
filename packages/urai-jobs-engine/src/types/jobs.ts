@@ -1,8 +1,11 @@
+import { z } from 'zod';
+
 export type JobStatus = 'queued' | 'leased' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'deadletter';
 
-export type JobPayload = Record<string, any>;
+export type JobPayload<T extends z.ZodType<any, any>> = z.infer<T>;
 
-export interface Job {
+export interface Job<T extends z.ZodType<any, any>> {
+  id: string;
   type: string;
   status: JobStatus;
   priority: number;
@@ -13,7 +16,7 @@ export interface Job {
   scheduledFor?: Date;
   leaseUntil: Date | null;
   idempotencyKey: string;
-  payload: JobPayload;
+  payload: JobPayload<T>;
   result?: any;
   error?: {
     message: string;

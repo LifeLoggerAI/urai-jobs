@@ -1,32 +1,41 @@
 import * as admin from 'firebase-admin';
 import { CloudTasksClient } from '@google-cloud/tasks';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 import { backoff } from './lib/backoff';
 import { claimJob, releaseJob } from './lib/claim';
 import { Job, JobPayload, JobStatus } from './types/jobs';
-import { handlers } from '../../functions/src/handlers';
+import { handlers } from './handlers';
+import { log } from './lib/logger';
+import { v4 as uuidv4 } from 'uuid';
 
-const PROJECT_ID = process.env.GCLOUD_PROJECT!;
-const QUEUE_LOCATION = 'us-central1';
-const QUEUE_ID = 'urai-jobs';
-const RUN_JOB_URL = `https://us-central1-${PROJECT_ID}.cloudfunctions.net/runJob`;
+const envSchema = z.object({
+  GCLOUD_PROJECT: z.string(),
+  QUEUE_LOCATION: z.string().default('us-central1'),
+  QUEUE_ID: z.string().default('urai-jobs'),
+});
+
+const env = envSchema.parse(process.env);
+
+const RUN_JOB_URL = `https://us-central1-${env.GCLOUD_PROJECT}.cloudfunctions.net/runJob`;
 
 export class JobEngine {
   private firestore = admin.firestore();
   private tasksClient = new CloudTasksClient();
 
-  async enqueue(type: string, payload: JobPayload, options: { idempotencyKey: string, scheduledFor?: Date }) {
+  async enqueue<T extends z.ZodType<any, any>>(type: string, payload: JobPayload<T>, options: { idempotencyKey: string, scheduledFor?: Date }) {
     const idempotencyKey = options.idempotencyKey;
-    const jobRef = this.firestore.collection('jobs').doc(`${type}-${idempotencyKey}`);
+    const jobId = `${type}-${idempotencyKey}`;
+    const jobRef = this.firestore.collection('jobs').doc(jobId);
 
     try {
       const job = await this.firestore.runTransaction(async (transaction) => {
         const doc = await transaction.get(jobRef);
         if (doc.exists) {
-          return doc.data() as Job;
+          return doc.data() as Job<T>;
         }
 
-        const newJob: Job = {
+        const newJob: Job<T> = {
+          id: jobId,
           type,
           status: 'queued',
           priority: 0,
@@ -37,7 +46,7 @@ export class JobEngine {
           scheduledFor: options.scheduledFor,
           idempotencyKey,
           payload,
-          traceId: crypto.randomUUID(),
+          traceId: uuidv4(),
           lockedBy: null,
           leaseUntil: null,
         };
@@ -53,13 +62,13 @@ export class JobEngine {
           body: Buffer.from(JSON.stringify({ jobId: jobRef.id })).toString('base64'),
           headers: { 'Content-Type': 'application/json' },
           oidcToken: {
-            serviceAccountEmail: `${PROJECT_ID}@appspot.gserviceaccount.com`,
+            serviceAccountEmail: `${env.GCLOUD_PROJECT}@appspot.gserviceaccount.com`,
           },
         },
         scheduleTime: options.scheduledFor ? { seconds: Math.floor(options.scheduledFor.getTime() / 1000) } : undefined,
       };
 
-      const parent = this.tasksClient.queuePath(PROJECT_ID, QUEUE_LOCATION, QUEUE_ID);
+      const parent = this.tasksClient.queuePath(env.GCLOUD_PROJECT, env.QUEUE_LOCATION, env.QUEUE_ID);
       await this.tasksClient.createTask({ parent, task });
 
       return job;
@@ -72,7 +81,7 @@ export class JobEngine {
   async getJob(jobId: string) {
     const jobRef = this.firestore.collection('jobs').doc(jobId);
     const doc = await jobRef.get();
-    return doc.data() as Job;
+    return doc.data() as Job<any>;
   }
 
   async cancelJob(jobId: string) {
@@ -88,14 +97,18 @@ export class JobEngine {
       return;
     }
 
+    log('info', 'starting job', job);
+
     const handler = handlers[job.type];
     if (!handler) {
+      log('error', 'no handler for job type', job);
       throw new Error(`No handler for job type ${job.type}`);
     }
 
     try {
       handler.payload.parse(job.payload);
     } catch (error) {
+      log('error', 'invalid payload', job, { error: (error as ZodError).format() });
       await releaseJob(this.firestore, jobRef, 'deadletter', { error: (error as ZodError).format() });
       return;
     }
@@ -115,10 +128,11 @@ export class JobEngine {
     try {
       const result = await handler.handler(job.payload);
 
+      log('info', 'job succeeded', job);
       await releaseJob(this.firestore, jobRef, 'succeeded', { result });
       await runRef.update({ status: 'succeeded', endedAt: new Date(), metrics: { durationMs: 0, coldStart: false } });
-    } catch (error) {
-      console.error('Error processing job:', error);
+    } catch (error: any) {
+      log('error', 'job failed', job, { error: error.message });
       const nextAttempt = job.attempt + 1;
       if (nextAttempt >= job.maxAttempts) {
         await releaseJob(this.firestore, jobRef, 'deadletter', { error: error.message });
@@ -143,7 +157,7 @@ export class JobEngine {
   async requeueJob(jobId: string) {
     const jobRef = this.firestore.collection('jobs').doc(jobId);
     const doc = await jobRef.get();
-    const job = doc.data() as Job;
+    const job = doc.data() as Job<any>;
 
     if (job.status !== 'deadletter') {
       throw new Error('Only deadlettered jobs can be requeued');
