@@ -1,0 +1,19 @@
+{
+  "name": "urai-jobs-monorepo",
+  "private": true,
+  "scripts": {
+    "install": "pnpm install",
+    "dev": "pnpm --filter urai-jobs-engine build && concurrently \"pnpm --filter functions dev\" \"pnpm --filter urai-jobs-cli dev\"",
+    "test": "pnpm --filter urai-jobs-engine test",
+    "lint": "pnpm --filter urai-jobs-engine lint",
+    "typecheck": "pnpm --filter urai-jobs-engine typecheck",
+    "smoke": "pnpm --filter urai-jobs-cli smoke",
+    "build": "pnpm --filter urai-jobs-engine build",
+    "deploy": "pnpm build && firebase deploy"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "firebase-tools": "^13.0.2",
+    "pnpm": "^8.14.1"
+  }
+}
