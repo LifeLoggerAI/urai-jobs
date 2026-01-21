@@ -1,1 +1,0 @@
-{"version":3,"file":"httpHealth.js","sourceRoot":"","sources":["../src/httpHealth.ts"],"names":[],"mappings":";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;AACA,8DAAgD;AAEnC,QAAA,UAAU,GAAG,SAAS,CAAC,KAAK,CAAC,SAAS,CAAC,CAAC,GAAG,EAAE,GAAG,EAAE,EAAE;IAC/D,GAAG,CAAC,MAAM,CAAC,GAAG,CAAC,CAAC,IAAI,CAAC,IAAI,CAAC,CAAC;AAC7B,CAAC,CAAC,CAAC"}
