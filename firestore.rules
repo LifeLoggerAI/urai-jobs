@@ -1,10 +1,9 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // Helper Functions
     function isSignedIn() {
       return request.auth != null;
     }
@@ -16,80 +15,133 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
-    
-    function getRole() {
-        return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role
-    }
-    
+
     function isRole(role) {
-        return isSignedIn() && (getRole() == role || getRole() == 'owner');
+      let userRole = get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role;
+      return userRole == role || userRole == 'owner';
     }
 
+    function isEmail(string) {
+      return string.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$');
+    }
+
+    function isString(val, min, max) {
+      return val is string && val.size() >= min && val.size() <= max;
+    }
+    
+    function isMap(val) {
+        return val is map;
+    }
+
+    function isTimestamp(val) {
+        return val is timestamp;
+    }
+
+    function isArray(val) {
+        return val is list;
+    }
+
+    function isArrayOf(val, type, min, max) {
+        return isArray(val) && val.size() >= min && val.size() <= max && (val.size() == 0 || val[0] is string);
+    }
+    
     function hasOnly(keys) {
       return request.resource.data.keys().hasOnly(keys);
     }
+    
+    function isValidApplicationStatus(status) {
+        return status in ["NEW", "SCREEN", "INTERVIEW", "OFFER", "HIRED", "REJECTED"];
+    }
 
-    // Admin
+    // Admins
     match /admins/{uid} {
-      allow read: if isAdmin();
-      allow list: if isAdmin();
-      allow write: if isRole('owner'); // Only owners can add other admins
+      allow read, list: if isAdmin();
+      allow create, update, delete: if isRole('owner');
     }
 
-    // Public read-only job postings
+    // Public-facing jobs
     match /jobPublic/{jobId} {
-      allow get: if true;
-      allow list: if true;
-      allow write: if false;
+      allow get, list: if true;
+      allow create, update, delete: if false;
     }
 
-    // Jobs collection (admins only)
+    // Internal jobs management
     match /jobs/{jobId} {
-      allow read, write: if isAdmin();
+      allow read, list: if isAdmin();
+      allow create, update: if isAdmin(); // Further validation in callable functions
     }
     
-    // Applicants can be created by anyone, but only read/updated by admins
+    // Applicants
     match /applicants/{applicantId} {
       allow get, list, update: if isAdmin();
-      allow create: if true; // Validation below
-      
-      // Validation on create
-      // - Ensure required fields are present and have correct types
-      // - ensure email is lowercased
+      allow create: if
+          isString(request.resource.data.name, 1, 100) &&
+          isEmail(request.resource.data.primaryEmail) &&
+          request.resource.data.primaryEmail == request.resource.data.primaryEmail.lower() &&
+          (!('phone' in request.resource.data) || isString(request.resource.data.phone, 0, 20)) &&
+          isMap(request.resource.data.links) &&
+          (!('portfolio' in request.resource.data.links) || isString(request.resource.data.links.portfolio, 0, 255)) &&
+          (!('linkedin' in request.resource.data.links) || isString(request.resource.data.links.linkedin, 0, 255)) &&
+          (!('github' in request.resource.data.links) || isString(request.resource.data.links.github, 0, 255)) &&
+          (!('other' in request.resource.data.links) || isArrayOf(request.resource.data.links.other, 'string', 0, 5)) &&
+          isMap(request.resource.data.source) &&
+          request.resource.data.source.type in ['direct', 'referral', 'waitlist'] &&
+          request.resource.data.createdAt == request.time &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.lastActivityAt == request.time;
     }
 
-    // Applications can be created by anyone, but only read/updated by admins
+    // Applications
     match /applications/{applicationId} {
-      allow get, list: if isAdmin();
-      allow create: if true; // further validation below
-      allow update: if isAdmin(); // for status changes, etc.
-
-      // Validation on create
-      // - Check for required fields (jobId, applicantEmail)
-      // - Validate email format
-      // - Limit size of answers map
+      allow get, list, update: if isAdmin();
+      allow create: if
+          resource.data.jobId is string &&
+          resource.data.applicantId is string &&
+          isEmail(resource.data.applicantEmail) &&
+          resource.data.applicantEmail == resource.data.applicantEmail.lower() &&
+          resource.data.status == 'NEW' &&
+          isMap(resource.data.answers) && resource.data.answers.keys().size() < 20 &&
+          (!('resume' in resource.data) || (
+            isMap(resource.data.resume) &&
+            isString(resource.data.resume.storagePath, 1, 255) &&
+            isString(resource.data.resume.filename, 1, 100) &&
+            isString(resource.data.resume.contentType, 1, 100) &&
+            resource.data.resume.size is number &&
+            resource.data.resume.size > 0 &&
+            resource.data.resume.size < 10 * 1024 * 1024
+          )) &&
+          resource.data.submittedAt == request.time &&
+          resource.data.updatedAt == request.time;
     }
 
-    // Referrals can be created by admins, and used by anyone
+    // Referrals
     match /referrals/{refCode} {
-        allow read: if true;
-        allow list: if isAdmin();
-        allow create, update: if isAdmin();
+      allow get: if true;
+      allow list, create, update: if isAdmin();
     }
 
-    // Waitlist can be written to by anyone, but only read by admins
+    // Waitlist
     match /waitlist/{docId} {
-      allow read, list, delete: if isAdmin();
-      allow create: if true;
-
-      // Validation on create
-      // - require email and consent
+      allow list, get: if isAdmin();
+      allow create: if
+          isEmail(request.resource.data.email) &&
+          request.resource.data.email == request.resource.data.email.lower() &&
+          (!('name' in request.resource.data) || isString(request.resource.data.name, 0, 100)) &&
+          isArrayOf(request.resource.data.interests, 'string', 0, 10) &&
+          isMap(request.resource.data.consent) &&
+          request.resource.data.consent.terms == true &&
+          request.resource.data.createdAt == request.time;
     }
-    
-    // Events can be written to by anyone, but only read by admins
+
+    // Events
     match /events/{eventId} {
-        allow read, list: if isAdmin();
-        allow create: if true;
+      allow list, get: if isAdmin();
+      allow create: if
+        isString(request.resource.data.type, 1, 50) &&
+        isString(request.resource.data.entityType, 1, 50) &&
+        isString(request.resource.data.entityId, 1, 100) &&
+        isMap(request.resource.data.metadata) &&
+        request.resource.data.createdAt == request.time;
     }
   }
 }
