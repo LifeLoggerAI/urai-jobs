@@ -1,21 +1,24 @@
 {
   "name": "functions",
-  "private": true,
+  "version": "1.0.0",
+  "description": "",
   "main": "lib/index.js",
   "scripts": {
     "build": "tsc",
-    "serve": "firebase emulators:start --only functions",
-    "shell": "firebase functions:shell",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
-    "dev": "firebase emulators:start",
+    "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "firebase-admin": "^12.0.0",
-    "firebase-functions": "^5.0.0",
-    "urai-jobs-engine": "workspace:*"
+    "firebase-admin": "^11.11.1",
+    "firebase-functions": "^4.9.0"
   },
   "devDependencies": {
-    "typescript": "^5.3.3"
+    "typescript": "^5.4.5"
   }
 }

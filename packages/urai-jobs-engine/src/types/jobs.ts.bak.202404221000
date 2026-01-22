@@ -14,9 +14,7 @@ export interface Job<T extends z.ZodType<any, any>> {
   createdAt: Date;
   updatedAt: Date;
   scheduledFor?: Date;
-  lockedAt: Date | null;
-  lockedBy: string | null;
-  leaseExpiresAt: Date | null;
+  leaseUntil: Date | null;
   idempotencyKey: string;
   payload: JobPayload<T>;
   result?: any;
@@ -27,6 +25,7 @@ export interface Job<T extends z.ZodType<any, any>> {
     meta?: any;
   };
   traceId: string;
+  lockedBy: string | null;
 }
 
 export interface JobRun {

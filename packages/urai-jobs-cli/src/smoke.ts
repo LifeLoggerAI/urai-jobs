@@ -1,25 +1,24 @@
-import { JobEngine } from 'urai-jobs-engine';
-
-const engine = new JobEngine();
+import { JobEngine } from './index';
 
 async function smokeTest() {
-  const idempotencyKey = `smoke-${Date.now()}`;
-  const job = await engine.enqueue('renderCinematic', { scene: 'test' }, { idempotencyKey });
-  console.log('Enqueued job:', job);
+  const engine = new JobEngine();
 
-  let status: string | undefined;
-  while (status !== 'succeeded') {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    const updatedJob = await engine.getJob(job.id);
-    status = updatedJob?.status;
-    console.log(`Job status: ${status}`);
-    if (status === 'failed' || status === 'deadletter') {
-      throw new Error('Job failed');
-    }
+  console.log('Enqueuing test job...');
+  const job = await engine.enqueue('test', { message: 'Hello, world!' }, { idempotencyKey: 'test-key' });
+  console.log('Job enqueued:', job);
+
+  console.log('Waiting for job to complete...');
+  await new Promise(resolve => setTimeout(resolve, 5000));
+
+  const completedJob = await engine.getJob(job.id);
+  console.log('Job status:', completedJob.status);
+
+  if (completedJob.status === 'succeeded') {
+    console.log('Smoke test PASSED');
+  } else {
+    console.log('Smoke test FAILED');
+    process.exit(1);
   }
 }
 
-smokeTest().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+smokeTest();

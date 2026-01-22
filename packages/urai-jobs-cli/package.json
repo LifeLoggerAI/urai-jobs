@@ -4,12 +4,17 @@
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "urai-jobs": "dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
-    "dev": "node dist/index.js",
-    "smoke": "node dist/smoke-test.js"
+    "dev": "tsc -w",
+    "cli": "node dist/index.js",
+    "smoke": "node dist/smoke.js"
   },
   "dependencies": {
+    "commander": "^12.0.0",
     "firebase-admin": "^12.0.0",
     "node-fetch": "^3.3.2"
   },

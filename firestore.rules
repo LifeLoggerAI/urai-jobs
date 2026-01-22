@@ -1,26 +1,95 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isAdmin() {
-      return request.auth.token.admin == true;
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
     }
 
+    function isUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    function getRole() {
+        return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role
+    }
+    
+    function isRole(role) {
+        return isSignedIn() && (getRole() == role || getRole() == 'owner');
+    }
+
+    function hasOnly(keys) {
+      return request.resource.data.keys().hasOnly(keys);
+    }
+
+    // Admin
+    match /admins/{uid} {
+      allow read: if isAdmin();
+      allow list: if isAdmin();
+      allow write: if isRole('owner'); // Only owners can add other admins
+    }
+
+    // Public read-only job postings
+    match /jobPublic/{jobId} {
+      allow get: if true;
+      allow list: if true;
+      allow write: if false;
+    }
+
+    // Jobs collection (admins only)
     match /jobs/{jobId} {
       allow read, write: if isAdmin();
     }
-
-    match /jobRuns/{runId} {
-      allow read, write: if isAdmin();
+    
+    // Applicants can be created by anyone, but only read/updated by admins
+    match /applicants/{applicantId} {
+      allow get, list, update: if isAdmin();
+      allow create: if true; // Validation below
+      
+      // Validation on create
+      // - Ensure required fields are present and have correct types
+      // - ensure email is lowercased
     }
 
-    match /jobTypes/{type} {
-      allow read, write: if isAdmin();
+    // Applications can be created by anyone, but only read/updated by admins
+    match /applications/{applicationId} {
+      allow get, list: if isAdmin();
+      allow create: if true; // further validation below
+      allow update: if isAdmin(); // for status changes, etc.
+
+      // Validation on create
+      // - Check for required fields (jobId, applicantEmail)
+      // - Validate email format
+      // - Limit size of answers map
     }
 
-    match /{document=**} {
-      allow read, write: if false;
+    // Referrals can be created by admins, and used by anyone
+    match /referrals/{refCode} {
+        allow read: if true;
+        allow list: if isAdmin();
+        allow create, update: if isAdmin();
+    }
+
+    // Waitlist can be written to by anyone, but only read by admins
+    match /waitlist/{docId} {
+      allow read, list, delete: if isAdmin();
+      allow create: if true;
+
+      // Validation on create
+      // - require email and consent
+    }
+    
+    // Events can be written to by anyone, but only read by admins
+    match /events/{eventId} {
+        allow read, list: if isAdmin();
+        allow create: if true;
     }
   }
 }

@@ -1,37 +1,26 @@
-# URAI Jobs
+# URAI-Jobs
 
-This project is a hiring, applicant tracking, waitlist, and referrals system for URAI Labs / URAI.
+A hiring + applicant tracking + waitlist + referrals system for URAI Labs / URAI.
 
 ## Local Setup
 
-1. Install pnpm: `npm install -g pnpm`
-2. Install dependencies: `pnpm install`
+1. Install Firebase CLI: `npm install -g firebase-tools`
+2. Install project dependencies: `npm install`
+3. Install functions dependencies: `cd functions && npm install && cd ..`
+4. Create a service account in the Firebase console and download the `serviceAccountKey.json` file to the root of the project.
 
-## Running Emulators
+## Run Emulators
 
-```bash
-pnpm emulators
-```
+`npm run emulators`
 
-This will start the Firebase emulators for Firestore, Functions, and Pub/Sub.
+## Seed Data
 
-## Seeding Data
+`npm run seed`
 
-To seed the database with test data, run the following command:
+## Run Web Dev Server
 
-```bash
-pnpm --filter urai-jobs-cli smoke
-```
+`npm run dev`
 
-## Running the Web App
+## Deploy
 
-This project does not yet have a web app. It is a backend-only system.
-
-## Deploying
-
-1. Login to Firebase: `firebase login`
-2. Set the project: `firebase use <your-project-id>`
-3. Set the project ID config: `firebase functions:config:set gcloud.project=<your-project-id>`
-4. Deploy: `pnpm deploy`
-
-This will deploy the Cloud Functions and Firestore rules.
+`firebase deploy`
