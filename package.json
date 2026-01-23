@@ -6,14 +6,19 @@
     "web"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run emulators\" \"npm run --workspace=web dev\"",
-    "build": "npm run --workspace=web build && npm run --workspace=functions build",
-    "emulators": "firebase emulators:start --import=./firebase-data --export-on-exit",
-    "seed": "firebase emulators:exec --only firestore \"npm --workspace=functions run seed\"",
-    "deploy": "firebase deploy --only functions,hosting",
-    "lint": "npm run --workspace=functions lint"
+    "dev": "npm run dev --workspace=web",
+    "build": "npm run build --workspace=web && npm run build --workspace=functions",
+    "emulators": "firebase emulators:start",
+    "lint": "npm run lint --workspace=functions && npm run lint --workspace=web",
+    "test": "vitest",
+    "smoke": "vitest run test/smoke.test.ts",
+    "deploy": "firebase deploy",
+    "seed": "ts-node scripts/seed.ts"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "firebase-functions-test": "^3.4.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5",
+    "vitest": "^4.0.17"
   }
 }

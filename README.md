@@ -1,26 +1,56 @@
 # URAI-Jobs
 
-A hiring + applicant tracking + waitlist + referrals system for URAI Labs / URAI.
+A production-grade job runner and queueing system built on Firebase.
 
-## Local Setup
+## Prerequisites
 
-1. Install Firebase CLI: `npm install -g firebase-tools`
-2. Install project dependencies: `npm install`
-3. Install functions dependencies: `cd functions && npm install && cd ..`
-4. Create a service account in the Firebase console and download the `serviceAccountKey.json` file to the root of the project.
+- Node.js (v20)
+- pnpm
+- Firebase CLI
 
-## Run Emulators
+## Installation
 
-`npm run emulators`
+```bash
+pnpm install
+```
 
-## Seed Data
+## Local Development
 
-`npm run seed`
+To start the local development environment, which includes the Firebase emulators and the web app, run:
 
-## Run Web Dev Server
+```bash
+./scripts/urai-jobs_golden.sh
+```
 
-`npm run dev`
+## Running Tests
 
-## Deploy
+To run the unit and integration tests, run:
 
-`firebase deploy`
+```bash
+pnpm test
+```
+
+To run the smoke test, which enqueues and processes a job, run:
+
+```bash
+pnpm smoke
+```
+
+## Deployment
+
+To deploy the project to Firebase, run:
+
+```bash
+firebase deploy
+```
+
+## Adding a New Job
+
+1.  Add a new job definition to `functions/src/jobs/registry.ts`.
+2.  Implement the job handler in the same file.
+3.  (Optional) Add a new smoke test to `test/smoke.test.ts` to test the new job.
+
+## Troubleshooting
+
+- If you have issues with the emulators, try restarting them with `firebase emulators:start --only functions,firestore`.
+- If you have issues with dependencies, try running `pnpm install` again.
