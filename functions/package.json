@@ -8,7 +8,8 @@
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "test": "vitest"
+    "test": "npm run build && mocha lib/test/**/*.js",
+    "smoke": "npm run build && node lib/smoke-test.js"
   },
   "engines": {
     "node": "20"
@@ -20,12 +21,21 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@firebase/testing": "^0.20.11",
+    "@types/chai": "^4.3.10",
+    "@types/mocha": "^10.0.10",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
+    "chai": "^4.3.10",
     "eslint": "^8.56.0",
     "eslint-plugin-import": "^2.29.1",
+    "firebase-functions-test": "^3.4.1",
+    "mocha": "^10.2.0",
+    "ts-mocha": "^11.1.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.3",
-    "vitest": "^1.2.2"
+    "uuid": "^9.0.0"
   },
   "private": true
 }
