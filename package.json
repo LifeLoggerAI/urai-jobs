@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "concurrently \"npm run emulators\" \"npm run dev --prefix web\"",
-    "build": "npm run build --prefix web && npm run build --prefix functions",
+    "dev": "concurrently \"pnpm run emulators\" \"pnpm run dev --filter web\"",
+    "build": "pnpm run build --filter web && pnpm run build --filter functions",
     "emulators": "firebase emulators:start",
     "seed": "ts-node scripts/seed.ts",
     "test": "echo \"Error: no test specified\" && exit 1"

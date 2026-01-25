@@ -1,31 +1,63 @@
-
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // The server-side functions run with admin privileges, so they bypass these rules.
-    // These rules are primarily for client-side security.
-
-    match /jobs/{jobId} {
-      // Disallow all client-side access to jobs.
-      allow read, write: if false;
-
-      // Rules for the audit_logs subcollection.
-      match /audit_logs/{logId} {
-        // Disallow all client-side access to audit logs.
-        allow read, write: if false;
-      }
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    match /idempotency_keys/{key} {
-        // Disallow all client-side access to idempotency keys.
-        allow read, write: if false;
+    function hasOnly(keys) {
+      return request.resource.data.keys().hasOnly(keys);
+    }
+
+    match /jobs/{jobId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /jobPublic/{jobId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /applicants/{applicantId} {
+      allow read: if isAdmin();
+      allow create: if request.resource.data.primaryEmail.toLowerCase() == request.resource.data.primaryEmail;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /applications/{applicationId} {
+      allow read: if isAdmin();
+      allow create: if request.resource.data.applicantEmail.toLowerCase() == request.resource.data.applicantEmail && hasOnly(['jobId', 'applicantId', 'applicantEmail', 'answers', 'resume', 'source']);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /referrals/{refCode} {
+      allow read, write: if isAdmin();
+    }
+
+    match /waitlist/{id} {
+        allow create: if request.resource.data.email.toLowerCase() == request.resource.data.email;
+        allow read, update, delete: if isAdmin();
+    }
+
+    match /admins/{uid} {
+      allow read, write: if isAdmin();
+    }
+
+    match /events/{eventId} {
+      allow read, write: if isAdmin();
+      allow create: if true;
+    }
+
+    match /digests/{digestId} {
+      allow read, write: if isAdmin();
     }
   }
 }
