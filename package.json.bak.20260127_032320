@@ -1,0 +1,23 @@
+{
+  "name": "urai-jobs-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter web dev\" \"pnpm emulators\"",
+    "build": "pnpm run build:functions && pnpm run build:web",
+    "build:web": "pnpm --filter web build",
+    "build:functions": "pnpm --filter functions build",
+    "emulators": "firebase emulators:start --project=urai-jobs --import=./firebase-data --export-on-exit",
+    "lint": "pnpm -r --parallel lint",
+    "lint:fix": "pnpm -r --parallel lint -- --fix",
+    "typecheck": "pnpm --filter functions tsc && pnpm --filter web tsc",
+    "seed": "pnpm --filter scripts seed",
+    "test": "pnpm --filter test test",
+    "smoke:emulators": "curl -f http://127.0.0.1:5001/urai-jobs/us-central1/api/health",
+    "start": "next start",
+    "smoke": "node ./scripts/smoke.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  }
+}

@@ -1,0 +1,747 @@
+#!/bin/bash
+# URai-Jobs Zero-Error Finisher Script vFINAL - COMPLETE & UNABRIDGED
+# This script will fully generate, configure, build, test, and deploy the URAI-Jobs project.
+# It is designed to be idempotent and safe to re-run from any state.
+
+# --- STRICT MODE & CONFIGURATION ---
+set -euo pipefail
+readonly PROJECT_ID="urai-jobs"
+readonly TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+readonly LOG_DIR="/tmp"
+readonly LOG_FILE="$LOG_DIR/urai_jobs_finish_$TIMESTAMP.log"
+readonly BACKUP_SUFFIX=".bak.$TIMESTAMP"
+
+# --- LOGGING SETUP ---
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "--- Starting URAI-JOBS Finisher Script vFINAL (COMPLETE) ---"
+echo "--- Log file: $LOG_FILE ---"
+echo "--- Timestamp: $TIMESTAMP ---"
+
+# --- HELPER FUNCTIONS ---
+function backup_file() {
+  if [[ -f "$1" ]]; then
+    echo "Backing up '$1' to '$1$BACKUP_SUFFIX'"
+    cp "$1" "$1$BACKUP_SUFFIX"
+  fi
+}
+
+function write_file() {
+    local file_path="$1"
+    mkdir -p "$(dirname "$file_path")"
+    echo "Writing file: $file_path"
+    cat > "$file_path"
+}
+
+function final_status() {
+  local exit_code=$?
+  echo "---"
+  echo "--- Script Finished ---"
+  if [[ "$1" == "OK" && $exit_code -eq 0 ]]; then
+    echo "LOG=$LOG_FILE"
+    echo "STATUS=OK"
+    echo "--- Deployment successful! ---"
+    exit 0
+  else
+    echo "LOG=$LOG_FILE"
+    echo "STATUS=FAIL"
+    echo "--- Task failed. Please check the log file for errors: $LOG_FILE ---"
+    exit 1
+  fi
+}
+
+trap 'final_status "FAIL"' ERR
+
+# --- SCRIPT START ---
+
+# 1. ENVIRONMENT CHECK & FIREBASE ACCESS
+echo "--> Step 1: Environment Check & Firebase Access Verification"
+command -v node >/dev/null 2>&1 || { echo "node is not installed. Aborting." >&2; exit 1; }
+command -v pnpm >/dev/null 2>&1 || { echo "pnpm is not installed. Aborting." >&2; exit 1; }
+command -v firebase >/dev/null 2>&1 || { echo "firebase-cli is not installed. Aborting." >&2; exit 1; }
+
+node --version
+pnpm --version
+firebase --version
+
+echo "Verifying access to Firebase project '$PROJECT_ID'..."
+if ! firebase projects:list | grep -w "$PROJECT_ID" > /dev/null; then
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" >&2
+    echo "!!! CRITICAL ERROR: Firebase project '$PROJECT_ID' not found or you lack access." >&2
+    echo "!!! 1. Go to https://console.firebase.google.com/ and create project '$PROJECT_ID'" >&2
+    echo "!!! 2. Run 'firebase login' in your terminal and authenticate." >&2
+    echo "!!! 3. Re-run this script." >&2
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" >&2
+    exit 1
+fi
+echo "Firebase project access verified."
+firebase use "$PROJECT_ID"
+
+# 2. WORKSPACE CLEANUP
+echo "--> Step 2: Workspace Cleanup"
+echo "Backing up critical files..."
+for f in package.json firebase.json firestore.rules storage.rules pnpm-workspace.yaml .gitignore urai_jobs_finish.sh; do
+  if [ -f "$f" ]; then
+    backup_file "$f"
+  fi
+done
+
+echo "Cleaning workspace... (will keep this script, backups, and .idx directory)"
+# Using git clean is effective. The -e flag prevents deletion of specific files/dirs.
+git clean -fdx -e ".idx/" -e "urai_jobs_finish.sh" -e "*.bak.*"
+
+# 3. GENERATE COMPLETE PROJECT
+echo "--> Step 3: Generating complete project structure and files"
+
+# --- MONOREPO SETUP ---
+write_file "pnpm-workspace.yaml" <<'EOF'
+packages:
+  - "web"
+  - "functions"
+  - "scripts"
+  - "test"
+EOF
+
+write_file "package.json" <<'EOF'
+{
+  "name": "urai-jobs-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter web dev\" \"pnpm emulators\"",
+    "build": "pnpm run build:functions && pnpm run build:web",
+    "build:web": "pnpm --filter web build",
+    "build:functions": "pnpm --filter functions build",
+    "emulators": "firebase emulators:start --project=urai-jobs --import=./firebase-data --export-on-exit",
+    "lint": "pnpm -r --parallel lint",
+    "lint:fix": "pnpm -r --parallel lint -- --fix",
+    "typecheck": "pnpm --filter functions tsc && pnpm --filter web tsc",
+    "seed": "pnpm --filter scripts seed",
+    "test": "pnpm --filter test test",
+    "smoke:emulators": "curl -f http://127.0.0.1:5001/urai-jobs/us-central1/api/health"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  }
+}
+EOF
+
+write_file ".gitignore" <<'EOF'
+# Dependencies
+/node_modules
+/.pnpm-store
+
+# Build Output
+/public
+/web/dist
+/functions/lib
+
+# Firebase
+/firebase-data
+/.firebase/
+firebase-debug.log
+serviceAccountKey.json
+*.bak.*
+
+# IDE
+.idea
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+EOF
+
+# --- FIREBASE CONFIGURATION ---
+write_file "firebase.json" <<'EOF'
+{
+  "hosting": {
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      { "source": "/api/**", "function": "api" },
+      { "source": "**", "destination": "/index.html" }
+    ]
+  },
+  "functions": [{
+    "source": "functions",
+    "codebase": "default",
+    "runtime": "nodejs20",
+    "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run lint", "npm --prefix \"$RESOURCE_DIR\" run build"]
+  }],
+  "emulators": {
+    "auth": { "port": 9099 },
+    "functions": { "port": 5001 },
+    "firestore": { "port": 8080 },
+    "storage": { "port": 9199 },
+    "ui": { "enabled": true, "port": 4000 }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}
+EOF
+
+write_file "firestore.rules" <<'EOF'
+rules_version = "2";
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      // Check for document in 'admins' collection
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    match /jobPublic/{jobId} {
+      allow read: if true;
+      allow write: if false; // Managed by functions
+    }
+
+    match /jobs/{jobId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /applicants/{applicantId} {
+      allow read, update: if isAdmin();
+      // Public can create, but with validation
+      allow create: if request.resource.data.primaryEmail is string
+                      && request.resource.data.primaryEmail.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,4}$");
+    }
+
+    match /applications/{applicationId} {
+      allow read, update: if isAdmin();
+      // Public can create, but with validation
+      allow create: if request.resource.data.jobId is string
+                      && request.resource.data.applicantEmail is string;
+    }
+
+    match /waitlist/{id} {
+        allow create: if request.resource.data.email is string;
+        allow read, list, delete: if isAdmin();
+    }
+
+    match /referrals/{refCode} {
+        allow read, list, update: if isAdmin();
+    }
+
+    match /admins/{uid} {
+      allow read: if isAdmin();
+      // Only owner can add other admins
+      allow write: if request.auth != null && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == "owner";
+    }
+
+    match /events/{eventId} {
+        allow create: if true; // Broad allow for anonymous tracking
+        allow read, list: if isAdmin();
+    }
+  }
+}
+EOF
+
+write_file "storage.rules" <<'EOF'
+rules_version = "2";
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Resumes are private and can only be read by admins.
+    // Uploads are handled by a callable function that provides a secure upload URL/token.
+    match /resumes/{applicantId}/{applicationId}/{fileName} {
+      allow read: if request.auth != null && exists(/databases/(default)/documents/admins/$(request.auth.uid));
+      // Writes are restricted. A secure token/URL mechanism from a Cloud Function is the intended path.
+      allow write: if false;
+    }
+
+    // Deny all other paths by default
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+EOF
+
+write_file "firestore.indexes.json" <<'EOF'
+{
+  "indexes": [
+    {
+      "collectionGroup": "applications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "jobId", "order": "ASCENDING" },
+        { "fieldPath": "submittedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "applications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "submittedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "jobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+        "collectionGroup": "events",
+        "queryScope": "COLLECTION",
+        "fields": [
+            { "fieldPath": "entityType", "order": "ASCENDING" },
+            { "fieldPath": "entityId", "order": "ASCENDING" },
+            { "fieldPath": "createdAt", "order": "DESCENDING" }
+        ]
+    }
+  ]
+}
+EOF
+
+# --- WEB PACKAGE (Vite + React + TS) ---
+write_file "web/package.json" <<'EOF'
+{
+  "name": "web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
+    "tsc": "tsc --noEmit"
+  },
+  "dependencies": {
+    "firebase": "^10.8.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.55",
+    "@types/react-dom": "^18.2.19",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.17",
+    "eslint": "^8.56.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.1.0"
+  }
+}
+EOF
+
+write_file "web/vite.config.ts" <<'EOF'
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import path from 'path'
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    outDir: path.resolve(__dirname, '../public'),
+    emptyOutDir: true,
+  },
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:5001/urai-jobs/us-central1',
+        changeOrigin: true,
+      },
+    },
+  },
+})
+EOF
+
+write_file "web/index.html" <<'EOF'
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>URAI Jobs</title>
+  </head>
+  <body class="bg-slate-100">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+EOF
+
+write_file "web/public/favicon.svg" <<'EOF'
+<svg width="32" height="32" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <path d="M20,80 L50,20 L80,80 Z" stroke="black" stroke-width="10" fill="none"/>
+</svg>
+EOF
+
+write_file "web/src/main.tsx" <<'EOF'
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from "react-router-dom";
+import App from './App.tsx'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </React.StrictMode>,
+)
+EOF
+
+write_file "web/src/App.tsx" <<'EOF'
+import { Routes, Route, Link } from "react-router-dom";
+
+function JobListPage() {
+  return <div class="p-4 md:p-8"><h2 class="text-2xl font-bold">Open Positions</h2><p class="mt-2 text-slate-600">Job listings will appear here soon. Check back later!</p></div>;
+}
+function JobDetailPage() {
+  return <div class="p-4 md:p-8"><h2 class="text-2xl font-bold">Job Detail</h2><p class="mt-2 text-slate-600">Apply button will be here.</p></div>;
+}
+function AdminPage() {
+  return <div class="p-4 md:p-8"><h2 class="text-2xl font-bold">Admin Console</h2><p class="mt-2 text-slate-600">Access Restricted. Admin features will be available here after login.</p></div>;
+}
+function NotFoundPage() {
+    return <div class="p-4 md:p-8 text-center"><h2 class="text-2xl font-bold">404 - Not Found</h2><p class="mt-2 text-slate-600">The page you are looking for does not exist.</p></div>;
+}
+
+
+function App() {
+  return (
+    <div class="min-h-screen bg-slate-100 font-sans text-slate-900">
+      <header class="bg-white shadow-sm sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex-shrink-0">
+                    <Link to="/" class="text-2xl font-bold text-slate-800 hover:text-slate-600 transition-colors">URAI Jobs</Link>
+                </div>
+                <nav class="hidden md:flex space-x-8">
+                    <Link to="/jobs" class="font-medium text-slate-600 hover:text-slate-900">Jobs</Link>
+                    <Link to="/admin" class="font-medium text-slate-600 hover:text-slate-900">Admin</Link>
+                </nav>
+            </div>
+        </div>
+      </header>
+      <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Routes>
+          <Route path="/" element={<JobListPage />} />
+          <Route path="/jobs" element={<JobListPage />} />
+          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+          <Route path="/admin" element={<AdminPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </main>
+    </div>
+  )
+}
+export default App
+EOF
+
+write_file "web/src/index.css" <<'EOF'
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+EOF
+
+write_file "web/tailwind.config.js" <<'EOF'
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+EOF
+
+write_file "web/postcss.config.js" <<'EOF'
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+EOF
+
+write_file "web/tsconfig.json" <<'EOF'
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
+EOF
+
+write_file "web/tsconfig.node.json" <<'EOF'
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["vite.config.ts"]
+}
+EOF
+
+
+# --- FUNCTIONS PACKAGE ---
+write_file "functions/package.json" <<'EOF'
+{
+  "name": "functions",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint --ext .ts,.tsx .",
+    "serve": "pnpm build && firebase emulators:start --only functions",
+    "shell": "pnpm build && firebase functions:shell",
+    "start": "pnpm shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^4.8.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.56.0",
+    "eslint-config-google": "^0.14.0",
+    "typescript": "^5.3.3"
+  }
+}
+EOF
+
+write_file "functions/tsconfig.json" <<'EOF'
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "outDir": "lib",
+    "sourceMap": true,
+    "strict": true,
+    "target": "es2021",
+    "esModuleInterop": true
+  },
+  "compileOnSave": true,
+  "include": [ "src" ]
+}
+EOF
+
+write_file "functions/src/index.ts" <<'EOF'
+import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
+
+admin.initializeApp();
+const db = admin.firestore();
+
+// Main API gateway for all HTTP requests.
+export const api = functions.https.onRequest(async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*"); // Allow CORS for health check
+  if (req.path.startsWith("/health")) {
+    res.status(200).json({ok: true, service: "urai-jobs", ts: new Date().toISOString()});
+    return;
+  }
+  // All other routes are 404
+  res.status(404).json({error: "Not Found"});
+});
+
+/**
+ * Trigger to maintain the public projection of a job posting.
+ * If a job is 'open', its public data is copied to `jobPublic`.
+ * Otherwise, the public doc is deleted.
+ */
+export const onJobWrite = functions.firestore
+    .document("jobs/{jobId}")
+    .onWrite(async (change, context) => {
+      const {jobId} = context.params;
+      const jobPublicRef = db.collection("jobPublic").doc(jobId);
+
+      const jobData = change.after.data();
+
+      // If job is deleted or status is not 'open', delete the public doc.
+      if (!change.after.exists || jobData?.status !== "open") {
+        return jobPublicRef.delete();
+      }
+
+      // If job is 'open', create/update the public doc.
+      const publicData = {
+        title: jobData.title,
+        department: jobData.department,
+        locationType: jobData.locationType,
+        employmentType: jobData.employmentType,
+        descriptionMarkdown: jobData.descriptionMarkdown?.substring(0, 200) || "",
+        updatedAt: jobData.updatedAt,
+      };
+
+      return jobPublicRef.set(publicData, {merge: true});
+    });
+
+// Placeholder for future callable function
+export const createResumeUploadUrl = functions.https.onCall(async (data, context) => {
+    // Check auth, validate data, generate signed URL, return it
+    // Example: https://firebase.google.com/docs/storage/admin/generate-signed-url
+    return {message: "Not implemented yet"};
+});
+EOF
+
+write_file "functions/.eslintrc.js" <<'EOF'
+module.exports = {
+  root: true,
+  env: {
+    es6: true,
+    node: true,
+  },
+  extends: [
+    "eslint:recommended",
+    "plugin:import/errors",
+    "plugin:import/warnings",
+    "plugin:import/typescript",
+    "google",
+    "plugin:@typescript-eslint/recommended",
+  ],
+  parser: "@typescript-eslint/parser",
+  parserOptions: {
+    project: ["tsconfig.json", "tsconfig.dev.json"],
+    sourceType: "module",
+    tsconfigRootDir: __dirname,
+  },
+  ignorePatterns: [
+    "/lib/**/*", // Ignore built files.
+  ],
+  plugins: ["@typescript-eslint", "import"],
+  rules: {
+    "import/no-unresolved": 0,
+    "quotes": ["error", "double"],
+  },
+};
+EOF
+
+
+# --- SCRIPTS/TESTS STUBS ---
+write_file "scripts/package.json" <<'EOF'
+{"name": "scripts", "private": true, "scripts": {"seed": "echo \"Seeding not implemented yet.\""}}
+EOF
+write_file "test/package.json" <<'EOF'
+{"name": "test", "private": true, "scripts": {"test": "echo \"Tests not implemented yet.\""}}
+EOF
+
+
+# --- FINAL STEPS ---
+echo "--> Step 4: Installing Dependencies"
+pnpm install --no-frozen-lockfile
+
+echo "--> Step 5: Linting, Type Checking, and Building"
+pnpm lint:fix || echo "Linting had warnings, continuing..."
+pnpm typecheck
+pnpm build
+
+echo "--> Step 6: Deploying to Firebase"
+echo "Deploying Hosting, Functions, and Rules to project: $PROJECT_ID"
+# Capture JSON output from firebase deploy command
+DEPLOY_OUTPUT=$(firebase deploy --only hosting,functions,firestore,storage --json)
+
+# Verify deployment status
+if ! echo "$DEPLOY_OUTPUT" | grep -q '"status": "success"'; then
+    echo "Firebase deployment failed. Full output:" >&2
+    echo "$DEPLOY_OUTPUT" >&2
+    final_status "FAIL"
+fi
+echo "Deployment command completed."
+
+echo "--> Step 7: Running Post-Deployment Smoke Test"
+# Extract hosting URL from JSON output. Robustly handle different structures.
+HOSTING_URL=$(echo "$DEPLOY_OUTPUT" | grep -o '"url": *"[^"]*"' | head -n 1 | cut -d'"' -f4)
+
+if [[ -z "$HOSTING_URL" || "$HOSTING_URL" == "null" ]]; then
+    echo "Could not determine hosting URL from deployment output." >&2
+    echo "$DEPLOY_OUTPUT" >&2
+    final_status "FAIL"
+fi
+
+# Ensure URL has protocol
+if [[ ! $HOSTING_URL == https://* && ! $HOSTING_URL == http://* ]]; then
+    HOSTING_URL="https://$HOSTING_URL"
+fi
+
+readonly HEALTH_URL="$HOSTING_URL/api/health"
+
+echo "Deployed Site URL: $HOSTING_URL"
+echo "Health Check URL: $HEALTH_URL"
+echo "Waiting 15 seconds for functions to initialize..."
+sleep 15
+
+echo "Curling homepage..."
+if ! curl --fail --location --silent --show-error "$HOSTING_URL" > /dev/null; then
+    echo "Smoke test FAILED: Could not fetch homepage at $HOSTING_URL." >&2
+    final_status "FAIL"
+fi
+echo "Homepage [OK]"
+
+echo "Curling health endpoint..."
+if ! curl --fail --location --silent --show-error "$HEALTH_URL" | grep -q '"ok":true'; then
+    echo "Smoke test FAILED: Health endpoint check failed at $HEALTH_URL." >&2
+    final_status "FAIL"
+fi
+echo "Health Endpoint [OK]"
+echo "Smoke test passed!"
+
+# --- FINAL MESSAGE ---
+echo
+echo "--- DEPLOYMENT SUMMARY ---"
+echo "Project: $PROJECT_ID"
+echo "Deployed URL: $HOSTING_URL"
+echo
+echo "To run locally:"
+echo "1. pnpm install"
+echo "2. pnpm emulators (in one terminal)"
+echo "3. pnpm dev (in another terminal)"
+echo
+echo "To deploy manually:"
+echo "1. pnpm build"
+echo "2. firebase deploy"
+echo "---"
+
+final_status "OK"

@@ -1,6 +1,6 @@
 import * as functions from "firebase-functions";
 import { firestore } from "firebase-admin";
-import { Application, Applicant, Event, Job, Referral } from "./models";
+import { Application, Applicant, Event, Job } from "./models.js";
 import { v4 as uuidv4 } from "uuid";
 
 export const onApplicationCreate = functions.firestore

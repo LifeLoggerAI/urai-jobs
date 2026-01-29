@@ -1,0 +1,12 @@
+{
+  "name": "urai-jobs-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"pnpm -F functions serve\" \"pnpm -F web dev\"",
+    "build": "pnpm -F web build && pnpm -F functions build",
+    "emulators": "firebase emulators:start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

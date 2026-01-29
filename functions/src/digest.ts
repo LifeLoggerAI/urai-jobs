@@ -1,6 +1,6 @@
 import * as functions from "firebase-functions";
 import { firestore } from "firebase-admin";
-import { Job, Application } from "./models";
+import { Job, Application } from "./models.js";
 
 export const scheduledDailyDigest = functions.pubsub
   .schedule("every 24 hours")
