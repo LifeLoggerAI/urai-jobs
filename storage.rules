@@ -1,20 +1,7 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // Helper function to check for admin privileges
-    function isAdmin() {
-      return request.auth != null && exists(/databases/(default)/documents/admins/$(request.auth.uid));
-    }
-
-    // Resumes can only be read by admins and written by the applicant who owns the application
-    match /resumes/{applicantId}/{applicationId}/{filename} {
-      allow read: if isAdmin();
-      allow write: if request.auth.uid == applicantId &&
-                   request.resource.size < 10 * 1024 * 1024 && // 10MB limit
-                   request.resource.contentType.matches('application/pdf|application/msword|application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    }
-
-    // Deny all other access to storage
     match /{allPaths=**} {
       allow read, write: if false;
     }

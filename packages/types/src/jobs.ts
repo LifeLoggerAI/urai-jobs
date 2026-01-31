@@ -1,9 +1,12 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase/firestore';
+
+export type JobStatus = 'active' | 'paused' | 'archived';
+export type IdempotencyPolicy = 'byParamsHash' | 'manual';
 
 export interface Job {
   name: string;
   description: string;
-  status: 'active' | 'paused' | 'archived';
+  status: JobStatus;
   priority: number;
   schedule: string | null;
   handler: 'assetFactoryRender' | 'analyticsBackfill' | 'noop';
@@ -13,15 +16,17 @@ export interface Job {
   updatedAt: Timestamp;
   createdBy: string;
   tags: string[];
-  idempotencyPolicy: 'byParamsHash' | 'manual';
+  idempotencyPolicy: IdempotencyPolicy;
   leaseSeconds: number;
   maxRetries: number;
   timeoutSeconds: number;
 }
 
+export type JobRunStatus = 'queued' | 'leased' | 'running' | 'succeeded' | 'failed' | 'canceled';
+
 export interface JobRun {
   jobId: string;
-  status: 'queued' | 'leased' | 'running' | 'succeeded' | 'failed' | 'canceled';
+  status: JobRunStatus;
   queuedAt: Timestamp;
   startedAt: Timestamp | null;
   finishedAt: Timestamp | null;
@@ -33,29 +38,9 @@ export interface JobRun {
   workerId: string | null;
   error: Record<string, any> | null;
   metrics: {
-    durationMs?: number;
-    costEstimate?: number;
+    durationMs: number;
+    costEstimate: number;
   };
   logRef: string;
   artifactRefs: string[];
-}
-
-export interface JobRunLog {
-  // Define the structure of your logs
-}
-
-export interface JobArtifact {
-  // Define the structure of your artifacts
-}
-
-export interface JobDeadletter {
-  // Define the structure of your deadletter entries
-}
-
-export interface JobAudit {
-  // Define the structure of your audit entries
-}
-
-export interface JobLock {
-  // Define the structure of your job locks
 }

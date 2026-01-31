@@ -2,70 +2,8 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper Functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && (get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ['owner', 'admin', 'reviewer']);
-    }
-
-    function isOwner() {
-      return isSignedIn() && (get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner');
-    }
-
-    function hasOnly(keys) {
-      return request.resource.data.keys().hasOnly(keys);
-    }
-
-    // Public read-only access to open jobs
-    match /jobPublic/{jobId} {
-      allow read: if true;
-      allow write: if false; // Managed by Cloud Functions
-    }
-
-    // Admin-only access to jobs
-    match /jobs/{jobId} {
-      allow read, write: if isAdmin();
-    }
-
-    // Applicants can be created by anyone, but only read/updated by admins
-    match /applicants/{applicantId} {
-      allow read, update: if isAdmin();
-      allow create: if request.resource.data.primaryEmail is string && request.resource.data.name is string;
-    }
-
-    // Applications can be created by anyone, but only read/updated by admins
-    match /applications/{applicationId} {
-      allow read, update: if isAdmin();
-      allow create: if request.resource.data.jobId is string 
-                      && request.resource.data.applicantEmail is string 
-                      && request.resource.data.answers is map;
-    }
-
-    // Referrals are admin-only
-    match /referrals/{refCode} {
-      allow read, write: if isAdmin();
-    }
-
-    // Waitlist can be written to by anyone, but only read by admins
-    match /waitlist/{id} {
-      allow read: if isAdmin();
-      allow create: if request.resource.data.email is string && request.resource.data.consent is map;
-    }
-
-    // Admins can only be managed by owners
-    match /admins/{uid} {
-      allow read: if isAdmin();
-      allow write: if isOwner();
-    }
-
-    // Events can be created by anyone, but only read by admins
-    match /events/{eventId} {
-      allow read: if isAdmin();
-      allow create: if request.resource.data.type is string;
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
