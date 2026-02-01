@@ -1,6 +1,5 @@
 {
   "projects": {
-    "default": "urai-jobs",
-    "jobs": "urai-jobs"
+    "default": "urai-jobs"
   }
 }

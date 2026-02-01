@@ -1,32 +1,18 @@
 {
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "function": "api"
+      }
+    ]
   },
-  "storage": {
-    "rules": "storage.rules"
-  },
-  "hosting": [
-    {
-      "target": "jobs-web",
-      "public": "apps/jobs-web/out",
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
-      ],
-      "rewrites": [
-        {
-          "source": "/api/**",
-          "function": "api"
-        },
-        {
-          "source": "**",
-          "destination": "/index.html"
-        }
-      ]
-    }
-  ],
   "functions": {
     "source": "functions",
     "runtime": "nodejs20"
@@ -35,21 +21,17 @@
     "auth": {
       "port": 9099
     },
-    "firestore": {
-      "port": 8080
-    },
     "functions": {
       "port": 5001
     },
-    "storage": {
-      "port": 9199
+    "firestore": {
+      "port": 8080
     },
     "hosting": {
       "port": 5000
     },
     "ui": {
-      "enabled": true,
-      "port": 4000
+      "enabled": true
     }
   }
 }

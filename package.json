@@ -1,25 +1,21 @@
 {
-  "name": "urai-jobs-monorepo",
+  "name": "urai-jobs",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "pnpm -r build",
+    "preinstall": "npx only-allow pnpm",
+    "build": "pnpm -r --filter=./apps/* build",
     "test": "pnpm -r test",
     "test:ci": "pnpm -r test:ci",
-    "e2e": "pnpm --filter=jobs-web e2e",
+    "e2e": "playwright test",
     "smoke": "./scripts/jobs_smoke.sh",
     "deploy:jobs": "./scripts/deploy_jobs.sh",
-    "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck",
-    "emulators": "firebase emulators:start --project=urai-jobs --import=./local_data --export-on-exit"
+    "postinstall": "pnpm -r postinstall"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
-    "cross-env": "^7.0.3",
-    "typescript": "^5.3.3",
-    "pnpm": "^8.15.4"
-  },
-  "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=8.0.0"
+    "@playwright/test": "^1.58.1",
+    "firebase-tools": "^13.0.0",
+    "pnpm": "^8.0.0",
+    "typescript": "^5.0.0"
   }
 }

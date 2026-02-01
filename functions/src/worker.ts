@@ -1,92 +1,80 @@
-import * as functions from 'firebase-functions';
-import * as admin from 'firebase-admin';
-import { JobRun } from './models';
-import { firestore } from 'firebase-admin';
+import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
+import { firestore } from "firebase-admin";
 
 const db = admin.firestore();
 
-export const worker = functions.pubsub.schedule('every 1 minutes').onRun(async (context) => {
-  const now = firestore.Timestamp.now();
-  const query = db.collection('jobRuns')
-    .where('status', '==', 'queued')
-    .orderBy('queuedAt', 'asc')
-    .limit(10);
+const leaseRun = async () => {
+    const now = firestore.Timestamp.now();
+    const query = db.collection("jobRuns")
+        .where("status", "==", "queued")
+        .orderBy("queuedAt")
+        .limit(1);
 
-  const runs = await query.get();
-
-  const promises = runs.docs.map(async (doc) => {
-    const run = doc.data() as JobRun;
-    const runRef = doc.ref;
-
-    try {
-      await db.runTransaction(async (transaction) => {
-        const doc = await transaction.get(runRef);
-        if (doc.data()?.status !== 'queued') {
-          return;
+    return db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(query);
+        if (snapshot.empty) {
+            return null;
         }
 
-        const jobRef = db.collection('jobs').doc(run.jobId);
-        const jobDoc = await transaction.get(jobRef);
-        const job = jobDoc.data()!;
+        const runDoc = snapshot.docs[0];
+        const jobDoc = await db.collection("jobs").doc(runDoc.data().jobId).get();
+        const job = jobDoc.data();
 
-        const leaseSeconds = job.leaseSeconds || 60;
+        if (!job) {
+            return null;
+        }
+
+        const leaseSeconds = job.leaseSeconds;
         const leaseExpiresAt = firestore.Timestamp.fromMillis(now.toMillis() + leaseSeconds * 1000);
 
-        transaction.update(runRef, {
-          status: 'leased',
-          leaseExpiresAt,
-          workerId: context.eventId,
+        transaction.update(runDoc.ref, {
+            status: "leased",
+            leaseExpiresAt,
+            workerId: "local-worker", // Replace with actual worker ID
         });
-      });
 
-      await executeRun(runRef.id, run);
+        return { run: { id: runDoc.id, ...runDoc.data() }, job };
+    });
+};
 
+const executeRun = async (run: any, job: any) => {
+    await db.collection("jobRuns").doc(run.id).update({ status: "running", startedAt: firestore.FieldValue.serverTimestamp() });
+
+    try {
+        // Simulate work
+        console.log(`Executing job: ${job.name}`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        await db.collection("jobRuns").doc(run.id).update({ status: "succeeded", finishedAt: firestore.FieldValue.serverTimestamp() });
     } catch (error) {
-      console.error(`Error leasing run ${runRef.id}:`, error);
-    }
-  });
+        console.error("Job execution failed:", error);
+        const runDoc = await db.collection("jobRuns").doc(run.id).get();
+        const currentAttempt = runDoc.data()?.attempt || 0;
 
-  await Promise.all(promises);
+        if (currentAttempt < job.maxRetries) {
+            await db.collection("jobRuns").doc(run.id).update({
+                status: "queued",
+                attempt: currentAttempt + 1,
+            });
+        } else {
+            await db.collection("jobRuns").doc(run.id).update({
+                status: "failed",
+                finishedAt: firestore.FieldValue.serverTimestamp(),
+                error: { message: (error as Error).message },
+            });
+
+            // Move to deadletter queue
+            await db.collection("jobDeadletter").add({ ...runDoc.data(), error: { message: (error as Error).message } });
+        }
+    }
+};
+
+export const worker = functions.pubsub.schedule("every 1 minutes").onRun(async (context) => {
+    const leased = await leaseRun();
+
+    if (leased) {
+        const { run, job } = leased;
+        await executeRun(run, job);
+    }
 });
-
-async function executeRun(runId: string, run: JobRun) {
-  const runRef = db.collection('jobRuns').doc(runId);
-
-  try {
-    await runRef.update({
-      status: 'running',
-      startedAt: firestore.Timestamp.now(),
-    });
-
-    // Execute the job handler
-    const handler = await import(`./jobs/handlers/${run.jobId}`);
-    await handler.default(run);
-
-    await runRef.update({
-      status: 'succeeded',
-      finishedAt: firestore.Timestamp.now(),
-    });
-
-  } catch (error: any) {
-    console.error(`Error executing run ${runId}:`, error);
-
-    const runDoc = await runRef.get();
-    const currentRun = runDoc.data() as JobRun;
-    const jobDoc = await db.collection('jobs').doc(currentRun.jobId).get();
-    const job = jobDoc.data()!;
-
-    if (currentRun.attempt >= job.maxRetries) {
-      await runRef.update({
-        status: 'failed',
-        finishedAt: firestore.Timestamp.now(),
-        error: { message: error.message },
-      });
-      // TODO: Add to deadletter queue
-    } else {
-      await runRef.update({
-        status: 'queued',
-        attempt: firestore.FieldValue.increment(1),
-      });
-    }
-  }
-}

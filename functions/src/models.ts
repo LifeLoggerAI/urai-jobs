@@ -1,61 +1,52 @@
-import { Timestamp } from 'firebase-admin/firestore';
 
-export interface Job {
-  name: string;
-  description: string;
-  status: 'active' | 'paused' | 'archived';
-  priority: number;
-  schedule: string | null;
-  handler: 'assetFactoryRender' | 'analyticsBackfill' | 'noop';
-  inputSchemaVersion: number;
-  defaultParams: Record<string, any>;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  createdBy: string;
-  tags: string[];
-  idempotencyPolicy: 'byParamsHash' | 'manual';
-  leaseSeconds: number;
-  maxRetries: number;
-  timeoutSeconds: number;
-}
+import { z } from 'zod';
 
-export interface JobRun {
-  jobId: string;
-  status: 'queued' | 'leased' | 'running' | 'succeeded' | 'failed' | 'canceled';
-  queuedAt: Timestamp;
-  startedAt: Timestamp | null;
-  finishedAt: Timestamp | null;
-  attempt: number;
-  params: Record<string, any>;
-  paramsHash: string;
-  idempotencyKey: string;
-  leaseExpiresAt: Timestamp | null;
-  workerId: string | null;
-  error: Record<string, any> | null;
-  metrics: {
-    durationMs?: number;
-    costEstimate?: number;
-  };
-  logRef: string;
-  artifactRefs: string[];
-}
+export const JobSchema = z.object({
+  ownerUid: z.string(),
+  status: z.enum(['QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELED']),
+  priority: z.number().int(),
+  type: z.string(),
+  input: z.object({}).passthrough(),
+  output: z.object({}).passthrough().nullable(),
+  attempts: z.number().int(),
+  maxAttempts: z.number().int().default(3),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  leaseExpiresAt: z.date().nullable(),
+  idempotencyKey: z.string(),
+  lastError: z.object({
+    code: z.string(),
+    message: z.string(),
+    details: z.any().optional(),
+  }).nullable(),
+});
 
-export interface JobRunLog {
-  // Define the structure of your logs
-}
+export const JobRunSchema = z.object({
+  jobId: z.string(),
+  ownerUid: z.string(),
+  status: z.enum(['QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELED']),
+  startedAt: z.date().nullable(),
+  finishedAt: z.date().nullable(),
+  workerId: z.string().nullable(),
+  logs: z.array(z.string()),
+  metrics: z.object({}).passthrough(),
+});
 
-export interface JobArtifact {
-  // Define the structure of your artifacts
-}
+export const JobEventSchema = z.object({
+  jobId: z.string(),
+  ownerUid: z.string(),
+  type: z.string(),
+  ts: z.date(),
+  payload: z.object({}).passthrough(),
+});
 
-export interface JobDeadletter {
-  // Define the structure of your deadletter entries
-}
-
-export interface JobAudit {
-  // Define the structure of your audit entries
-}
-
-export interface JobLock {
-  // Define the structure of your job locks
-}
+export const ArtifactSchema = z.object({
+  jobId: z.string(),
+  ownerUid: z.string(),
+  kind: z.string(),
+  storagePath: z.string(),
+  mimeType: z.string(),
+  bytes: z.number(),
+  createdAt: z.date(),
+  meta: z.object({}).passthrough(),
+});

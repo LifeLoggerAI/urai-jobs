@@ -1,9 +1,13 @@
+import * as functions from "firebase-functions";
 
-import { defineString } from 'firebase-functions/params';
-
-// General configuration
-export const PROJECT_ID = defineString('PROJECT_ID', { default: process.env.GCP_PROJECT });
-export const REGION = 'us-central1';
-
-// Admin configuration
-export const BOOTSTRAP_ADMIN_UID = defineString('URAI_JOBS_BOOTSTRAP_ADMIN_UID');
+export const config = {
+  project: {
+    id: process.env.GCLOUD_PROJECT || "urai-jobs",
+  },
+  emulators: {
+    using: process.env.FUNCTIONS_EMULATOR === "true",
+  },
+  admin: {
+    bootstrap_uid: functions.config().admin?.bootstrap_uid || process.env.URAI_JOBS_BOOTSTRAP_ADMIN_UID,
+  },
+};

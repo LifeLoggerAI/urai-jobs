@@ -1,9 +1,46 @@
-rules_version = '2';
 
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(resource) {
+      return request.auth.uid == resource.data.ownerUid;
+    }
+
+    function isAdmin() {
+      return request.auth.token.admin == true;
+    }
+
+    match /jobs/{jobId} {
+      allow read: if isSignedIn() && (isOwner(resource) || isAdmin());
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (isOwner(resource) || isAdmin());
+      allow delete: if isSignedIn() && (isOwner(resource) || isAdmin());
+    }
+
+    match /jobRuns/{runId} {
+      allow read: if isSignedIn() && (isOwner(resource) || isAdmin());
+      allow create: if isSignedIn() && (isOwner(resource) || isAdmin());
+      allow update: if isSignedIn() && (isOwner(resource) || isAdmin());
+      allow delete: if isSignedIn() && (isOwner(resource) || isAdmin());
+    }
+
+    match /jobEvents/{eventId} {
+      allow read: if isSignedIn() && (isOwner(resource) || isAdmin());
+      allow create: if isSignedIn() && (isOwner(resource) || isAdmin());
+      allow update: if isSignedIn() && (isOwner(resource) || isAdmin());
+      allow delete: if isSignedIn() && (isOwner(resource) || isAdmin());
+    }
+
+    match /artifacts/{artifactId} {
+      allow read: if isSignedIn() && (isOwner(resource) || isAdmin());
+      allow create: if isSignedIn() && (isOwner(resource) || isAdmin());
+      allow update: if isSignedIn() && (isOwner(resource) || isAdmin());
+      allow delete: if isSignedIn() && (isOwner(resource) || isAdmin());
     }
   }
 }
