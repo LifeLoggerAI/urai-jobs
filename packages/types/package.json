@@ -5,6 +5,7 @@
   "types": "./src/index.ts",
   "license": "MIT",
   "dependencies": {
-    "firebase": "^9.17.2"
+    "firebase": "^9.17.2",
+    "firebase-admin": "^12.7.0"
   }
 }
