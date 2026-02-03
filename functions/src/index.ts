@@ -1,214 +1,259 @@
+import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
+import { Job, JobSchema } from "./types/jobs";
+import { lockJob, heartbeatJob, releaseJob } from "./firestore";
+import { writeAuditEvent } from "./audit";
 
-import * as functions from 'firebase-functions';
-import * as express from 'express';
-import { nanoid } from 'nanoid';
-import { Timestamp } from 'firebase-admin/firestore';
-import { Job, JobSchema, JobStatus } from './types/jobs';
-import { 
-    getJob, 
-    createJob, 
-    updateJob, 
-    lockJob, 
-    heartbeatJob, 
-    releaseJob, 
-    pollJobs 
-} from './firestore';
-import { writeAuditEvent } from './audit';
+admin.initializeApp();
 
-const app = express();
+const db = admin.firestore();
 
-const authMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const apiKey = req.get('x-urai-internal-key');
-    if (apiKey && apiKey === process.env.URAI_INTERNAL_KEY) {
-        next();
-    } else {
-        res.status(401).send('Unauthorized');
-    }
-};
+const getApiKey = () => functions.config().urai.internal_key;
 
-app.use(authMiddleware);
+const isAuthorized = (req: functions.https.Request) => req.header("x-urai-internal-key") === getApiKey();
 
-app.post('/jobs/enqueue', async (req, res) => {
-    try {
-        const jobId = nanoid();
-        const job: Job = {
-            jobId,
-            ...req.body,
-            status: 'QUEUED',
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now(),
-        };
+export const enqueueJob = functions.https.onRequest(async (req, res) => {
+  if (!isAuthorized(req)) {
+    res.status(401).send("Unauthorized");
+    return;
+  }
 
-        const validatedJob = JobSchema.parse(job);
-        await createJob(validatedJob);
+  const { kind, input } = req.body;
 
-        await writeAuditEvent({
-            eventId: nanoid(),
-            jobId,
-            at: Timestamp.now(),
-            type: 'ENQUEUED',
-            actor: { kind: 'api', id: 'enqueue' },
-        });
+  const newJob: Job = {
+    jobId: db.collection("jobs").doc().id,
+    kind: kind,
+    status: "QUEUED",
+    priority: 50,
+    attempt: 0,
+    maxAttempts: 3,
+    input: input,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
 
-        res.status(200).json({ ok: true, jobId });
-    } catch (error) {
-        res.status(400).json({ ok: false, error });
-    }
+  const validation = JobSchema.safeParse(newJob);
+
+  if (!validation.success) {
+    res.status(400).send(validation.error.issues);
+    return;
+  }
+
+  await db.collection("jobs").doc(newJob.jobId).set(newJob);
+
+  await writeAuditEvent(newJob, "ENQUEUED", { kind: "api", id: "enqueueJob" });
+
+  res.send({ ok: true, jobId: newJob.jobId });
 });
 
-app.get('/jobs/poll', async (req, res) => {
-    try {
-        const limit = parseInt(req.query.limit as string) || 10;
-        const kinds = req.query.kinds ? (req.query.kinds as string).split(',') : [];
-        const jobs = await pollJobs(limit, kinds);
-        res.status(200).json({ ok: true, jobs });
-    } catch (error) {
-        res.status(400).json({ ok: false, error });
-    }
+export const getJob = functions.https.onRequest(async (req, res) => {
+  if (!isAuthorized(req)) {
+    res.status(401).send("Unauthorized");
+    return;
+  }
+
+  const jobId = req.params.jobId;
+
+  if (!jobId) {
+    res.status(400).send("jobId is required");
+    return;
+  }
+
+  const jobDoc = await db.collection("jobs").doc(jobId).get();
+
+  if (!jobDoc.exists) {
+    res.status(404).send("Job not found");
+    return;
+  }
+
+  res.send({ ok: true, job: jobDoc.data() });
 });
 
-app.get('/jobs/:jobId', async (req, res) => {
-    try {
-        const { jobId } = req.params;
-        const job = await getJob(jobId);
-        if (job) {
-            res.status(200).json({ ok: true, job });
-        } else {
-            res.status(404).json({ ok: false, error: 'Job not found' });
-        }
-    } catch (error) {
-        res.status(400).json({ ok: false, error });
-    }
+export const pollJobs = functions.https.onRequest(async (req, res) => {
+  if (!isAuthorized(req)) {
+    res.status(401).send("Unauthorized");
+    return;
+  }
+
+  const limit = parseInt(req.query.limit as string) || 10;
+  const kinds = (req.query.kinds as string)?.split(",");
+
+  let query: admin.firestore.Query = db.collection("jobs").where("status", "==", "QUEUED").orderBy("priority", "desc");
+
+  if (kinds && kinds.length > 0) {
+    query = query.where("kind", "in", kinds);
+  }
+
+  const jobsSnapshot = await query.limit(limit).get();
+
+  const jobs = jobsSnapshot.docs.map((doc) => doc.data());
+
+  res.send({ ok: true, jobs: jobs });
 });
 
-app.post('/jobs/:jobId/cancel', async (req, res) => {
-    try {
-        const { jobId } = req.params;
-        const job = await getJob(jobId);
+export const lockNextJob = functions.https.onRequest(async (req, res) => {
+  if (!isAuthorized(req)) {
+    res.status(401).send("Unauthorized");
+    return;
+  }
 
-        if (!job) {
-            return res.status(404).json({ ok: false, error: 'Job not found' });
-        }
+  const workerId = req.body.workerId;
 
-        await updateJob(jobId, { status: 'CANCELED' });
+  if (!workerId) {
+    res.status(400).send("workerId is required");
+    return;
+  }
 
-        await writeAuditEvent({
-            eventId: nanoid(),
-            jobId,
-            at: Timestamp.now(),
-            type: 'CANCELED',
-            from: job.status,
-            to: 'CANCELED',
-            actor: { kind: 'api', id: 'cancel' },
-        });
+  const jobsSnapshot = await db.collection("jobs").where("status", "==", "QUEUED").orderBy("priority", "desc").limit(1).get();
 
-        res.status(200).json({ ok: true });
-    } catch (error) {
-        res.status(400).json({ ok: false, error });
-    }
+  if (jobsSnapshot.empty) {
+    res.send({ ok: true, job: null });
+    return;
+  }
+
+  const job = jobsSnapshot.docs[0].data() as Job;
+
+  const lockedJob = await lockJob(job, workerId);
+
+  if (!lockedJob) {
+    res.status(409).send("Job already locked");
+    return;
+  }
+
+  res.send({ ok: true, job: lockedJob });
 });
 
-app.post('/jobs/:jobId/retry', async (req, res) => {
-    try {
-        const { jobId } = req.params;
-        const job = await getJob(jobId);
+export const heartbeat = functions.https.onRequest(async (req, res) => {
+  if (!isAuthorized(req)) {
+    res.status(401).send("Unauthorized");
+    return;
+  }
 
-        if (!job) {
-            return res.status(404).json({ ok: false, error: 'Job not found' });
-        }
+  const jobId = req.params.jobId;
+  const workerId = req.body.workerId;
 
-        if (job.status === 'FAILED' && job.attempt < job.maxAttempts) {
-            await updateJob(jobId, { status: 'QUEUED', attempt: job.attempt + 1 });
+  if (!jobId || !workerId) {
+    res.status(400).send("jobId and workerId are required");
+    return;
+  }
 
-            await writeAuditEvent({
-                eventId: nanoid(),
-                jobId,
-                at: Timestamp.now(),
-                type: 'RETRIED',
-                from: job.status,
-                to: 'QUEUED',
-                actor: { kind: 'api', id: 'retry' },
-            });
+  const jobDoc = await db.collection("jobs").doc(jobId).get();
 
-            const newJob = await getJob(jobId);
-            res.status(200).json({ ok: true, job: newJob });
-        } else {
-            res.status(400).json({ ok: false, error: 'Job not eligible for retry' });
-        }
-    } catch (error) {
-        res.status(400).json({ ok: false, error });
-    }
+  if (!jobDoc.exists) {
+    res.status(404).send("Job not found");
+    return;
+  }
+
+  const lockedUntil = await heartbeatJob(jobDoc.data() as Job, workerId);
+
+  if (!lockedUntil) {
+    res.status(409).send("Job not locked by this worker");
+    return;
+  }
+
+  res.send({ ok: true, lockedUntil });
 });
 
+export const release = functions.https.onRequest(async (req, res) => {
+  if (!isAuthorized(req)) {
+    res.status(401).send("Unauthorized");
+    return;
+  }
 
-app.post('/jobs/:jobId/lock', async (req, res) => {
-    try {
-        const { jobId } = req.params;
-        const { workerId, leaseMs } = req.body;
-        const job = await lockJob(jobId, workerId, leaseMs);
+  const jobId = req.params.jobId;
+  const workerId = req.body.workerId;
 
-        if (job) {
-            await writeAuditEvent({
-                eventId: nanoid(),
-                jobId,
-                at: Timestamp.now(),
-                type: 'LOCKED',
-                actor: { kind: 'worker', id: workerId },
-            });
+  if (!jobId || !workerId) {
+    res.status(400).send("jobId and workerId are required");
+    return;
+  }
 
-            res.status(200).json({ ok: true, job });
-        } else {
-            res.status(409).json({ ok: false, error: 'Could not lock job' });
-        }
-    } catch (error) {
-        res.status(400).json({ ok: false, error });
-    }
+  const jobDoc = await db.collection("jobs").doc(jobId).get();
+
+  if (!jobDoc.exists) {
+    res.status(404).send("Job not found");
+    return;
+  }
+
+  await releaseJob(jobDoc.data() as Job, workerId);
+
+  res.send({ ok: true });
 });
 
-app.post('/jobs/:jobId/heartbeat', async (req, res) => {
-    try {
-        const { jobId } = req.params;
-        const { workerId, leaseMs } = req.body;
-        const lockedUntil = await heartbeatJob(jobId, workerId, leaseMs);
+export const cancelJob = functions.https.onRequest(async (req, res) => {
+  if (!isAuthorized(req)) {
+    res.status(401).send("Unauthorized");
+    return;
+  }
 
-        if (lockedUntil) {
-            await writeAuditEvent({
-                eventId: nanoid(),
-                jobId,
-                at: Timestamp.now(),
-                type: 'HEARTBEAT',
-                actor: { kind: 'worker', id: workerId },
-            });
+  const jobId = req.params.jobId;
 
-            res.status(200).json({ ok: true, lockedUntil });
-        } else {
-            res.status(409).json({ ok: false, error: 'Could not heartbeat job' });
-        }
-    } catch (error) {
-        res.status(400).json({ ok: false, error });
-    }
+  if (!jobId) {
+    res.status(400).send("jobId is required");
+    return;
+  }
+
+  const jobRef = db.collection("jobs").doc(jobId);
+
+  const jobDoc = await jobRef.get();
+
+  if (!jobDoc.exists) {
+    res.status(404).send("Job not found");
+    return;
+  }
+
+  const job = jobDoc.data() as Job;
+
+  if (job.status === "CANCELED") {
+    res.send({ ok: true });
+    return;
+  }
+
+  await jobRef.update({ status: "CANCELED" });
+
+  await writeAuditEvent(job, "CANCELED", { kind: "api", id: "cancelJob" });
+
+  res.send({ ok: true });
 });
 
-app.post('/jobs/:jobId/release', async (req, res) => {
-    try {
-        const { jobId } = req.params;
-        const { workerId } = req.body;
-        await releaseJob(jobId, workerId);
+export const retryJob = functions.https.onRequest(async (req, res) => {
+  if (!isAuthorized(req)) {
+    res.status(401).send("Unauthorized");
+    return;
+  }
 
-        await writeAuditEvent({
-            eventId: nanoid(),
-            jobId,
-            at: Timestamp.now(),
-            type: 'RELEASED',
-            actor: { kind: 'worker', id: workerId },
-        });
+  const jobId = req.params.jobId;
 
-        res.status(200).json({ ok: true });
-    } catch (error) {
-        res.status(400).json({ ok: false, error });
-    }
+  if (!jobId) {
+    res.status(400).send("jobId is required");
+    return;
+  }
+
+  const jobRef = db.collection("jobs").doc(jobId);
+
+  const jobDoc = await jobRef.get();
+
+  if (!jobDoc.exists) {
+    res.status(404).send("Job not found");
+    return;
+  }
+
+  const job = jobDoc.data() as Job;
+
+  if (job.status !== "FAILED" || job.attempt >= job.maxAttempts) {
+    res.status(400).send("Job cannot be retried");
+    return;
+  }
+
+  const retriedJob = {
+    ...job,
+    status: "QUEUED",
+    attempt: job.attempt + 1,
+  } as Job;
+
+  await jobRef.update(retriedJob);
+
+  await writeAuditEvent(retriedJob, "RETRIED", { kind: "api", id: "retryJob" });
+
+  res.send({ ok: true, job: retriedJob });
 });
-
-
-
-export const api = functions.https.onRequest(app);

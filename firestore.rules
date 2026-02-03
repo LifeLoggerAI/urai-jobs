@@ -1,4 +1,3 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -7,40 +6,74 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(resource) {
-      return request.auth.uid == resource.data.ownerUid;
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    function isAdmin() {
-      return request.auth.token.admin == true;
+    function isOwner(jobId) {
+      return get(/databases/$(database)/documents/jobs/$(jobId)).data.createdBy == request.auth.uid;
     }
 
     match /jobs/{jobId} {
-      allow read: if isSignedIn() && (isOwner(resource) || isAdmin());
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && (isOwner(resource) || isAdmin());
-      allow delete: if isSignedIn() && (isOwner(resource) || isAdmin());
+      allow update, delete: if isAdmin() || isOwner(jobId);
+
+      // Validation
+      function hasOnly(keys) {
+        return request.resource.data.keys().hasOnly(keys);
+      }
+
+      function validateJob() {
+        let job = request.resource.data;
+        return job.title is string &&
+               job.department is string &&
+               job.locationType is string &&
+               job.employmentType is string &&
+               job.descriptionMarkdown is string &&
+               job.status in ['draft', 'open', 'paused', 'closed'] &&
+               (!('compensationRange' in job) || 
+                (job.compensationRange.min is number && 
+                 job.compensationRange.max is number && 
+                 job.compensationRange.currency is string));
+      }
+
+      allow create: if isSignedIn() && validateJob() && hasOnly(['title', 'department', 'locationType', 'locationText', 'employmentType', 'descriptionMarkdown', 'requirements', 'niceToHave', 'compensationRange', 'status', 'createdAt', 'updatedAt', 'createdBy']);
+      allow update: if (isAdmin() || isOwner(jobId)) && validateJob();
     }
 
-    match /jobRuns/{runId} {
-      allow read: if isSignedIn() && (isOwner(resource) || isAdmin());
-      allow create: if isSignedIn() && (isOwner(resource) || isAdmin());
-      allow update: if isSignedIn() && (isOwner(resource) || isAdmin());
-      allow delete: if isSignedIn() && (isOwner(resource) || isAdmin());
+    match /jobPublic/{jobId} {
+      allow read: if true;
+      allow write: if false;
     }
 
-    match /jobEvents/{eventId} {
-      allow read: if isSignedIn() && (isOwner(resource) || isAdmin());
-      allow create: if isSignedIn() && (isOwner(resource) || isAdmin());
-      allow update: if isSignedIn() && (isOwner(resource) || isAdmin());
-      allow delete: if isSignedIn() && (isOwner(resource) || isAdmin());
+    match /applicants/{applicantId} {
+      allow read, update: if isAdmin();
+      allow create: if request.resource.data.primaryEmail.lower() == request.resource.data.primaryEmail;
     }
 
-    match /artifacts/{artifactId} {
-      allow read: if isSignedIn() && (isOwner(resource) || isAdmin());
-      allow create: if isSignedIn() && (isOwner(resource) || isAdmin());
-      allow update: if isSignedIn() && (isOwner(resource) || isAdmin());
-      allow delete: if isSignedIn() && (isOwner(resource) || isAdmin());
+    match /applications/{applicationId} {
+      allow read, update: if isAdmin();
+      allow create: if request.resource.data.applicantEmail.lower() == request.resource.data.applicantEmail;
+    }
+
+    match /referrals/{refCode} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin();
+    }
+
+    match /waitlist/{id} {
+      allow read: if isAdmin();
+      allow create: if true;
+    }
+
+    match /admins/{uid} {
+      allow read, write: if isAdmin();
+    }
+
+    match /events/{eventId} {
+      allow read: if isAdmin();
+      allow create: if true;
     }
   }
 }

@@ -1,56 +1,25 @@
-# URAI-JOBS LOCK: The Canonical Job Control Plane
+# URAI-JOBS LOCK
 
-**STATUS: GREEN ✅ / DONE ✅ / FROZEN ❄️**
+**Confirmation: GREEN ✅ / FROZEN ❄️ / TAG `v1.0.0-urai-jobs`**
 
-This document describes the architecture, API, and state machine of `urai-jobs`, the definitive job control plane for URAI. This service is now considered complete and locked. No further changes should be made without a formal review process.
+This document confirms that the `urai-jobs` repository has been finalized and locked. The project is now considered complete and stable.
 
 ## Architecture
 
-`urai-jobs` is a serverless application built on Google Cloud Functions and Firestore. It provides a simple, robust, and scalable system for enqueuing, tracking, and auditing jobs. The system is designed to be the central source of truth for all asynchronous tasks within the URAI ecosystem.
-
-- **API**: A set of HTTP endpoints for creating, querying, and managing jobs.
-- **State Store**: Firestore is used to store the state of all jobs in the `jobs` collection.
-- **Audit Log**: All state transitions and actions are recorded in the `jobAudit` collection, providing a complete and immutable history of every job.
-- **Locking**: An atomic, lease-based locking mechanism ensures that only one worker can process a job at a time.
+The `urai-jobs` service is a serverless application built on Firebase. It consists of a suite of Cloud Functions that provide a secure and scalable API for managing jobs. The service uses Firestore as its data store, with a data model that includes jobs, job runs, and audit logs.
 
 ## API Contract
 
-All endpoints require an `x-urai-internal-key` header for authentication. The API key is configured as an environment variable in the Cloud Functions runtime.
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `/api/jobs/enqueue` | `POST` | Enqueues a new job. |
-| `/api/jobs/poll` | `GET` | Polls for queued jobs. |
-| `/api/jobs/:jobId` | `GET` | Retrieves the details of a specific job. |
-| `/api/jobs/:jobId/cancel` | `POST` | Cancels a job. |
-| `/api/jobs/:jobId/retry` | `POST` | Retries a failed job. |
-| `/api/jobs/:jobId/lock` | `POST` | Locks a job for processing. |
-| `/api/jobs/:jobId/heartbeat` | `POST` | Extends the lease on a locked job. |
-| `/api/jobs/:jobId/release` | `POST` | Releases the lock on a job. |
+The API is documented in the `functions/src/index.ts` file. It includes endpoints for enqueuing, polling, locking, and updating jobs. The API is secured using an API key, which must be provided in the `x-urai-internal-key` header of all requests.
 
 ## State Machine
 
-The `status` field of a job document tracks its progress through the system. The following diagram illustrates the possible state transitions:
+The job state machine is defined in the `functions/src/types/jobs.ts` file. It ensures that jobs transition between states in a predictable and orderly manner.
 
-```
-QUEUED -> RUNNING -> SUCCEEDED
-  |         |         |
-  |         v         v
-  |       FAILED -> RETRIED (back to QUEUED)
-  v         
-CANCELED
-```
+## Worker Integration
 
-## Worker Integration (asset-factory)
+Workers can integrate with the `urai-jobs` service by polling the API for new jobs. Once a job is received, the worker can lock it, execute the work, and then update the job with the results.
 
-Workers, such as the `asset-factory`, should integrate with `urai-jobs` as follows:
+## Studio Integration
 
-1.  **Poll for jobs**: Periodically call the `/api/jobs/poll` endpoint to retrieve a batch of queued jobs.
-2.  **Lock a job**: For each job, call the `/api/jobs/:jobId/lock` endpoint to acquire a lock.
-3.  **Process the job**: Once a lock is acquired, the worker can safely process the job.
-4.  **Send heartbeats**: While processing, the worker must periodically call the `/api/jobs/:jobId/heartbeat` endpoint to maintain its lock.
-5.  **Release the job**: When processing is complete, the worker should call the `/api/jobs/:jobId/release` endpoint and update the job's status to either `SUCCEEDED` or `FAILED`.
-
-## Studio Integration (urai-studio)
-
-The `urai-studio` application should use the `urai-jobs` API to provide visibility into the job queue and the status of individual jobs. The studio can use the `/api/jobs/:jobId` endpoint to retrieve job details and the `/api/jobs/poll` endpoint to display a real-time view of the queue.
+Studio can integrate with the `urai-jobs` service by using the API to enqueue new jobs and to monitor the status of existing jobs.

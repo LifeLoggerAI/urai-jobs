@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "build": "pnpm -r --filter=./apps/* build",
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter web dev & firebase emulators:start",
     "test": "pnpm -r test",
     "test:ci": "pnpm -r test:ci",
     "e2e": "playwright test",
-    "smoke": "./scripts/jobs_smoke.sh",
+    "smoke": "./scripts/smoke_urai_jobs.sh",
     "deploy:jobs": "./scripts/deploy_jobs.sh",
     "postinstall": "pnpm -r postinstall"
   },

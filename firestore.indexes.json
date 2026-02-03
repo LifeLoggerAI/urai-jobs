@@ -1,12 +1,25 @@
-
 {
   "indexes": [
     {
-      "collectionGroup": "jobs",
+      "collectionGroup": "applications",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "ownerUid",
+          "fieldPath": "jobId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "submittedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "applications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "jobId",
           "order": "ASCENDING"
         },
         {
@@ -14,7 +27,21 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "createdAt",
+          "fieldPath": "submittedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "applications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "submittedAt",
           "order": "DESCENDING"
         }
       ]
@@ -24,11 +51,25 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "ownerUid",
+          "fieldPath": "status",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "type",
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entityType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "entityId",
           "order": "ASCENDING"
         },
         {
@@ -38,11 +79,11 @@
       ]
     },
     {
-      "collectionGroup": "jobs",
+      "collectionGroup": "referrals",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "status",
+          "fieldPath": "active",
           "order": "ASCENDING"
         },
         {
@@ -51,5 +92,6 @@
         }
       ]
     }
-  ]
+  ],
+  "fieldOverrides": []
 }
