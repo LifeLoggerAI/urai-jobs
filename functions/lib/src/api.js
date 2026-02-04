@@ -38,7 +38,7 @@ const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 const express = __importStar(require("express"));
 const zod_1 = require("zod");
-const app = express();
+const app = (express.default || express)();
 const db = admin.firestore();
 // Zod schemas for validation
 const JobSchema = zod_1.z.object({

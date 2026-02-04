@@ -41,7 +41,7 @@ const firestore_1 = require("firebase-admin/firestore");
 const jobs_1 = require("./types/jobs");
 const firestore_2 = require("./firestore");
 const audit_1 = require("./audit");
-const app = express();
+const app = (express.default || express)();
 const authMiddleware = (req, res, next) => {
     const apiKey = req.get('x-urai-internal-key');
     if (apiKey && apiKey === process.env.URAI_INTERNAL_KEY) {

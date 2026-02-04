@@ -4,11 +4,6 @@ import * as admin from "firebase-admin";
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import express = require("express");
-
-// AUTO-FIX: define express app at top-level (must be in module scope)
-const app = (express as any)();
-
 
 // Ensure default app exists during deploy-time analysis
 if (!admin.apps.length) admin.initializeApp();
@@ -191,6 +186,4 @@ export const httpHealth = onRequest((req, res) => {
 });
 
 
-
-// AUTO-FIX: express app required by api export
 export const api = onRequest({ region: "us-central1", invoker: "public" }, app);

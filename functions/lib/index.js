@@ -1,28 +1,77 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.httpHealth = exports.scheduledDailyDigest = exports.adminSetApplicationStatus = exports.createResumeUpload = exports.onApplicationCreate = exports.onJobWrite = void 0;
-const functions = require("firebase-functions");
-const admin = require("firebase-admin");
-const uuid_1 = require("uuid");
-admin.initializeApp();
-// ... (onJobWrite and onApplicationCreate functions remain the same)
-exports.onJobWrite = functions.firestore
-    .document("jobs/{jobId}")
-    .onWrite(async (change, context) => {
-    const { jobId } = context.params;
-    const job = change.after.data();
+exports.api = exports.httpHealth = exports.scheduledDailyDigest = exports.adminSetApplicationStatus = exports.createResumeUpload = exports.onApplicationCreate = exports.onJobWrite = void 0;
+const admin = __importStar(require("firebase-admin"));
+// v2 providers
+const firestore_1 = require("firebase-functions/v2/firestore");
+const https_1 = require("firebase-functions/v2/https");
+const scheduler_1 = require("firebase-functions/v2/scheduler");
+const express = require("express");
+// AUTO-FIX: define express app at top-level (must be in module scope)
+const app = (express.default || express)();
+// Ensure default app exists during deploy-time analysis
+if (!admin.apps.length)
+    admin.initializeApp();
+/**
+ * Mirror jobs -> jobPublic (same semantics as v1 onWrite)
+ */
+exports.onJobWrite = (0, firestore_1.onDocumentWritten)("jobs/{jobId}", async (event) => {
+    var _a;
+    const jobId = event.params.jobId;
+    const after = (_a = event.data) === null || _a === void 0 ? void 0 : _a.after;
+    const job = (after === null || after === void 0 ? void 0 : after.exists) ? after.data() : undefined;
+    const pubRef = admin.firestore().collection("jobPublic").doc(jobId);
     if (job && job.status === "open") {
-        await admin.firestore().collection("jobPublic").doc(jobId).set(job);
+        await pubRef.set(job);
     }
     else {
-        await admin.firestore().collection("jobPublic").doc(jobId).delete();
+        await pubRef.delete();
     }
 });
-exports.onApplicationCreate = functions.firestore
-    .document("applications/{applicationId}")
-    .onCreate(async (snap, context) => {
-    const application = snap.data();
+/**
+ * On application create (same semantics as v1 onCreate)
+ */
+exports.onApplicationCreate = (0, firestore_1.onDocumentCreated)("applications/{applicationId}", async (event) => {
+    var _a;
+    const application = (_a = event.data) === null || _a === void 0 ? void 0 : _a.data();
+    if (!application)
+        return;
     const { jobId, applicantEmail } = application;
+    if (!jobId || !applicantEmail)
+        return;
     // Create or update applicant
     const applicantRef = admin.firestore().collection("applicants").doc(applicantEmail);
     const applicantSnap = await applicantRef.get();
@@ -41,7 +90,7 @@ exports.onApplicationCreate = functions.firestore
     await admin.firestore().collection("events").add({
         type: "application_submitted",
         entityType: "application",
-        entityId: context.params.applicationId,
+        entityId: event.params.applicationId,
         metadata: { jobId, applicantEmail },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -51,21 +100,23 @@ exports.onApplicationCreate = functions.firestore
         "stats.applicantsCount": admin.firestore.FieldValue.increment(1),
     });
 });
-// This function now creates a secure upload token
-exports.createResumeUpload = functions.https.onCall(async (data, context) => {
-    var _a;
+/**
+ * Callable: createResumeUpload (same semantics, v2 request signature)
+ */
+exports.createResumeUpload = (0, https_1.onCall)(async (request) => {
+    var _a, _b, _c, _d, _e;
+    const data = ((_a = request.data) !== null && _a !== void 0 ? _a : {});
     const { applicantId, applicationId, filename, contentType, size } = data;
-    const uid = (_a = context.auth) === null || _a === void 0 ? void 0 : _a.uid;
+    const uid = (_b = request.auth) === null || _b === void 0 ? void 0 : _b.uid;
     if (!uid) {
-        throw new functions.https.HttpsError("unauthenticated", "You must be logged in to upload a resume.");
+        throw new https_1.HttpsError("unauthenticated", "You must be logged in to upload a resume.");
     }
-    // Validate input
     if (!applicantId || !applicationId || !filename || !contentType || !size) {
-        throw new functions.https.HttpsError("invalid-argument", "Missing required parameters.");
+        throw new https_1.HttpsError("invalid-argument", "Missing required parameters.");
     }
-    // TODO: Add more robust validation (e.g., file type, size)
-    const token = (0, uuid_1.v4)();
-    const expires = Date.now() + 1000 * 60 * 5; // 5-minute expiry
+    // Keep your existing token approach; uuidv4 existed before — but if it was removed, fall back.
+    const token = (_e = (_d = (_c = globalThis.crypto) === null || _c === void 0 ? void 0 : _c.randomUUID) === null || _d === void 0 ? void 0 : _d.call(_c)) !== null && _e !== void 0 ? _e : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const expiresMs = Date.now() + 1000 * 60 * 5; // 5 minutes
     await admin.firestore().collection("uploadTokens").doc(token).set({
         applicantId,
         applicationId,
@@ -73,21 +124,30 @@ exports.createResumeUpload = functions.https.onCall(async (data, context) => {
         contentType,
         size,
         uid,
-        expires: admin.firestore.Timestamp.fromMillis(expires),
+        expires: admin.firestore.Timestamp.fromMillis(expiresMs),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     const path = `resumes/${applicantId}/${applicationId}/${filename}`;
     return { token, path };
 });
-exports.adminSetApplicationStatus = functions.https.onCall(async (data, context) => {
-    if (!context.auth || !context.auth.uid) {
-        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+/**
+ * Callable: adminSetApplicationStatus (same semantics, v2 request signature)
+ */
+exports.adminSetApplicationStatus = (0, https_1.onCall)(async (request) => {
+    var _a, _b;
+    const data = ((_a = request.data) !== null && _a !== void 0 ? _a : {});
+    if (!((_b = request.auth) === null || _b === void 0 ? void 0 : _b.uid)) {
+        throw new https_1.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
-    const adminRef = admin.firestore().collection("admins").doc(context.auth.uid);
+    const adminRef = admin.firestore().collection("admins").doc(request.auth.uid);
     const adminSnap = await adminRef.get();
     if (!adminSnap.exists) {
-        throw new functions.https.HttpsError("permission-denied", "The function must be called by an admin.");
+        throw new https_1.HttpsError("permission-denied", "The function must be called by an admin.");
     }
     const { applicationId, status, tags, rating } = data;
+    if (!applicationId) {
+        throw new https_1.HttpsError("invalid-argument", "Missing applicationId.");
+    }
     await admin.firestore().collection("applications").doc(applicationId).update({
         status,
         tags,
@@ -101,12 +161,30 @@ exports.adminSetApplicationStatus = functions.https.onCall(async (data, context)
         metadata: { status },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    return { ok: true };
 });
-exports.scheduledDailyDigest = functions.pubsub.schedule("every 24 hours").onRun(async (context) => {
+/**
+ * Scheduled: daily digest (v2 scheduler). Cron is UTC.
+ */
+exports.scheduledDailyDigest = (0, scheduler_1.onSchedule)("0 0 * * *", async () => {
     const today = new Date().toISOString().slice(0, 10);
-    const newApplications = await admin.firestore().collection("applications").where("submittedAt", ">=", new Date(Date.now() - 24 * 60 * 60 * 1000)).get();
-    const pendingApplications = await admin.firestore().collection("applications").where("status", "in", ["NEW", "SCREEN"]).get();
-    const topJobs = await admin.firestore().collection("jobs").orderBy("stats.applicantsCount", "desc").limit(5).get();
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const newApplications = await admin
+        .firestore()
+        .collection("applications")
+        .where("submittedAt", ">=", since)
+        .get();
+    const pendingApplications = await admin
+        .firestore()
+        .collection("applications")
+        .where("status", "in", ["NEW", "SCREEN"])
+        .get();
+    const topJobs = await admin
+        .firestore()
+        .collection("jobs")
+        .orderBy("stats.applicantsCount", "desc")
+        .limit(5)
+        .get();
     await admin.firestore().collection("digests").doc(today).set({
         newApplications: newApplications.size,
         pendingApplications: pendingApplications.size,
@@ -114,7 +192,12 @@ exports.scheduledDailyDigest = functions.pubsub.schedule("every 24 hours").onRun
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 });
-exports.httpHealth = functions.https.onRequest((req, res) => {
+/**
+ * HTTP health endpoint (v2)
+ */
+exports.httpHealth = (0, https_1.onRequest)((req, res) => {
     res.status(200).send("OK");
 });
+// AUTO-FIX: express app required by api export
+exports.api = (0, https_1.onRequest)({ region: "us-central1", invoker: "public" }, app);
 //# sourceMappingURL=index.js.map

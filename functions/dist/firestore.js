@@ -2,6 +2,12 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.pollJobs = exports.releaseJob = exports.heartbeatJob = exports.lockJob = exports.updateJob = exports.createJob = exports.getJob = void 0;
 const firebase_admin_1 = require("firebase-admin");
+
+
+// AUTO-PATCH: ensure default app exists during deploy analysis
+if (!firebase_admin_1.apps?.length) { firebase_admin_1.initializeApp(); }
+// AUTO-PATCH: ensure default app exists during deploy analysis
+if (!firebase_admin_1.apps?.length) { firebase_admin_1.initializeApp(); }
 const jobs_1 = require("./types/jobs");
 const db = (0, firebase_admin_1.firestore)();
 const jobsCollection = db.collection('jobs');
