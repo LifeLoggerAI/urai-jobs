@@ -1,259 +1,142 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import { Job, JobSchema } from "./types/jobs";
-import { lockJob, heartbeatJob, releaseJob } from "./firestore";
-import { writeAuditEvent } from "./audit";
+import { v4 as uuidv4 } from "uuid";
 
 admin.initializeApp();
 
-const db = admin.firestore();
+// ... (onJobWrite and onApplicationCreate functions remain the same)
 
-const getApiKey = () => functions.config().urai.internal_key;
+export const onJobWrite = functions.firestore
+  .document("jobs/{jobId}")
+  .onWrite(async (change, context) => {
+    const { jobId } = context.params;
+    const job = change.after.data();
 
-const isAuthorized = (req: functions.https.Request) => req.header("x-urai-internal-key") === getApiKey();
+    if (job && job.status === "open") {
+      await admin.firestore().collection("jobPublic").doc(jobId).set(job);
+    } else {
+      await admin.firestore().collection("jobPublic").doc(jobId).delete();
+    }
+  });
 
-export const enqueueJob = functions.https.onRequest(async (req, res) => {
-  if (!isAuthorized(req)) {
-    res.status(401).send("Unauthorized");
-    return;
+export const onApplicationCreate = functions.firestore
+  .document("applications/{applicationId}")
+  .onCreate(async (snap, context) => {
+    const application = snap.data();
+    const { jobId, applicantEmail } = application;
+
+    // Create or update applicant
+    const applicantRef = admin.firestore().collection("applicants").doc(applicantEmail);
+    const applicantSnap = await applicantRef.get();
+    if (applicantSnap.exists) {
+      await applicantRef.update({ lastActivityAt: admin.firestore.FieldValue.serverTimestamp() });
+    } else {
+      await applicantRef.set({
+        primaryEmail: applicantEmail,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    // Record event
+    await admin.firestore().collection("events").add({
+      type: "application_submitted",
+      entityType: "application",
+      entityId: context.params.applicationId,
+      metadata: { jobId, applicantEmail },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Increment job stats
+    const jobRef = admin.firestore().collection("jobs").doc(jobId);
+    await jobRef.update({
+      "stats.applicantsCount": admin.firestore.FieldValue.increment(1),
+    });
+  });
+
+
+// This function now creates a secure upload token
+export const createResumeUpload = functions.https.onCall(async (data, context) => {
+  const { applicantId, applicationId, filename, contentType, size } = data;
+  const uid = context.auth?.uid;
+
+  if (!uid) {
+    throw new functions.https.HttpsError("unauthenticated", "You must be logged in to upload a resume.");
   }
 
-  const { kind, input } = req.body;
-
-  const newJob: Job = {
-    jobId: db.collection("jobs").doc().id,
-    kind: kind,
-    status: "QUEUED",
-    priority: 50,
-    attempt: 0,
-    maxAttempts: 3,
-    input: input,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  const validation = JobSchema.safeParse(newJob);
-
-  if (!validation.success) {
-    res.status(400).send(validation.error.issues);
-    return;
+  // Validate input
+  if (!applicantId || !applicationId || !filename || !contentType || !size) {
+    throw new functions.https.HttpsError("invalid-argument", "Missing required parameters.");
   }
 
-  await db.collection("jobs").doc(newJob.jobId).set(newJob);
+  // TODO: Add more robust validation (e.g., file type, size)
 
-  await writeAuditEvent(newJob, "ENQUEUED", { kind: "api", id: "enqueueJob" });
+  const token = uuidv4();
+  const expires = Date.now() + 1000 * 60 * 5; // 5-minute expiry
 
-  res.send({ ok: true, jobId: newJob.jobId });
+  await admin.firestore().collection("uploadTokens").doc(token).set({
+    applicantId,
+    applicationId,
+    filename,
+    contentType,
+    size,
+    uid,
+    expires: admin.firestore.Timestamp.fromMillis(expires),
+  });
+
+  const path = `resumes/${applicantId}/${applicationId}/${filename}`;
+
+  return { token, path };
 });
 
-export const getJob = functions.https.onRequest(async (req, res) => {
-  if (!isAuthorized(req)) {
-    res.status(401).send("Unauthorized");
-    return;
+
+
+export const adminSetApplicationStatus = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.uid) {
+    throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
   }
 
-  const jobId = req.params.jobId;
-
-  if (!jobId) {
-    res.status(400).send("jobId is required");
-    return;
+  const adminRef = admin.firestore().collection("admins").doc(context.auth.uid);
+  const adminSnap = await adminRef.get();
+  if (!adminSnap.exists) {
+    throw new functions.https.HttpsError("permission-denied", "The function must be called by an admin.");
   }
 
-  const jobDoc = await db.collection("jobs").doc(jobId).get();
+  const { applicationId, status, tags, rating } = data;
 
-  if (!jobDoc.exists) {
-    res.status(404).send("Job not found");
-    return;
-  }
+  await admin.firestore().collection("applications").doc(applicationId).update({
+    status,
+    tags,
+    "internal.rating": rating,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
 
-  res.send({ ok: true, job: jobDoc.data() });
+  await admin.firestore().collection("events").add({
+    type: "status_changed",
+    entityType: "application",
+    entityId: applicationId,
+    metadata: { status },
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
 });
 
-export const pollJobs = functions.https.onRequest(async (req, res) => {
-  if (!isAuthorized(req)) {
-    res.status(401).send("Unauthorized");
-    return;
-  }
+export const scheduledDailyDigest = functions.pubsub.schedule("every 24 hours").onRun(async (context) => {
+  const today = new Date().toISOString().slice(0, 10);
 
-  const limit = parseInt(req.query.limit as string) || 10;
-  const kinds = (req.query.kinds as string)?.split(",");
+  const newApplications = await admin.firestore().collection("applications").where("submittedAt", ">=", new Date(Date.now() - 24 * 60 * 60 * 1000)).get();
+  const pendingApplications = await admin.firestore().collection("applications").where("status", "in", ["NEW", "SCREEN"]).get();
+  const topJobs = await admin.firestore().collection("jobs").orderBy("stats.applicantsCount", "desc").limit(5).get();
 
-  let query: admin.firestore.Query = db.collection("jobs").where("status", "==", "QUEUED").orderBy("priority", "desc");
-
-  if (kinds && kinds.length > 0) {
-    query = query.where("kind", "in", kinds);
-  }
-
-  const jobsSnapshot = await query.limit(limit).get();
-
-  const jobs = jobsSnapshot.docs.map((doc) => doc.data());
-
-  res.send({ ok: true, jobs: jobs });
+  await admin.firestore().collection("digests").doc(today).set({
+    newApplications: newApplications.size,
+    pendingApplications: pendingApplications.size,
+    topJobs: topJobs.docs.map((doc) => doc.data()),
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
 });
 
-export const lockNextJob = functions.https.onRequest(async (req, res) => {
-  if (!isAuthorized(req)) {
-    res.status(401).send("Unauthorized");
-    return;
-  }
-
-  const workerId = req.body.workerId;
-
-  if (!workerId) {
-    res.status(400).send("workerId is required");
-    return;
-  }
-
-  const jobsSnapshot = await db.collection("jobs").where("status", "==", "QUEUED").orderBy("priority", "desc").limit(1).get();
-
-  if (jobsSnapshot.empty) {
-    res.send({ ok: true, job: null });
-    return;
-  }
-
-  const job = jobsSnapshot.docs[0].data() as Job;
-
-  const lockedJob = await lockJob(job, workerId);
-
-  if (!lockedJob) {
-    res.status(409).send("Job already locked");
-    return;
-  }
-
-  res.send({ ok: true, job: lockedJob });
+export const httpHealth = functions.https.onRequest((req, res) => {
+  res.status(200).send("OK");
 });
 
-export const heartbeat = functions.https.onRequest(async (req, res) => {
-  if (!isAuthorized(req)) {
-    res.status(401).send("Unauthorized");
-    return;
-  }
-
-  const jobId = req.params.jobId;
-  const workerId = req.body.workerId;
-
-  if (!jobId || !workerId) {
-    res.status(400).send("jobId and workerId are required");
-    return;
-  }
-
-  const jobDoc = await db.collection("jobs").doc(jobId).get();
-
-  if (!jobDoc.exists) {
-    res.status(404).send("Job not found");
-    return;
-  }
-
-  const lockedUntil = await heartbeatJob(jobDoc.data() as Job, workerId);
-
-  if (!lockedUntil) {
-    res.status(409).send("Job not locked by this worker");
-    return;
-  }
-
-  res.send({ ok: true, lockedUntil });
-});
-
-export const release = functions.https.onRequest(async (req, res) => {
-  if (!isAuthorized(req)) {
-    res.status(401).send("Unauthorized");
-    return;
-  }
-
-  const jobId = req.params.jobId;
-  const workerId = req.body.workerId;
-
-  if (!jobId || !workerId) {
-    res.status(400).send("jobId and workerId are required");
-    return;
-  }
-
-  const jobDoc = await db.collection("jobs").doc(jobId).get();
-
-  if (!jobDoc.exists) {
-    res.status(404).send("Job not found");
-    return;
-  }
-
-  await releaseJob(jobDoc.data() as Job, workerId);
-
-  res.send({ ok: true });
-});
-
-export const cancelJob = functions.https.onRequest(async (req, res) => {
-  if (!isAuthorized(req)) {
-    res.status(401).send("Unauthorized");
-    return;
-  }
-
-  const jobId = req.params.jobId;
-
-  if (!jobId) {
-    res.status(400).send("jobId is required");
-    return;
-  }
-
-  const jobRef = db.collection("jobs").doc(jobId);
-
-  const jobDoc = await jobRef.get();
-
-  if (!jobDoc.exists) {
-    res.status(404).send("Job not found");
-    return;
-  }
-
-  const job = jobDoc.data() as Job;
-
-  if (job.status === "CANCELED") {
-    res.send({ ok: true });
-    return;
-  }
-
-  await jobRef.update({ status: "CANCELED" });
-
-  await writeAuditEvent(job, "CANCELED", { kind: "api", id: "cancelJob" });
-
-  res.send({ ok: true });
-});
-
-export const retryJob = functions.https.onRequest(async (req, res) => {
-  if (!isAuthorized(req)) {
-    res.status(401).send("Unauthorized");
-    return;
-  }
-
-  const jobId = req.params.jobId;
-
-  if (!jobId) {
-    res.status(400).send("jobId is required");
-    return;
-  }
-
-  const jobRef = db.collection("jobs").doc(jobId);
-
-  const jobDoc = await jobRef.get();
-
-  if (!jobDoc.exists) {
-    res.status(404).send("Job not found");
-    return;
-  }
-
-  const job = jobDoc.data() as Job;
-
-  if (job.status !== "FAILED" || job.attempt >= job.maxAttempts) {
-    res.status(400).send("Job cannot be retried");
-    return;
-  }
-
-  const retriedJob = {
-    ...job,
-    status: "QUEUED",
-    attempt: job.attempt + 1,
-  } as Job;
-
-  await jobRef.update(retriedJob);
-
-  await writeAuditEvent(retriedJob, "RETRIED", { kind: "api", id: "retryJob" });
-
-  res.send({ ok: true, job: retriedJob });
-});

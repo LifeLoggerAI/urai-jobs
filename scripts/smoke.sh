@@ -1,37 +1,20 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
 
-PORT="${PORT:-3000}"
-LOG="/tmp/urai_jobs_smoke_$(date +%Y%m%d_%H%M%S).log"
-exec > >(tee -a "$LOG") 2>&1
+# Exit immediately if a command exits with a non-zero status.
+set -e
 
-kill_tree() {
-  local pid="$1"
-  (pkill -P "$pid" 2>/dev/null || true)
-  (kill "$pid" 2>/dev/null || true)
-}
+# Start the Firebase emulator
+firebase emulators:start --only functions,firestore,auth,storage --import=./firebase-export --export-on-exit & 
+EMULATOR_PID=$!
 
-echo "== smoke: build first =="
-pnpm build
+# Wait for the emulator to start
+sleep 10
 
-echo "== smoke: start server (PORT=$PORT) =="
-PORT="$PORT" pnpm start >/tmp/urai_jobs_start_${PORT}.log 2>&1 &
-PID=$!
+# Run the seed script
+# ts-node scripts/seed.ts
 
-for i in $(seq 1 40); do
-  if curl -fsS "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
-    break
-  fi
-  sleep 1
-done
+# Make a request to the health check endpoint
+curl -f http://localhost:5001/urai-jobs/us-central1/health
 
-curl -fsS "http://127.0.0.1:${PORT}/" >/dev/null
-curl -fsS "http://127.0.0.1:${PORT}/api/health" | head -c 800 || true
-echo
-
-# optional second route
-curl -fsS "http://127.0.0.1:${PORT}/admin" >/dev/null || true
-
-echo "== smoke OK =="
-kill_tree "$PID"
-echo "LOG=$LOG"
+# Kill the emulator
+kill $EMULATOR_PID

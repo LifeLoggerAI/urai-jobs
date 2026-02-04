@@ -1,25 +1,25 @@
-# URAI-JOBS LOCK
+# URAI_JOBS_LOCK — v1.0.0-jobs
 
-**Confirmation: GREEN ✅ / FROZEN ❄️ / TAG `v1.0.0-urai-jobs`**
+**Status:** LOCKED (build/test/deploy recorded)  
+**UTC Timestamp:** 2026-02-04 04:42:44 UTC  
+**Repo:** (none)  
+**Branch:** main  
+**Commit (pre):** 5b9203773652f98f7d66200c47396a642dbfe28e  
+**Commit (lock):** 5b9203773652f98f7d66200c47396a642dbfe28e  
+**Tag:** v1.0.0-jobs  
 
-This document confirms that the `urai-jobs` repository has been finalized and locked. The project is now considered complete and stable.
+## Environment
+- node: v22.10.0
+- npm:  10.9.0
+- pnpm: 8.15.9
 
-## Architecture
+## Firebase
+- project (best-effort): (current selection)
+- deploy: FAIL
 
-The `urai-jobs` service is a serverless application built on Firebase. It consists of a suite of Cloud Functions that provide a secure and scalable API for managing jobs. The service uses Firestore as its data store, with a data model that includes jobs, job runs, and audit logs.
+## Verification
+- local smoke: FAIL
 
-## API Contract
-
-The API is documented in the `functions/src/index.ts` file. It includes endpoints for enqueuing, polling, locking, and updating jobs. The API is secured using an API key, which must be provided in the `x-urai-internal-key` header of all requests.
-
-## State Machine
-
-The job state machine is defined in the `functions/src/types/jobs.ts` file. It ensures that jobs transition between states in a predictable and orderly manner.
-
-## Worker Integration
-
-Workers can integrate with the `urai-jobs` service by polling the API for new jobs. Once a job is received, the worker can lock it, execute the work, and then update the job with the results.
-
-## Studio Integration
-
-Studio can integrate with the `urai-jobs` service by using the API to enqueue new jobs and to monitor the status of existing jobs.
+## Notes
+- This lock file records the shipped/locked state for URAI-JOBS at the tag above.
+- Re-run script is safe; it will refresh backups and re-verify.

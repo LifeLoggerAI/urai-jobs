@@ -1,79 +1,129 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // --- Helper Functions ---
 
     function isSignedIn() {
       return request.auth != null;
     }
 
     function isAdmin() {
+      // Check if the user is in the 'admins' collection
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    function isOwner(jobId) {
-      return get(/databases/$(database)/documents/jobs/$(jobId)).data.createdBy == request.auth.uid;
+    function isOwner(uid) {
+      // Check if the user is an 'owner' in the 'admins' collection
+      return get(/databases/$(database)/documents/admins/$(uid)).data.role == 'owner';
     }
 
+    // --- Data Validation Functions ---
+
+    function isValidString(str, maxLength) {
+      return str is string && str.size() > 0 && str.size() <= maxLength;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,4}$');
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp;
+    }
+
+    function isValidJobStatus(status) {
+      return status in ['draft', 'open', 'paused', 'closed'];
+    }
+    
+    function isValidApplicationStatus(status) {
+        return status in [\"NEW\", \"SCREEN\", \"INTERVIEW\", \"OFFER\", \"HIRED\", \"REJECTED\"];
+    }
+    
+    function isValidAdminRole(role) {
+      return role in ['owner', 'admin', 'reviewer'];
+    }
+
+    // --- Collection Rules ---
+
     match /jobs/{jobId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if isAdmin() || isOwner(jobId);
-
-      // Validation
-      function hasOnly(keys) {
-        return request.resource.data.keys().hasOnly(keys);
-      }
-
-      function validateJob() {
-        let job = request.resource.data;
-        return job.title is string &&
-               job.department is string &&
-               job.locationType is string &&
-               job.employmentType is string &&
-               job.descriptionMarkdown is string &&
-               job.status in ['draft', 'open', 'paused', 'closed'] &&
-               (!('compensationRange' in job) || 
-                (job.compensationRange.min is number && 
-                 job.compensationRange.max is number && 
-                 job.compensationRange.currency is string));
-      }
-
-      allow create: if isSignedIn() && validateJob() && hasOnly(['title', 'department', 'locationType', 'locationText', 'employmentType', 'descriptionMarkdown', 'requirements', 'niceToHave', 'compensationRange', 'status', 'createdAt', 'updatedAt', 'createdBy']);
-      allow update: if (isAdmin() || isOwner(jobId)) && validateJob();
+      allow read, write: if isAdmin();
+      allow create: if isValidString(request.resource.data.title, 100) &&
+                     isValidString(request.resource.data.department, 50) &&
+                     isValidJobStatus(request.resource.data.status) &&
+                     isValidTimestamp(request.resource.data.createdAt) &&
+                     isValidTimestamp(request.resource.data.updatedAt);
+      allow update: if isValidString(request.resource.data.title, 100) &&
+                      isValidString(request.resource.data.department, 50) &&
+                      isValidJobStatus(request.resource.data.status) &&
+                      isValidTimestamp(request.resource.data.updatedAt);
     }
 
     match /jobPublic/{jobId} {
-      allow read: if true;
-      allow write: if false;
+      allow get: if true;
+      allow list, create, update, delete: if false;
     }
 
     match /applicants/{applicantId} {
-      allow read, update: if isAdmin();
-      allow create: if request.resource.data.primaryEmail.lower() == request.resource.data.primaryEmail;
+      allow create: if isValidEmail(request.resource.data.primaryEmail)
+                    && request.resource.data.primaryEmail == request.resource.data.primaryEmail.lower()
+                    && isValidString(request.resource.data.name, 100)
+                    && (!('phone' in request.resource.data) || isValidString(request.resource.data.phone, 20))
+                    && request.resource.data.keys().hasAll(['primaryEmail', 'name', 'createdAt', 'updatedAt', 'lastActivityAt'])
+                    && isValidTimestamp(request.resource.data.createdAt)
+                    && isValidTimestamp(request.resource.data.updatedAt)
+                    && isValidTimestamp(request.resource.data.lastActivityAt);
+      allow read, update, delete: if isAdmin();
     }
 
     match /applications/{applicationId} {
-      allow read, update: if isAdmin();
-      allow create: if request.resource.data.applicantEmail.lower() == request.resource.data.applicantEmail;
+      allow create: if isValidEmail(request.resource.data.applicantEmail)
+                    && request.resource.data.applicantEmail == request.resource.data.applicantEmail.lower()
+                    && isValidString(request.resource.data.jobId, 20)
+                    && request.resource.data.status == 'NEW'
+                    && request.resource.data.keys().hasAll(['jobId', 'applicantEmail', 'status', 'submittedAt'])
+                    && isValidTimestamp(request.resource.data.submittedAt);
+      allow read, update, delete: if isAdmin();
     }
 
     match /referrals/{refCode} {
-      allow read: if isAdmin();
-      allow create, update: if isAdmin();
+      allow read, write: if isAdmin();
+      allow create: if isValidString(request.resource.data.code, 20) &&
+                     request.resource.data.active == true &&
+                     isValidTimestamp(request.resource.data.createdAt);
+      allow update: if isValidString(request.resource.data.code, 20);
     }
 
     match /waitlist/{id} {
-      allow read: if isAdmin();
-      allow create: if true;
+      allow create: if isValidEmail(request.resource.data.email)
+                    && request.resource.data.email == request.resource.data.email.lower()
+                    && (!('name' in request.resource.data) || isValidString(request.resource.data.name, 100))
+                    && request.resource.data.consent.terms == true
+                    && request.resource.data.keys().hasAll(['email', 'consent', 'createdAt'])
+                    && isValidTimestamp(request.resource.data.createdAt);
+      allow read, update, delete: if isAdmin();
     }
 
     match /admins/{uid} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create, update, delete: if isOwner(request.auth.uid);
+      allow create: if isValidAdminRole(request.resource.data.role) &&
+                     isValidTimestamp(request.resource.data.createdAt);
+      allow update: if isValidAdminRole(request.resource.data.role);
     }
 
     match /events/{eventId} {
-      allow read: if isAdmin();
-      allow create: if true;
+      allow create: if isValidString(request.resource.data.type, 50)
+                   && isValidString(request.resource.data.entityType, 50)
+                   && isValidString(request.resource.data.entityId, 50)
+                   && request.resource.data.keys().hasAll(['type', 'entityType', 'entityId', 'createdAt'])
+                   && isValidTimestamp(request.resource.data.createdAt);
+      allow read, update, delete: if isAdmin();
+    }
+    
+    match /uploadTokens/{tokenId} {
+      allow read, write: if false; // Only backend can access
     }
   }
 }

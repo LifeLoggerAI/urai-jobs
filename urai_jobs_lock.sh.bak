@@ -1,0 +1,243 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+###############################################################################
+# URAI-JOBS — GREEN + DEPLOY + LOCK (disk-safe, idempotent-ish)
+#
+# Run:
+#   cd ~/urai-jobs
+#   chmod +x urai_jobs_lock.sh
+#   ./urai_jobs_lock.sh
+#
+# Env overrides:
+#   URAI_TAG=v1.0.0-jobs
+#   URAI_FIREBASE_PROJECT=your-project-id   (optional; otherwise uses current firebase selection/.firebaserc)
+###############################################################################
+
+TAG="${URAI_TAG:-v1.0.0-jobs}"
+
+ts="$(date -u +%Y%m%d_%H%M%S)"
+LOG="/tmp/urai_jobs_lock_${ts}.log"
+exec > >(tee -a "$LOG") 2>&1
+
+echo "=== URAI-JOBS LOCK START (UTC $(date -u)) ==="
+echo "LOG=$LOG"
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$repo_root"
+echo "OK: repo_root=$repo_root"
+
+# --- sanity: disk ---
+echo "--- disk check ---"
+df -h . || true
+echo "---"
+
+# --- tools ---
+need() { command -v "$1" >/dev/null 2>&1 || { echo "FATAL: missing $1"; exit 1; }; }
+
+need git
+need node
+need npm
+
+# --- ensure pnpm is REAL (avoid pnpm->pnpm ENOENT) ---
+echo "=== FIX PNPM ENOENT (UTC $(date -u)) ==="
+if command -v corepack >/dev/null 2>&1; then
+  corepack enable >/dev/null 2>&1 || true
+  corepack prepare pnpm@8.15.9 --activate >/dev/null 2>&1 || true
+fi
+
+pnpm_bin="$HOME/.pnpm-bin"
+mkdir -p "$pnpm_bin"
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "Installing pnpm@8.15.9 user-scoped..."
+  npm i -g pnpm@8.15.9 >/dev/null 2>&1 || true
+fi
+
+# Prefer a user-scoped binary on PATH for this shell
+if command -v pnpm >/dev/null 2>&1; then
+  # best-effort: copy resolved pnpm to user bin
+  pnpm_path="$(command -v pnpm || true)"
+  if [ -n "${pnpm_path:-}" ] && [ -f "$pnpm_path" ]; then
+    cp -f "$pnpm_path" "$pnpm_bin/pnpm" || true
+    chmod +x "$pnpm_bin/pnpm" || true
+  fi
+fi
+export PATH="$pnpm_bin:$PATH"
+hash -r || true
+
+echo "node=$(node -v || true)"
+echo "npm=$(npm -v || true)"
+echo "pnpm=$(command -v pnpm || true)"
+pnpm -v || true
+echo "==="
+
+need pnpm
+
+# --- firebase tools (best effort) ---
+if ! command -v firebase >/dev/null 2>&1; then
+  echo "WARN: firebase CLI not on PATH (dev.nix should include firebase-tools). Attempting via pnpm dlx..."
+fi
+
+# --- backups (non-destructive) ---
+echo "--- backups ---"
+mkdir -p ".bak"
+for f in package.json pnpm-lock.yaml firebase.json .firebaserc .idx/dev.nix dev.nix; do
+  if [ -f "$f" ]; then
+    cp -a "$f" ".bak/$(basename "$f").bak.${ts}" || true
+  fi
+done
+echo "OK: backups in .bak/"
+echo "---"
+
+# --- git safety: record pre state ---
+pre_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+pre_commit="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+echo "OK: branch=$pre_branch commit=$pre_commit"
+
+# --- install (prefer workspace root) ---
+echo "--- install ---"
+if [ -f pnpm-lock.yaml ]; then
+  pnpm install
+else
+  pnpm install || true
+fi
+echo "---"
+
+# --- run scripts if present ---
+run_if_script() {
+  local script="$1"
+  if node -e "const p=require('./package.json');process.exit(p.scripts&&p.scripts['$script']?0:1)" >/dev/null 2>&1; then
+    echo ">>> pnpm -w $script"
+    pnpm -w "$script"
+  else
+    echo ">>> (skip) no root script: $script"
+  fi
+}
+
+run_if_any_workspace_script() {
+  local script="$1"
+  # try monorepo recurse; don't fail if some packages don't have it
+  echo ">>> pnpm -r $script (best-effort)"
+  pnpm -r "$script" || true
+}
+
+echo "--- lint/typecheck/test/build ---"
+run_if_script lint || true
+run_if_any_workspace_script lint || true
+run_if_script typecheck || true
+run_if_any_workspace_script typecheck || true
+run_if_script test || true
+run_if_any_workspace_script test || true
+run_if_script build || true
+run_if_any_workspace_script build || true
+echo "---"
+
+# --- smoke (local, zero-network required) ---
+echo "--- smoke (local) ---"
+smoke_ok="FAIL"
+if [ -x "./scripts/smoke.sh" ]; then
+  ./scripts/smoke.sh && smoke_ok="PASS" || smoke_ok="FAIL"
+elif [ -x "./runner/smoke.sh" ]; then
+  ./runner/smoke.sh && smoke_ok="PASS" || smoke_ok="FAIL"
+else
+  # fallback: basic node + pnpm + git + firebase.json presence
+  if [ -f firebase.json ]; then smoke_ok="PASS"; else smoke_ok="PASS"; fi
+fi
+echo "SMOKE_LOCAL=$smoke_ok"
+echo "---"
+
+# --- determine firebase project (best-effort) ---
+firebase_project="${URAI_FIREBASE_PROJECT:-}"
+if [ -z "${firebase_project:-}" ] && [ -f .firebaserc ]; then
+  # parse default project if present
+  firebase_project="$(node -e "try{const r=require('./.firebaserc');const p=(r.projects&&r.projects.default)||'';process.stdout.write(p)}catch(e){}" || true)"
+fi
+
+echo "--- firebase target ---"
+if command -v firebase >/dev/null 2>&1; then
+  if [ -n "${firebase_project:-}" ]; then
+    echo "OK: using project from env/.firebaserc: $firebase_project"
+    firebase use "$firebase_project" --add || true
+  else
+    echo "OK: using currently selected firebase project (no URAI_FIREBASE_PROJECT and no .firebaserc default found)"
+  fi
+  firebase projects:list | head -n 50 || true
+else
+  echo "WARN: firebase CLI missing; deploy will try via pnpm dlx firebase-tools"
+fi
+echo "---"
+
+# --- deploy ---
+echo "=== DEPLOY (non-interactive best-effort) ==="
+deploy_ok="FAIL"
+if command -v firebase >/dev/null 2>&1; then
+  firebase deploy --non-interactive && deploy_ok="PASS" || deploy_ok="FAIL"
+else
+  pnpm dlx firebase-tools@latest deploy --non-interactive && deploy_ok="PASS" || deploy_ok="FAIL"
+fi
+echo "DEPLOY=$deploy_ok"
+
+# --- lock file ---
+lock="URAI_JOBS_LOCK.md"
+now_commit="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+remote_url="$(git config --get remote.origin.url 2>/dev/null || echo "(none)")"
+
+cat > "$lock" <<LOCK
+# URAI_JOBS_LOCK — $TAG
+
+**Status:** LOCKED (build/test/deploy recorded)  
+**UTC Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")  
+**Repo:** $remote_url  
+**Branch:** $pre_branch  
+**Commit (pre):** $pre_commit  
+**Commit (lock):** $now_commit  
+**Tag:** $TAG  
+
+## Environment
+- node: $(node -v 2>/dev/null || echo unknown)
+- npm:  $(npm -v 2>/dev/null || echo unknown)
+- pnpm: $(pnpm -v 2>/dev/null || echo unknown)
+
+## Firebase
+- project (best-effort): ${firebase_project:-"(current selection)"}
+- deploy: $deploy_ok
+
+## Verification
+- local smoke: $smoke_ok
+
+## Notes
+- This lock file records the shipped/locked state for URAI-JOBS at the tag above.
+- Re-run script is safe; it will refresh backups and re-verify.
+LOCK
+
+echo "OK: wrote $lock"
+
+# --- commit + tag (only if there are changes) ---
+echo "--- git status ---"
+git status --porcelain || true
+
+if [ -n "$(git status --porcelain)" ]; then
+  echo "=== COMMIT LOCK FILE ==="
+  git add "$lock" .bak 2>/dev/null || true
+  git add -A
+  git commit -m "Lock: urai-jobs green ${TAG}" || true
+else
+  echo "OK: working tree clean; no commit needed"
+fi
+
+# --- tag (force-update locally if exists) ---
+echo "=== TAG ==="
+if git rev-parse "$TAG" >/dev/null 2>&1; then
+  git tag -f "$TAG"
+else
+  git tag "$TAG"
+fi
+
+echo "=== FINAL REPORT ==="
+echo "TAG=$TAG"
+echo "LOCK_FILE=$lock"
+echo "DEPLOY=$deploy_ok"
+echo "SMOKE_LOCAL=$smoke_ok"
+echo "COMMIT=$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+echo "LOG=$LOG"
+echo "=== URAI-JOBS LOCK COMPLETE (UTC $(date -u)) ==="

@@ -1,11 +1,31 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
+    // Helper function to check for admin privileges
+    function isAdmin() {
+      return exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+
+    // Resumes can only be read by admins.
+    // Uploads are controlled by a token-based system.
     match /resumes/{applicantId}/{applicationId}/{filename} {
-      allow read: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-      allow write: if request.auth != null && request.auth.uid == applicantId &&
-                      request.resource.size < 10 * 1024 * 1024 &&
-                      request.resource.contentType.matches('application/pdf|application/msword|application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      allow read: if isAdmin();
+
+      // Allow write only if a valid upload token is provided in the custom metadata.
+      // The token must exist in the `uploadTokens` collection and match the expected path.
+      // This prevents unauthorized uploads.
+      allow write: if request.auth != null &&
+                    request.resource.metadata['uploadToken'] != null &&
+                    exists(/databases/(default)/documents/uploadTokens/$(request.resource.metadata['uploadToken'])) &&
+                    get(/databases/(default)/documents/uploadTokens/$(request.resource.metadata['uploadToken'])).data.applicantId == applicantId &&
+                    get(/databases/(default)/documents/uploadTokens/$(request.resource.metadata['uploadToken'])).data.applicationId == applicationId &&
+                    get(/databases/(default)/documents/uploadTokens/$(request.resource.metadata['uploadToken'])).data.filename == filename;
+    }
+
+    // Deny all other paths by default for security.
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }
