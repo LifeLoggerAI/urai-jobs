@@ -1,25 +1,12 @@
-# URAI_JOBS_LOCK — v1.0.0-jobs
+# URAI_JOBS_LOCK ✅
 
-**Status:** LOCKED (build/test/deploy recorded)  
-**UTC Timestamp:** 2026-02-04 04:42:44 UTC  
-**Repo:** (none)  
-**Branch:** main  
-**Commit (pre):** 5b9203773652f98f7d66200c47396a642dbfe28e  
-**Commit (lock):** 5b9203773652f98f7d66200c47396a642dbfe28e  
-**Tag:** v1.0.0-jobs  
-
-## Environment
-- node: v22.10.0
-- npm:  10.9.0
-- pnpm: 8.15.9
-
-## Firebase
-- project (best-effort): (current selection)
-- deploy: FAIL
-
-## Verification
-- local smoke: FAIL
+- Project: `urai-4dc1d`
+- Region: `us-central1`
+- Deployed function: `api` (GCFv2)
+- Function URL: https://api-ufrs6kq3da-uc.a.run.app
+- Commit: `9426670a502cf9f7dfba09bbb17de07720fc9ba2`
+- Locked at (UTC): Wed Feb  4 08:02:21 AM UTC 2026
 
 ## Notes
-- This lock file records the shipped/locked state for URAI-JOBS at the tag above.
-- Re-run script is safe; it will refresh backups and re-verify.
+- Deploy performed via: `npx firebase-tools@latest deploy --only functions`
+- If deploying again: prefer `npx firebase-tools@latest` (older nix firebase CLI may choke on firebase.json keys like `extensions`).
