@@ -1,16 +1,16 @@
-# URAI JOBS — LOCKED
+# URAI-JOBS — LOCKED
 
-Project: urai-jobs
-Firebase: urai-4dc1d
-Tag: v1.0.0-jobs-lock
-Locked (UTC): Thu Feb  5 03:35:28 AM UTC 2026
+Status: LOCKED
+Repo: urai-jobs
+Branch: main
 
-Commit: fff2a0d086d206d49885f3f4635a2f8dd667ac52
+This repository is production-locked.
+History rewritten to remove backups and large artifacts.
+Further changes require explicit version bump and unlock.
 
-Status:
-- Dependencies frozen
-- Build complete
-- Functions deployed
-- Project frozen
+Tags:
+- v1.0.0-jobs
+- v1.0.0-jobs-lock
+- v1.0.0-urai-jobs
 
-Changes require version bump + explicit unlock.
+Locked at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
