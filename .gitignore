@@ -7,3 +7,18 @@ node_modules
 functions/lib/
 public/
 apps/public/
+
+# === URAI — build artifacts ===
+.next/
+.turbo/
+**/.turbo/
+**/.next/
+*.log
+
+# === URAI — backups (NEVER commit) ===
+backups/
+*.tar.gz
+*.tgz
+
+# === OS / tooling ===
+.DS_Store
