@@ -11,7 +11,9 @@
     "e2e": "playwright test",
     "smoke": "./scripts/smoke_urai_jobs.sh",
     "deploy:jobs": "./scripts/deploy_jobs.sh",
-    "postinstall": "pnpm -r postinstall"
+    "postinstall": "pnpm -r postinstall",
+    "preseed": "tsc scripts/seed.ts --outDir .",
+    "seed": "firebase emulators:exec \"node scripts/seed.js\""
   },
   "devDependencies": {
     "@playwright/test": "^1.58.1",

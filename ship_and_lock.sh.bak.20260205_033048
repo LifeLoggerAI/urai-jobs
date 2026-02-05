@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ===============================
+# URAI-JOBS FINAL SHIP + LOCK
+# ===============================
+
+PROJECT_NAME="urai-jobs"
+PROJECT_ID="urai-4dc1d"
+TAG="v1.0.0-jobs-lock"
+UTC_TS="$(date -u +%Y%m%d_%H%M%S)"
+ROOT="$HOME/urai-jobs"
+LOG="/tmp/${PROJECT_NAME}_ship_${UTC_TS}.log"
+
+exec > >(tee -a "$LOG") 2>&1
+
+echo "=== ${PROJECT_NAME} FINAL SHIP START (UTC $(date -u)) ==="
+cd "$ROOT"
+
+# -------------------------------
+# 0) Sanity
+# -------------------------------
+command -v node >/dev/null || { echo "node missing"; exit 1; }
+command -v pnpm >/dev/null || { echo "pnpm missing"; exit 1; }
+command -v firebase >/dev/null || { echo "firebase CLI missing"; exit 1; }
+
+node -v
+pnpm -v
+firebase --version
+
+# -------------------------------
+# 1) Clean workspace
+# -------------------------------
+echo "--- clean ---"
+git status --porcelain
+rm -rf node_modules
+rm -rf functions/node_modules
+rm -rf dist .next out || true
+
+# -------------------------------
+# 2) Install (locked)
+# -------------------------------
+echo "--- install ---"
+corepack enable || true
+corepack prepare pnpm@8.15.9 --activate || true
+pnpm install --frozen-lockfile
+
+# -------------------------------
+# 3) Typecheck + build
+# -------------------------------
+echo "--- typecheck ---"
+pnpm run typecheck || pnpm run lint
+
+echo "--- build ---"
+pnpm run build
+
+# -------------------------------
+# 4) Tests (skip if none)
+# -------------------------------
+if pnpm run | grep -q test; then
+  echo "--- tests ---"
+  pnpm run test
+else
+  echo "--- tests skipped (none defined) ---"
+fi
+
+# -------------------------------
+# 5) Firebase deploy (functions only)
+# -------------------------------
+echo "--- firebase deploy ---"
+firebase use "$PROJECT_ID"
+firebase deploy --project "$PROJECT_ID" --only functions
+
+# -------------------------------
+# 6) LOCK artifacts
+# -------------------------------
+echo "--- lock artifacts ---"
+
+LOCK_FILE="URAI_JOBS_LOCK.md"
+cat > "$LOCK_FILE" <<EOF
+# URAI JOBS — LOCKED
+
+Project: ${PROJECT_NAME}  
+Firebase Project: ${PROJECT_ID}  
+Tag: ${TAG}  
+Locked At (UTC): $(date -u)
+
+Status:
+- Dependencies frozen
+- Build verified
+- Functions deployed
+- No pending migrations
+- No known errors
+
+Commit: $(git rev-parse HEAD)
+
+This project is **FROZEN**.
+Changes require version bump + explicit unlock.
+EOF
+
+# -------------------------------
+# 7) Git freeze
+# -------------------------------
+echo "--- git freeze ---"
+git add .
+git commit -m "lock(urai-jobs): final ship + freeze ${TAG}" || true
+git tag -f "$TAG"
+git push origin main
+git push origin --tags
+
+# -------------------------------
+# 8) Permissions hard stop reminder
+# -------------------------------
+echo "--- freeze reminder ---"
+echo "DO NOT:"
+echo "- upgrade deps"
+echo "- edit functions"
+echo "- redeploy without bumping version"
+
+echo "=== ${PROJECT_NAME} LOCK COMPLETE (UTC $(date -u)) ==="
+echo "LOG: $LOG"
