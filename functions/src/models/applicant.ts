@@ -1,8 +1,8 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldValue } from "firebase-admin/firestore";
 
 export interface Applicant {
-  primaryEmail: string;
-  name: string;
+  primaryEmail: string; // lowercased
+  name?: string;
   phone?: string;
   links?: {
     portfolio?: string;
@@ -11,11 +11,11 @@ export interface Applicant {
     other?: string[];
   };
   source: {
-    type: 'direct' | 'referral' | 'waitlist';
+    type: "direct" | "referral" | "waitlist";
     refCode?: string;
     campaign?: string;
   };
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  lastActivityAt: Timestamp;
+  createdAt: FieldValue;
+  updatedAt: FieldValue;
+  lastActivityAt: FieldValue;
 }

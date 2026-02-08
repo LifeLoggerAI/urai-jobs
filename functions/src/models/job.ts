@@ -1,11 +1,15 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldValue } from "firebase-admin/firestore";
+
+export type JobStatus = "draft" | "open" | "paused" | "closed";
+export type LocationType = "remote" | "hybrid" | "onsite";
+export type EmploymentType = "full_time" | "part_time" | "contract" | "intern";
 
 export interface Job {
   title: string;
   department: string;
-  locationType: 'remote' | 'hybrid' | 'onsite';
+  locationType: LocationType;
   locationText: string;
-  employmentType: 'full_time' | 'part_time' | 'contract' | 'intern';
+  employmentType: EmploymentType;
   descriptionMarkdown: string;
   requirements: string[];
   niceToHave: string[];
@@ -14,29 +18,18 @@ export interface Job {
     max?: number;
     currency?: string;
   };
-  status: 'draft' | 'open' | 'paused' | 'closed';
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  createdBy: string;
-  stats?: {
-    applicantsCount?: number;
-    statusCounts?: {
-      NEW?: number;
-      SCREEN?: number;
-      INTERVIEW?: number;
-      OFFER?: number;
-      HIRED?: number;
-      REJECTED?: number;
-    };
-  };
+  status: JobStatus;
+  createdAt: FieldValue;
+  updatedAt: FieldValue;
+  createdBy: string; // UID
 }
 
 export interface JobPublic {
   title: string;
   department: string;
-  locationType: 'remote' | 'hybrid' | 'onsite';
+  locationType: LocationType;
   locationText: string;
-  employmentType: 'full_time' | 'part_time' | 'contract' | 'intern';
+  employmentType: EmploymentType;
   descriptionMarkdown: string;
   requirements: string[];
   niceToHave: string[];
@@ -45,4 +38,6 @@ export interface JobPublic {
     max?: number;
     currency?: string;
   };
+  status: "open";
+  updatedAt: FieldValue;
 }

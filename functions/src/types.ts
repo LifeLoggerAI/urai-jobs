@@ -1,4 +1,3 @@
-
 export interface Job {
   title: string;
   department: string;
@@ -20,6 +19,9 @@ export interface Job {
 }
 
 export interface JobPublic {
+  // public projection for read-only job board
+  // only includes fields safe for public display
+  // exists only when status="open"
   title: string;
   department: string;
   locationType: "remote" | "hybrid" | "onsite";
@@ -36,7 +38,7 @@ export interface JobPublic {
 }
 
 export interface Applicant {
-  primaryEmail: string;
+  primaryEmail: string; // lowercased
   name: string;
   phone?: string;
   links?: {
@@ -58,7 +60,7 @@ export interface Applicant {
 export interface Application {
   jobId: string;
   applicantId: string;
-  applicantEmail: string;
+  applicantEmail: string; // lowercased
   status: "NEW" | "SCREEN" | "INTERVIEW" | "OFFER" | "HIRED" | "REJECTED";
   answers: Record<string, string>;
   resume?: {
@@ -88,7 +90,7 @@ export interface Referral {
 }
 
 export interface Waitlist {
-  email: string;
+  email: string; // lowercased
   name?: string;
   interests: string[];
   consent: {

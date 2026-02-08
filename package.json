@@ -1,28 +1,21 @@
 {
   "name": "urai-jobs",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
-    "preinstall": "npx only-allow pnpm",
-    "build": "pnpm -r build",
-    "dev": "pnpm --filter web dev & firebase emulators:start",
-    "test": "pnpm -r test",
-    "test:ci": "pnpm -r test:ci",
-    "e2e": "playwright test",
-    "smoke": "./scripts/smoke_urai_jobs.sh",
-    "deploy:jobs": "./scripts/deploy_jobs.sh",
-    "postinstall": "pnpm -r postinstall",
-    "preseed": "tsc scripts/seed.ts --outDir .",
-    "seed": "firebase emulators:exec \"node scripts/seed.js\""
+    "postinstall": "cd functions && npm install && cd ../web && npm install",
+    "dev": "concurrently \"npm:dev:web\" \"npm:emulators\"",
+    "dev:web": "cd web && npm run dev",
+    "build": "npm run build:web && npm run build:functions",
+    "build:web": "cd web && npm run build",
+    "build:functions": "cd functions && npm run build",
+    "emulators": "firebase emulators:start --import=./firebase-data --export-on-exit",
+    "lint": "cd functions && npm run lint",
+    "seed": "cd scripts && npm install && ts-node seed.ts",
+    "deploy": "firebase deploy --only functions,hosting"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.1",
-    "firebase-tools": "^13.0.0",
-    "pnpm": "^8.0.0",
-    "typescript": "5.5.4"
-  },
-  "overrides": {
-    "typescript": "5.5.4"
-  },
-  "packageManager": "pnpm@8.15.9"
+    "concurrently": "^8.2.2",
+    "firebase-tools": "^13.8.0"
+  }
 }

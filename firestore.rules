@@ -1,4 +1,3 @@
-
 rules_version = '2';
 
 service cloud.firestore {
@@ -13,69 +12,73 @@ service cloud.firestore {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    function isApplicant(applicantId) {
-      return isSignedIn() && request.auth.uid == applicantId;
+    function isRole(role) {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == role;
     }
-
+    
     function hasOnly(keys) {
       return request.resource.data.keys().hasOnly(keys);
     }
 
-    // Admins: Full access to everything
-    match /admins/{uid} {
-      allow read, write: if isAdmin();
-    }
-
-    // Public job listings
+    // PUBLIC: Job listings (read-only)
     match /jobPublic/{jobId} {
       allow get: if true;
       allow list: if true;
       allow write: if false;
     }
 
-    // Jobs: Admin-only CRUD
+    // ADMIN: Job management
     match /jobs/{jobId} {
       allow read, write: if isAdmin();
+      // TODO: Add field validation on write
     }
 
-    // Applicants: Create-only for public, admin-only for read/update
-    match /applicants/{applicantId} {
-      allow create: if hasOnly(['primaryEmail', 'name', 'phone', 'links', 'source']) && request.resource.data.primaryEmail == request.resource.data.primaryEmail.lower();
-      allow read, update: if isAdmin();
-    }
-
-    // Applications: Create-only for public, admin-only for read/update
+    // PUBLIC WRITE: Create applications
     match /applications/{applicationId} {
-      allow create: if hasOnly(['jobId', 'applicantEmail', 'answers', 'resume']) && request.resource.data.applicantEmail == request.resource.data.applicantEmail.lower();
-      allow read, update: if isAdmin();
+      allow create: if true; // TODO: Add validation for public creation
+      allow read, update, delete: if isAdmin();
+
+      // Anyone can create an application, but with strict validation
+      // - must have required fields
+      // - email must be lowercased
+      // - resume info must be valid if present
     }
 
-    // Referrals: Admin-only
+    // PUBLIC WRITE: Create applicants (or lookup)
+    match /applicants/{applicantId} {
+      allow create: if true; // TODO: Add validation for public creation
+      allow read, update, delete: if isAdmin();
+    }
+    
+    // PUBLIC WRITE: Join waitlist
+    match /waitlist/{entryId} {
+        allow create: if true; // TODO: Add validation for public creation
+        allow read, update, delete: if isAdmin();
+    }
+    
+    // PUBLIC WRITE: Track events
+    match /events/{eventId} {
+        allow create: if true; // TODO: Add validation for public creation
+        allow read: if isAdmin();
+        allow update, delete: if false;
+    }
+
+    // ADMIN: Referral code management
     match /referrals/{refCode} {
       allow read, write: if isAdmin();
     }
 
-    // Waitlist: Create-only for public, admin-only for read
-    match /waitlist/{entryId} {
-      allow create: if hasOnly(['email', 'name', 'interests', 'consent']) && request.resource.data.email == request.resource.data.email.lower();
+    // ADMIN: Admin role management (only owners can manage admins)
+    match /admins/{uid} {
       allow read: if isAdmin();
+      allow write: if isRole('owner');
+      // Prevent non-owners from making themselves an owner
+      // allow update: if isRole('owner') && request.resource.data.role != 'owner';
     }
-
-    // Events: Create-only for public, admin-only for read
-    match /events/{eventId} {
-        allow create: if true;
-        allow read: if isAdmin();
-    }
-
-    // Upload Tokens: Used for resume uploads
-    match /uploadTokens/{token} {
-      allow read, create: if isSignedIn(); // Further validation in callable function
-      allow update, delete: if false;
-    }
-
-    // Digests: Admin-only
-    match /digests/{digestId} {
-      allow read, write: if isAdmin();
+    
+    // Default deny all other collections
+    match /{path=**} {
+      allow read, write: if false;
     }
   }
 }

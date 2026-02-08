@@ -1,4 +1,3 @@
 packages:
-  - 'apps/*'
+  - 'web'
   - 'functions'
-  - 'apps/web'

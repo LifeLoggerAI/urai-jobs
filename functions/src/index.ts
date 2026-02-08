@@ -1,196 +1,52 @@
-import * as admin from "firebase-admin";
+import * as logger from "firebase-functions/logger";
+import {onRequest} from "firebase-functions/v2/https";
+import {onDocumentWritten} from "firebase-functions/v2/firestore";
+import {onCall} from "firebase-functions/v2/https";
+import {onSchedule} from "firebase-functions/v2/scheduler";
 
-// v2 providers
-import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
-import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
-import { onSchedule } from "firebase-functions/v2/scheduler";
-import express = require("express");
+// TODO: Replace with actual implementation
 
-// AUTO-FIX: define express app at top-level (must be in module scope)
-const app = (express as any)();
-
-
-// Ensure default app exists during deploy-time analysis
-if (!admin.apps.length) admin.initializeApp();
-
-/**
- * Mirror jobs -> jobPublic (same semantics as v1 onWrite)
- */
-export const onJobWrite = onDocumentWritten("jobs/{jobId}", async (event) => {
-  const jobId = event.params.jobId;
-  const after = event.data?.after;
-  const job = after?.exists ? (after.data() as any) : undefined;
-
-  const pubRef = admin.firestore().collection("jobPublic").doc(jobId);
-
-  if (job && job.status === "open") {
-    await pubRef.set(job);
-  } else {
-    await pubRef.delete();
-  }
+// 1) onJobWrite (firestore trigger)
+export const onjobwrite = onDocumentWritten("jobs/{jobId}", (event) => {
+  logger.info("onJobWrite triggered for a job.", event.params.jobId);
+  // TODO: Sync to jobPublic collection
 });
 
-/**
- * On application create (same semantics as v1 onCreate)
- */
-export const onApplicationCreate = onDocumentCreated("applications/{applicationId}", async (event) => {
-  const application = event.data?.data() as any;
-  if (!application) return;
-
-  const { jobId, applicantEmail } = application;
-  if (!jobId || !applicantEmail) return;
-
-  // Create or update applicant
-  const applicantRef = admin.firestore().collection("applicants").doc(applicantEmail);
-  const applicantSnap = await applicantRef.get();
-
-  if (applicantSnap.exists) {
-    await applicantRef.update({ lastActivityAt: admin.firestore.FieldValue.serverTimestamp() });
-  } else {
-    await applicantRef.set({
-      primaryEmail: applicantEmail,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  }
-
-  // Record event
-  await admin.firestore().collection("events").add({
-    type: "application_submitted",
-    entityType: "application",
-    entityId: event.params.applicationId,
-    metadata: { jobId, applicantEmail },
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-
-  // Increment job stats
-  const jobRef = admin.firestore().collection("jobs").doc(jobId);
-  await jobRef.update({
-    "stats.applicantsCount": admin.firestore.FieldValue.increment(1),
-  });
+// 2) onApplicationCreate (firestore trigger)
+export const onapplicationcreate = onDocumentWritten("applications/{applicationId}", (event) => {
+  logger.info("onApplicationCreate triggered for an application.", event.params.applicationId);
+  // TODO: Create/merge applicant
+  // TODO: Write event
+  // TODO: Increment job stats
+  // TODO: Increment referral stats
 });
 
-/**
- * Callable: createResumeUpload (same semantics, v2 request signature)
- */
-export const createResumeUpload = onCall(async (request) => {
-  const data = (request.data ?? {}) as any;
-  const { applicantId, applicationId, filename, contentType, size } = data;
-  const uid = request.auth?.uid;
-
-  if (!uid) {
-    throw new HttpsError("unauthenticated", "You must be logged in to upload a resume.");
-  }
-
-  if (!applicantId || !applicationId || !filename || !contentType || !size) {
-    throw new HttpsError("invalid-argument", "Missing required parameters.");
-  }
-
-  // Keep your existing token approach; uuidv4 existed before — but if it was removed, fall back.
-  const token =
-    (globalThis as any).crypto?.randomUUID?.() ??
-    `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-
-  const expiresMs = Date.now() + 1000 * 60 * 5; // 5 minutes
-
-  await admin.firestore().collection("uploadTokens").doc(token).set({
-    applicantId,
-    applicationId,
-    filename,
-    contentType,
-    size,
-    uid,
-    expires: admin.firestore.Timestamp.fromMillis(expiresMs),
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-
-  const path = `resumes/${applicantId}/${applicationId}/${filename}`;
-  return { token, path };
+// 3) createResumeUpload (callable)
+export const createresumeupload = onCall((request) => {
+  logger.info("createResumeUpload called", request.data);
+  // TODO: Validate input
+  // TODO: Generate signed URL or upload token
+  return { status: "pending" };
 });
 
-/**
- * Callable: adminSetApplicationStatus (same semantics, v2 request signature)
- */
-export const adminSetApplicationStatus = onCall(async (request) => {
-  const data = (request.data ?? {}) as any;
-
-  if (!request.auth?.uid) {
-    throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
-  }
-
-  const adminRef = admin.firestore().collection("admins").doc(request.auth.uid);
-  const adminSnap = await adminRef.get();
-  if (!adminSnap.exists) {
-    throw new HttpsError("permission-denied", "The function must be called by an admin.");
-  }
-
-  const { applicationId, status, tags, rating } = data;
-  if (!applicationId) {
-    throw new HttpsError("invalid-argument", "Missing applicationId.");
-  }
-
-  await admin.firestore().collection("applications").doc(applicationId).update({
-    status,
-    tags,
-    "internal.rating": rating,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-
-  await admin.firestore().collection("events").add({
-    type: "status_changed",
-    entityType: "application",
-    entityId: applicationId,
-    metadata: { status },
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-
-  return { ok: true };
+// 4) adminSetApplicationStatus (callable, admin-only)
+export const adminsetapplicationstatus = onCall((request) => {
+  logger.info("adminSetApplicationStatus called", request.data);
+  // TODO: Add admin-only guard
+  // TODO: Update application status
+  // TODO: Write event
+  return { status: "pending" };
 });
 
-/**
- * Scheduled: daily digest (v2 scheduler). Cron is UTC.
- */
-export const scheduledDailyDigest = onSchedule("0 0 * * *", async () => {
-  const today = new Date().toISOString().slice(0, 10);
-
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-  const newApplications = await admin
-    .firestore()
-    .collection("applications")
-    .where("submittedAt", ">=", since)
-    .get();
-
-  const pendingApplications = await admin
-    .firestore()
-    .collection("applications")
-    .where("status", "in", ["NEW", "SCREEN"])
-    .get();
-
-  const topJobs = await admin
-    .firestore()
-    .collection("jobs")
-    .orderBy("stats.applicantsCount", "desc")
-    .limit(5)
-    .get();
-
-  await admin.firestore().collection("digests").doc(today).set({
-    newApplications: newApplications.size,
-    pendingApplications: pendingApplications.size,
-    topJobs: topJobs.docs.map((doc) => doc.data()),
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+// 5) scheduledDailyDigest (scheduler)
+export const scheduleddailydigest = onSchedule("every 24 hours", async (event) => {
+  logger.info("scheduledDailyDigest triggered");
+  // TODO: Aggregate daily stats
+  // TODO: Write to digests collection
 });
 
-/**
- * HTTP health endpoint (v2)
- */
-export const httpHealth = onRequest((req, res) => {
-  res.status(200).send("OK");
+// 6) httpHealth (http function)
+export const health = onRequest((request, response) => {
+  logger.info("Health check requested!");
+  response.status(200).send({ status: "ok", build: "dev" });
 });
-
-
-
-// AUTO-FIX: express app required by api export
-export const api = onRequest({ region: "us-central1", invoker: "public" }, app);

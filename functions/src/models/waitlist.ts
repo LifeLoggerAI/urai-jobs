@@ -1,12 +1,12 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldValue } from "firebase-admin/firestore";
 
 export interface Waitlist {
-  email: string;
+  email: string; // lowercased
   name?: string;
-  interests: string[];
+  interests?: string[];
   consent: {
     terms: boolean;
     marketing: boolean;
   };
-  createdAt: Timestamp;
+  createdAt: FieldValue;
 }
