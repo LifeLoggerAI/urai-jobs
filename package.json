@@ -5,8 +5,9 @@
   "scripts": {
     "dev": "concurrently \"pnpm:emulators\" \"pnpm:dev --prefix web\"",
     "build": "pnpm --prefix web build && pnpm --prefix functions build",
-    "emulators": "firebase emulators:start --import=./firebase-data --export-on-exit",
-    "seed": "echo \"TODO: seed script\""
+    "emulators": "firebase emulators:start",
+    "seed": "pnpm --prefix functions start-seed",
+    "deploy": "firebase deploy --only hosting,functions"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

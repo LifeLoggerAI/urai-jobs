@@ -1,20 +1,31 @@
 module.exports = {
   root: true,
-  env: { node: true, es2020: true },
-  parser: "@typescript-eslint/parser",
-  parserOptions: {
-    ecmaVersion: 2020,
-    sourceType: "module",
-    project: ["./tsconfig.dev.json"]
+  env: {
+    es6: true,
+    node: true,
   },
-  plugins: ["@typescript-eslint"],
   extends: [
     "eslint:recommended",
-    "plugin:@typescript-eslint/recommended"
+    "plugin:import/errors",
+    "plugin:import/warnings",
+    "plugin:import/typescript",
+    "google",
+    "plugin:@typescript-eslint/recommended",
   ],
-  ignorePatterns: ["dist/", "lib/", "node_modules/"],
+  parser: "@typescript-eslint/parser",
+  parserOptions: {
+    project: ["tsconfig.json", "tsconfig.dev.json"],
+    sourceType: "module",
+  },
+  ignorePatterns: [
+    "/lib/**/*", // Ignore built files.
+  ],
+  plugins: [
+    "@typescript-eslint",
+    "import",
+  ],
   rules: {
-    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
-    "@typescript-eslint/no-explicit-any": "off"
-  }
+    "quotes": ["error", "double"],
+    "import/no-unresolved": 0,
+  },
 };
