@@ -1,8 +1,10 @@
 
+
+
 import * as logger from "firebase-functions/logger";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { getFirestore } from "firebase-admin/firestore";
-import { Job, JobPublic } from "../models/job";
+import { Job, JobPublic } from "../../../packages/types/src";
 
 const db = getFirestore();
 
@@ -49,7 +51,7 @@ export const onjobwrite = onDocumentWritten("jobs/{jobId}", async (event) => {
     updatedAt,
   } = jobAfter;
 
-  const jobPublic: JobPublic = {
+  const jobPublicData: JobPublic = {
     title,
     department,
     locationType,
@@ -63,6 +65,6 @@ export const onjobwrite = onDocumentWritten("jobs/{jobId}", async (event) => {
     updatedAt,
   };
 
-  await jobPublicRef.set(jobPublic, { merge: true });
+  await jobPublicRef.set(jobPublicData, { merge: true });
   logger.info(`Successfully synced job ${jobId} to public collection.`);
 });

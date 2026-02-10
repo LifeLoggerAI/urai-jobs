@@ -1,21 +1,14 @@
 {
   "name": "urai-jobs",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
-    "postinstall": "cd functions && npm install && cd ../web && npm install",
-    "dev": "concurrently \"npm:dev:web\" \"npm:emulators\"",
-    "dev:web": "cd web && npm run dev",
-    "build": "npm run build:web && npm run build:functions",
-    "build:web": "cd web && npm run build",
-    "build:functions": "cd functions && npm run build",
+    "dev": "concurrently \"pnpm:emulators\" \"pnpm:dev --prefix web\"",
+    "build": "pnpm --prefix web build && pnpm --prefix functions build",
     "emulators": "firebase emulators:start --import=./firebase-data --export-on-exit",
-    "lint": "cd functions && npm run lint",
-    "seed": "cd scripts && npm install && ts-node seed.ts",
-    "deploy": "firebase deploy --only functions,hosting"
+    "seed": "echo \"TODO: seed script\""
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
-    "firebase-tools": "^13.8.0"
+    "concurrently": "^8.2.2"
   }
 }

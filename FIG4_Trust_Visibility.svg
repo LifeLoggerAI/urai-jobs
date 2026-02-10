@@ -1,0 +1,6 @@
+<svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
+<rect x="10" y="10" width="580" height="380" fill="none" stroke="black"/>
+<text x="20" y="30">FIG. 4 Trust-Weighted Visibility Adjustment</text>
+<line x1="50" y1="200" x2="550" y2="200" stroke="black"/>
+<line x1="300" y1="50" x2="300" y2="350" stroke="black"/>
+</svg>

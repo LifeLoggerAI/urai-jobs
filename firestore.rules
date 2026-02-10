@@ -3,7 +3,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // --- Helper Functions ---
     function isSignedIn() {
       return request.auth != null;
     }
@@ -12,72 +12,49 @@ service cloud.firestore {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    function isRole(role) {
-      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == role;
-    }
-    
-    function hasOnly(keys) {
-      return request.resource.data.keys().hasOnly(keys);
+    function isOwner(uid) {
+      return request.auth.uid == uid;
     }
 
-    // PUBLIC: Job listings (read-only)
+    function getRole() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role;
+    }
+
+    // --- Collections ---
+
+    // Admins can do anything
+    match /{path=**}/documents/{doc} {
+        allow read, write: if isAdmin();
+    }
+
+    // Public read for open jobs
     match /jobPublic/{jobId} {
       allow get: if true;
-      allow list: if true;
-      allow write: if false;
+      allow list: if false; // No listing all public jobs
     }
 
-    // ADMIN: Job management
-    match /jobs/{jobId} {
-      allow read, write: if isAdmin();
-      // TODO: Add field validation on write
-    }
-
-    // PUBLIC WRITE: Create applications
+    // Allow users to apply for jobs
     match /applications/{applicationId} {
-      allow create: if true; // TODO: Add validation for public creation
-      allow read, update, delete: if isAdmin();
-
-      // Anyone can create an application, but with strict validation
-      // - must have required fields
-      // - email must be lowercased
-      // - resume info must be valid if present
+        allow create: if request.resource.data.keys().hasAll(['jobId', 'applicantEmail', 'answers', 'submittedAt']);
     }
 
-    // PUBLIC WRITE: Create applicants (or lookup)
+    // Allow users to create an applicant profile
     match /applicants/{applicantId} {
-      allow create: if true; // TODO: Add validation for public creation
-      allow read, update, delete: if isAdmin();
+        allow create: if request.resource.data.keys().hasAll(['primaryEmail', 'name']);
     }
-    
-    // PUBLIC WRITE: Join waitlist
-    match /waitlist/{entryId} {
-        allow create: if true; // TODO: Add validation for public creation
-        allow read, update, delete: if isAdmin();
+
+    // Allow users to join the waitlist
+    match /waitlist/{waitlistId} {
+        allow create: if request.resource.data.keys().hasAll(['email', 'consent']);
     }
-    
-    // PUBLIC WRITE: Track events
+
+    // Allow anyone to submit events
     match /events/{eventId} {
-        allow create: if true; // TODO: Add validation for public creation
-        allow read: if isAdmin();
-        allow update, delete: if false;
+        allow create: if request.resource.data.keys().hasAll(['type', 'entityType', 'entityId', 'createdAt']);
     }
 
-    // ADMIN: Referral code management
-    match /referrals/{refCode} {
-      allow read, write: if isAdmin();
-    }
-
-    // ADMIN: Admin role management (only owners can manage admins)
-    match /admins/{uid} {
-      allow read: if isAdmin();
-      allow write: if isRole('owner');
-      // Prevent non-owners from making themselves an owner
-      // allow update: if isRole('owner') && request.resource.data.role != 'owner';
-    }
-    
-    // Default deny all other collections
-    match /{path=**} {
+    // Deny all other access
+    match /{path=**}/documents/{doc} {
       allow read, write: if false;
     }
   }
