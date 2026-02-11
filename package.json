@@ -1,15 +1,14 @@
 {
-  "name": "urai-jobs",
-  "version": "1.0.0",
+  "name": "urai-jobs-monorepo",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"pnpm:emulators\" \"pnpm:dev --prefix web\"",
-    "build": "pnpm --prefix web build && pnpm --prefix functions build",
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build && pnpm --filter functions build",
     "emulators": "firebase emulators:start",
-    "seed": "pnpm --prefix functions start-seed",
-    "deploy": "firebase deploy --only hosting,functions"
+    "seed": "pnpm --filter scripts seed"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "pnpm": "^9.1.0",
+    "typescript": "^5.3.3"
   }
 }

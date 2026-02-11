@@ -1,22 +1,16 @@
 
-import { Timestamp } from "firebase-admin/firestore";
+import { firestore } from "firebase-admin";
 
-// B) ADMIN CONSOLE (PROTECTED)
-// Under /admin:
-// - Job CRUD: draft/open/paused/closed
-// - View applicants per job with filters (status, tag)
-// - Applicant/Application detail: status changes, internal notes, tags
-// - Export CSV per job (client-side export ok)
-// - Simple metrics:
-//   - applicants per job
-//   - funnel counts by status
-//   - average time from submit → first review (if timestamps exist)
+// --- Base Types ---
+export type ServerTimestamp = firestore.FieldValue;
 
-// C) FIRESTORE DATA MODEL (IMPLEMENT)
-// Collections:
+// --- Firestore Collections ---
 
-// 1) jobs/{jobId}
+/**
+ * The main job document, managed by admins.
+ */
 export interface Job {
+  id?: string; // Not stored, but useful on the client
   title: string;
   department: string;
   locationType: "remote" | "hybrid" | "onsite";
@@ -31,13 +25,23 @@ export interface Job {
     currency?: string;
   };
   status: "draft" | "open" | "paused" | "closed";
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  createdBy: string; // uid
+  createdAt: ServerTimestamp;
+  updatedAt: ServerTimestamp;
+  createdBy: string; // UID
+  stats?: {
+    applicantCount?: number;
+    statusCounts?: {
+      [key in ApplicationStatus]?: number;
+    };
+  };
 }
 
-// 2) jobPublic/{jobId}
+/**
+ * A public-facing, read-only projection of a job.
+ * Exists only when a job's status is "open".
+ */
 export interface JobPublic {
+  id?: string;
   title: string;
   department: string;
   locationType: "remote" | "hybrid" | "onsite";
@@ -46,17 +50,16 @@ export interface JobPublic {
   descriptionMarkdown: string;
   requirements: string[];
   niceToHave: string[];
-  compensationRange?: {
-    min?: number;
-    max?: number;
-    currency?: string;
-  };
-  status: "open";
-  updatedAt: Timestamp;
+  compensationRange?: Job["compensationRange"];
+  updatedAt: ServerTimestamp; // To show when it was last updated
 }
 
-// 3) applicants/{applicantId}
+/**
+ * Represents a unique job applicant.
+ * ID should be a hash of the lowercased primary email.
+ */
 export interface Applicant {
+  id?: string;
   primaryEmail: string; // lowercased
   name: string;
   phone?: string;
@@ -71,47 +74,64 @@ export interface Applicant {
     refCode?: string;
     campaign?: string;
   };
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  lastActivityAt: Timestamp;
+  createdAt: ServerTimestamp;
+  updatedAt: ServerTimestamp;
+  lastActivityAt: ServerTimestamp;
 }
 
-// 4) applications/{applicationId}
+export type ApplicationStatus =
+  | "NEW"
+  | "SCREEN"
+  | "INTERVIEW"
+  | "OFFER"
+  | "HIRED"
+  | "REJECTED";
+
+/**
+ * An application submitted by an applicant for a specific job.
+ */
 export interface Application {
+  id?: string;
   jobId: string;
   applicantId: string;
-  applicantEmail: string; // lowercased (denormalized for lookups)
-  status: "NEW" | "SCREEN" | "INTERVIEW" | "OFFER" | "HIRED" | "REJECTED";
-  answers: { [key: string]: string }; // q -> a
+  applicantEmail: string; // lowercased, denormalized for lookups
+  status: ApplicationStatus;
+  answers: { [key: string]: string }; // Map of question keys to answer strings
   resume?: {
     storagePath: string;
     filename: string;
     contentType: string;
     size: number;
   };
-  tags: string[];
-  notesCount: number;
-  submittedAt: Timestamp;
-  updatedAt: Timestamp;
+  tags?: string[];
+  notesCount?: number;
+  submittedAt: ServerTimestamp;
+  updatedAt: ServerTimestamp;
   internal?: {
-    rating?: number;
-    reviewerId?: string;
-    reviewedAt?: Timestamp;
+    rating?: number; // e.g., 1-5
+    reviewerId?: string; // UID of admin who reviewed
+    reviewedAt?: ServerTimestamp;
   };
 }
 
-// 5) referrals/{refCode}
+/**
+ * A referral code for tracking application sources.
+ */
 export interface Referral {
+  id?: string;
   code: string;
-  createdBy: string; // uid
-  createdAt: Timestamp;
+  createdBy: string; // UID
+  createdAt: ServerTimestamp;
   clicksCount: number;
   submitsCount: number;
   active: boolean;
 }
 
-// 6) waitlist/{id}
-export interface WaitlistEntry {
+/**
+ * An entry for the general talent waitlist.
+ */
+export interface Waitlist {
+  id?: string;
   email: string; // lowercased
   name?: string;
   interests: string[];
@@ -119,20 +139,32 @@ export interface WaitlistEntry {
     terms: boolean;
     marketing: boolean;
   };
-  createdAt: Timestamp;
+  createdAt: ServerTimestamp;
 }
 
-// 7) admins/{uid}
+/**
+ * Defines an admin user's role.
+ * Doc ID is the Firebase Auth UID.
+ */
 export interface Admin {
   role: "owner" | "admin" | "reviewer";
-  createdAt: Timestamp;
+  createdAt: ServerTimestamp;
 }
 
-// 8) events/{eventId}
+/**
+ * A generic event for internal tracking.
+ */
 export interface Event {
-  type: string;
-  entityType: "job" | "applicant" | "application" | "referral" | "waitlist" | "page";
+  id?: string;
+  type: string; // e.g., "page_view", "application_submitted"
+  entityType:
+    | "job"
+    | "applicant"
+    | "application"
+    | "referral"
+    | "waitlist"
+    | "page";
   entityId: string;
-  metadata: { [key: string]: any };
-  createdAt: Timestamp;
+  metadata?: { [key: string]: any };
+  createdAt: ServerTimestamp;
 }

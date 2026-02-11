@@ -12,49 +12,99 @@ service cloud.firestore {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    function isOwner(uid) {
-      return request.auth.uid == uid;
+    function isOwner() {
+      return isAdmin() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner';
     }
 
-    function getRole() {
-      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role;
+    // --- Validation Helpers ---
+    function isString(val, min, max) { return val is string && val.size() >= min && val.size() <= max; }
+    function isOptionalString(val, min, max) { return val == null || isString(val, min, max); }
+    function isEmail(email) { return email is string && email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,4}$'); }
+    function isMap(data) { return data is map; }
+    function isList(data) { return data is list; }
+    function hasOnly(keys) { return request.resource.data.keys().hasOnly(keys); }
+    function isJobStatus(status) { return status in ['draft', 'open', 'paused', 'closed']; }
+    function isApplicationStatus(status) { return status in ['NEW', 'SCREEN', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED']; }
+    function isLocationType(val) { return val in ['remote', 'hybrid', 'onsite']; }
+    function isEmploymentType(val) { return val in ['full_time', 'part_time', 'contract', 'intern']; }
+
+    // --- Collection Rules ---
+
+    match /admins/{uid} {
+      allow read: if isAdmin();
+      allow list, create, update, delete: if isOwner();
     }
 
-    // --- Collections ---
+    match /jobPublic/{jobId} {
+      allow get: if true;
+      allow list, write: if false;
+    }
 
-    // Admins can do anything
-    match /{path=**}/documents/{doc} {
+    match /jobs/{jobId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+                    && hasOnly(['title', 'department', 'locationType', 'locationText', 'employmentType', 'descriptionMarkdown', 'requirements', 'niceToHave', 'compensationRange', 'status', 'createdAt', 'updatedAt', 'createdBy'])
+                    && isString(request.resource.data.title, 5, 100)
+                    && isString(request.resource.data.department, 2, 50)
+                    && isLocationType(request.resource.data.locationType)
+                    && isString(request.resource.data.locationText, 2, 100)
+                    && isEmploymentType(request.resource.data.employmentType)
+                    && isString(request.resource.data.descriptionMarkdown, 100, 10000)
+                    && isList(request.resource.data.requirements)
+                    && isList(request.resource.data.niceToHave)
+                    && isJobStatus(request.resource.data.status)
+                    && request.resource.data.createdBy == request.auth.uid
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin()
+                    && request.resource.data.updatedAt == request.time;
+                    // Note: More specific field validation could be added here for updates.
+    }
+
+    match /applicants/{applicantId} {
+      allow get, list, update, delete: if isAdmin();
+      allow create: if isEmail(request.resource.data.primaryEmail)
+                    && request.resource.data.primaryEmail == request.resource.data.primaryEmail.lower()
+                    && isString(request.resource.data.name, 2, 100)
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.lastActivityAt == request.time;
+    }
+
+    match /applications/{applicationId} {
+      allow get, list, update, delete: if isAdmin();
+      // Public can create an application ONLY for a job that is currently open.
+      allow create: if exists(/databases/$(database)/documents/jobPublic/$(request.resource.data.jobId))
+                    && isEmail(request.resource.data.applicantEmail)
+                    && request.resource.data.applicantEmail == request.resource.data.applicantEmail.lower()
+                    && isString(request.resource.data.jobId, 5, 30)
+                    && isString(request.resource.data.applicantId, 5, 100) // Ensure applicantId is provided
+                    && isMap(request.resource.data.answers)
+                    && request.resource.data.submittedAt == request.time
+                    && request.resource.data.status == 'NEW';
+    }
+
+    match /waitlist/{waitlistId} {
+      allow get, list, update, delete: if isAdmin();
+      allow create: if isEmail(request.resource.data.email)
+                    && request.resource.data.email == request.resource.data.email.lower()
+                    && request.resource.data.consent.terms == true
+                    && request.resource.data.createdAt == request.time;
+    }
+
+    match /referrals/{refCode} {
         allow read, write: if isAdmin();
     }
 
-    // Public read for open jobs
-    match /jobPublic/{jobId} {
-      allow get: if true;
-      allow list: if false; // No listing all public jobs
-    }
-
-    // Allow users to apply for jobs
-    match /applications/{applicationId} {
-        allow create: if request.resource.data.keys().hasAll(['jobId', 'applicantEmail', 'answers', 'submittedAt']);
-    }
-
-    // Allow users to create an applicant profile
-    match /applicants/{applicantId} {
-        allow create: if request.resource.data.keys().hasAll(['primaryEmail', 'name']);
-    }
-
-    // Allow users to join the waitlist
-    match /waitlist/{waitlistId} {
-        allow create: if request.resource.data.keys().hasAll(['email', 'consent']);
-    }
-
-    // Allow anyone to submit events
     match /events/{eventId} {
-        allow create: if request.resource.data.keys().hasAll(['type', 'entityType', 'entityId', 'createdAt']);
+      allow create: if isString(request.resource.data.type, 3, 50)
+                      && isString(request.resource.data.entityType, 3, 20)
+                      && request.resource.data.createdAt == request.time;
+      allow read, update, delete: if isAdmin();
+      allow list: if false;
     }
 
-    // Deny all other access
-    match /{path=**}/documents/{doc} {
+    // Default deny all
+    match /{path=**} {
       allow read, write: if false;
     }
   }
