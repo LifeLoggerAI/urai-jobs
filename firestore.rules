@@ -9,103 +9,105 @@ service cloud.firestore {
     }
 
     function isAdmin() {
+      // Check for a doc in the 'admins' collection with the user's UID.
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
     function isOwner() {
+      // Owners have the 'owner' role in their admin doc.
       return isAdmin() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner';
     }
 
     // --- Validation Helpers ---
     function isString(val, min, max) { return val is string && val.size() >= min && val.size() <= max; }
-    function isOptionalString(val, min, max) { return val == null || isString(val, min, max); }
     function isEmail(email) { return email is string && email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,4}$'); }
     function isMap(data) { return data is map; }
     function isList(data) { return data is list; }
     function hasOnly(keys) { return request.resource.data.keys().hasOnly(keys); }
     function isJobStatus(status) { return status in ['draft', 'open', 'paused', 'closed']; }
     function isApplicationStatus(status) { return status in ['NEW', 'SCREEN', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED']; }
-    function isLocationType(val) { return val in ['remote', 'hybrid', 'onsite']; }
-    function isEmploymentType(val) { return val in ['full_time', 'part_time', 'contract', 'intern']; }
 
-    // --- Collection Rules ---
+    // =====================================================================
+    //  Collection Rules
+    // =====================================================================
 
+    // Admins can only be managed by Owners.
     match /admins/{uid} {
-      allow read: if isAdmin();
-      allow list, create, update, delete: if isOwner();
+      allow read, list: if isAdmin();
+      allow create, update, delete: if isOwner();
     }
 
+    // Public can read, Admins can write.
     match /jobPublic/{jobId} {
       allow get: if true;
-      allow list, write: if false;
+      allow list, create, update, delete: if isAdmin(); // Managed by backend function
     }
 
+    // Jobs can only be managed by Admins.
     match /jobs/{jobId} {
       allow read: if isAdmin();
-      allow create: if isAdmin()
-                    && hasOnly(['title', 'department', 'locationType', 'locationText', 'employmentType', 'descriptionMarkdown', 'requirements', 'niceToHave', 'compensationRange', 'status', 'createdAt', 'updatedAt', 'createdBy'])
-                    && isString(request.resource.data.title, 5, 100)
-                    && isString(request.resource.data.department, 2, 50)
-                    && isLocationType(request.resource.data.locationType)
-                    && isString(request.resource.data.locationText, 2, 100)
-                    && isEmploymentType(request.resource.data.employmentType)
-                    && isString(request.resource.data.descriptionMarkdown, 100, 10000)
-                    && isList(request.resource.data.requirements)
-                    && isList(request.resource.data.niceToHave)
-                    && isJobStatus(request.resource.data.status)
-                    && request.resource.data.createdBy == request.auth.uid
-                    && request.resource.data.createdAt == request.time
-                    && request.resource.data.updatedAt == request.time;
-      allow update: if isAdmin()
-                    && request.resource.data.updatedAt == request.time;
-                    // Note: More specific field validation could be added here for updates.
+      allow create: if isAdmin(); // Complex validation handled in callable function
+      allow update: if isAdmin(); // Complex validation handled in callable function
+      allow delete: if isOwner();
     }
 
+    // An applicant can only be created by the user themselves, and is mostly immutable.
     match /applicants/{applicantId} {
-      allow get, list, update, delete: if isAdmin();
-      allow create: if isEmail(request.resource.data.primaryEmail)
-                    && request.resource.data.primaryEmail == request.resource.data.primaryEmail.lower()
-                    && isString(request.resource.data.name, 2, 100)
-                    && request.resource.data.createdAt == request.time
-                    && request.resource.data.lastActivityAt == request.time;
+      // Only the user themselves or an admin can read the applicant profile.
+      allow get: if isSignedIn() && (request.auth.uid == applicantId || isAdmin());
+      // Only admins can list applicants (e.g., for an admin search view).
+      allow list: if isAdmin();
+
+      // A user can create their own applicant profile.
+      allow create: if isSignedIn() && request.auth.uid == applicantId;
+
+      // A user can update their own profile. Admins cannot update this directly.
+      allow update: if isSignedIn() && request.auth.uid == applicantId;
+
+      // Only owners can delete applicant records for compliance reasons.
+      allow delete: if isOwner();
     }
 
+    // Applications have the strictest rules.
     match /applications/{applicationId} {
-      allow get, list, update, delete: if isAdmin();
-      // Public can create an application ONLY for a job that is currently open.
-      allow create: if exists(/databases/$(database)/documents/jobPublic/$(request.resource.data.jobId))
-                    && isEmail(request.resource.data.applicantEmail)
-                    && request.resource.data.applicantEmail == request.resource.data.applicantEmail.lower()
-                    && isString(request.resource.data.jobId, 5, 30)
-                    && isString(request.resource.data.applicantId, 5, 100) // Ensure applicantId is provided
-                    && isMap(request.resource.data.answers)
-                    && request.resource.data.submittedAt == request.time
-                    && request.resource.data.status == 'NEW';
+      // Only admins can read application data.
+      allow get, list: if isAdmin();
+
+      // An applicant can create an application for themselves IF the job is open.
+      allow create: if isSignedIn()
+                    && request.resource.data.applicantId == request.auth.uid
+                    && exists(/databases/$(database)/documents/jobPublic/$(request.resource.data.jobId));
+
+      // Only Admins can update an application, and only specific fields.
+      allow update: if isAdmin()
+                  && request.resource.data.diff(resource.data).changedKeys()
+                     .hasOnly(['status', 'internal', 'tags', 'notesCount', 'updatedAt']);
+
+      // Only Owners can delete application records for compliance reasons.
+      allow delete: if isOwner();
     }
 
+    // Waitlist and Events are write-only for the public, via secure Cloud Functions.
+    // Direct creation is denied to prevent abuse.
     match /waitlist/{waitlistId} {
-      allow get, list, update, delete: if isAdmin();
-      allow create: if isEmail(request.resource.data.email)
-                    && request.resource.data.email == request.resource.data.email.lower()
-                    && request.resource.data.consent.terms == true
-                    && request.resource.data.createdAt == request.time;
-    }
-
-    match /referrals/{refCode} {
-        allow read, write: if isAdmin();
+      allow read, list: if isAdmin();
+      allow create, update, delete: if false; // Must be created via a callable function
     }
 
     match /events/{eventId} {
-      allow create: if isString(request.resource.data.type, 3, 50)
-                      && isString(request.resource.data.entityType, 3, 20)
-                      && request.resource.data.createdAt == request.time;
-      allow read, update, delete: if isAdmin();
-      allow list: if false;
+      allow read, list: if isAdmin();
+      allow create, update, delete: if false; // Must be created via a callable function
     }
 
-    // Default deny all
+    // Referrals are admin-only.
+    match /referrals/{refCode} {
+        allow read, list, create, update: if isAdmin();
+        allow delete: if isOwner();
+    }
+    
+    // Explicitly deny access to all other collections/paths.
     match /{path=**} {
-      allow read, write: if false;
+        allow read, write: if false;
     }
   }
 }

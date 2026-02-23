@@ -1,62 +1,54 @@
-
+import * as functions from "firebase-functions";
 import { getStorage } from "firebase-admin/storage";
-import { HttpsError, onCall } from "firebase-functions/v2/https";
-import * as logger from "firebase-functions/logger";
+import { HttpsError } from "firebase-functions/v1/https";
 
-const MAX_UPLOAD_SIZE_MB = 10;
-const ALLOWED_CONTENT_TYPES = [
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-];
+const BUCKET_NAME = process.env.GCLOUD_PROJECT + ".appspot.com";
 
-export const createresumeupload = onCall(async (request) => {
-  // For this simplified flow, we are assuming the client has created an application
-  // document and has the necessary IDs. In a production system, you would add
-  // a security token to the application document to verify ownership before
-  // generating an upload URL.
-  const {
-    applicantId,
-    applicationId,
-    filename,
-    contentType,
-    size,
-  } = request.data;
+export const createResumeUpload = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new HttpsError("unauthenticated", "You must be logged in to upload a resume.");
+    }
 
-  if (!applicantId || !applicationId || !filename || !contentType || !size) {
-    throw new HttpsError("invalid-argument", "Missing required parameters.");
-  }
+    const { applicationId, filename, contentType, size } = data;
 
-  // Validate file size
-  if (size > MAX_UPLOAD_SIZE_MB * 1024 * 1024) {
-    throw new HttpsError(
-      "invalid-argument",
-      `File size exceeds the limit of ${MAX_UPLOAD_SIZE_MB}MB.`
-    );
-  }
+    if (!applicationId || !filename || !contentType || !size) {
+        throw new HttpsError("invalid-argument", "Missing required parameters.");
+    }
 
-  // Validate content type
-  if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
-    throw new HttpsError("invalid-argument", `Content type '${contentType}' is not allowed.`);
-  }
+    // Validate file size and type
+    const MAX_SIZE_MB = 10;
+    if (size > MAX_SIZE_MB * 1024 * 1024) {
+        throw new HttpsError("invalid-argument", `File size exceeds ${MAX_SIZE_MB}MB.`);
+    }
 
-  const bucket = getStorage().bucket();
-  const filePath = `resumes/${applicantId}/${applicationId}/${filename}`;
-  const file = bucket.file(filePath);
+    const ALLOWED_CONTENT_TYPES = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ];
+    if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
+        throw new HttpsError("invalid-argument", "Invalid file type.");
+    }
 
-  logger.info(`Generating signed URL for: ${filePath}`);
+    const applicantId = context.auth.uid;
+    const path = `resumes/${applicantId}/${applicationId}/${filename}`;
 
-  try {
-    const [url] = await file.getSignedUrl({
-      version: "v4",
-      action: "write",
-      expires: Date.now() + 15 * 60 * 1000, // 15 minutes
-      contentType: contentType,
-    });
+    const bucket = getStorage().bucket(BUCKET_NAME);
+    const file = bucket.file(path);
 
-    return { signedUrl: url, filePath };
-  } catch (error) {
-    logger.error("Error creating signed URL", { error });
-    throw new HttpsError("internal", "Could not create upload URL.");
-  }
+    const expires = Date.now() + 60 * 1000; // 1 minute to upload
+    const options = {
+        version: "v4" as const,
+        action: "write" as const,
+        expires,
+        contentType,
+    };
+
+    try {
+        const [url] = await file.getSignedUrl(options);
+        return { url, path };
+    } catch (error) {
+        console.error("Error creating signed URL:", error);
+        throw new HttpsError("internal", "Could not create upload URL.");
+    }
 });

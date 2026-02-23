@@ -1,79 +1,60 @@
-
-import * as logger from "firebase-functions/logger";
-import { firestore } from "firebase-admin";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import * as functions from "firebase-functions";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { Application, Applicant } from "../../../packages/types/src";
-import * as crypto from "crypto";
+import { createHash } from "crypto";
+import { QueryDocumentSnapshot } from "firebase-functions/v1/firestore";
 
-const db = getFirestore();
+export const onApplicationCreate = functions.firestore
+    .document("applications/{applicationId}")
+    .onCreate(async (snap: QueryDocumentSnapshot, context: functions.EventContext) => {
+        const db = getFirestore();
+        const application = snap.data();
 
-// Function to create a deterministic applicantId from an email address.
-const createApplicantId = (email: string) => {
-  return crypto.createHash("md5").update(email.toLowerCase()).digest("hex");
-};
+        // 1. Create or merge applicant
+        let applicantId = application.applicantId;
+        if (!applicantId) {
+            // If no applicantId is provided, create one based on the email hash.
+            const email = application.applicantEmail.toLowerCase();
+            applicantId = createHash('sha256').update(email).digest('hex');
+            
+            const applicantRef = db.collection("applicants").doc(applicantId);
+            const applicantSnap = await applicantRef.get();
 
-export const onapplicationcreate = onDocumentCreated(
-  "applications/{applicationId}",
-  async (event) => {
-    const application = event.data?.data() as Application;
-    const { applicantEmail, jobId, source } = application;
+            if (applicantSnap.exists) {
+                // If applicant exists, update their last activity.
+                await applicantRef.update({ lastActivityAt: FieldValue.serverTimestamp() });
+            } else {
+                // If applicant does not exist, create a new one.
+                await applicantRef.set({
+                    primaryEmail: email,
+                    name: application.answers?.name || "", // Assuming name is in answers
+                    lastActivityAt: FieldValue.serverTimestamp(),
+                    createdAt: FieldValue.serverTimestamp(),
+                });
+            }
+        } else {
+          const applicantRef = db.collection("applicants").doc(applicantId);
+          await applicantRef.update({ lastActivityAt: FieldValue.serverTimestamp() });
+        }
 
-    if (!applicantEmail || !jobId) {
-      logger.error("Application missing critical data", { event });
-      return;
-    }
+        // 2. Write event entry
+        await db.collection("events").add({
+            type: "application_submitted",
+            entityType: "application",
+            entityId: context.params.applicationId,
+            metadata: { jobId: application.jobId },
+            createdAt: FieldValue.serverTimestamp(),
+        });
 
-    const applicantId = createApplicantId(applicantEmail);
-    const applicantRef = db.collection("applicants").doc(applicantId);
-    const now = firestore.Timestamp.now();
+        // 3. Increment job stats
+        const jobRef = db.collection("jobs").doc(application.jobId);
+        await jobRef.update({
+            'stats.applicantsCount': FieldValue.increment(1),
+            [`stats.statusCounts.NEW`]: FieldValue.increment(1),
+        });
 
-    logger.info(`Processing new application for ${applicantEmail} for job ${jobId}`);
-
-    // 1. Create or merge applicant
-    const applicantDoc = await applicantRef.get();
-    if (applicantDoc.exists) {
-      await applicantRef.update({ lastActivityAt: now });
-    } else {
-      const newApplicant: Applicant = {
-        primaryEmail: applicantEmail.toLowerCase(),
-        name: application.answers["name"] || "", // Assuming name is a form answer
-        links: {},
-        source: source || { type: "direct" },
-        createdAt: now,
-        updatedAt: now,
-        lastActivityAt: now,
-      };
-      await applicantRef.set(newApplicant);
-      logger.info(`Created new applicant profile for ${applicantEmail}`);
-    }
-
-    // 2. Write "application_submitted" event
-    await db.collection("events").add({
-      type: "application_submitted",
-      entityType: "application",
-      entityId: event.params.applicationId,
-      metadata: { jobId, applicantId },
-      createdAt: now,
+        // 4. Handle referral
+        if (application.source?.type === "referral" && application.source?.refCode) {
+            const referralRef = db.collection("referrals").doc(application.source.refCode);
+            await referralRef.update({ submitsCount: FieldValue.increment(1) });
+        }
     });
-
-    // 3. Increment job stats using a transaction
-    const jobRef = db.collection("jobs").doc(jobId);
-    await db.runTransaction(async (transaction) => {
-      transaction.update(jobRef, {
-        "stats.applicantsCount": FieldValue.increment(1),
-        "stats.statusCounts.NEW": FieldValue.increment(1),
-      });
-    });
-
-    // 4. If it was a referral, increment the referral counter
-    if (source?.type === "referral" && source.refCode) {
-      const referralRef = db.collection("referrals").doc(source.refCode);
-      const referralDoc = await referralRef.get();
-      if (referralDoc.exists) {
-        await referralRef.update({ submitsCount: FieldValue.increment(1) });
-        logger.info(`Incremented submitsCount for referral code: ${source.refCode}`);
-      }
-    }
-  }
-);
