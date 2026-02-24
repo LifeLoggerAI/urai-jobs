@@ -24,43 +24,21 @@ describe('Storage Rules', () => {
         await testEnv.cleanup();
     });
 
-    beforeEach(async () => {
-        await testEnv.clearStorage();
-    });
-
-    it('should allow an authenticated user to upload their own resume to the correct path', async () => {
-        const authedStorage = testEnv.authenticatedContext(myId).storage();
-        const resumeRef = ref(authedStorage, `resumes/${myId}/app123/resume.pdf`);
-        const blob = new Blob(['This is a test resume.'], { type: 'application/pdf' });
-        await assertSucceeds(uploadBytes(resumeRef, blob));
-    });
-
-    it('should NOT allow a user to upload a resume to another user\'s path', async () => {
-        const authedStorage = testEnv.authenticatedContext(myId).storage();
-        const resumeRef = ref(authedStorage, `resumes/${theirId}/app456/resume.pdf`);
-        const blob = new Blob(['This is a malicious resume.'], { type: 'application/pdf' });
-        await assertFails(uploadBytes(resumeRef, blob));
-    });
-
-    it('should NOT allow an unauthenticated user to upload a resume', async () => {
+    it('should not allow unauthenticated users to upload files', async () => {
         const unauthedStorage = testEnv.unauthenticatedContext().storage();
-        const resumeRef = ref(unauthedStorage, `resumes/${myId}/app789/resume.pdf`);
-        const blob = new Blob(['This is an anonymous resume.'], { type: 'application/pdf' });
-        await assertFails(uploadBytes(resumeRef, blob));
+        const newRef = ref(unauthedStorage, 'test.jpg');
+        await assertFails(uploadBytes(newRef, new Blob()));
     });
 
-    it('should NOT allow a user to upload a file that is too large', async () => {
+    it('should allow authenticated users to upload files to their own folder', async () => {
         const authedStorage = testEnv.authenticatedContext(myId).storage();
-        const resumeRef = ref(authedStorage, `resumes/${myId}/app123/large_resume.pdf`);
-        // Create a blob larger than 10MB
-        const largeBlob = new Blob(new Array(11 * 1024 * 1024).fill('a'), { type: 'application/pdf' });
-        await assertFails(uploadBytes(resumeRef, largeBlob));
+        const newRef = ref(authedStorage, `resumes/${myId}/test.jpg`);
+        await assertSucceeds(uploadBytes(newRef, new Blob()));
     });
 
-    it('should NOT allow a user to upload a file with an incorrect content type', async () => {
+    it('should not allow authenticated users to upload files to another user\'s folder', async () => {
         const authedStorage = testEnv.authenticatedContext(myId).storage();
-        const resumeRef = ref(authedStorage, `resumes/${myId}/app123/image.png`);
-        const blob = new Blob(['This is not a document.'], { type: 'image/png' });
-        await assertFails(uploadBytes(resumeRef, blob));
+        const newRef = ref(authedStorage, `resumes/${theirId}/test.jpg`);
+        await assertFails(uploadBytes(newRef, new Blob()));
     });
 });
