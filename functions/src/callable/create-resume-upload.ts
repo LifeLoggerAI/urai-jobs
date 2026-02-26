@@ -1,67 +1,97 @@
 import * as functions from "firebase-functions";
-import { getStorage } from "firebase-admin/storage";
-import { HttpsError } from "firebase-functions/v1/https";
-import { getFunctions } from "firebase-admin/functions";
+import * as admin from "firebase-admin";
 
-const BUCKET_NAME = process.env.GCLOUD_PROJECT + ".appspot.com";
+// --- Configuration ---
+const BUCKET_NAME = process.env.GCLOUD_STORAGE_BUCKET || ""; // Will be auto-populated by Firebase
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_CONTENT_TYPES = [
+  "application/pdf",
+  "application/msword", // .doc
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+];
 
-async function logError(message: string, data: any, source: string) {
-    try {
-        const logErrorCallable = getFunctions().task("logError");
-        await logErrorCallable.enqueue({ message, data, source });
-    } catch (e) {
-        console.error("Failed to log error:", e);
-        console.error("Original error:", message, data);
-    }
-}
+const db = admin.firestore();
+const storage = admin.storage();
 
+/**
+ * A public callable function for generating a signed URL to upload a resume.
+ *
+ * This function provides a secure endpoint for clients to request permission to
+ * upload a resume directly to a specific, sandboxed path in Cloud Storage.
+ * It validates the request and returns a short-lived URL, offloading the actual
+ * file transfer from the backend.
+ *
+ * The flow is:
+ * 1. Client gets applicantId (e.g., deterministic hash of email).
+ * 2. Client calls this function with file metadata.
+ * 3. Function validates, generates a new applicationId, and creates a signed URL.
+ * 4. Function returns the signed URL and applicationId to the client.
+ * 5. Client uses the URL to PUT the file directly to Cloud Storage.
+ * 6. Client then creates the application document in Firestore, including the
+ *    final storagePath.
+ */
 export const createResumeUpload = functions.https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new HttpsError("unauthenticated", "You must be logged in to upload a resume.");
-    }
+  // Although public, we can use this to attribute uploads if user is signed in.
+  const uid = context.auth?.uid;
+  functions.logger.log(`[createResumeUpload] Called by uid: ${uid ?? "anonymous"}`);
 
-    const { applicationId, filename, contentType, size } = data;
+  // --- Input Validation ---
+  const { orgId, applicantId, filename, contentType, size } = data;
+  if (!orgId || !applicantId || !filename || !contentType || !size) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Missing required data: orgId, applicantId, filename, contentType, size."
+    );
+  }
 
-    if (!applicationId || !filename || !contentType || !size) {
-        throw new HttpsError("invalid-argument", "Missing required parameters.");
-    }
+  if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      `Invalid content type. Allowed types are: ${ALLOWED_CONTENT_TYPES.join(", ")}`
+    );
+  }
 
-    // Validate file size and type
-    const MAX_SIZE_MB = 10;
-    if (size > MAX_SIZE_MB * 1024 * 1024) {
-        await logError("File size exceeds limit", { size, MAX_SIZE_MB }, "callable.createResumeUpload");
-        throw new HttpsError("invalid-argument", `File size exceeds ${MAX_SIZE_MB}MB.`);
-    }
+  if (size > MAX_FILE_SIZE_BYTES) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      `File size exceeds the limit of ${MAX_FILE_SIZE_BYTES / 1024 / 1024} MB.`
+    );
+  }
 
-    const ALLOWED_CONTENT_TYPES = [
-        "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ];
-    if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
-        await logError("Invalid file type", { contentType }, "callable.createResumeUpload");
-        throw new HttpsError("invalid-argument", "Invalid file type.");
-    }
+  if (!BUCKET_NAME) {
+      functions.logger.error("[createResumeUpload] GCLOUD_STORAGE_BUCKET env var not set.");
+      throw new functions.https.HttpsError("internal", "Storage bucket not configured.");
+  }
 
-    const applicantId = context.auth.uid;
-    const path = `resumes/${applicantId}/${applicationId}/${filename}`;
+  // --- URL Generation ---
+  try {
+    // Generate a new, unique ID for this application submission.
+    const applicationId = db.collection(`orgs/${orgId}/applications`).doc().id;
 
-    const bucket = getStorage().bucket(BUCKET_NAME);
-    const file = bucket.file(path);
+    const storagePath = `orgs/${orgId}/resumes/${applicantId}/${applicationId}/${filename}`;
 
-    const expires = Date.now() + 60 * 1000; // 1 minute to upload
-    const options = {
-        version: "v4" as const,
-        action: "write" as const,
-        expires,
-        contentType,
+    const signedUrlOptions: admin.storage.GetSignedUrlConfig = {
+      version: "v4",
+      action: "write",
+      expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+      contentType: contentType,
     };
 
-    try {
-        const [url] = await file.getSignedUrl(options);
-        return { url, path };
-    } catch (error) {
-        await logError("Error creating signed URL", { error }, "callable.createResumeUpload");
-        throw new HttpsError("internal", "Could not create upload URL.");
-    }
+    const bucket = storage.bucket(BUCKET_NAME);
+    const [signedUrl] = await bucket.file(storagePath).getSignedUrl(signedUrlOptions);
+
+    functions.logger.log(
+      `[createResumeUpload] Generated signed URL for path: ${storagePath}`
+    );
+
+    // Return the URL and the generated ID to the client.
+    return { signedUrl, applicationId, storagePath };
+
+  } catch (error) {
+    functions.logger.error("[createResumeUpload] Failed to generate signed URL", error);
+    throw new functions.https.HttpsError(
+      "internal",
+      "Could not create upload URL. Please try again later."
+    );
+  }
 });

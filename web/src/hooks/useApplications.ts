@@ -1,6 +1,5 @@
-
 import { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
+import { db, ORG_ID } from '../lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { Application } from '../../../packages/types/src/jobs';
 
@@ -14,11 +13,17 @@ const useApplications = (applicantId: string) => {
 
     const fetchApplications = async () => {
       try {
-        const q = query(collection(db, 'applications'), where('applicantId', '==', applicantId));
+        const q = query(
+          collection(db, `orgs/${ORG_ID}/applications`),
+          where('applicantId', '==', applicantId)
+        );
         const querySnapshot = await getDocs(q);
-        const applicationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Application));
+        const applicationsData = querySnapshot.docs.map(
+          (doc) => ({ id: doc.id, ...doc.data() } as Application)
+        );
         setApplications(applicationsData);
       } catch (err) {
+        console.error('Error fetching applications:', err);
         setError(err as Error);
       }
       setLoading(false);

@@ -3,10 +3,17 @@
   "private": true,
   "scripts": {
     "test": "npm run test --workspaces",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "dev": "concurrently \"npm:emulators\" \"npm:dev --workspace=web\"",
+    "build": "npm run build --workspaces",
+    "emulators": "firebase emulators:start --import=./firebase-data --export-on-exit",
+    "seed": "FIRESTORE_EMULATOR_HOST='localhost:8080' ts-node scripts/seed.ts"
   },
   "devDependencies": {
+    "@faker-js/faker": "^8.4.1",
     "@types/node": "^20.11.24",
+    "concurrently": "^8.2.2",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   },
   "workspaces": [

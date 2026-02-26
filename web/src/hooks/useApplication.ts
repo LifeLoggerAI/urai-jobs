@@ -1,99 +1,22 @@
+import { doc } from "firebase/firestore";
+import { useDocumentData } from "react-firebase-hooks/firestore";
+import { db, ORG_ID } from "../lib/firebase";
+import { Application } from "../../../packages/types/src/jobs";
 
-import { useState } from 'react';
-import { db, functions } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { v4 as uuidv4 } from 'uuid';
+/**
+ * Fetches a single application document from the organization's subcollection.
+ * @param applicationId The ID of the application to fetch.
+ */
+export const useApplication = (applicationId: string) => {
+    const ref = doc(db, `orgs/${ORG_ID}/applications`, applicationId);
+    const [application, loading, error] = useDocumentData<Application>(ref);
 
-interface ApplicationData {
-  name: string;
-  primaryEmail: string;
-  phone?: string;
-  portfolio?: string;
-  linkedin?: string;
-  github?: string;
-  resume: FileList;
-  jobId: string;
-}
-
-const useApplication = () => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-
-  const createApplication = async (data: ApplicationData) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const applicantId = uuidv4();
-      const applicationId = uuidv4();
-      const resumeFile = data.resume[0];
-
-      // 1. Get signed URL for resume upload
-      const createResumeUpload = httpsCallable(functions, 'createResumeUpload');
-      const uploadResult = await createResumeUpload({
-        applicationId,
-        filename: resumeFile.name,
-        contentType: resumeFile.type,
-        size: resumeFile.size,
-      });
-
-      const { url, path } = uploadResult.data as { url: string; path: string; };
-
-      // 2. Upload resume to signed URL
-      await fetch(url, {
-        method: 'PUT',
-        body: resumeFile,
-        headers: {
-          'Content-Type': resumeFile.type,
-        },
-      });
-
-      // 3. Create applicant
-      await addDoc(collection(db, 'applicants'), {
-        applicantId,
-        name: data.name,
-        primaryEmail: data.primaryEmail.toLowerCase(),
-        phone: data.phone,
-        links: {
-          portfolio: data.portfolio,
-          linkedin: data.linkedin,
-          github: data.github,
-        },
-        source: { type: 'direct' },
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastActivityAt: serverTimestamp(),
-      });
-
-      // 4. Create application
-      await addDoc(collection(db, 'applications'), {
-        applicationId,
-        jobId: data.jobId,
-        applicantId,
-        applicantEmail: data.primaryEmail.toLowerCase(),
-        status: 'NEW',
-        answers: {},
-        resume: {
-          storagePath: path,
-          filename: resumeFile.name,
-          contentType: resumeFile.type,
-          size: resumeFile.size,
-        },
-        submittedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      setLoading(false);
-      return { success: true };
-    } catch (err) {
-      setError(err as Error);
-      setLoading(false);
-      return { success: false };
+    if (error) {
+        console.error(`Error fetching application ${applicationId}:`, error);
     }
-  };
 
-  return { createApplication, loading, error };
+    return { application, loading, error };
 };
 
-export default useApplication;
+// Note: The previous content of this file, which handled application *creation*,
+// was architecturally incorrect. It has been moved to a new `useCreateApplication.ts` hook.

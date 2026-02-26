@@ -4,79 +4,102 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // --- Helper Functions ---
-    // Is the user signed in?
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Get the user's role from their custom claims.
-    function getRole(orgId) {
-      return request.auth.token.roles[orgId];
-    }
-
-    // Does the user have the 'admin' role for this org?
     function isOrgAdmin(orgId) {
-      return isSignedIn() && getRole(orgId) == 'admin';
+      return isSignedIn() && exists(/databases/$(database)/documents/orgs/$(orgId)/admins/$(request.auth.uid));
     }
-    
-    // Does the user have the 'member' role for this org?
+
     function isOrgMember(orgId) {
-        return isSignedIn() && (getRole(orgId) == 'admin' || getRole(orgId) == 'member');
+      // For this project, we can assume all admins are members.
+      // In a more complex app, this could check a different collection.
+      return isOrgAdmin(orgId);
     }
 
-    // --- Default Deny ---
-    match /{path=**} {
-      allow read, write: if false;
+    // --- Data Validation Helpers ---
+    function isString(value, min, max) {
+      return value is string && value.size() >= min && value.size() <= max;
     }
 
-    // --- Org Collections ---
+    function isOptionalString(value, min, max) {
+        return value == null || isString(value, min, max);
+    }
+
+    function isMap(data) {
+        return data is map;
+    }
+
+    function hasOnly(keys) {
+        return request.resource.data.keys().hasOnly(keys);
+    }
+
     match /orgs/{orgId} {
-      allow read: if isOrgMember(orgId);
-      allow create: if isSignedIn(); // Org creation logic handled in a callable function
-      allow update, delete: if isOrgAdmin(orgId);
+        // Orgs themselves can't be created/deleted via rules for now.
+        allow read, write: if false;
+
+        // --- Public Collections ---
+        match /jobPublic/{jobId} {
+            allow get: if true; // Anyone can view a single public job
+            allow list: if true; // Anyone can list all public jobs
+            allow write: if false; // Deny all writes
+        }
+
+        // --- Application Submission Collections (Public Write, Restricted Read) ---
+        match /applications/{applicationId} {
+            allow read: if isOrgMember(orgId);
+            allow create: if true; // Public can submit applications
+            allow update, delete: if isOrgAdmin(orgId);
+        }
+
+        match /waitlist/{waitlistId} {
+            allow read: if isOrgMember(orgId);
+            allow create: if true; // Public can join waitlist
+            allow update, delete: if isOrgAdmin(orgId);
+        }
+
+        match /events/{eventId} {
+            allow read: if isOrgMember(orgId);
+            allow create: if true; // Allow client-side tracking events
+            allow update, delete: if isOrgAdmin(orgId);
+        }
+
+        // --- Admin/Member-Only Collections ---
+        match /jobs/{jobId} {
+            allow read, write: if isOrgAdmin(orgId);
+        }
+
+        match /applicants/{applicantId} {
+            allow read, write: if isOrgMember(orgId);
+        }
+
+        match /referrals/{refCode} {
+            allow read, write: if isOrgAdmin(orgId);
+        }
+
+        match /digests/{digestId} {
+            allow read: if isOrgMember(orgId);
+            allow write: if false; // Only created by backend functions
+        }
+
+        // --- Admin Management ---
+        match /admins/{uid} {
+            // Only other admins can see who is an admin.
+            allow read: if isOrgAdmin(orgId);
+            // To prevent escalation, only allow owner-level to grant admin status (future-proofing)
+            allow write: if false; // For now, manage this via Console/backend.
+        }
+
+        // --- Default Deny for any other collections in an org ---
+        match /{path=**} {
+            allow read, write: if false;
+        }
     }
 
-    // --- Sub-collections ---
-
-    match /orgs/{orgId}/jobs/{jobId} {
-      allow read: if isOrgMember(orgId);
-      allow create, update: if isOrgAdmin(orgId);
-      allow delete: if isOrgAdmin(orgId);
-    }
-    
-    match /orgs/{orgId}/jobPublic/{jobId} {
-        allow get: if true;
-        allow list, create, update, delete: if false; // Managed by backend
-    }
-
-    match /orgs/{orgId}/applicants/{applicantId} {
-      allow read: if isOrgMember(orgId);
-      allow create, update, delete: if false; // Managed by backend
-    }
-
-    match /orgs/{orgId}/applications/{applicationId} {
-      allow read: if isOrgMember(orgId);
-      allow create: if isSignedIn(); // Public can create applications
-      allow update: if isOrgAdmin(orgId);
-      allow delete: if isOrgAdmin(orgId);
-    }
-    
-    match /orgs/{orgId}/waitlist/{waitlistId} {
-        allow create: if true;
-        allow read, list, update, delete: if isOrgAdmin(orgId);
-    }
-    
-    match /orgs/{orgId}/events/{eventId} {
-        allow create: if true; // Public can create events
-        allow read, list, update, delete: if isOrgAdmin(orgId);
-    }
-    
-    match /orgs/{orgId}/referrals/{refCode} {
-        allow read, list, create, update, delete: if isOrgAdmin(orgId);
-    }
-    
-    match /orgs/{orgId}/admins/{uid} {
-        allow read, list, create, update, delete: if isOrgAdmin(orgId);
+    // --- Global Default Deny ---
+    match /{path=**} {
+        allow read, write: if false;
     }
   }
 }

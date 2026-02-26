@@ -1,146 +1,123 @@
-import * as admin from 'firebase-admin';
-import { faker } from '@faker-js/faker';
 
-// Initialize Firebase Admin SDK against the emulator
-process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
-admin.initializeApp({ projectId: 'urai-jobs-dev' });
+import * as admin from 'firebase-admin';
+import { v4 as uuidv4 } from 'uuid';
+
+// Initialize Firebase Admin SDK
+const serviceAccount = require('../serviceAccountKey.json'); // Adjust the path to your service account key
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 const db = admin.firestore();
 
-const seedDatabase = async () => {
-  console.log('Starting to seed the database...');
+const seed = async () => {
+  console.log('Seeding database...');
 
   // Clear existing data
-  await clearAllData();
+  await clearCollection('jobs');
+  await clearCollection('jobPublic');
+  await clearCollection('applicants');
+  await clearCollection('applications');
+  await clearCollection('referrals');
+  await clearCollection('waitlist');
+  await clearCollection('admins');
+  await clearCollection('events');
 
   // Seed Admins
-  await db.collection('admins').doc('test-admin-uid').set({
+  const adminUid = 'F5emx622VzY7V3gWjTOdYj2dZ3A2'; // Replace with a real UID for testing
+  await db.collection('admins').doc(adminUid).set({
     role: 'owner',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
   // Seed Jobs
-  const jobIds = await seedJobs();
+  const jobs = [
+    { title: 'Software Engineer', department: 'Engineering', locationType: 'remote', status: 'open' },
+    { title: 'Product Manager', department: 'Product', locationType: 'hybrid', locationText: 'New York, NY', status: 'open' },
+    { title: 'UX Designer', department: 'Design', locationType: 'onsite', locationText: 'San Francisco, CA', status: 'draft' },
+    { title: 'Data Scientist', department: 'Data', locationType: 'remote', status: 'closed' },
+    { title: 'Marketing Manager', department: 'Marketing', locationType: 'hybrid', locationText: 'London, UK', status: 'paused' },
+  ];
 
-  // Seed Applicants and Applications
-  await seedApplicantsAndApplications(jobIds);
-
-  // Seed Waitlist
-  await seedWaitlist();
-
-  // Seed Referrals
-  await seedReferrals();
-
-  console.log('Database seeding completed successfully!');
-};
-
-const clearAllData = async () => {
-    console.log('Clearing all existing data...');
-    const collections = await db.listCollections();
-    for (const collection of collections) {
-        const docs = await collection.listDocuments();
-        await Promise.all(docs.map(doc => doc.delete()));
-    }
-}
-
-const seedJobs = async (): Promise<string[]> => {
-  const jobPromises: Promise<any>[] = [];
-  for (let i = 0; i < 5; i++) {
-    const status = i < 3 ? 'open' : 'draft'; // 3 open, 2 draft
-    const jobData = {
-      title: faker.person.jobTitle(),
-      department: faker.commerce.department(),
-      locationType: faker.helpers.arrayElement(['remote', 'hybrid', 'onsite']),
-      locationText: faker.location.city() + ', ' + faker.location.state(),
-      employmentType: faker.helpers.arrayElement(['full_time', 'part_time', 'contract']),
-      descriptionMarkdown: faker.lorem.paragraphs(3),
-      requirements: Array.from({ length: 5 }, () => faker.lorem.sentence()),
-      niceToHave: Array.from({ length: 3 }, () => faker.lorem.sentence()),
-      status: status,
+  const jobIds: string[] = [];
+  for (const job of jobs) {
+    const jobId = uuidv4();
+    jobIds.push(jobId);
+    await db.collection('jobs').doc(jobId).set({
+      ...job,
+      descriptionMarkdown: 'This is a job description.',
+      requirements: ['Requirement 1', 'Requirement 2'],
+      niceToHave: ['Nice to have 1', 'Nice to have 2'],
+      compensationRange: { min: 80000, max: 120000, currency: 'USD' },
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      createdBy: 'test-admin-uid',
-    };
-    jobPromises.push(db.collection('jobs').add(jobData));
+      createdBy: adminUid,
+    });
   }
-  const results = await Promise.all(jobPromises);
-  return results.map(r => r.id);
-};
 
-const seedApplicantsAndApplications = async (jobIds: string[]) => {
-  const applicantPromises: Promise<any>[] = [];
-  for (let i = 0; i < 30; i++) {
-    const applicantData = {
-        primaryEmail: faker.internet.email().toLowerCase(),
-        name: faker.person.fullName(),
-        phone: faker.phone.number(),
-        links: {
-            portfolio: faker.internet.url(),
-            linkedin: `https://linkedin.com/in/${faker.internet.userName()}`
-        },
-        source: { type: 'direct' },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-    applicantPromises.push(db.collection('applicants').add(applicantData));
+  // Seed Applicants
+  const applicants = Array.from({ length: 30 }, (_, i) => ({
+    primaryEmail: `applicant${i}@example.com`,
+    name: `Applicant ${i}`,
+    source: { type: i % 3 === 0 ? 'referral' : 'direct', refCode: i % 3 === 0 ? 'REF001' : undefined },
+  }));
+
+  const applicantIds: string[] = [];
+  for (const applicant of applicants) {
+    const applicantId = uuidv4();
+    applicantIds.push(applicantId);
+    await db.collection('applicants').doc(applicantId).set({
+      ...applicant,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
   }
-  const applicantResults = await Promise.all(applicantPromises);
-  const applicantIds = applicantResults.map(r => r.id);
 
-  const applicationPromises: Promise<any>[] = [];
+  // Seed Applications
   for (let i = 0; i < 40; i++) {
-    const applicantId = faker.helpers.arrayElement(applicantIds);
-    const jobId = faker.helpers.arrayElement(jobIds);
-    const applicationData = {
-        jobId: jobId,
-        applicantId: applicantId,
-        applicantEmail: faker.internet.email().toLowerCase(), // Denormalized
-        status: faker.helpers.arrayElement(['NEW', 'SCREEN', 'INTERVIEW', 'REJECTED']),
-        answers: {
-            'question1': faker.lorem.paragraph(),
-            'question2': faker.lorem.sentence(),
-        },
-        submittedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-    applicationPromises.push(db.collection('applications').add(applicationData));
+    const applicationId = uuidv4();
+    await db.collection('applications').doc(applicationId).set({
+      jobId: jobIds[i % jobIds.length],
+      applicantId: applicantIds[i % applicantIds.length],
+      applicantEmail: `applicant${i % applicantIds.length}@example.com`,
+      status: 'NEW',
+      answers: { question1: 'Answer 1' },
+      submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
   }
-  await Promise.all(applicationPromises);
+
+  // Seed Referral Codes
+  await db.collection('referrals').doc('REF001').set({
+    code: 'REF001',
+    createdBy: adminUid,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    clicksCount: 10,
+    submitsCount: 2,
+    active: true,
+  });
+
+  // Seed Waitlist
+  for (let i = 0; i < 20; i++) {
+    await db.collection('waitlist').add({
+      email: `waitlist${i}@example.com`,
+      name: `Waitlist User ${i}`,
+      interests: ['Engineering', 'Product'],
+      consent: { terms: true, marketing: true },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+
+  console.log('Database seeded successfully!');
 };
 
-const seedWaitlist = async () => {
-    const waitlistPromises: Promise<any>[] = [];
-    for (let i = 0; i < 20; i++) {
-        const waitlistData = {
-            email: faker.internet.email().toLowerCase(),
-            name: faker.person.fullName(),
-            interests: [faker.person.jobArea()],
-            consent: { terms: true, marketing: faker.datatype.boolean() },
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
-        waitlistPromises.push(db.collection('waitlist').add(waitlistData));
-    }
-    await Promise.all(waitlistPromises);
+const clearCollection = async (collectionPath: string) => {
+  const collectionRef = db.collection(collectionPath);
+  const snapshot = await collectionRef.get();
+  const batch = db.batch();
+  snapshot.docs.forEach(doc => batch.delete(doc.ref));
+  await batch.commit();
 };
 
-const seedReferrals = async () => {
-    const referralPromises: Promise<any>[] = [];
-    for (let i = 0; i < 5; i++) {
-        const referralData = {
-            code: faker.lorem.slug(),
-            createdBy: 'test-admin-uid',
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            clicksCount: faker.number.int({ min: 10, max: 100 }),
-            submitsCount: faker.number.int({ min: 1, max: 10 }),
-            active: true,
-        };
-        referralPromises.push(db.collection('referrals').add(referralData));
-    }
-    await Promise.all(referralPromises);
-};
-
-seedDatabase().catch(error => {
-  console.error('Error seeding database:', error);
-  process.exit(1);
-});
+seed().catch(err => console.error(err));

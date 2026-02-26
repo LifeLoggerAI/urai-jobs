@@ -1,8 +1,7 @@
-
 import { useState, useEffect } from 'react';
-import { db } from '../../lib/firebase';
+import { db, ORG_ID } from '../lib/firebase'; // Corrected import path
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { Job } from '../../types';
+import { Job } from '../../types'; // Assuming types are in a higher-level directory
 
 const useAdminJobs = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -10,12 +9,15 @@ const useAdminJobs = () => {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, 'jobs'), orderBy('createdAt', 'desc'));
+    // Scoped query to the organization's jobs subcollection
+    const q = query(collection(db, `orgs/${ORG_ID}/jobs`), orderBy('createdAt', 'desc'));
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const jobsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Job));
       setJobs(jobsData);
       setLoading(false);
     }, (err) => {
+      console.error("Error fetching admin jobs:", err);
       setError(err);
       setLoading(false);
     });

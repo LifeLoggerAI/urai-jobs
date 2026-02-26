@@ -1,41 +1,95 @@
 {
   "indexes": [
     {
-      "collectionGroup": "jobs",
-      "queryScope": "COLLECTION_GROUP",
+      "collectionGroup": "applications",
+      "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "orgId" },
-        { "fieldPath": "status" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "jobId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "submittedAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "applications",
-      "queryScope": "COLLECTION_GROUP",
+      "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "orgId" },
-        { "fieldPath": "jobId" },
-        { "fieldPath": "status" },
-        { "fieldPath": "submittedAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "jobId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "submittedAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
-      "collectionGroup": "applicants",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "orgId" },
-        { "fieldPath": "primaryEmail" }
-      ]
+        "collectionGroup": "applications",
+        "queryScope": "COLLECTION",
+        "fields": [
+            {
+                "fieldPath": "status",
+                "order": "ASCENDING"
+            },
+            {
+                "fieldPath": "submittedAt",
+                "order": "DESCENDING"
+            }
+        ]
+    },
+    {\n        "collectionGroup": "jobs",
+        "queryScope": "COLLECTION",
+        "fields": [
+            {
+                "fieldPath": "status",
+                "order": "ASCENDING"
+            },
+            {
+                "fieldPath": "updatedAt",
+                "order": "DESCENDING"
+            }
+        ]
     },
     {
-      "collectionGroup": "events",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "orgId" },
-        { "fieldPath": "entityType" },
-        { "fieldPath": "entityId" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
+        "collectionGroup": "events",
+        "queryScope": "COLLECTION",
+        "fields": [
+            {
+                "fieldPath": "entityType",
+                "order": "ASCENDING"
+            },
+            {
+                "fieldPath": "entityId",
+                "order": "ASCENDING"
+            },
+            {
+                "fieldPath": "createdAt",
+                "order": "DESCENDING"
+            }
+        ]
+    },
+    {
+        "collectionGroup": "referrals",
+        "queryScope": "COLLECTION",
+        "fields": [
+            {
+                "fieldPath": "active",
+                "order": "ASCENDING"
+            },
+            {
+                "fieldPath": "createdAt",
+                "order": "DESCENDING"
+            }
+        ]
     }
   ],
   "fieldOverrides": []
