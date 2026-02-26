@@ -1,8 +1,19 @@
 import * as functions from "firebase-functions";
 import { getStorage } from "firebase-admin/storage";
 import { HttpsError } from "firebase-functions/v1/https";
+import { getFunctions } from "firebase-admin/functions";
 
 const BUCKET_NAME = process.env.GCLOUD_PROJECT + ".appspot.com";
+
+async function logError(message: string, data: any, source: string) {
+    try {
+        const logErrorCallable = getFunctions().task("logError");
+        await logErrorCallable.enqueue({ message, data, source });
+    } catch (e) {
+        console.error("Failed to log error:", e);
+        console.error("Original error:", message, data);
+    }
+}
 
 export const createResumeUpload = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
@@ -18,6 +29,7 @@ export const createResumeUpload = functions.https.onCall(async (data, context) =
     // Validate file size and type
     const MAX_SIZE_MB = 10;
     if (size > MAX_SIZE_MB * 1024 * 1024) {
+        await logError("File size exceeds limit", { size, MAX_SIZE_MB }, "callable.createResumeUpload");
         throw new HttpsError("invalid-argument", `File size exceeds ${MAX_SIZE_MB}MB.`);
     }
 
@@ -27,6 +39,7 @@ export const createResumeUpload = functions.https.onCall(async (data, context) =
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ];
     if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
+        await logError("Invalid file type", { contentType }, "callable.createResumeUpload");
         throw new HttpsError("invalid-argument", "Invalid file type.");
     }
 
@@ -48,7 +61,7 @@ export const createResumeUpload = functions.https.onCall(async (data, context) =
         const [url] = await file.getSignedUrl(options);
         return { url, path };
     } catch (error) {
-        console.error("Error creating signed URL:", error);
+        await logError("Error creating signed URL", { error }, "callable.createResumeUpload");
         throw new HttpsError("internal", "Could not create upload URL.");
     }
 });

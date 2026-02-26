@@ -2,7 +2,8 @@
   "name": "urai-jobs",
   "private": true,
   "scripts": {
-    "test": "npm run test --workspaces"
+    "test": "npm run test --workspaces",
+    "smoke": "node scripts/smoke.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",

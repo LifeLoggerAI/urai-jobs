@@ -4,110 +4,79 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // --- Helper Functions ---
+    // Is the user signed in?
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      // Check for a doc in the 'admins' collection with the user's UID.
-      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    // Get the user's role from their custom claims.
+    function getRole(orgId) {
+      return request.auth.token.roles[orgId];
     }
 
-    function isOwner() {
-      // Owners have the 'owner' role in their admin doc.
-      return isAdmin() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner';
-    }
-
-    // --- Validation Helpers ---
-    function isString(val, min, max) { return val is string && val.size() >= min && val.size() <= max; }
-    function isEmail(email) { return email is string && email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,4}$'); }
-    function isMap(data) { return data is map; }
-    function isList(data) { return data is list; }
-    function hasOnly(keys) { return request.resource.data.keys().hasOnly(keys); }
-    function isJobStatus(status) { return status in ['draft', 'open', 'paused', 'closed']; }
-    function isApplicationStatus(status) { return status in ['NEW', 'SCREEN', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED']; }
-
-    // =====================================================================
-    //  Collection Rules
-    // =====================================================================
-
-    // Admins can only be managed by Owners.
-    match /admins/{uid} {
-      allow read, list: if isAdmin();
-      allow create, update, delete: if isOwner();
-    }
-
-    // Public can read, Admins can write.
-    match /jobPublic/{jobId} {
-      allow get: if true;
-      allow list, create, update, delete: if isAdmin(); // Managed by backend function
-    }
-
-    // Jobs can only be managed by Admins.
-    match /jobs/{jobId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin(); // Complex validation handled in callable function
-      allow update: if isAdmin(); // Complex validation handled in callable function
-      allow delete: if isOwner();
-    }
-
-    // An applicant can only be created by the user themselves, and is mostly immutable.
-    match /applicants/{applicantId} {
-      // Only the user themselves or an admin can read the applicant profile.
-      allow get: if isSignedIn() && (request.auth.uid == applicantId || isAdmin());
-      // Only admins can list applicants (e.g., for an admin search view).
-      allow list: if isAdmin();
-
-      // A user can create their own applicant profile.
-      allow create: if isSignedIn() && request.auth.uid == applicantId;
-
-      // A user can update their own profile. Admins cannot update this directly.
-      allow update: if isSignedIn() && request.auth.uid == applicantId;
-
-      // Only owners can delete applicant records for compliance reasons.
-      allow delete: if isOwner();
-    }
-
-    // Applications have the strictest rules.
-    match /applications/{applicationId} {
-      // Only admins can read application data.
-      allow get, list: if isAdmin();
-
-      // An applicant can create an application for themselves IF the job is open.
-      allow create: if isSignedIn()
-                    && request.resource.data.applicantId == request.auth.uid
-                    && exists(/databases/$(database)/documents/jobPublic/$(request.resource.data.jobId));
-
-      // Only Admins can update an application, and only specific fields.
-      allow update: if isAdmin()
-                  && request.resource.data.diff(resource.data).changedKeys()
-                     .hasOnly(['status', 'internal', 'tags', 'notesCount', 'updatedAt']);
-
-      // Only Owners can delete application records for compliance reasons.
-      allow delete: if isOwner();
-    }
-
-    // Waitlist and Events are write-only for the public, via secure Cloud Functions.
-    // Direct creation is denied to prevent abuse.
-    match /waitlist/{waitlistId} {
-      allow read, list: if isAdmin();
-      allow create, update, delete: if false; // Must be created via a callable function
-    }
-
-    match /events/{eventId} {
-      allow read, list: if isAdmin();
-      allow create, update, delete: if false; // Must be created via a callable function
-    }
-
-    // Referrals are admin-only.
-    match /referrals/{refCode} {
-        allow read, list, create, update: if isAdmin();
-        allow delete: if isOwner();
+    // Does the user have the 'admin' role for this org?
+    function isOrgAdmin(orgId) {
+      return isSignedIn() && getRole(orgId) == 'admin';
     }
     
-    // Explicitly deny access to all other collections/paths.
+    // Does the user have the 'member' role for this org?
+    function isOrgMember(orgId) {
+        return isSignedIn() && (getRole(orgId) == 'admin' || getRole(orgId) == 'member');
+    }
+
+    // --- Default Deny ---
     match /{path=**} {
-        allow read, write: if false;
+      allow read, write: if false;
+    }
+
+    // --- Org Collections ---
+    match /orgs/{orgId} {
+      allow read: if isOrgMember(orgId);
+      allow create: if isSignedIn(); // Org creation logic handled in a callable function
+      allow update, delete: if isOrgAdmin(orgId);
+    }
+
+    // --- Sub-collections ---
+
+    match /orgs/{orgId}/jobs/{jobId} {
+      allow read: if isOrgMember(orgId);
+      allow create, update: if isOrgAdmin(orgId);
+      allow delete: if isOrgAdmin(orgId);
+    }
+    
+    match /orgs/{orgId}/jobPublic/{jobId} {
+        allow get: if true;
+        allow list, create, update, delete: if false; // Managed by backend
+    }
+
+    match /orgs/{orgId}/applicants/{applicantId} {
+      allow read: if isOrgMember(orgId);
+      allow create, update, delete: if false; // Managed by backend
+    }
+
+    match /orgs/{orgId}/applications/{applicationId} {
+      allow read: if isOrgMember(orgId);
+      allow create: if isSignedIn(); // Public can create applications
+      allow update: if isOrgAdmin(orgId);
+      allow delete: if isOrgAdmin(orgId);
+    }
+    
+    match /orgs/{orgId}/waitlist/{waitlistId} {
+        allow create: if true;
+        allow read, list, update, delete: if isOrgAdmin(orgId);
+    }
+    
+    match /orgs/{orgId}/events/{eventId} {
+        allow create: if true; // Public can create events
+        allow read, list, update, delete: if isOrgAdmin(orgId);
+    }
+    
+    match /orgs/{orgId}/referrals/{refCode} {
+        allow read, list, create, update, delete: if isOrgAdmin(orgId);
+    }
+    
+    match /orgs/{orgId}/admins/{uid} {
+        allow read, list, create, update, delete: if isOrgAdmin(orgId);
     }
   }
 }

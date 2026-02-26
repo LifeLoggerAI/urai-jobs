@@ -1,46 +1,79 @@
 import { Timestamp } from 'firebase/firestore';
 
-export type JobStatus = 'active' | 'paused' | 'archived';
-export type IdempotencyPolicy = 'byParamsHash' | 'manual';
-
 export interface Job {
-  name: string;
-  description: string;
-  status: JobStatus;
-  priority: number;
-  schedule: string | null;
-  handler: 'assetFactoryRender' | 'analyticsBackfill' | 'noop';
-  inputSchemaVersion: number;
-  defaultParams: Record<string, any>;
+  id: string;
+  title: string;
+  department: string;
+  locationType: 'remote' | 'hybrid' | 'onsite';
+  locationText: string;
+  employmentType: 'full_time' | 'part_time' | 'contract' | 'intern';
+  descriptionMarkdown: string;
+  requirements: string[];
+  niceToHave: string[];
+  compensationRange?: {
+    min?: number;
+    max?: number;
+    currency?: string;
+  };
+  status: 'draft' | 'open' | 'paused' | 'closed';
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy: string;
-  tags: string[];
-  idempotencyPolicy: IdempotencyPolicy;
-  leaseSeconds: number;
-  maxRetries: number;
-  timeoutSeconds: number;
 }
 
-export type JobRunStatus = 'queued' | 'leased' | 'running' | 'succeeded' | 'failed' | 'canceled';
+export interface JobPublic {
+  id: string;
+  title: string;
+  department: string;
+  locationType: 'remote' | 'hybrid' | 'onsite';
+  locationText: string;
+  employmentType: 'full_time' | 'part_time' | 'contract' | 'intern';
+  descriptionMarkdown: string;
+  requirements: string[];
+  niceToHave: string[];
+}
 
-export interface JobRun {
-  jobId: string;
-  status: JobRunStatus;
-  queuedAt: Timestamp;
-  startedAt: Timestamp | null;
-  finishedAt: Timestamp | null;
-  attempt: number;
-  params: Record<string, any>;
-  paramsHash: string;
-  idempotencyKey: string;
-  leaseExpiresAt: Timestamp | null;
-  workerId: string | null;
-  error: Record<string, any> | null;
-  metrics: {
-    durationMs: number;
-    costEstimate: number;
+export interface Applicant {
+  id: string;
+  primaryEmail: string;
+  name: string;
+  phone?: string;
+  links?: {
+    portfolio?: string;
+    linkedin?: string;
+    github?: string;
+    other?: string[];
   };
-  logRef: string;
-  artifactRefs: string[];
+  source: {
+    type: 'direct' | 'referral' | 'waitlist';
+    refCode?: string;
+    campaign?: string;
+  };
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  lastActivityAt: Timestamp;
+}
+
+export interface Application {
+  id: string;
+  jobId: string;
+  applicantId: string;
+  applicantEmail: string;
+  status: 'NEW' | 'SCREEN' | 'INTERVIEW' | 'OFFER' | 'HIRED' | 'REJECTED';
+  answers: Record<string, string>;
+  resume?: {
+    storagePath: string;
+    filename: string;
+    contentType: string;
+    size: number;
+  };
+  tags: string[];
+  notesCount: number;
+  submittedAt: Timestamp;
+  updatedAt: Timestamp;
+  internal?: {
+    rating?: number;
+    reviewerId?: string;
+    reviewedAt?: Timestamp;
+  };
 }
