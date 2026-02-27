@@ -2,12 +2,11 @@
   "name": "urai-jobs",
   "private": true,
   "scripts": {
-    "test": "npm run test --workspaces",
-    "smoke": "node scripts/smoke.mjs",
     "dev": "concurrently \"npm:emulators\" \"npm:dev --workspace=web\"",
-    "build": "npm run build --workspaces",
+    "build": "npm run build --workspace=web && npm run build --workspace=functions",
+    "build:functions": "npm run build --workspace=functions",
     "emulators": "firebase emulators:start --import=./firebase-data --export-on-exit",
-    "seed": "FIRESTORE_EMULATOR_HOST='localhost:8080' ts-node scripts/seed.ts"
+    "seed": "npm run seed --workspace=scripts"
   },
   "devDependencies": {
     "@faker-js/faker": "^8.4.1",
