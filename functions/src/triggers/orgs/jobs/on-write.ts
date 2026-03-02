@@ -1,38 +1,31 @@
-import * as functions from "firebase-functions";
-import { getFirestore } from "firebase-admin/firestore";
-import { Job } from "../../../../packages/types/src";
+import { firestore } from 'firebase-functions';
+import * as admin from 'firebase-admin';
 
-/**
- * Triggered on write to a job document in an organization.
- * Manages the public projection of the job in the `jobPublic` collection.
- */
-export const onWrite = functions.firestore
-  .document("orgs/{orgId}/jobs/{jobId}")
-  .onWrite(async (change, context) => {
-    const { orgId, jobId } = context.params;
-    const db = getFirestore();
+admin.initializeApp();
 
-    const jobPublicRef = db.collection("orgs").doc(orgId).collection("jobPublic").doc(jobId);
+export const onJobWrite = firestore.document('/orgs/{orgId}/jobs/{jobId}').onWrite(async (change, context) => {
+  const { jobId } = context.params;
+  const jobData = change.after.data();
 
-    const job = change.after.data() as Job | undefined;
+  const db = admin.firestore();
+  const jobPublicRef = db.collection('jobPublic').doc(jobId);
 
-    if (job && job.status === "open") {
-      // If the job is open, create or update the public projection.
-      const publicJob = {
-        title: job.title,
-        department: job.department,
-        locationType: job.locationType,
-        locationText: job.locationText,
-        employmentType: job.employmentType,
-        descriptionMarkdown: job.descriptionMarkdown,
-        requirements: job.requirements,
-        niceToHave: job.niceToHave,
-        compensationRange: job.compensationRange,
-        updatedAt: job.updatedAt,
-      };
-      await jobPublicRef.set(publicJob, { merge: true });
-    } else {
-      // If the job is not open, delete the public projection.
-      await jobPublicRef.delete();
-    }
-  });
+  if (jobData?.status === 'open') {
+    const publicData = {
+      title: jobData.title,
+      department: jobData.department,
+      locationType: jobData.locationType,
+      locationText: jobData.locationText,
+      employmentType: jobData.employmentType,
+      descriptionMarkdown: jobData.descriptionMarkdown,
+      requirements: jobData.requirements,
+      niceToHave: jobData.niceToHave,
+      compensationRange: jobData.compensationRange,
+      createdAt: jobData.createdAt,
+      updatedAt: jobData.updatedAt,
+    };
+    return jobPublicRef.set(publicData, { merge: true });
+  } else {
+    return jobPublicRef.delete();
+  }
+});

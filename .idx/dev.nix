@@ -6,10 +6,11 @@
       packages = [
         nixpkgs.legacyPackages.${system}.nodejs_20
         nixpkgs.legacyPackages.${system}.nodePackages.pnpm
+        nixpkgs.legacyPackages.${system}.gnupg
       ];
       shellHook = ''
-        echo \"Node.js $(node --version)\"
-        echo \"pnpm $(pnpm --version)\"
+        echo "Node.js $(node --version)"
+        echo "pnpm $(pnpm --version)"
       '';
     };
   })"

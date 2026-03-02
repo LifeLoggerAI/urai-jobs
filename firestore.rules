@@ -1,66 +1,99 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isAuthenticated() {
+    // Helper functions
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOrgAdmin(orgId) {
-      return request.auth.token.orgId == orgId && request.auth.token.role == "admin";
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    function isOrgMember(orgId) {
-      return request.auth.token.orgId == orgId && (request.auth.token.role == "admin" || request.auth.token.role == "reviewer");
+    function isRole(role) {
+      return isAdmin() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in role;
     }
 
-    match /jobs/{jobId} {
-      allow get: if true;
-      allow list: if true;
-      allow create, update, delete: if isOrgAdmin(request.resource.data.orgId);
+    function getIncomingData() {
+      return request.resource.data;
     }
 
+    function hasOnly(keys) {
+      return getIncomingData().keys().hasOnly(keys);
+    }
+
+    function isEmail(email) {
+      return email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+    }
+
+    // Publicly readable job postings
     match /jobPublic/{jobId} {
-      allow get: if true;
-      allow list: if true;
-      allow write: if false;
+      allow read: if true;
+      allow write: if false; // Managed by cloud function
     }
 
+    // Admin-only job management
+    match /jobs/{jobId} {
+      allow read, write: if isRole(['owner', 'admin']);
+
+      // Validation on create/update
+      allow create: if isRole(['owner', 'admin'])
+                    && hasOnly(['title', 'department', 'locationType', 'locationText', 'employmentType', 'descriptionMarkdown', 'requirements', 'niceToHave', 'compensationRange', 'status', 'createdAt', 'updatedAt', 'createdBy'])
+                    && getIncomingData().title is string && getIncomingData().title.size() < 100
+                    && getIncomingData().status in ['draft', 'open', 'paused', 'closed']
+                    && getIncomingData().createdBy == request.auth.uid;
+    }
+
+    // Applicants can be created by anyone, but not read or updated publicly
     match /applicants/{applicantId} {
-      allow create: if true;
-      allow read, update: if isOrgMember(request.resource.data.orgId);
-      allow delete: if isOrgAdmin(request.resource.data.orgId);
+      allow read, update: if isRole(['owner', 'admin', 'reviewer']);
+      allow create: if hasOnly(['primaryEmail', 'name', 'phone', 'links', 'source', 'createdAt', 'updatedAt', 'lastActivityAt'])
+                    && isEmail(getIncomingData().primaryEmail)
+                    && getIncomingData().primaryEmail == getIncomingData().primaryEmail.lower()
+                    && getIncomingData().name is string && getIncomingData().name.size() < 100;
+      allow delete: if false;
     }
 
+    // Applications can be created by anyone, but not read or updated publicly
     match /applications/{applicationId} {
-      allow create: if true;
-      allow read, update: if isOrgMember(request.resource.data.orgId);
-      allow delete: if isOrgAdmin(request.resource.data.orgId);
+      allow read, update: if isRole(['owner', 'admin', 'reviewer']);
+      allow create: if hasOnly(['jobId', 'applicantId', 'applicantEmail', 'status', 'answers', 'resume', 'tags', 'notesCount', 'submittedAt', 'updatedAt', 'internal'])
+                    && isEmail(getIncomingData().applicantEmail)
+                    && getIncomingData().applicantEmail == getIncomingData().applicantEmail.lower()
+                    && getIncomingData().status == 'NEW'
+                    && getIncomingData().jobId is string && exists(/databases/$(database)/documents/jobs/$(getIncomingData().jobId));
+      allow delete: if false;
     }
 
+    // Waitlist can be created by anyone
+    match /waitlist/{entryId} {
+      allow read, update, delete: if isRole(['owner', 'admin']);
+      allow create: if hasOnly(['email', 'name', 'interests', 'consent', 'createdAt'])
+                    && isEmail(getIncomingData().email)
+                    && getIncomingData().email == getIncomingData().email.lower();
+    }
+    
+    // Referrals can be read and updated by admins
     match /referrals/{refCode} {
-      allow get: if true;
-      allow create: if isOrgMember(request.resource.data.orgId);
-      allow update: if isOrgAdmin(request.resource.data.orgId);
-      allow delete: if isOrgAdmin(request.resource.data.orgId);
+        allow read, write: if isRole(['owner', 'admin']);
     }
 
-    match /waitlist/{id} {
-      allow create: if true;
-      allow read, delete: if isOrgAdmin(request.resource.data.orgId);
-    }
-
+    // Admins can only be created/edited by owners
     match /admins/{uid} {
-      allow read, write: if isOrgAdmin(request.resource.data.orgId);
+      allow read: if isAdmin();
+      allow write: if isRole(['owner']);
     }
 
+    // Events can be created by anyone, read by admins
     match /events/{eventId} {
-      allow create: if true;
-      allow read: if isOrgMember(request.resource.data.orgId);
-      allow write: if isOrgAdmin(request.resource.data.orgId);
+      allow read: if isRole(['owner', 'admin']);
+      allow create: if hasOnly(['type', 'entityType', 'entityId', 'metadata', 'createdAt']);
     }
-
+    
+    // Default deny all other paths
     match /{document=**} {
       allow read, write: if false;
     }

@@ -1,76 +1,58 @@
-import * as functions from "firebase-functions";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { createHash } from "crypto";
-import { Application } from "../../../../packages/types/src";
+import { firestore } from 'firebase-functions';
+import * as admin from 'firebase-admin';
 
-// Placeholder for a function that calls an AI model to generate a summary.
-async function generateAiSummary(application: Application): Promise<string> {
-  try {
-    const summary = `AI Summary for ${application.applicantEmail}: This is a placeholder summary.`;
-    return Promise.resolve(summary);
-  } catch (error) {
-    functions.logger.error("AI summary generation failed", { error });
-    return "AI summary could not be generated."; // Fallback summary
-  }
-}
+admin.initializeApp();
 
-export const onCreate = functions.firestore
-  .document("orgs/{orgId}/applications/{applicationId}")
-  .onCreate(async (snap, context) => {
-    const { orgId, applicationId } = context.params;
-    const db = getFirestore();
-    const application = snap.data() as Application;
+export const onApplicationCreate = firestore.document('/orgs/{orgId}/applications/{applicationId}').onCreate(async (snap, context) => {
+  const { orgId, applicationId } = context.params;
+  const applicationData = snap.data();
 
-    const batch = db.batch();
+  const db = admin.firestore();
 
-    // 1. Generate AI Summary
-    const summary = await generateAiSummary(application);
-    batch.update(snap.ref, { "internal.aiSummary": summary });
-
-    // 2. Create or merge applicant
-    const email = application.applicantEmail.toLowerCase();
-    // Create an org-specific applicant ID to prevent cross-org data leakage
-    const applicantId = createHash("sha256").update(`${orgId}_${email}`).digest("hex");
-
-    const applicantRef = db.collection("orgs").doc(orgId).collection("applicants").doc(applicantId);
-    const applicantSnap = await applicantRef.get();
-
-    if (applicantSnap.exists) {
-      batch.update(applicantRef, { lastActivityAt: FieldValue.serverTimestamp() });
+  // Create or update applicant
+  let applicantId = applicationData.applicantId;
+  if (!applicantId) {
+    const applicantRef = db.collection('orgs').doc(orgId).collection('applicants');
+    const applicantQuery = await applicantRef.where('primaryEmail', '==', applicationData.applicantEmail).limit(1).get();
+    if (applicantQuery.empty) {
+      const newApplicant = {
+        primaryEmail: applicationData.applicantEmail,
+        name: applicationData.name,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      const newApplicantRef = await applicantRef.add(newApplicant);
+      applicantId = newApplicantRef.id;
     } else {
-      batch.set(applicantRef, {
-        primaryEmail: email,
-        name: "", // Name should be part of the applicant profile, not application answers
-        lastActivityAt: FieldValue.serverTimestamp(),
-        createdAt: FieldValue.serverTimestamp(),
-        source: application.source,
-      });
+      const applicantDoc = applicantQuery.docs[0];
+      applicantId = applicantDoc.id;
+      await applicantDoc.ref.update({ lastActivityAt: admin.firestore.FieldValue.serverTimestamp() });
     }
-    // Ensure the application document has the correct applicantId
-    batch.update(snap.ref, { applicantId });
+    await snap.ref.update({ applicantId });
+  }
 
-    // 3. Write event entry
-    const eventRef = db.collection("orgs").doc(orgId).collection("events").doc();
-    batch.set(eventRef, {
-      type: "application_submitted",
-      entityType: "application",
-      entityId: applicationId,
-      metadata: { jobId: application.jobId },
-      createdAt: FieldValue.serverTimestamp(),
-    });
+  // Create event
+  const eventRef = db.collection('orgs').doc(orgId).collection('events');
+  const event = {
+    type: 'application_submitted',
+    entityType: 'application',
+    entityId: applicationId,
+    metadata: { ...applicationData },
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  await eventRef.add(event);
 
-    // 4. Increment job stats
-    const jobRef = db.collection("orgs").doc(orgId).collection("jobs").doc(application.jobId);
-    batch.update(jobRef, {
-      "stats.applicantsCount": FieldValue.increment(1),
-      [`stats.statusCounts.NEW`]: FieldValue.increment(1),
-    });
-
-    // 5. Handle referral
-    if (application.source?.type === "referral" && application.source?.refCode) {
-      const referralRef = db.collection("orgs").doc(orgId).collection("referrals").doc(application.source.refCode);
-      batch.update(referralRef, { submitsCount: FieldValue.increment(1) });
-    }
-
-    await batch.commit();
+  // Update job stats
+  const jobRef = db.collection('orgs').doc(orgId).collection('jobs').doc(applicationData.jobId);
+  await jobRef.update({
+    'stats.applicantsCount': admin.firestore.FieldValue.increment(1),
+    [`stats.statusCounts.${applicationData.status}`]: admin.firestore.FieldValue.increment(1),
   });
+
+  // Update referral stats
+  if (applicationData.source?.type === 'referral' && applicationData.source?.refCode) {
+    const referralRef = db.collection('orgs').doc(orgId).collection('referrals').doc(applicationData.source.refCode);
+    await referralRef.update({ submitsCount: admin.firestore.FieldValue.increment(1) });
+  }
+});
