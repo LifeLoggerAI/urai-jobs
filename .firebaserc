@@ -1,8 +1,5 @@
 {
   "projects": {
-    "default": "urai-4dc1d",
-    "jobs": "urai-4dc1d"
-  },
-  "targets": {},
-  "etags": {}
+    "default": "urai-jobs-dev"
+  }
 }
