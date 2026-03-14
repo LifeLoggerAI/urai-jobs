@@ -1,79 +1,42 @@
-import * as admin from "firebase-admin";
 import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
 
 const db = admin.firestore();
 
 export const processJob = functions.firestore
-    .document("jobs/{jobId}")
-    .onCreate(async (snap, context) => {
-        const job = snap.data();
-        const { jobId } = context.params;
+  .document("jobs/{jobId}")
+  .onCreate(async (snap, context) => {
+    const { jobId } = context.params;
+    const job = snap.data();
 
-        // Update status to processing
-        await snap.ref.update({ status: "processing" });
+    if (!job) {
+      functions.logger.error(`Job data not found for job ${jobId}`);
+      return;
+    }
 
-        functions.logger.info(`Processing job`, { jobId, job });
+    try {
+      // 1. Update status to "processing"
+      await db.collection("jobs").doc(jobId).update({ status: "processing" });
+      functions.logger.info(`Job ${jobId} status updated to processing`);
 
-        // Log job start
-        await db.collection("jobLogs").add({
-            jobId,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            stage: "processing",
-            message: `Job ${jobId} started`,
-        });
+      // 2. Simulate work
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-        try {
-            // Simulate job execution based on type
-            let resultData;
-            switch (job.type) {
-                case "data_enrichment":
-                    resultData = { ...job.payload, enriched: true };
-                    break;
-                case "ai_analysis":
-                    resultData = { ...job.payload, analysis: "completed" };
-                    break;
-                case "asset_generation":
-                    resultData = { ...job.payload, assetUrl: "https://example.com/asset.png" };
-                    break;
-                case "analytics_aggregation":
-                    resultData = { ...job.payload, aggregation: "done" };
-                    break;
-                default:
-                    throw new Error(`Unknown job type: ${job.type}`);
-            }
+      // 3. Update status to "completed"
+      await db.collection("jobs").doc(jobId).update({ status: "completed" });
+      functions.logger.info(`Job ${jobId} status updated to completed`);
 
-            // Store result, which will trigger the verifyJob function
-            await db.collection("jobResults").doc(jobId).set({
-                jobId,
-                resultData,
-                completedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
+      // 4. Write to jobResults collection
+      await db.collection("jobResults").doc(jobId).set({
+        jobId,
+        status: "completed",
+        result: "Job completed successfully",
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      functions.logger.info(`Job result for ${jobId} written to jobResults`);
 
-            functions.logger.info(`Job processing finished, result stored for verification.`, { jobId });
-
-            // Log successful processing
-            await db.collection("jobLogs").add({
-                jobId,
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                stage: "processing_success",
-                message: `Job ${jobId} processing finished successfully, awaiting verification.`,
-            });
-        } catch (error) {
-            functions.logger.error(`Error processing job`, { jobId, error, job });
-
-            // Update job status to failed
-            await snap.ref.update({
-                status: "failed",
-                error: error.message,
-            });
-
-            // Log job failure
-            await db.collection("jobLogs").add({
-                jobId,
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                stage: "failed",
-                message: `Job ${jobId} failed during processing`,
-                errorStack: error.stack,
-            });
-        }
-    });
+    } catch (error) {
+      functions.logger.error(`Error processing job ${jobId}:`, error);
+      await db.collection("jobs").doc(jobId).update({ status: "failed" });
+    }
+  });
