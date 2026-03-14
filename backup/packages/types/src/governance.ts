@@ -1,8 +1,0 @@
-import { Timestamp } from 'firebase/firestore';
-
-export type AdminRole = 'owner' | 'admin' | 'reviewer';
-
-export interface Admin {
-  role: AdminRole;
-  createdAt: Timestamp;
-}

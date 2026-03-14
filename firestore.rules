@@ -2,21 +2,43 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Lock down all access by default
+    // Default deny all reads and writes
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Allow authenticated users to read and create jobs
-    match /jobs/{jobId} {
-      allow read, create: if request.auth != null;
-      allow update: if request.auth.token.serviceAccount == true;
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Allow only service accounts to write to jobResults
-    match /jobResults/{jobId} {
-      allow read, write: if request.auth.token.serviceAccount == true;
+    match /candidateProfiles/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /employerProfiles/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /jobs/{jobId} {
+      allow read;
+      allow create: if request.auth != null && request.resource.data.employerId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.employerId == request.auth.uid;
+
+      match /applications/{applicationId} {
+        allow create: if request.auth != null;
+        allow read: if request.auth != null && (get(/databases/$(database)/documents/jobs/$(jobId)).data.employerId == request.auth.uid || resource.data.applicantId == request.auth.uid);
+        allow update: if request.auth != null && get(/databases/$(database)/documents/jobs/$(jobId)).data.employerId == request.auth.uid;
+        allow delete: if request.auth != null && resource.data.applicantId == request.auth.uid;
+      }
+    }
+
+    match /messages/{messageId} {
+      allow create: if request.auth != null && request.resource.data.from == request.auth.uid;
+      allow read: if request.auth != null && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+    }
+
+    match /notifications/{notificationId} {
+      allow read, update: if request.auth != null && resource.data.userId == request.auth.uid;
     }
   }
 }
