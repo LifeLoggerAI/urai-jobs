@@ -2,12 +2,13 @@
   "name": "urai-jobs",
   "version": "1.0.0",
   "scripts": {
-    "lint": "npm run lint -w functions",
-    "build": "npm run build -w functions",
-    "serve": "firebase emulators:start --only functions",
+    "lint": "npm run lint -w functions && npm run lint -w web",
+    "build": "npm run build -w functions && npm run build -w web",
+    "serve": "firebase emulators:start --only functions,hosting",
     "dev": "firebase emulators:start"
   },
   "workspaces": [
-    "functions"
+    "functions",
+    "web"
   ]
 }

@@ -1,6 +1,9 @@
+
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { rateLimiter } from "firebase-functions-rate-limiter";
+import * as yup from "yup";
+import { recommendJobs, resumeParser, aiJobMatcher } from "./ai";
 
 admin.initializeApp();
 
@@ -9,13 +12,24 @@ const limiter = rateLimiter({
   periodSeconds: 3600,
 });
 
+const createUserSchema = yup.object({
+  email: yup.string().email().required(),
+  password: yup.string().min(8).required(),
+  displayName: yup.string().required(),
+  photoURL: yup.string().url(),
+  userType: yup.string().oneOf(['candidate', 'employer']).required(),
+});
+
 export const createUser = functions.https.onCall(async (data, context) => {
   await limiter(context);
-  const { email, password, displayName, photoURL, userType } = data;
-
-  if (!userType || (userType !== 'candidate' && userType !== 'employer')) {
-    throw new functions.https.HttpsError('invalid-argument', 'The function must be called with a valid "userType" of "candidate" or "employer".');
+  
+  try {
+    await createUserSchema.validate(data);
+  } catch (error) {
+    throw new functions.https.HttpsError('invalid-argument', error.message);
   }
+
+  const { email, password, displayName, photoURL, userType } = data;
 
   try {
     const usersRef = admin.firestore().collection("users");
@@ -62,10 +76,22 @@ export const createUser = functions.https.onCall(async (data, context) => {
   }
 });
 
+const createJobSchema = yup.object({
+  title: yup.string().required(),
+  description: yup.string().required(),
+  company: yup.string().required(),
+});
+
 export const createJob = functions.https.onCall(async (data, context) => {
   await limiter(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "You must be logged in to create a job.");
+  }
+
+  try {
+    await createJobSchema.validate(data);
+  } catch (error) {
+    throw new functions.https.HttpsError('invalid-argument', error.message);
   }
 
   const { title, description, company } = data;
@@ -85,8 +111,20 @@ export const createJob = functions.https.onCall(async (data, context) => {
   }
 });
 
+const getJobsSchema = yup.object({
+  query: yup.string(),
+  company: yup.string(),
+  location: yup.string(),
+});
+
 export const getJobs = functions.https.onCall(async (data, context) => {
   await limiter(context);
+  try {
+    await getJobsSchema.validate(data);
+  } catch (error) {
+    throw new functions.https.HttpsError('invalid-argument', error.message);
+  }
+
   const { query, company, location } = data;
   let jobsQuery = admin.firestore().collection("jobs").orderBy("createdAt", "desc");
 
@@ -109,10 +147,21 @@ export const getJobs = functions.https.onCall(async (data, context) => {
   }
 });
 
+const applyForJobSchema = yup.object({
+  jobId: yup.string().required(),
+  coverLetter: yup.string().required(),
+});
+
 export const applyForJob = functions.https.onCall(async (data, context) => {
   await limiter(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "You must be logged in to apply for a job.");
+  }
+  
+  try {
+    await applyForJobSchema.validate(data);
+  } catch (error) {
+    throw new functions.https.HttpsError('invalid-argument', error.message);
   }
 
   const { jobId, coverLetter } = data;
@@ -155,10 +204,23 @@ export const applyForJob = functions.https.onCall(async (data, context) => {
   }
 });
 
+const updateJobSchema = yup.object({
+  jobId: yup.string().required(),
+  title: yup.string(),
+  description: yup.string(),
+  company: yup.string(),
+});
+
 export const updateJob = functions.https.onCall(async (data, context) => {
   await limiter(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "You must be logged in to update a job.");
+  }
+  
+  try {
+    await updateJobSchema.validate(data);
+  } catch (error) {
+    throw new functions.https.HttpsError('invalid-argument', error.message);
   }
 
   const { jobId, ...jobData } = data;
@@ -184,18 +246,25 @@ export const updateJob = functions.https.onCall(async (data, context) => {
   }
 });
 
+const uploadResumeSchema = yup.object({
+  fileContent: yup.string().required(),
+  fileName: yup.string().required(),
+});
+
 export const uploadResume = functions.https.onCall(async (data, context) => {
   await limiter(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "You must be logged in to upload a resume.");
   }
 
+  try {
+    await uploadResumeSchema.validate(data);
+  } catch (error) {
+    throw new functions.https.HttpsError('invalid-argument', error.message);
+  }
+
   const { fileContent, fileName } = data;
   const userId = context.auth.uid;
-
-  if (!fileContent || !fileName) {
-    throw new functions.https.HttpsError("invalid-argument", "The function must be called with a fileContent and fileName.");
-  }
 
   const userDoc = await admin.firestore().collection("users").doc(userId).get();
   if (userDoc.data()?.userType !== 'candidate') {
@@ -219,10 +288,20 @@ export const uploadResume = functions.https.onCall(async (data, context) => {
   }
 });
 
+const getApplicationsSchema = yup.object({
+  jobId: yup.string().required(),
+});
+
 export const getApplications = functions.https.onCall(async (data, context) => {
   await limiter(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "You must be logged in to view applications.");
+  }
+
+  try {
+    await getApplicationsSchema.validate(data);
+  } catch (error) {
+    throw new functions.https.HttpsError('invalid-argument', error.message);
   }
 
   const { jobId } = data;
@@ -250,10 +329,22 @@ export const getApplications = functions.https.onCall(async (data, context) => {
   }
 });
 
+const updateApplicationStatusSchema = yup.object({
+  jobId: yup.string().required(),
+  applicationId: yup.string().required(),
+  status: yup.string().oneOf(['submitted', 'reviewed', 'rejected', 'hired']).required(),
+});
+
 export const updateApplicationStatus = functions.https.onCall(async (data, context) => {
   await limiter(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "You must be logged in to update an application.");
+  }
+
+  try {
+    await updateApplicationStatusSchema.validate(data);
+  } catch (error) {
+    throw new functions.https.HttpsError('invalid-argument', error.message);
   }
 
   const { jobId, applicationId, status } = data;
@@ -281,31 +372,21 @@ export const updateApplicationStatus = functions.https.onCall(async (data, conte
   }
 });
 
-export const jobRecommendationEngine = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {
-  console.log('Running job recommendation engine...');
-  // In a real implementation, this would query candidates and jobs, and generate recommendations.
-  return null;
-});
-
-export const resumeParser = functions.storage.object().onFinalize(async (object) => {
-  const { name, bucket } = object;
-  console.log(`File ${name} uploaded to ${bucket}.`);
-  // In a real implementation, this would parse the resume and extract skills.
-  return null;
-});
-
-export const aiJobMatcher = functions.https.onCall(async (data, context) => {
-  await limiter(context);
-  const { jobId } = data;
-  console.log(`Matching candidates for job ${jobId}...`);
-  // In a real implementation, this would find the best candidates for the job.
-  return { success: true };
+const sendMessageSchema = yup.object({
+  to: yup.string().required(),
+  content: yup.string().required(),
 });
 
 export const sendMessage = functions.https.onCall(async (data, context) => {
   await limiter(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "You must be logged in to send a message.");
+  }
+
+  try {
+    await sendMessageSchema.validate(data);
+  } catch (error) {
+    throw new functions.https.HttpsError('invalid-argument', error.message);
   }
 
   const { to, content } = data;
@@ -325,10 +406,21 @@ export const sendMessage = functions.https.onCall(async (data, context) => {
   }
 });
 
+const createNotificationSchema = yup.object({
+  userId: yup.string().required(),
+  message: yup.string().required(),
+});
+
 export const createNotification = functions.https.onCall(async (data, context) => {
   await limiter(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "You must be logged in to create a notification.");
+  }
+
+  try {
+    await createNotificationSchema.validate(data);
+  } catch (error) {
+    throw new functions.https.HttpsError('invalid-argument', error.message);
   }
 
   const { userId, message } = data;
@@ -346,3 +438,6 @@ export const createNotification = functions.https.onCall(async (data, context) =
     throw new functions.https.HttpsError("internal", "Error creating notification:", error);
   }
 });
+
+// AI Functions
+export { recommendJobs, resumeParser, aiJobMatcher };
