@@ -32,6 +32,7 @@ export const recommendJobs = functions.https.onCall(async (data, context) => {
   return jobs.docs.map(doc => doc.data());
 });
 
+/*
 // This function will be triggered when a new resume is uploaded to Firebase Storage.
 export const resumeParser = functions.storage.object().onFinalize(async (object) => {
   const { name, bucket } = object;
@@ -47,3 +48,4 @@ export const aiJobMatcher = functions.https.onCall(async (data, context) => {
     // In a real implementation, this would find the best candidates for the job.
     return { success: true };
 });
+*/

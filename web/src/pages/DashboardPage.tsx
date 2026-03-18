@@ -1,12 +1,12 @@
 import React from 'react';
-import RecommendedJobs from '../components/RecommendedJobs';
+import LatestJobs from '../components/LatestJobs';
 
 const DashboardPage: React.FC = () => {
   return (
     <div>
       <h1>Dashboard</h1>
       <p>Welcome to your dashboard!</p>
-      <RecommendedJobs />
+      <LatestJobs />
     </div>
   );
 };
