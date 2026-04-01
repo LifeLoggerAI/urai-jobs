@@ -1,48 +1,57 @@
-import React, { useState } from 'react';
-import { auth } from '../firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../firebase";
 
-const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
+export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from || "/jobs";
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError("");
+    setSubmitting(true);
     try {
-      if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
-    } catch (error) {
-      console.error(error);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+      navigate(from, { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setSubmitting(false);
     }
-  };
+  }
 
   return (
-    <div>
-      <h1>{isSignUp ? 'Sign Up' : 'Login'}</h1>
-      <form onSubmit={handleSubmit}>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <button type="submit">{isSignUp ? 'Sign Up' : 'Login'}</button>
-      </form>
-      <button onClick={() => setIsSignUp(!isSignUp)}>
-        {isSignUp ? 'Already have an account? Login' : 'Don\'t have an account? Sign Up'}
+    <form onSubmit={handleSubmit}>
+      <h1>Login</h1>
+      {error ? <p role="alert">{error}</p> : null}
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        autoComplete="email"
+        required
+        placeholder="Email"
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        autoComplete="current-password"
+        required
+        placeholder="Password"
+      />
+      <button type="submit" disabled={submitting}>
+        {submitting ? "Logging in..." : "Login"}
       </button>
-    </div>
+      <p>
+        Need an account? <Link to="/signup">Sign up</Link>
+      </p>
+    </form>
   );
-};
-
-export default LoginPage;
+}

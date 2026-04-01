@@ -1,443 +1,195 @@
-
-import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import { rateLimiter } from "firebase-functions-rate-limiter";
-import * as yup from "yup";
-import { recommendJobs, resumeParser, aiJobMatcher } from "./ai";
+import * as functions from "firebase-functions";
 
 admin.initializeApp();
+const db = admin.firestore();
 
-const limiter = rateLimiter({
-  maxCalls: 100,
-  periodSeconds: 3600,
-});
+// --- Canonical Write Path for Jobs ---
 
-const createUserSchema = yup.object({
-  email: yup.string().email().required(),
-  password: yup.string().min(8).required(),
-  displayName: yup.string().required(),
-  photoURL: yup.string().url(),
-  userType: yup.string().oneOf(['candidate', 'employer']).required(),
-});
+type CreateJobPayload = {
+  title: string;
+  company: string;
+  description: string;
+};
 
-export const createUser = functions.https.onCall(async (data, context) => {
-  await limiter(context);
-  
-  try {
-    await createUserSchema.validate(data);
-  } catch (error) {
-    throw new functions.https.HttpsError('invalid-argument', error.message);
-  }
-
-  const { email, password, displayName, photoURL, userType } = data;
-
-  try {
-    const usersRef = admin.firestore().collection("users");
-    const existingUser = await usersRef.where("email", "==", email).get();
-
-    if (!existingUser.empty) {
-      throw new functions.https.HttpsError("already-exists", "A user with this email address already exists.");
-    }
-
-    const userRecord = await admin.auth().createUser({
-      email,
-      password,
-      displayName,
-      photoURL,
-    });
-
-    const userDoc = {
-      email,
-      displayName,
-      photoURL,
-      userType,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-
-    await admin.firestore().collection("users").doc(userRecord.uid).set(userDoc);
-
-    if (userType === 'candidate') {
-      await admin.firestore().collection('candidateProfiles').doc(userRecord.uid).set({
-        userId: userRecord.uid,
-        resume: '',
-        skills: [],
-      });
-    } else if (userType === 'employer') {
-      await admin.firestore().collection('employerProfiles').doc(userRecord.uid).set({
-        userId: userRecord.uid,
-        companyName: '',
-        companyDescription: '',
-      });
-    }
-
-    return { uid: userRecord.uid };
-  } catch (error) {
-    throw new functions.https.HttpsError("internal", "Error creating user:", error);
-  }
-});
-
-const createJobSchema = yup.object({
-  title: yup.string().required(),
-  description: yup.string().required(),
-  company: yup.string().required(),
-});
-
-export const createJob = functions.https.onCall(async (data, context) => {
-  await limiter(context);
+export const createJob = functions.https.onCall(async (data: CreateJobPayload, context) => {
   if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "You must be logged in to create a job.");
+    throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   }
 
-  try {
-    await createJobSchema.validate(data);
-  } catch (error) {
-    throw new functions.https.HttpsError('invalid-argument', error.message);
+  const title = typeof data.title === "string" ? data.title.trim() : "";
+  const company = typeof data.company === "string" ? data.company.trim() : "";
+  const description = typeof data.description === "string" ? data.description.trim() : "";
+
+  if (!title || !description || !company) {
+    throw new functions.https.HttpsError("invalid-argument", "title, company, and description are required.");
   }
 
-  const { title, description, company } = data;
-
-  try {
-    const jobRef = await admin.firestore().collection("jobs").add({
-      title,
-      description,
-      company,
-      employerId: context.auth.uid,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    return { jobId: jobRef.id };
-  } catch (error) {
-    throw new functions.https.HttpsError("internal", "Error creating job:", error);
+  const userDoc = await db.collection("users").doc(context.auth.uid).get();
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError("not-found", "User profile not found.");
   }
+  const orgId = userDoc.data()?.orgId;
+  if (!orgId) {
+    throw new functions.https.HttpsError("failed-precondition", "User is not associated with an organization.");
+  }
+
+  const jobData = {
+    orgId,
+    ownerUid: context.auth.uid,
+    title,
+    company,
+    description,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  const jobRef = await db.collection("jobs").add(jobData);
+  return { id: jobRef.id };
 });
 
-const getJobsSchema = yup.object({
-  query: yup.string(),
-  company: yup.string(),
-  location: yup.string(),
-});
+type UpdateJobPayload = {
+  jobId: string;
+  title: string;
+  company: string;
+  description: string;
+};
 
-export const getJobs = functions.https.onCall(async (data, context) => {
-  await limiter(context);
-  try {
-    await getJobsSchema.validate(data);
-  } catch (error) {
-    throw new functions.https.HttpsError('invalid-argument', error.message);
-  }
-
-  const { query, company, location } = data;
-  let jobsQuery = admin.firestore().collection("jobs").orderBy("createdAt", "desc");
-
-  if (query) {
-    jobsQuery = jobsQuery.where("title", ">=", query).where("title", "<=", query + "\uf8ff");
-  }
-  if (company) {
-    jobsQuery = jobsQuery.where("company", "==", company);
-  }
-  if (location) {
-    jobsQuery = jobsQuery.where("location", "==", location);
-  }
-
-  try {
-    const snapshot = await jobsQuery.get();
-    const jobs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    return { jobs };
-  } catch (error) {
-    throw new functions.https.HttpsError("internal", "Error getting jobs:", error);
-  }
-});
-
-const applyForJobSchema = yup.object({
-  jobId: yup.string().required(),
-  coverLetter: yup.string().required(),
-});
-
-export const applyForJob = functions.https.onCall(async (data, context) => {
-  await limiter(context);
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "You must be logged in to apply for a job.");
-  }
-  
-  try {
-    await applyForJobSchema.validate(data);
-  } catch (error) {
-    throw new functions.https.HttpsError('invalid-argument', error.message);
-  }
-
-  const { jobId, coverLetter } = data;
-  const applicantId = context.auth.uid;
-
-  try {
-    const jobRef = admin.firestore().collection("jobs").doc(jobId);
-    const jobDoc = await jobRef.get();
-    if (!jobDoc.exists) {
-      throw new functions.https.HttpsError("not-found", "Job not found.");
+export const updateJob = functions.https.onCall(async (data: UpdateJobPayload, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
     }
 
-    const applicationRef = jobRef.collection("applications").doc(applicantId);
-
-    const applicationDoc = await applicationRef.get();
-    if (applicationDoc.exists) {
-      throw new functions.https.HttpsError("already-exists", "You have already applied for this job.");
+    const { jobId, title, company, description } = data;
+    if (!jobId || !title || !company || !description) {
+        throw new functions.https.HttpsError("invalid-argument", "jobId, title, company, and description are required.");
     }
 
-    await applicationRef.set({
-      applicantId,
-      coverLetter,
-      status: 'submitted',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    const employerId = jobDoc.data()?.employerId;
-    if (employerId) {
-      await admin.firestore().collection("notifications").add({
-        userId: employerId,
-        message: `You have a new application for your job: ${jobDoc.data()?.title}`,
-        isRead: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+    const userDoc = await db.collection("users").doc(context.auth.uid).get();
+    const orgId = userDoc.data()?.orgId;
+    if (!orgId) {
+        throw new functions.https.HttpsError("failed-precondition", "User is not associated with an organization.");
     }
 
-    return { applicationId: applicationRef.id };
-  } catch (error) {
-    throw new functions.https.HttpsError("internal", "Error applying for job:", error);
-  }
-});
-
-const updateJobSchema = yup.object({
-  jobId: yup.string().required(),
-  title: yup.string(),
-  description: yup.string(),
-  company: yup.string(),
-});
-
-export const updateJob = functions.https.onCall(async (data, context) => {
-  await limiter(context);
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "You must be logged in to update a job.");
-  }
-  
-  try {
-    await updateJobSchema.validate(data);
-  } catch (error) {
-    throw new functions.https.HttpsError('invalid-argument', error.message);
-  }
-
-  const { jobId, ...jobData } = data;
-  const employerId = context.auth.uid;
-
-  try {
-    const jobRef = admin.firestore().collection("jobs").doc(jobId);
+    const jobRef = db.collection("jobs").doc(jobId);
     const jobDoc = await jobRef.get();
 
     if (!jobDoc.exists) {
-      throw new functions.https.HttpsError("not-found", "Job not found.");
+        throw new functions.https.HttpsError("not-found", "Job not found.");
     }
 
-    if (jobDoc.data()?.employerId !== employerId) {
-      throw new functions.https.HttpsError("permission-denied", "You are not authorized to update this job.");
+    if (jobDoc.data()?.orgId !== orgId) {
+        throw new functions.https.HttpsError("permission-denied", "You do not have permission to edit this job.");
     }
 
-    await jobRef.update(jobData);
+    await jobRef.update({
+        title,
+        company,
+        description,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
-    return { success: true };
-  } catch (error) {
-    throw new functions.https.HttpsError("internal", "Error updating job:", error);
-  }
+    return { id: jobId };
 });
 
-const uploadResumeSchema = yup.object({
-  fileContent: yup.string().required(),
-  fileName: yup.string().required(),
-});
 
-export const uploadResume = functions.https.onCall(async (data, context) => {
-  await limiter(context);
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "You must be logged in to upload a resume.");
-  }
+type DeleteJobPayload = {
+  jobId: string;
+};
 
-  try {
-    await uploadResumeSchema.validate(data);
-  } catch (error) {
-    throw new functions.https.HttpsError('invalid-argument', error.message);
-  }
+export const deleteJob = functions.https.onCall(async (data: DeleteJobPayload, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+    }
 
-  const { fileContent, fileName } = data;
-  const userId = context.auth.uid;
+    const { jobId } = data;
+    if (!jobId) {
+        throw new functions.https.HttpsError("invalid-argument", "jobId is required.");
+    }
 
-  const userDoc = await admin.firestore().collection("users").doc(userId).get();
-  if (userDoc.data()?.userType !== 'candidate') {
-    throw new functions.https.HttpsError("permission-denied", "Only candidates can upload resumes.");
-  }
+    const userDoc = await db.collection("users").doc(context.auth.uid).get();
+    const orgId = userDoc.data()?.orgId;
+    if (!orgId) {
+        throw new functions.https.HttpsError("failed-precondition", "User is not associated with an organization.");
+    }
 
-  const bucket = admin.storage().bucket();
-  const filePath = `resumes/${userId}/${fileName}`;
-  const file = bucket.file(filePath);
-
-  try {
-    const buffer = Buffer.from(fileContent, "base64");
-    await file.save(buffer, { resumable: false });
-    const [url] = await file.getSignedUrl({ action: 'read', expires: '03-09-2491' });
-
-    await admin.firestore().collection('candidateProfiles').doc(userId).update({ resume: url });
-
-    return { resumeUrl: url };
-  } catch (error) {
-    throw new functions.https.HttpsError("internal", "Error uploading resume:", error);
-  }
-});
-
-const getApplicationsSchema = yup.object({
-  jobId: yup.string().required(),
-});
-
-export const getApplications = functions.https.onCall(async (data, context) => {
-  await limiter(context);
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "You must be logged in to view applications.");
-  }
-
-  try {
-    await getApplicationsSchema.validate(data);
-  } catch (error) {
-    throw new functions.https.HttpsError('invalid-argument', error.message);
-  }
-
-  const { jobId } = data;
-  const employerId = context.auth.uid;
-
-  const jobRef = admin.firestore().collection("jobs").doc(jobId);
-  const jobDoc = await jobRef.get();
-
-  if (!jobDoc.exists) {
-    throw new functions.https.HttpsError("not-found", "Job not found.");
-  }
-
-  if (jobDoc.data()?.employerId !== employerId) {
-    throw new functions.https.HttpsError("permission-denied", "You are not authorized to view these applications.");
-  }
-
-  const applicationsQuery = jobRef.collection("applications").orderBy("createdAt", "desc");
-
-  try {
-    const snapshot = await applicationsQuery.get();
-    const applications = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    return { applications };
-  } catch (error) {
-    throw new functions.https.HttpsError("internal", "Error getting applications:", error);
-  }
-});
-
-const updateApplicationStatusSchema = yup.object({
-  jobId: yup.string().required(),
-  applicationId: yup.string().required(),
-  status: yup.string().oneOf(['submitted', 'reviewed', 'rejected', 'hired']).required(),
-});
-
-export const updateApplicationStatus = functions.https.onCall(async (data, context) => {
-  await limiter(context);
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "You must be logged in to update an application.");
-  }
-
-  try {
-    await updateApplicationStatusSchema.validate(data);
-  } catch (error) {
-    throw new functions.https.HttpsError('invalid-argument', error.message);
-  }
-
-  const { jobId, applicationId, status } = data;
-  const employerId = context.auth.uid;
-
-  try {
-    const jobRef = admin.firestore().collection("jobs").doc(jobId);
+    const jobRef = db.collection("jobs").doc(jobId);
     const jobDoc = await jobRef.get();
 
     if (!jobDoc.exists) {
-      throw new functions.https.HttpsError("not-found", "Job not found.");
+        throw new functions.https.HttpsError("not-found", "Job not found.");
     }
 
-    if (jobDoc.data()?.employerId !== employerId) {
-      throw new functions.https.HttpsError("permission-denied", "You are not authorized to update this application.");
+    if (jobDoc.data()?.orgId !== orgId) {
+        throw new functions.https.HttpsError("permission-denied", "You do not have permission to delete this job.");
     }
 
-    const applicationRef = jobRef.collection("applications").doc(applicationId);
+    await jobRef.delete();
 
-    await applicationRef.update({ status });
-
-    return { success: true };
-  } catch (error) {
-    throw new functions.https.HttpsError("internal", "Error updating application status:", error);
-  }
+    return { id: jobId };
 });
 
-const sendMessageSchema = yup.object({
-  to: yup.string().required(),
-  content: yup.string().required(),
-});
 
-export const sendMessage = functions.https.onCall(async (data, context) => {
-  await limiter(context);
+// --- Existing Application Submission Function ---
+
+type SubmitApplicationPayload = {
+  jobId: string;
+  resumeUrl?: string | null;
+};
+
+export const submitApplication = functions.https.onCall(async (data: SubmitApplicationPayload, context) => {
   if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "You must be logged in to send a message.");
+    throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   }
 
-  try {
-    await sendMessageSchema.validate(data);
-  } catch (error) {
-    throw new functions.https.HttpsError('invalid-argument', error.message);
+  const jobId = typeof data?.jobId === "string" ? data.jobId.trim() : "";
+  if (!jobId) {
+    throw new functions.https.HttpsError("invalid-argument", "jobId is required.");
   }
 
-  const { to, content } = data;
-  const from = context.auth.uid;
+  const existing = await db
+    .collection("applications")
+    .where("userId", "==", context.auth.uid)
+    .where("jobId", "==", jobId)
+    .limit(1)
+    .get();
 
-  try {
-    const messageRef = await admin.firestore().collection("messages").add({
-      from,
-      to,
-      content,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    return { messageId: messageRef.id };
-  } catch (error) {
-    throw new functions.https.HttpsError("internal", "Error sending message:", error);
+  if (!existing.empty) {
+    return { id: existing.docs[0].id, duplicate: true };
   }
+
+  const created = await db.collection("applications").add({
+    userId: context.auth.uid,
+    jobId,
+    resumeUrl: typeof data?.resumeUrl === "string" ? data.resumeUrl.trim() : null,
+    status: "submitted",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return { id: created.id, duplicate: false };
 });
 
-const createNotificationSchema = yup.object({
-  userId: yup.string().required(),
-  message: yup.string().required(),
-});
 
-export const createNotification = functions.https.onCall(async (data, context) => {
-  await limiter(context);
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "You must be logged in to create a notification.");
-  }
+// --- DEPRECATED VALIDATOR (LOGIC MOVED TO CALLABLES) ---
+// This can be removed or kept for data backfills if needed.
 
-  try {
-    await createNotificationSchema.validate(data);
-  } catch (error) {
-    throw new functions.https.HttpsError('invalid-argument', error.message);
-  }
+export const validateJobWrite = functions.firestore
+  .document("jobs/{jobId}")
+  .onWrite(async (change) => {
+    const after = change.after.exists ? change.after.data() : null;
+    if (!after || after.validatedAt) {
+      return;
+    }
 
-  const { userId, message } = data;
+    const title = typeof after.title === "string" ? after.title.trim() : "";
+    const description = typeof after.description === "string" ? after.description.trim() : "";
 
-  try {
-    const notificationRef = await admin.firestore().collection("notifications").add({
-      userId,
-      message,
-      isRead: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    return { notificationId: notificationRef.id };
-  } catch (error) {
-    throw new functions.https.HttpsError("internal", "Error creating notification:", error);
-  }
-});
-
-// AI Functions
-export { recommendJobs, resumeParser, aiJobMatcher };
+    if (!title || !description) {
+      await change.after.ref.update({
+        invalid: true,
+        validationError: "title and description are required",
+        validatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+  });

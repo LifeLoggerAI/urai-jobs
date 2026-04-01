@@ -1,11 +1,17 @@
 rules_version = '2';
-
 service firebase.storage {
   match /b/{bucket}/o {
-    match /resumes/{userId}/{fileName} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
-      allow delete: if false;
+    // By default, disallow all reads and writes
+    // All storage access should be done via getDownloadURL() from a secure backend
+    // or with fine-grained rules for user-specific content.
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
+
+    // Example for user-specific files (e.g. resumes)
+    // match /users/{userId}/{fileName} {
+    //   allow write: if request.auth.uid == userId;
+    //   allow read: if request.auth.uid == userId;
+    // }
   }
 }

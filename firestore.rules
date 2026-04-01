@@ -1,59 +1,56 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isAuthenticated() {
+
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    function isUser(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    // Get user's orgId from their user profile document
+    function getOrgId(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data.orgId;
     }
 
-    function isEmployer() {
-      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'employer';
+    // Check if a user belongs to the same org as a resource
+    function isInOrg(resource) {
+      let uid = request.auth.uid;
+      let userOrgId = getOrgId(uid);
+      let resourceOrgId = resource.data.orgId;
+      return userOrgId == resourceOrgId;
     }
 
-    function isCandidate() {
-      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'candidate';
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
-    }
+    // --- COLLECTIONS ---
 
     match /users/{userId} {
-      allow read, write: if isUser(userId);
+      // Users can read and write their own profile
+      allow read, write: if request.auth.uid == userId;
     }
 
-    match /candidateProfiles/{userId} {
-      allow read, write: if isUser(userId) && isCandidate();
-    }
-
-    match /employerProfiles/{userId} {
-      allow read, write: if isUser(userId) && isEmployer();
+    match /orgs/{orgId} {
+       // Only users within an org can read its details
+      allow read: if isSignedIn() && getOrgId(request.auth.uid) == orgId;
+      // Org creation/mutation must be handled by backend functions
+      allow write: if false;
     }
 
     match /jobs/{jobId} {
-      allow read;
-      allow create: if isEmployer();
-      allow update, delete: if isEmployer() && resource.data.employerId == request.auth.uid;
-
-      match /applications/{applicationId} {
-        allow create: if isCandidate();
-        allow read: if (isEmployer() && get(/databases/$(database)/documents/jobs/$(jobId)).data.employerId == request.auth.uid) || (isCandidate() && resource.data.applicantId == request.auth.uid);
-        allow update: if isEmployer() && get(/databases/$(database)/documents/jobs/$(jobId)).data.employerId == request.auth.uid;
-        allow delete: if isCandidate() && resource.data.applicantId == request.auth.uid;
-      }
+      // Allow public reads for job boards, but enforce org-level reads for dashboards
+      allow read: if true;
+      // ALL job writes must go through backend callable functions. NO client writes.
+      allow write: if false;
     }
 
-    match /messages/{messageId} {
-      allow create: if isAuthenticated() && request.resource.data.from == request.auth.uid;
-      allow read: if isAuthenticated() && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
-    }
+    match /applications/{applicationId} {
+      // Users can only create applications for themselves
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
 
-    match /notifications/{notificationId} {
-      allow read, update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Users can read their own applications.
+      // Org owners/admins would need a backend function to read all applications for a job.
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if false;
     }
   }
 }
