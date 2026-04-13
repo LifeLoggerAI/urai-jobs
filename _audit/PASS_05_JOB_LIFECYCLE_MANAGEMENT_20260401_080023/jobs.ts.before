@@ -49,3 +49,23 @@ export async function deleteJob(params: DeleteJobParams): Promise<void> {
   const deleteJobCallable = httpsCallable(functions, 'deleteJob');
   await deleteJobCallable(params);
 }
+
+interface UpdateJobParams {
+    jobId: string;
+    title: string;
+    description: string;
+}
+
+export async function updateJob(params: UpdateJobParams): Promise<void> {
+  const updateJobCallable = httpsCallable(functions, 'updateJob');
+  await updateJobCallable(params);
+}
+
+interface DeleteJobParams {
+    jobId: string;
+}
+
+export async function deleteJob(params: DeleteJobParams): Promise<void> {
+  const deleteJobCallable = httpsCallable(functions, 'deleteJob');
+  await deleteJobCallable(params);
+}

@@ -5,8 +5,6 @@ import JobBoard from "./pages/JobBoard";
 import JobDetail from "./pages/JobDetail";
 import Apply from "./pages/Apply";
 import CreateJobPage from "./pages/CreateJobPage";
-import CreateJobPage from "./pages/CreateJobPage";
-import CreateJobPage from "./pages/CreateJobPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 
@@ -22,8 +20,6 @@ export default function App() {
           <Route path="/jobs/:jobId" element={<JobDetail />} />
           <Route
             path="/jobs/:jobId/apply"
-          <Route path="/jobs/new" element={<ProtectedRoute><CreateJobPage /></ProtectedRoute>} />
-          <Route path="/jobs/new" element={<ProtectedRoute><CreateJobPage /></ProtectedRoute>} />
           <Route path="/jobs/new" element={<ProtectedRoute><CreateJobPage /></ProtectedRoute>} />
             element={
               <ProtectedRoute>

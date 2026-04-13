@@ -47,108 +47,149 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.listJobs = listJobs;
+exports.getJobs = getJobs;
 exports.getJob = getJob;
 exports.createJob = createJob;
 exports.updateJob = updateJob;
 exports.deleteJob = deleteJob;
+exports.updateJob = updateJob;
+exports.deleteJob = deleteJob;
+exports.updateJob = updateJob;
+exports.deleteJob = deleteJob;
 var firestore_1 = require("firebase/firestore");
-var firebase_1 = require("../firebase");
-var jobsRef = (0, firestore_1.collection)(firebase_1.db, "jobs");
-function listJobs() {
-    return __awaiter(this, arguments, void 0, function (max) {
-        var q, snap;
-        if (max === void 0) { max = 25; }
+var firebase_1 = require("./firebase"); // Assumes db is exported from firebase.ts
+var functions_1 = require("firebase/functions");
+var functions = (0, functions_1.getFunctions)();
+function getJobs() {
+    return __awaiter(this, void 0, void 0, function () {
+        var querySnapshot;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0: return [4 /*yield*/, (0, firestore_1.getDocs)((0, firestore_1.collection)(firebase_1.db, "jobs"))];
+                case 1:
+                    querySnapshot = _a.sent();
+                    return [2 /*return*/, querySnapshot.docs.map(function (doc) { return (__assign({ id: doc.id }, doc.data())); })];
+            }
+        });
+    });
+}
+function getJob(id) {
+    return __awaiter(this, void 0, void 0, function () {
+        var docRef, docSnap;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    q = (0, firestore_1.query)(jobsRef, (0, firestore_1.orderBy)("createdAt", "desc"), (0, firestore_1.limit)(max));
-                    return [4 /*yield*/, (0, firestore_1.getDocs)(q)];
+                    docRef = (0, firestore_1.doc)(firebase_1.db, "jobs", id);
+                    return [4 /*yield*/, (0, firestore_1.getDoc)(docRef)];
                 case 1:
-                    snap = _a.sent();
-                    return [2 /*return*/, snap.docs.map(function (d) { return (__assign({ id: d.id }, d.data())); })];
+                    docSnap = _a.sent();
+                    if (docSnap.exists()) {
+                        return [2 /*return*/, __assign({ id: docSnap.id }, docSnap.data())];
+                    }
+                    return [2 /*return*/, null];
             }
         });
     });
 }
-function getJob(jobId) {
+function createJob(params) {
     return __awaiter(this, void 0, void 0, function () {
-        var snap;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
-                case 0: return [4 /*yield*/, (0, firestore_1.getDoc)((0, firestore_1.doc)(firebase_1.db, "jobs", jobId))];
-                case 1:
-                    snap = _a.sent();
-                    if (!snap.exists())
-                        return [2 /*return*/, null];
-                    return [2 /*return*/, __assign({ id: snap.id }, snap.data())];
-            }
-        });
-    });
-}
-function createJob(input) {
-    return __awaiter(this, void 0, void 0, function () {
-        var ref;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
-                case 0: return [4 /*yield*/, (0, firestore_1.addDoc)(jobsRef, {
-                        ownerUid: input.ownerUid,
-                        title: input.title.trim(),
-                        company: input.company.trim(),
-                        description: input.description.trim(),
-                        createdAt: (0, firestore_1.serverTimestamp)(),
-                        updatedAt: (0, firestore_1.serverTimestamp)()
-                    })];
-                case 1:
-                    ref = _a.sent();
-                    return [2 /*return*/, ref.id];
-            }
-        });
-    });
-}
-function updateJob(jobId, ownerUid, input) {
-    return __awaiter(this, void 0, void 0, function () {
-        var ref, snap;
+        var createJobCallable;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    ref = (0, firestore_1.doc)(firebase_1.db, "jobs", jobId);
-                    return [4 /*yield*/, (0, firestore_1.getDoc)(ref)];
+                    createJobCallable = (0, functions_1.httpsCallable)(functions, 'createJob');
+                    return [4 /*yield*/, createJobCallable(params)];
                 case 1:
-                    snap = _a.sent();
-                    if (!snap.exists())
-                        throw new Error("Job not found");
-                    if (snap.data().ownerUid !== ownerUid)
-                        throw new Error("Unauthorized");
-                    return [4 /*yield*/, (0, firestore_1.updateDoc)(ref, {
-                            title: input.title.trim(),
-                            company: input.company.trim(),
-                            description: input.description.trim(),
-                            updatedAt: (0, firestore_1.serverTimestamp)()
-                        })];
-                case 2:
                     _a.sent();
                     return [2 /*return*/];
             }
         });
     });
 }
-function deleteJob(jobId, ownerUid) {
+function updateJob(params) {
     return __awaiter(this, void 0, void 0, function () {
-        var ref, snap;
+        var updateJobCallable;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    ref = (0, firestore_1.doc)(firebase_1.db, "jobs", jobId);
-                    return [4 /*yield*/, (0, firestore_1.getDoc)(ref)];
+                    updateJobCallable = (0, functions_1.httpsCallable)(functions, 'updateJob');
+                    return [4 /*yield*/, updateJobCallable(params)];
                 case 1:
-                    snap = _a.sent();
-                    if (!snap.exists())
-                        throw new Error("Job not found");
-                    if (snap.data().ownerUid !== ownerUid)
-                        throw new Error("Unauthorized");
-                    return [4 /*yield*/, (0, firestore_1.deleteDoc)(ref)];
-                case 2:
+                    _a.sent();
+                    return [2 /*return*/];
+            }
+        });
+    });
+}
+function deleteJob(params) {
+    return __awaiter(this, void 0, void 0, function () {
+        var deleteJobCallable;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    deleteJobCallable = (0, functions_1.httpsCallable)(functions, 'deleteJob');
+                    return [4 /*yield*/, deleteJobCallable(params)];
+                case 1:
+                    _a.sent();
+                    return [2 /*return*/];
+            }
+        });
+    });
+}
+function updateJob(params) {
+    return __awaiter(this, void 0, void 0, function () {
+        var updateJobCallable;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    updateJobCallable = (0, functions_1.httpsCallable)(functions, 'updateJob');
+                    return [4 /*yield*/, updateJobCallable(params)];
+                case 1:
+                    _a.sent();
+                    return [2 /*return*/];
+            }
+        });
+    });
+}
+function deleteJob(params) {
+    return __awaiter(this, void 0, void 0, function () {
+        var deleteJobCallable;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    deleteJobCallable = (0, functions_1.httpsCallable)(functions, 'deleteJob');
+                    return [4 /*yield*/, deleteJobCallable(params)];
+                case 1:
+                    _a.sent();
+                    return [2 /*return*/];
+            }
+        });
+    });
+}
+function updateJob(params) {
+    return __awaiter(this, void 0, void 0, function () {
+        var updateJobCallable;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    updateJobCallable = (0, functions_1.httpsCallable)(functions, 'updateJob');
+                    return [4 /*yield*/, updateJobCallable(params)];
+                case 1:
+                    _a.sent();
+                    return [2 /*return*/];
+            }
+        });
+    });
+}
+function deleteJob(params) {
+    return __awaiter(this, void 0, void 0, function () {
+        var deleteJobCallable;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    deleteJobCallable = (0, functions_1.httpsCallable)(functions, 'deleteJob');
+                    return [4 /*yield*/, deleteJobCallable(params)];
+                case 1:
                     _a.sent();
                     return [2 /*return*/];
             }

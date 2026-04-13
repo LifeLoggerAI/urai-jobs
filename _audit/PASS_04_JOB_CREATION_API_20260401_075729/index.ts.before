@@ -168,3 +168,70 @@ export const submitApplication = functions.https.onCall(async (data: SubmitAppli
 
   return { id: created.id, duplicate: false };
 });
+
+
+// --- DEPRECATED VALIDATOR (LOGIC MOVED TO CALLABLES) ---
+// This can be removed or kept for data backfills if needed.
+
+export const validateJobWrite = functions.firestore
+  .document("jobs/{jobId}")
+  .onWrite(async (change) => {
+    const after = change.after.exists ? change.after.data() : null;
+    if (!after || after.validatedAt) {
+      return;
+    }
+
+    const title = typeof after.title === "string" ? after.title.trim() : "";
+    const description = typeof after.description === "string" ? after.description.trim() : "";
+
+    if (!title || !description) {
+      await change.after.ref.update({
+        invalid: true,
+        validationError: "title and description are required",
+        validatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+  });
+
+export const createJob = https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new https.HttpsError("unauthenticated", "Must be logged in to create a job.");
+  }
+
+  const { title, description } = data;
+  if (!title || !description) {
+    throw new https.HttpsError("invalid-argument", "Title and description are required.");
+  }
+
+  const db = getFirestore();
+  await db.collection("jobs").add({
+    title,
+    description,
+    creatorId: context.auth.uid,
+    createdAt: new Date(),
+  });
+
+  return { success: true };
+});
+
+export const createJob = https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new https.HttpsError("unauthenticated", "Must be logged in to create a job.");
+  }
+
+  const { title, description } = data;
+  if (!title || !description) {
+    throw new https.HttpsError("invalid-argument", "Title and description are required.");
+  }
+
+  const db = getFirestore();
+  await db.collection("jobs").add({
+    title,
+    description,
+    creatorId: context.auth.uid,
+    createdAt: new Date(),
+  });
+
+  return { success: true };
+});

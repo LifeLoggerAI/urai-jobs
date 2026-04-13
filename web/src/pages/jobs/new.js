@@ -1,15 +1,4 @@
 "use strict";
-var __assign = (this && this.__assign) || function () {
-    __assign = Object.assign || function(t) {
-        for (var s, i = 1, n = arguments.length; i < n; i++) {
-            s = arguments[i];
-            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
-                t[p] = s[p];
-        }
-        return t;
-    };
-    return __assign.apply(this, arguments);
-};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -47,38 +36,44 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getMyApplications = getMyApplications;
-exports.submitApplication = submitApplication;
-var firestore_1 = require("firebase/firestore");
-var functions_1 = require("firebase/functions");
-var firebase_1 = require("../firebase");
-// --- READ operations can still use direct access for performance ---
-function getMyApplications(userId) {
-    return __awaiter(this, void 0, void 0, function () {
-        var q, snap;
+exports.default = NewJobPage;
+var jobs_1 = require("@/lib/jobs");
+var router_1 = require("next/router");
+var react_1 = require("react");
+function NewJobPage() {
+    var _this = this;
+    var router = (0, router_1.useRouter)();
+    var _a = (0, react_1.useState)(""), title = _a[0], setTitle = _a[1];
+    var _b = (0, react_1.useState)(""), company = _b[0], setCompany = _b[1];
+    var _c = (0, react_1.useState)(""), description = _c[0], setDescription = _c[1];
+    var handleSubmit = function (e) { return __awaiter(_this, void 0, void 0, function () {
+        var jobId, error_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    q = (0, firestore_1.query)((0, firestore_1.collection)(firebase_1.db, "applications"), (0, firestore_1.where)("userId", "==", userId));
-                    return [4 /*yield*/, (0, firestore_1.getDocs)(q)];
+                    e.preventDefault();
+                    _a.label = 1;
                 case 1:
-                    snap = _a.sent();
-                    return [2 /*return*/, snap.docs.map(function (d) { return (__assign({ id: d.id }, d.data())); })];
+                    _a.trys.push([1, 3, , 4]);
+                    return [4 /*yield*/, (0, jobs_1.createJob)({ title: title, company: company, description: description })];
+                case 2:
+                    jobId = _a.sent();
+                    router.push("/jobs/".concat(jobId));
+                    return [3 /*break*/, 4];
+                case 3:
+                    error_1 = _a.sent();
+                    console.error(error_1);
+                    alert("Error creating job");
+                    return [3 /*break*/, 4];
+                case 4: return [2 /*return*/];
             }
         });
-    });
-}
-var submitCallable = (0, functions_1.httpsCallable)(firebase_1.functions, "submitApplication");
-function submitApplication(payload) {
-    return __awaiter(this, void 0, void 0, function () {
-        var result;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
-                case 0: return [4 /*yield*/, submitCallable(payload)];
-                case 1:
-                    result = _a.sent();
-                    return [2 /*return*/, result.data];
-            }
-        });
-    });
+    }); };
+    return (<form onSubmit={handleSubmit}>
+      <h1>Create a New Job</h1>
+      <input type="text" placeholder="Job Title" value={title} onChange={function (e) { return setTitle(e.target.value); }} required/>
+      <input type="text" placeholder="Company" value={company} onChange={function (e) { return setCompany(e.target.value); }} required/>
+      <textarea placeholder="Job Description" value={description} onChange={function (e) { return setDescription(e.target.value); }} required/>
+      <button type="submit">Create Job</button>
+    </form>);
 }

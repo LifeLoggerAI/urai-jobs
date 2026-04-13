@@ -7,6 +7,7 @@ var SignupPage_1 = require("./pages/SignupPage");
 var JobBoard_1 = require("./pages/JobBoard");
 var JobDetail_1 = require("./pages/JobDetail");
 var Apply_1 = require("./pages/Apply");
+var CreateJobPage_1 = require("./pages/CreateJobPage");
 var ProtectedRoute_1 = require("./components/ProtectedRoute");
 var AuthContext_1 = require("./context/AuthContext");
 function App() {
@@ -18,9 +19,14 @@ function App() {
           <react_router_dom_1.Route path="/signup" element={<SignupPage_1.default />}/>
           <react_router_dom_1.Route path="/jobs" element={<JobBoard_1.default />}/>
           <react_router_dom_1.Route path="/jobs/:jobId" element={<JobDetail_1.default />}/>
-          <react_router_dom_1.Route path="/jobs/:jobId/apply" element={<ProtectedRoute_1.default>
+          <react_router_dom_1.Route path="/jobs/:jobId/apply"/>
+          <react_router_dom_1.Route path="/jobs/new" element={<ProtectedRoute_1.default><CreateJobPage_1.default /></ProtectedRoute_1.default>}/>
+          <react_router_dom_1.Route path="/jobs/new" element={<ProtectedRoute_1.default><CreateJobPage_1.default /></ProtectedRoute_1.default>}/>
+          <react_router_dom_1.Route path="/jobs/new" element={<ProtectedRoute_1.default><CreateJobPage_1.default /></ProtectedRoute_1.default>}/>
+            element={<ProtectedRoute_1.default>
                 <Apply_1.default />
-              </ProtectedRoute_1.default>}/>
+              </ProtectedRoute_1.default>}
+          />
           <react_router_dom_1.Route path="*" element={<react_router_dom_1.Navigate to="/jobs" replace/>}/>
         </react_router_dom_1.Routes>
       </AuthContext_1.AuthProvider>

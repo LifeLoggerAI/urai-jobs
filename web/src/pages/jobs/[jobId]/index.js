@@ -1,15 +1,4 @@
 "use strict";
-var __assign = (this && this.__assign) || function () {
-    __assign = Object.assign || function(t) {
-        for (var s, i = 1, n = arguments.length; i < n; i++) {
-            s = arguments[i];
-            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
-                t[p] = s[p];
-        }
-        return t;
-    };
-    return __assign.apply(this, arguments);
-};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -47,38 +36,44 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getMyApplications = getMyApplications;
-exports.submitApplication = submitApplication;
-var firestore_1 = require("firebase/firestore");
-var functions_1 = require("firebase/functions");
-var firebase_1 = require("../firebase");
-// --- READ operations can still use direct access for performance ---
-function getMyApplications(userId) {
-    return __awaiter(this, void 0, void 0, function () {
-        var q, snap;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
-                case 0:
-                    q = (0, firestore_1.query)((0, firestore_1.collection)(firebase_1.db, "applications"), (0, firestore_1.where)("userId", "==", userId));
-                    return [4 /*yield*/, (0, firestore_1.getDocs)(q)];
-                case 1:
-                    snap = _a.sent();
-                    return [2 /*return*/, snap.docs.map(function (d) { return (__assign({ id: d.id }, d.data())); })];
-            }
-        });
-    });
+exports.getServerSideProps = void 0;
+exports.default = JobPage;
+var jobs_1 = require("@/lib/jobs");
+var link_1 = require("next/link");
+var router_1 = require("next/router");
+function JobPage(_a) {
+    var job = _a.job;
+    var router = (0, router_1.useRouter)();
+    if (router.isFallback) {
+        return <div>Loading...</div>;
+    }
+    if (!job) {
+        return <div>Job not found</div>;
+    }
+    return (<div>
+      <h1>{job.title}</h1>
+      <h2>{job.company}</h2>
+      <p>{job.description}</p>
+      <link_1.default href={"/jobs/".concat(job.id, "/edit")}>Edit Job</link_1.default>
+      <br />
+      <link_1.default href={"/jobs/".concat(job.id, "/apply")}>Apply for this Job</link_1.default>
+    </div>);
 }
-var submitCallable = (0, functions_1.httpsCallable)(firebase_1.functions, "submitApplication");
-function submitApplication(payload) {
-    return __awaiter(this, void 0, void 0, function () {
-        var result;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
-                case 0: return [4 /*yield*/, submitCallable(payload)];
-                case 1:
-                    result = _a.sent();
-                    return [2 /*return*/, result.data];
-            }
-        });
+var getServerSideProps = function (context) { return __awaiter(void 0, void 0, void 0, function () {
+    var jobId, job;
+    return __generator(this, function (_a) {
+        switch (_a.label) {
+            case 0:
+                jobId = context.params.jobId;
+                return [4 /*yield*/, (0, jobs_1.getJob)(jobId)];
+            case 1:
+                job = _a.sent();
+                return [2 /*return*/, {
+                        props: {
+                            job: job,
+                        },
+                    }];
+        }
     });
-}
+}); };
+exports.getServerSideProps = getServerSideProps;
