@@ -1,39 +1,23 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import LoginPage from "./pages/LoginPage";
-import SignupPage from "./pages/SignupPage";
-import JobBoard from "./pages/JobBoard";
-import JobDetail from "./pages/JobDetail";
-import Apply from "./pages/Apply";
-import CreateJobPage from "./pages/CreateJobPage";
-import CreateJobPage from "./pages/CreateJobPage";
-import CreateJobPage from "./pages/CreateJobPage";
-import ProtectedRoute from "./components/ProtectedRoute";
-import { AuthProvider } from "./context/AuthContext";
+import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
+import { AuthProvider } from './context/AuthContext'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import { LoginPage } from './pages/LoginPage'
+import { SignupPage } from './pages/SignupPage'
+import { CreateJobPage } from './pages/CreateJobPage'
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
+    <AuthProvider>
+      <BrowserRouter>
+        <nav>
+          <Link to="/">Jobs</Link> | <Link to="/login">Login</Link> | <Link to="/signup">Sign up</Link>
+        </nav>
         <Routes>
-          <Route path="/" element={<Navigate to="/jobs" replace />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
-          <Route path="/jobs" element={<JobBoard />} />
-          <Route path="/jobs/:jobId" element={<JobDetail />} />
-          <Route
-            path="/jobs/:jobId/apply"
-          <Route path="/jobs/new" element={<ProtectedRoute><CreateJobPage /></ProtectedRoute>} />
-          <Route path="/jobs/new" element={<ProtectedRoute><CreateJobPage /></ProtectedRoute>} />
-          <Route path="/jobs/new" element={<ProtectedRoute><CreateJobPage /></ProtectedRoute>} />
-            element={
-              <ProtectedRoute>
-                <Apply />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="*" element={<Navigate to="/jobs" replace />} />
+          <Route path="/" element={<ProtectedRoute><CreateJobPage /></ProtectedRoute>} />
         </Routes>
-      </AuthProvider>
-    </BrowserRouter>
-  );
+      </BrowserRouter>
+    </AuthProvider>
+  )
 }

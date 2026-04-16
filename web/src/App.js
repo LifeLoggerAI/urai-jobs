@@ -1,34 +1,10 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.default = App;
-var react_router_dom_1 = require("react-router-dom");
-var LoginPage_1 = require("./pages/LoginPage");
-var SignupPage_1 = require("./pages/SignupPage");
-var JobBoard_1 = require("./pages/JobBoard");
-var JobDetail_1 = require("./pages/JobDetail");
-var Apply_1 = require("./pages/Apply");
-var CreateJobPage_1 = require("./pages/CreateJobPage");
-var ProtectedRoute_1 = require("./components/ProtectedRoute");
-var AuthContext_1 = require("./context/AuthContext");
-function App() {
-    return (<react_router_dom_1.BrowserRouter>
-      <AuthContext_1.AuthProvider>
-        <react_router_dom_1.Routes>
-          <react_router_dom_1.Route path="/" element={<react_router_dom_1.Navigate to="/jobs" replace/>}/>
-          <react_router_dom_1.Route path="/login" element={<LoginPage_1.default />}/>
-          <react_router_dom_1.Route path="/signup" element={<SignupPage_1.default />}/>
-          <react_router_dom_1.Route path="/jobs" element={<JobBoard_1.default />}/>
-          <react_router_dom_1.Route path="/jobs/:jobId" element={<JobDetail_1.default />}/>
-          <react_router_dom_1.Route path="/jobs/:jobId/apply"/>
-          <react_router_dom_1.Route path="/jobs/new" element={<ProtectedRoute_1.default><CreateJobPage_1.default /></ProtectedRoute_1.default>}/>
-          <react_router_dom_1.Route path="/jobs/new" element={<ProtectedRoute_1.default><CreateJobPage_1.default /></ProtectedRoute_1.default>}/>
-          <react_router_dom_1.Route path="/jobs/new" element={<ProtectedRoute_1.default><CreateJobPage_1.default /></ProtectedRoute_1.default>}/>
-            element={<ProtectedRoute_1.default>
-                <Apply_1.default />
-              </ProtectedRoute_1.default>}
-          />
-          <react_router_dom_1.Route path="*" element={<react_router_dom_1.Navigate to="/jobs" replace/>}/>
-        </react_router_dom_1.Routes>
-      </AuthContext_1.AuthProvider>
-    </react_router_dom_1.BrowserRouter>);
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { LoginPage } from './pages/LoginPage';
+import { SignupPage } from './pages/SignupPage';
+import { CreateJobPage } from './pages/CreateJobPage';
+export default function App() {
+    return (_jsx(AuthProvider, { children: _jsxs(BrowserRouter, { children: [_jsxs("nav", { children: [_jsx(Link, { to: "/", children: "Jobs" }), " | ", _jsx(Link, { to: "/login", children: "Login" }), " | ", _jsx(Link, { to: "/signup", children: "Sign up" })] }), _jsxs(Routes, { children: [_jsx(Route, { path: "/login", element: _jsx(LoginPage, {}) }), _jsx(Route, { path: "/signup", element: _jsx(SignupPage, {}) }), _jsx(Route, { path: "/", element: _jsx(ProtectedRoute, { children: _jsx(CreateJobPage, {}) }) })] })] }) }));
 }

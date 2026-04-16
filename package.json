@@ -2,13 +2,22 @@
   "name": "urai-jobs",
   "private": true,
   "workspaces": [
+    "functions",
+    "packages/shared-types",
     "web",
-    "functions"
+    "workers/*"
   ],
   "scripts": {
-    "dev": "firebase emulators:start",
-    "build": "npm run build --workspaces",
-    "serve": "npm run preview --workspace web",
-    "lint": "npm run lint --workspaces"
+    "postinstall": "npm run build -w @urai-jobs/shared-types",
+    "build": "npm run build -ws",
+    "deploy:dev": "firebase use dev && firebase deploy",
+    "deploy:staging": "firebase use staging && firebase deploy",
+    "deploy:prod": "firebase use prod && firebase deploy"
+  },
+  "devDependencies": {
+    "@types/uuid": "^10.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.15.0"
   }
 }

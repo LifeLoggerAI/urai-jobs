@@ -1,56 +1,60 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isSignedIn() {
+    function signedIn() {
       return request.auth != null;
     }
 
-    // Get user's orgId from their user profile document
-    function getOrgId(uid) {
-      return get(/databases/$(database)/documents/users/$(uid)).data.orgId;
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    // Check if a user belongs to the same org as a resource
-    function isInOrg(resource) {
-      let uid = request.auth.uid;
-      let userOrgId = getOrgId(uid);
-      let resourceOrgId = resource.data.orgId;
-      return userOrgId == resourceOrgId;
+    function userPerms() {
+      return signedIn() && userDoc().data.permissions is list
+        ? userDoc().data.permissions
+        : [];
     }
 
-    // --- COLLECTIONS ---
-
-    match /users/{userId} {
-      // Users can read and write their own profile
-      allow read, write: if request.auth.uid == userId;
+    function hasPerm(p) {
+      return signedIn() && p in userPerms();
     }
 
-    match /orgs/{orgId} {
-       // Only users within an org can read its details
-      allow read: if isSignedIn() && getOrgId(request.auth.uid) == orgId;
-      // Org creation/mutation must be handled by backend functions
-      allow write: if false;
+    function sameTenant(resourceTenantId) {
+      return signedIn() && userDoc().data.tenantId == resourceTenantId;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn() && request.auth.uid == uid;
     }
 
     match /jobs/{jobId} {
-      // Allow public reads for job boards, but enforce org-level reads for dashboards
-      allow read: if true;
-      // ALL job writes must go through backend callable functions. NO client writes.
+      allow read: if hasPerm('jobs.read.any') || (hasPerm('jobs.read.own') && sameTenant(resource.data.tenantId) && resource.data.ownerUid == request.auth.uid);
       allow write: if false;
     }
 
-    match /applications/{applicationId} {
-      // Users can only create applications for themselves
-      allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid;
+    match /jobResults/{jobId} {
+      allow read: if hasPerm('jobs.read.any') || hasPerm('jobs.read.own');
+      allow write: if false;
+    }
 
-      // Users can read their own applications.
-      // Org owners/admins would need a backend function to read all applications for a job.
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+    match /logs/{logId} {
+      allow read: if hasPerm('jobs.read.any');
+      allow write: if false;
+    }
 
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow delete: if false;
+    match /roles/{roleId} {
+      allow read: if hasPerm('admin.roles.read');
+      allow write: if false;
+    }
+
+    match /permissions/{permId} {
+      allow read: if hasPerm('admin.roles.read');
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

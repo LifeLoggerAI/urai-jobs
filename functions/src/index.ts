@@ -1,170 +1,18 @@
-import * as admin from "firebase-admin";
-import * as functions from "firebase-functions";
+// Canonical single source of truth for all Firebase function exports.
 
-admin.initializeApp();
-const db = admin.firestore();
+// HTTP-triggered and callable functions
+export * from './jobs/createJob';
+export * from './jobs/getJobStatus';
+export * from './jobs/cancelJob';
 
-// --- Canonical Write Path for Jobs ---
+// Pub/Sub-triggered functions
+export * from './jobs/executeJob';
 
-type CreateJobPayload = {
-  title: string;
-  company: string;
-  description: string;
-};
+// Scheduled functions (Pub/Sub)
+export * from './jobs/processQueueTick';
+export * from './jobs/retryExpiredLeases';
+export * from './jobs/cleanupTerminalJobs';
+export * from './jobs/systemReconcile';
 
-export const createJob = functions.https.onCall(async (data: CreateJobPayload, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
-  }
-
-  const title = typeof data.title === "string" ? data.title.trim() : "";
-  const company = typeof data.company === "string" ? data.company.trim() : "";
-  const description = typeof data.description === "string" ? data.description.trim() : "";
-
-  if (!title || !description || !company) {
-    throw new functions.https.HttpsError("invalid-argument", "title, company, and description are required.");
-  }
-
-  const userDoc = await db.collection("users").doc(context.auth.uid).get();
-  if (!userDoc.exists) {
-    throw new functions.https.HttpsError("not-found", "User profile not found.");
-  }
-  const orgId = userDoc.data()?.orgId;
-  if (!orgId) {
-    throw new functions.https.HttpsError("failed-precondition", "User is not associated with an organization.");
-  }
-
-  const jobData = {
-    orgId,
-    ownerUid: context.auth.uid,
-    title,
-    company,
-    description,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  };
-
-  const jobRef = await db.collection("jobs").add(jobData);
-  return { id: jobRef.id };
-});
-
-type UpdateJobPayload = {
-  jobId: string;
-  title: string;
-  company: string;
-  description: string;
-};
-
-export const updateJob = functions.https.onCall(async (data: UpdateJobPayload, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
-    }
-
-    const { jobId, title, company, description } = data;
-    if (!jobId || !title || !company || !description) {
-        throw new functions.https.HttpsError("invalid-argument", "jobId, title, company, and description are required.");
-    }
-
-    const userDoc = await db.collection("users").doc(context.auth.uid).get();
-    const orgId = userDoc.data()?.orgId;
-    if (!orgId) {
-        throw new functions.https.HttpsError("failed-precondition", "User is not associated with an organization.");
-    }
-
-    const jobRef = db.collection("jobs").doc(jobId);
-    const jobDoc = await jobRef.get();
-
-    if (!jobDoc.exists) {
-        throw new functions.https.HttpsError("not-found", "Job not found.");
-    }
-
-    if (jobDoc.data()?.orgId !== orgId) {
-        throw new functions.https.HttpsError("permission-denied", "You do not have permission to edit this job.");
-    }
-
-    await jobRef.update({
-        title,
-        company,
-        description,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    return { id: jobId };
-});
-
-
-type DeleteJobPayload = {
-  jobId: string;
-};
-
-export const deleteJob = functions.https.onCall(async (data: DeleteJobPayload, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
-    }
-
-    const { jobId } = data;
-    if (!jobId) {
-        throw new functions.https.HttpsError("invalid-argument", "jobId is required.");
-    }
-
-    const userDoc = await db.collection("users").doc(context.auth.uid).get();
-    const orgId = userDoc.data()?.orgId;
-    if (!orgId) {
-        throw new functions.https.HttpsError("failed-precondition", "User is not associated with an organization.");
-    }
-
-    const jobRef = db.collection("jobs").doc(jobId);
-    const jobDoc = await jobRef.get();
-
-    if (!jobDoc.exists) {
-        throw new functions.https.HttpsError("not-found", "Job not found.");
-    }
-
-    if (jobDoc.data()?.orgId !== orgId) {
-        throw new functions.https.HttpsError("permission-denied", "You do not have permission to delete this job.");
-    }
-
-    await jobRef.delete();
-
-    return { id: jobId };
-});
-
-
-// --- Existing Application Submission Function ---
-
-type SubmitApplicationPayload = {
-  jobId: string;
-  resumeUrl?: string | null;
-};
-
-export const submitApplication = functions.https.onCall(async (data: SubmitApplicationPayload, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
-  }
-
-  const jobId = typeof data?.jobId === "string" ? data.jobId.trim() : "";
-  if (!jobId) {
-    throw new functions.https.HttpsError("invalid-argument", "jobId is required.");
-  }
-
-  const existing = await db
-    .collection("applications")
-    .where("userId", "==", context.auth.uid)
-    .where("jobId", "==", jobId)
-    .limit(1)
-    .get();
-
-  if (!existing.empty) {
-    return { id: existing.docs[0].id, duplicate: true };
-  }
-
-  const created = await db.collection("applications").add({
-    userId: context.auth.uid,
-    jobId,
-    resumeUrl: typeof data?.resumeUrl === "string" ? data.resumeUrl.trim() : null,
-    status: "submitted",
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-
-  return { id: created.id, duplicate: false };
-});
+// Firestore-triggered functions
+export * from './events/onJobTerminalEvent';

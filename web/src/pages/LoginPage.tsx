@@ -1,57 +1,33 @@
-import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
+import { useState } from 'react'
+import { signInWithEmailAndPassword } from 'firebase/auth'
+import { Link, useNavigate } from 'react-router-dom'
+import { auth } from '../firebase'
 
-export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from || "/jobs";
+export function LoginPage() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const navigate = useNavigate()
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setSubmitting(true);
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      navigate(from, { replace: true });
+      await signInWithEmailAndPassword(auth, email, password)
+      navigate('/')
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-    } finally {
-      setSubmitting(false);
+      setError(err instanceof Error ? err.message : String(err))
     }
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={submit}>
       <h1>Login</h1>
-      {error ? <p role="alert">{error}</p> : null}
-      <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        autoComplete="email"
-        required
-        placeholder="Email"
-      />
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        autoComplete="current-password"
-        required
-        placeholder="Password"
-      />
-      <button type="submit" disabled={submitting}>
-        {submitting ? "Logging in..." : "Login"}
-      </button>
-      <p>
-        Need an account? <Link to="/signup">Sign up</Link>
-      </p>
+      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email" />
+      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="password" type="password" />
+      <button type="submit">Login</button>
+      {error && <pre>{error}</pre>}
+      <p><Link to="/signup">Sign up</Link></p>
     </form>
-  );
+  )
 }

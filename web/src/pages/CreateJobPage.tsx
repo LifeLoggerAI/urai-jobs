@@ -1,66 +1,59 @@
-import React, { useState } from 'react';
-import { db } from '../firebase';
-import { collection, addDoc } from 'firebase/firestore';
-import { useAuth } from '../hooks/useAuth';
+import { useState } from 'react'
+import { httpsCallable } from 'firebase/functions'
+import { functions } from '../firebase'
 
-const CreateJobPage = () => {
-  const { user } = useAuth();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [company, setCompany] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+export function CreateJobPage() {
+  const [tenantId, setTenantId] = useState('default')
+  const [orgId, setOrgId] = useState('default')
+  const [type, setType] = useState('generic.task')
+  const [payload, setPayload] = useState('{}')
+  const [jobId, setJobId] = useState('')
+  const [output, setOutput] = useState('')
 
-  const handleCreateJob = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
+  async function createJob() {
+    const call = httpsCallable(functions, 'createJob')
+    const result = await call({
+      tenantId,
+      orgId,
+      type,
+      origin: 'API',
+      priority: 'NORMAL',
+      workerClass: 'FUNCTION',
+      payload: JSON.parse(payload || '{}')
+    })
+    const data = result.data as { jobId: string }
+    setJobId(data.jobId)
+    setOutput(JSON.stringify(result.data, null, 2))
+  }
 
-    if (!user) {
-      setError('You must be logged in to create a job.');
-      return;
-    }
+  async function getStatus() {
+    if (!jobId) return
+    const call = httpsCallable(functions, 'getJobStatus')
+    const result = await call({ jobId })
+    setOutput(JSON.stringify(result.data, null, 2))
+  }
 
-    try {
-      await addDoc(collection(db, 'jobs'), {
-        title,
-        description,
-        company,
-        uid: user.uid,
-        createdAt: new Date(),
-      });
-      setSuccess('Job created successfully!');
-      setTitle('');
-      setDescription('');
-      setCompany('');
-    } catch (err) {
-      setError('Failed to create job. Please try again.');
-      console.error(err);
-    }
-  };
+  async function cancelJob() {
+    if (!jobId) return
+    const call = httpsCallable(functions, 'cancelJob')
+    const result = await call({ jobId })
+    setOutput(JSON.stringify(result.data, null, 2))
+  }
 
   return (
     <div>
-      <h1>Create Job</h1>
-      <form onSubmit={handleCreateJob}>
-        <div>
-          <label>Title</label>
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required />
-        </div>
-        <div>
-          <label>Company</label>
-          <input type="text" value={company} onChange={(e) => setCompany(e.target.value)} required />
-        </div>
-        <div>
-          <label>Description</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} required />
-        </div>
-        <button type="submit">Create Job</button>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        {success && <p style={{ color: 'green' }}>{success}</p>}
-      </form>
+      <h1>URAI-JOBS</h1>
+      <input value={tenantId} onChange={(e) => setTenantId(e.target.value)} placeholder="tenantId" />
+      <input value={orgId} onChange={(e) => setOrgId(e.target.value)} placeholder="orgId" />
+      <input value={type} onChange={(e) => setType(e.target.value)} placeholder="type" />
+      <textarea value={payload} onChange={(e) => setPayload(e.target.value)} rows={10} cols={80} />
+      <div>
+        <button onClick={createJob}>Create job</button>
+        <button onClick={getStatus}>Get status</button>
+        <button onClick={cancelJob}>Cancel</button>
+      </div>
+      <input value={jobId} onChange={(e) => setJobId(e.target.value)} placeholder="jobId" />
+      <pre>{output}</pre>
     </div>
-  );
-};
-
-export default CreateJobPage;
+  )
+}
