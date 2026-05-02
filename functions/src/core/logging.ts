@@ -1,7 +1,10 @@
-import * as admin from 'firebase-admin';
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getApps, initializeApp } from "firebase-admin/app";
 import { LogLevel, LogSource } from './types.js';
 
-const db = admin.firestore();
+if (getApps().length === 0) initializeApp();
+
+const db = getFirestore();
 
 export const createLog = async (
   tenantId: string,
@@ -19,7 +22,7 @@ export const createLog = async (
       event,
       message,
       context,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      timestamp: FieldValue.serverTimestamp(),
     });
   } catch (error) {
     console.error('Failed to create log:', error);

@@ -1,8 +1,12 @@
+import { getFirestore } from "firebase-admin/firestore";
+import { getApps, initializeApp } from "firebase-admin/app";
 import * as admin from 'firebase-admin';
+
+if (getApps().length === 0) initializeApp();
 
 // Initialize admin SDK
 admin.initializeApp();
-const db = admin.firestore();
+const db = getFirestore();
 
 async function bootstrap() {
   console.log('Seeding roles...');

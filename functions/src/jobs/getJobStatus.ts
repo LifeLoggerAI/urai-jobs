@@ -35,5 +35,5 @@ export const getJobStatus = async (data: any, context: CallableContext, user: Us
     throw httpsError('permission-denied', 'You do not have permission to view this job.');
   }
 
-  return job;
+  return { job };
 };

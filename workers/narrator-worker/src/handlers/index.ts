@@ -1,5 +1,5 @@
 import { Job } from '@urai-jobs/shared-types';
-import { handleNarratorTts } from './narrator-tts.js.js.js.js';
+import { handleNarratorTts } from './narrator-tts.js';
 
 export async function handleJob(job: Job): Promise<any> {
   switch (job.jobType) {

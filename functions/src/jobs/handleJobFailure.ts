@@ -1,10 +1,13 @@
-import * as admin from 'firebase-admin';
+import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
+import { getApps, initializeApp } from "firebase-admin/app";
 import { JobDoc } from '../core/types.js';
 import { updateJob, updateQueue } from '../core/lease.js';
 import { createLog } from '../core/logging.js';
 import { URAI_Error } from '../core/errors.js';
 
-const db = admin.firestore();
+if (getApps().length === 0) initializeApp();
+
+const db = getFirestore();
 
 export const handleJobFailure = async (jobId: string, error: Error) => {
   const jobRef = db.collection('jobs').doc(jobId);
@@ -15,12 +18,12 @@ export const handleJobFailure = async (jobId: string, error: Error) => {
 
   if (isTransient && attemptCount < jobDoc.execution.maxAttempts) {
     const backoff = Math.pow(2, attemptCount) * 1000 + Math.random() * 1000; // Exponential backoff with jitter
-    const availableAt = admin.firestore.Timestamp.fromMillis(Date.now() + backoff);
+    const availableAt = Timestamp.fromMillis(Date.now() + backoff);
 
     await updateJob(jobId, { 
       status: 'RETRY', 
       'execution.attemptCount': attemptCount, 
-      'error.lastFailedAt': admin.firestore.FieldValue.serverTimestamp() 
+      'error.lastFailedAt': FieldValue.serverTimestamp() 
     });
     await updateQueue(jobId, { status: 'READY', availableAt, attemptCount });
 

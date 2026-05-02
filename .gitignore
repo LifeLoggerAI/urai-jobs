@@ -22,3 +22,34 @@ backups/
 
 # === OS / tooling ===
 .DS_Store
+
+# Firebase deploy/local cache
+.firebase/
+
+# Audit/proof scratch output
+_audit/
+
+# Build outputs
+web/dist/
+functions/lib/
+functions/dist/
+packages/shared-types/dist/
+workers/*/dist/
+workers/**/dist/
+
+# Local env files
+.env
+.env.*
+web/.env.local
+web/.env.production
+
+# Logs/emulator output
+*.log
+firestore-debug.log
+firebase-debug.log
+ui-debug.log
+
+# Local scratch/helpers
+pnpm
+scripts/urai-jobs-live-inspect.mjs
+scripts/urai-jobs-live-list-recent.mjs

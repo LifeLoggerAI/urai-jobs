@@ -8,15 +8,23 @@
     "workers/*"
   ],
   "scripts": {
-    "postinstall": "npm run build -w @urai-jobs/shared-types",
-    "build": "npm run build -ws",
+    "urai-jobs:verify": "node scripts/urai-jobs-verify.mjs",
+    "urai-jobs:smoke": "node scripts/urai-jobs-smoke.mjs",
+    "urai-jobs:e2e": "node scripts/urai-jobs-e2e.mjs",
+    "postinstall": "node \"$npm_execpath\" --filter @urai-jobs/shared-types build",
+    "build": "node \"$npm_execpath\" -r --if-present build",
+    "typecheck": "node \"$npm_execpath\" -r --if-present typecheck",
     "deploy:dev": "firebase use dev && firebase deploy",
     "deploy:staging": "firebase use staging && firebase deploy",
     "deploy:prod": "firebase use prod && firebase deploy",
     "worker:run": "node scripts/run-worker.mjs",
     "job:queue": "node scripts/queue-job.mjs",
     "leases:reclaim": "node scripts/reclaim-stale-leases.mjs",
-    "dead:requeue": "node scripts/requeue-dead.mjs"
+    "dead:requeue": "node scripts/requeue-dead.mjs",
+    "urai-jobs:deploy-precheck": "node scripts/urai-jobs-deploy-precheck.mjs",
+    "dev": "node \"$npm_execpath\" --dir web dev",
+    "dev:all": "node \"$npm_execpath\" -r --parallel --if-present dev",
+    "check:workspace": "node \"$npm_execpath\" -r list --depth -1"
   },
   "devDependencies": {
     "@types/uuid": "^10.0.0"

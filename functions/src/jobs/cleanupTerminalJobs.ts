@@ -18,8 +18,8 @@ export const cleanupTerminalJobs = functions.firestore
   .document(`${JOBS_COLLECTION}/{jobId}`)
   .onUpdate(async (change, context) => {
     const { jobId } = context.params;
-    const before = change.before.data() as Job;
-    const after = change.after.data() as Job;
+    const before = change.before.data() as any as Job;
+    const after = change.after.data() as any as Job;
 
     const beforeIsTerminal = TERMINAL_STATUSES.includes(before.status);
     const afterIsTerminal = TERMINAL_STATUSES.includes(after.status);

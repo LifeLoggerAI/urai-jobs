@@ -1,67 +1,91 @@
-import { FieldValue } from 'firebase-admin/firestore';
-import { z } from 'zod';
-import type { CallableContext } from 'firebase-functions/v1/https';
-import { User } from '@urai-jobs/shared-types';
-import { httpsError } from '../core/errors.js';
-import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getApps, initializeApp } from "firebase-admin/app";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 
-const CancelJobSchema = z.object({
-  jobId: z.string(),
-});
+if (getApps().length === 0) initializeApp();
 
-/**
- * A callable function that allows a user to cancel a job they own, or an admin to cancel any job.
- * The job can only be cancelled if it is not already in a terminal state.
- */
-export const cancelJob = async (data: any, context: CallableContext, user: User) => {
-  const validationResult = CancelJobSchema.safeParse(data);
-  if (!validationResult.success) {
-    throw httpsError('invalid-argument', 'Invalid data.', validationResult.error.flatten());
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function hasOperatorAccess(auth: unknown): boolean {
+  const authRecord = asRecord(auth);
+  const token = asRecord(authRecord.token);
+  const role = token.role;
+  const roles = Array.isArray(token.roles) ? token.roles : [];
+
+  return (
+    role === "admin" ||
+    role === "operator" ||
+    token.uraiJobsAdmin === true ||
+    roles.includes("admin") ||
+    roles.includes("operator")
+  );
+}
+
+function authUid(auth: unknown): string {
+  return String(asRecord(auth).uid || "");
+}
+
+export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication is required.");
   }
 
-  const { jobId } = validationResult.data;
+  const jobId = String(asRecord(request.data).jobId || "").trim();
+  if (!jobId) {
+    throw new HttpsError("invalid-argument", "jobId is required.");
+  }
+
   const db = getFirestore();
+  const jobRef = db.collection("jobs").doc(jobId);
+  const queueRef = db.collection("jobQueue").doc(jobId);
 
-  const jobRef = jobDoc(jobId);
-  const queueRef = jobQueueEntryDoc(jobId);
+  await db.runTransaction(async (transaction) => {
+    const jobSnap = await transaction.get(jobRef);
 
-  try {
-    await db.runTransaction(async (transaction) => {
-      const jobSnapshot = await transaction.get(jobRef);
+    if (!jobSnap.exists) {
+      throw new HttpsError("not-found", `Job ${jobId} was not found.`);
+    }
 
-      if (!jobSnapshot.exists) {
-        throw httpsError('not-found', 'Job not found.');
-      }
+    const job = jobSnap.data() || {};
+    const status = String(job.status || "");
+    const ownerUid = String(job.ownerUid || job.createdBy || "");
 
-      const job = jobSnapshot.data();
+    if (!hasOperatorAccess(request.auth) && ownerUid !== authUid(request.auth)) {
+      throw new HttpsError("permission-denied", "You do not have access to cancel this job.");
+    }
 
-      // RBAC: Check if the user has permission to cancel this job.
-      // An admin can cancel any job, a user can only cancel their own.
-      if (user.role !== 'admin' && job.ownerUid !== user.uid) {
-        throw httpsError('permission-denied', 'You do not have permission to cancel this job.');
-      }
+    if (!["queued", "running", "retry_needed"].includes(status)) {
+      throw new HttpsError("failed-precondition", `Job ${jobId} cannot be cancelled from status ${status}.`);
+    }
 
-      // A job can only be cancelled if it is not already in a terminal state.
-      if (['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].includes(job.status)) {
-        return;
-      }
+    transaction.set(
+      jobRef,
+      {
+        status: "cancelled",
+        cancelledAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
 
-      const now = FieldValue.serverTimestamp();
+    transaction.set(
+      queueRef,
+      {
+        status: "cancelled",
+        updatedAt: FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+  });
 
-      transaction.update(jobRef, { 
-        status: 'CANCELLED',
-        updatedAt: now,
-       });
-       
-      transaction.update(queueRef, { 
-        status: 'DONE', 
-        updatedAt: now, 
-      });
-    });
-  } catch (error: any) {
-    throw httpsError('internal', 'Failed to cancel job.', { message: error.message });
-  }
+  await jobRef.collection("logs").add({
+    level: "info",
+    message: "Job cancelled from live admin callable.",
+    createdAt: FieldValue.serverTimestamp(),
+    source: "cancelJob"
+  });
 
-  return { status: 'CANCELLED' };
-};
+  return { jobId, status: "cancelled" };
+});

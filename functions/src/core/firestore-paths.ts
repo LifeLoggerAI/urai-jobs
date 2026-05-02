@@ -1,5 +1,10 @@
 import { getFirestore, FirestoreDataConverter, QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
 import { Job, JobQueueEntry, User, JobLog } from '@urai-jobs/shared-types';
+import { getApps, initializeApp } from 'firebase-admin/app';
+
+export const JOBS_COLLECTION = "jobs";
+export const JOB_QUEUE_COLLECTION = "jobQueue";
+export const JOB_LOGS_COLLECTION = "jobLogs";
 
 const converter = <T>(): FirestoreDataConverter<T> => ({
   toFirestore: (data: T) => data as DocumentData,
@@ -8,11 +13,10 @@ const converter = <T>(): FirestoreDataConverter<T> => ({
 
 // --- Collection Names ---
 const USERS_COLLECTION = 'users';
-const JOBS_COLLECTION = 'jobs';
-const JOB_QUEUE_COLLECTION = 'jobQueue';
 const LOGS_SUBCOLLECTION = 'logs';
 
 // --- Firestore DB Instance ---
+if (getApps().length === 0) initializeApp();
 const db = getFirestore();
 
 // --- Typed Collection References ---

@@ -1,42 +1,32 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useState } from 'react';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebase';
+import { useState } from "react";
+import { createJob } from "../lib/jobsApi";
+const DEFAULT_PAYLOAD = JSON.stringify({
+    text: "URAI Jobs production smoke test",
+    voice: "en-US-Wavenet-D",
+    locale: "en-US",
+    format: "mp3",
+    outputPrefix: "prod-smoke-test"
+}, null, 2);
 export function CreateJobPage() {
-    const [tenantId, setTenantId] = useState('default');
-    const [orgId, setOrgId] = useState('default');
-    const [type, setType] = useState('generic.task');
-    const [payload, setPayload] = useState('{}');
-    const [jobId, setJobId] = useState('');
-    const [output, setOutput] = useState('');
-    async function createJob() {
-        const call = httpsCallable(functions, 'createJob');
-        const result = await call({
-            tenantId,
-            orgId,
-            type,
-            origin: 'API',
-            priority: 'NORMAL',
-            workerClass: 'FUNCTION',
-            payload: JSON.parse(payload || '{}')
-        });
-        const data = result.data;
-        setJobId(data.jobId);
-        setOutput(JSON.stringify(result.data, null, 2));
+    const [jobType, setJobType] = useState("narrator.tts");
+    const [payload, setPayload] = useState(DEFAULT_PAYLOAD);
+    const [status, setStatus] = useState("idle");
+    const [message, setMessage] = useState("");
+    async function submit(event) {
+        event.preventDefault();
+        setStatus("loading");
+        setMessage("");
+        try {
+            const parsed = JSON.parse(payload);
+            const result = await createJob(jobType, parsed);
+            setStatus("success");
+            setMessage(`Job created: ${result.jobId || result.id || "created"}`);
+        }
+        catch (error) {
+            setStatus("error");
+            setMessage(error instanceof Error ? error.message : "Create job failed.");
+        }
     }
-    async function getStatus() {
-        if (!jobId)
-            return;
-        const call = httpsCallable(functions, 'getJobStatus');
-        const result = await call({ jobId });
-        setOutput(JSON.stringify(result.data, null, 2));
-    }
-    async function cancelJob() {
-        if (!jobId)
-            return;
-        const call = httpsCallable(functions, 'cancelJob');
-        const result = await call({ jobId });
-        setOutput(JSON.stringify(result.data, null, 2));
-    }
-    return (_jsxs("div", { children: [_jsx("h1", { children: "URAI-JOBS" }), _jsx("input", { value: tenantId, onChange: (e) => setTenantId(e.target.value), placeholder: "tenantId" }), _jsx("input", { value: orgId, onChange: (e) => setOrgId(e.target.value), placeholder: "orgId" }), _jsx("input", { value: type, onChange: (e) => setType(e.target.value), placeholder: "type" }), _jsx("textarea", { value: payload, onChange: (e) => setPayload(e.target.value), rows: 10, cols: 80 }), _jsxs("div", { children: [_jsx("button", { onClick: createJob, children: "Create job" }), _jsx("button", { onClick: getStatus, children: "Get status" }), _jsx("button", { onClick: cancelJob, children: "Cancel" })] }), _jsx("input", { value: jobId, onChange: (e) => setJobId(e.target.value), placeholder: "jobId" }), _jsx("pre", { children: output })] }));
+    return (_jsx("main", { className: "page-shell", children: _jsxs("section", { className: "panel", children: [_jsx("div", { className: "eyebrow", children: "Create Job" }), _jsx("h1", { children: "Submit a production job" }), _jsxs("p", { children: ["This calls the live Firebase callable function ", _jsx("code", { children: "createJob" }), "."] }), _jsxs("form", { onSubmit: submit, className: "form-stack", children: [_jsxs("label", { children: ["Job Type", _jsx("input", { value: jobType, onChange: (event) => setJobType(event.target.value) })] }), _jsxs("label", { children: ["Payload JSON", _jsx("textarea", { rows: 14, value: payload, onChange: (event) => setPayload(event.target.value) })] }), _jsx("button", { type: "submit", disabled: status === "loading", children: status === "loading" ? "Creating..." : "Create Job" })] }), status !== "idle" && (_jsxs("div", { className: `notice ${status}`, children: [_jsx("strong", { children: status.toUpperCase() }), _jsx("p", { children: message })] }))] }) }));
 }

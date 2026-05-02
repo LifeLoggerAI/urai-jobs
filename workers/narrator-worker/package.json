@@ -4,7 +4,8 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "rimraf dist && tsc",
-    "start": "npm run build && node dist/index.js"
+    "start": "npm run build && node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.10.0",

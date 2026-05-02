@@ -1,11 +1,11 @@
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getApps, initializeApp } from "firebase-admin/app";
 import { Job, JobQueueEntry, UserRole, JobLog, NarratorTtsPayloadSchema } from '../shared-types/index.js';
-
-
-import * as admin from 'firebase-admin';
-
 import { v4 as uuidv4 } from 'uuid';
 
-const db = admin.firestore();
+if (getApps().length === 0) initializeApp();
+
+const db = getFirestore();
 
 export async function createJob(jobType: string, payload: any, ownerId: string): Promise<string> {
   const jobId = uuidv4();
@@ -15,8 +15,8 @@ export async function createJob(jobType: string, payload: any, ownerId: string):
     status: 'pending',
     payload,
     ownerId,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   };
 
   await db.collection('jobs').doc(jobId).set(job);

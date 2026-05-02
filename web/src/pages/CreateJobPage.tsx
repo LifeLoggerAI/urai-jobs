@@ -1,70 +1,70 @@
-import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useState } from "react";
+import { createJob } from "../lib/jobsApi";
+
+const DEFAULT_PAYLOAD = JSON.stringify(
+  {
+    text: "URAI Jobs production smoke test",
+    voice: "en-US-Wavenet-D",
+    locale: "en-US",
+    format: "mp3",
+    outputPrefix: "prod-smoke-test"
+  },
+  null,
+  2
+);
 
 export function CreateJobPage() {
-  const { tokenResult } = useAuth();
-  const [jobName, setJobName] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [jobType, setJobType] = useState("narrator.tts");
+  const [payload, setPayload] = useState(DEFAULT_PAYLOAD);
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [message, setMessage] = useState("");
 
-  const handleSubmit = async (event: React.FormEvent) => {
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    if (!tokenResult) {
-      setError('You must be logged in to create a job.');
-      setIsLoading(false);
-      return;
-    }
+    setStatus("loading");
+    setMessage("");
 
     try {
-      const response = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await tokenResult.token}`,
-        },
-        body: JSON.stringify({ name: jobName }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create job');
-      }
-
-      const responseData = await response.json();
-      setSuccess(`Job created successfully! Job ID: ${responseData.id}`);
-      setJobName(''); // Clear the form
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
+      const parsed = JSON.parse(payload);
+      const result = await createJob(jobType, parsed);
+      setStatus("success");
+      setMessage(`Job created: ${result.jobId || result.id || "created"}`);
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Create job failed.");
     }
-  };
+  }
 
   return (
-    <div>
-      <h1>Create a New Job</h1>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label htmlFor="jobName">Job Name:</label>
-          <input
-            id="jobName"
-            type="text"
-            value={jobName}
-            onChange={(e) => setJobName(e.target.value)}
-            required
-          />
-        </div>
-        <button type="submit" disabled={isLoading}>
-          {isLoading ? 'Creating...' : 'Create Job'}
-        </button>
-      </form>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {success && <p style={{ color: 'green' }}>{success}</p>}
-    </div>
+    <main className="page-shell">
+      <section className="panel">
+        <div className="eyebrow">Create Job</div>
+        <h1>Submit a production job</h1>
+        <p>This calls the live Firebase callable function <code>createJob</code>.</p>
+
+        <form onSubmit={submit} className="form-stack">
+          <label>
+            Job Type
+            <input value={jobType} onChange={(event) => setJobType(event.target.value)} />
+          </label>
+
+          <label>
+            Payload JSON
+            <textarea rows={14} value={payload} onChange={(event) => setPayload(event.target.value)} />
+          </label>
+
+          <button type="submit" disabled={status === "loading"}>
+            {status === "loading" ? "Creating..." : "Create Job"}
+          </button>
+        </form>
+
+        {status !== "idle" && (
+          <div className={`notice ${status}`}>
+            <strong>{status.toUpperCase()}</strong>
+            <p>{message}</p>
+          </div>
+        )}
+      </section>
+    </main>
   );
 }

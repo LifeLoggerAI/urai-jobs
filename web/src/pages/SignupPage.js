@@ -1,23 +1,31 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState } from 'react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
+import { useNavigate } from 'react-router-dom';
 export function SignupPage() {
+    const navigate = useNavigate();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const navigate = useNavigate();
-    async function submit(e) {
-        e.preventDefault();
-        setError('');
+    const [error, setError] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const handleSignup = async (event) => {
+        event.preventDefault();
+        setIsLoading(true);
+        setError(null);
         try {
+            // This simply creates the user in Firebase Auth
             await createUserWithEmailAndPassword(auth, email, password);
+            // After sign-up, we could also make a call to our backend to create a user profile in Firestore
+            // For now, we'll just redirect to the home page.
             navigate('/');
         }
         catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
+            setError(err.message);
         }
-    }
-    return (_jsxs("form", { onSubmit: submit, children: [_jsx("h1", { children: "Sign up" }), _jsx("input", { value: email, onChange: (e) => setEmail(e.target.value), placeholder: "email" }), _jsx("input", { value: password, onChange: (e) => setPassword(e.target.value), placeholder: "password", type: "password" }), _jsx("button", { type: "submit", children: "Create account" }), error && _jsx("pre", { children: error }), _jsx("p", { children: _jsx(Link, { to: "/login", children: "Login" }) })] }));
+        finally {
+            setIsLoading(false);
+        }
+    };
+    return (_jsxs("div", { children: [_jsx("h1", { children: "Sign Up" }), _jsxs("form", { onSubmit: handleSignup, children: [_jsxs("div", { children: [_jsx("label", { htmlFor: "email", children: "Email:" }), _jsx("input", { id: "email", type: "email", value: email, onChange: (e) => setEmail(e.target.value), required: true })] }), _jsxs("div", { children: [_jsx("label", { htmlFor: "password", children: "Password:" }), _jsx("input", { id: "password", type: "password", value: password, onChange: (e) => setPassword(e.target.value), required: true })] }), _jsx("button", { type: "submit", disabled: isLoading, children: isLoading ? 'Signing up...' : 'Sign Up' })] }), error && _jsx("p", { style: { color: 'red' }, children: error })] }));
 }

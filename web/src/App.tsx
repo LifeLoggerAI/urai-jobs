@@ -1,58 +1,54 @@
+import { Component, type ReactNode } from "react";
+import { LoginPage } from "./pages/LoginPage";
+import { LandingPage } from "./pages/LandingPage";
+import { CreateJobPage } from "./pages/CreateJobPage";
+import { AdminPage } from "./pages/AdminPage";
 
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { LoginPage } from './pages/LoginPage';
-import { SignupPage } from './pages/SignupPage';
-import { CreateJobPage } from './pages/CreateJobPage';
-import { AdminPage } from './pages/AdminPage';
+class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
 
-// A simple navigation component that shows relevant links based on auth state
-function Navigation() {
-  const { user, role } = useAuth();
-  return (
-    <nav>
-      <Link to="/">Home</Link>
-      {user ? (
-        <>
-          | <Link to="/create">Create Job</Link>
-          {role === 'admin' && ( | <Link to="/admin">Admin</Link>)}
-          {/* Add a sign-out button here */}
-        </>
-      ) : (
-        <>
-          | <Link to="/login">Login</Link>| <Link to="/signup">Sign up</Link>
-        </>
-      )}
-    </nav>
-  );
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <main className="page-shell">
+          <section className="panel danger">
+            <div className="eyebrow">Runtime Error</div>
+            <h1>URAI Jobs UI failed to render.</h1>
+            <pre>{this.state.error.message}</pre>
+          </section>
+        </main>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function routeForPath(pathname: string) {
+  if (pathname.startsWith("/login")) return <LoginPage />;
+  if (pathname.startsWith("/admin")) return <AdminPage />;
+  if (pathname.startsWith("/create")) return <CreateJobPage />;
+  return <LandingPage />;
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Navigation />
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-
-          {/* Protected Routes */}
-          <Route
-            path="/create"
-            element={<ProtectedRoute allowedRoles={['admin', 'user']}><CreateJobPage /></ProtectedRoute>}
-          />
-          <Route
-            path="/admin"
-            element={<ProtectedRoute allowedRoles={['admin']}><AdminPage /></ProtectedRoute>}
-          />
-
-          {/* General Home Route and Error/Info Routes */}
-          <Route path="/unauthorized" element={<div>Unauthorized</div>} />
-          <Route path="/" element={<div>Welcome to URAI Studio</div>} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+    <AppErrorBoundary>
+      <div className="app">
+        <nav className="top-nav">
+          <a className="brand" href="/">URAI Jobs</a>
+          <div>
+            <a href="/login">Login</a>
+            <a href="/create">Create</a>
+            <a href="/admin">Admin</a>
+          </div>
+        </nav>
+        {routeForPath(window.location.pathname)}
+      </div>
+    </AppErrorBoundary>
   );
 }

@@ -1,6 +1,8 @@
-import * as admin from 'firebase-admin';
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getApps, initializeApp } from "firebase-admin/app";
+if (getApps().length === 0) initializeApp();
 
-const db = admin.firestore();
+const db = getFirestore();
 
 export async function updateJobResult(
   jobId: string,
@@ -14,14 +16,14 @@ export async function updateJobResult(
 
   batch.update(jobRef, {
     status,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   });
 
   batch.set(jobResultRef, {
     jobId,
     status,
     result,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   });
 
   await batch.commit();

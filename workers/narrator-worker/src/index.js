@@ -39,12 +39,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const dotenv = __importStar(require("dotenv"));
 dotenv.config();
 const express_1 = __importDefault(require("express"));
-const handlers_1 = require("./handlers");
+const index_js_1 = require("./handlers/index.js");
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
 app.post('/execute-job', async (req, res) => {
     try {
-        const result = await (0, handlers_1.handleJob)(req.body);
+        const result = await (0, index_js_1.handleJob)(req.body);
         res.status(200).send(result);
     }
     catch (error) {

@@ -1,11 +1,15 @@
+import { getFirestore } from "firebase-admin/firestore";
+import { getApps, initializeApp } from "firebase-admin/app";
 import admin from 'firebase-admin';
 import { User } from '@urai-jobs/shared-types';
+
+if (getApps().length === 0) initializeApp();
 
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-const db = admin.firestore();
+const db = getFirestore();
 const auth = admin.auth();
 
 const users: Omit<User, 'uid'>[] = [

@@ -1,9 +1,10 @@
 {
   "name": "@urai-jobs/shared-types",
-"main": "src/index.ts",
+  "main": "src/index.ts",
   "version": "1.0.0",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "typecheck": "tsc -p tsconfig.json"
   }
 }
