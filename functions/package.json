@@ -16,8 +16,8 @@
     "@google-cloud/pubsub": "^4.8.0",
     "@google-cloud/storage": "^7.10.0",
     "axios": "^1.16.0",
-    "firebase-admin": "^12.7.0",
-    "firebase-functions": "^5.1.1",
+    "firebase-admin": "^13.8.0",
+    "firebase-functions": "^7.2.5",
     "ulid": "^2.3.0",
     "zod": "^3.23.8"
   },

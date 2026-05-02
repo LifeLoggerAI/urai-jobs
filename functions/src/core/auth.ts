@@ -1,6 +1,5 @@
-import { getFirestore } from 'firebase-admin/firestore';
-import { https } from 'firebase-functions';
-import type { CallableContext } from 'firebase-functions/v1/https';
+import type { CallableRequest } from 'firebase-functions/v2/https';
+import { onCall } from 'firebase-functions/v2/https';
 import { User } from '@urai-jobs/shared-types';
 import { httpsError } from './errors.js';
 import { userDoc } from './firestore-paths.js';
@@ -23,18 +22,17 @@ export async function getAuthenticatedUser(uid: string): Promise<User> {
 /**
  * A Higher-Order Function that wraps a callable function to enforce role-based access control.
  *
- * @param allowedRoles An array of roles that are allowed to call this function.
- * @param handler The function to execute if the user has one of the allowed roles.
- * @returns A callable function that enforces RBAC.
+ * This uses the Firebase Functions v2 callable request shape while preserving
+ * a small context-compatible object for older handlers.
  */
-export const withAuthenticatedRole = 
-  <T>(allowedRoles: Array<User['role']>, handler: (data: T, context: CallableContext, user: User) => any) => 
-  https.onCall(async (data: T, context: CallableContext) => {
-    if (!context.auth) {
+export const withAuthenticatedRole =
+  <T>(allowedRoles: Array<User['role']>, handler: (data: T, context: any, user: User) => any) =>
+  onCall({ region: 'us-central1' }, async (request: CallableRequest<T>) => {
+    if (!request.auth) {
       throw httpsError('unauthenticated', 'The function must be called while authenticated.');
     }
 
-    const user = await getAuthenticatedUser(context.auth.uid);
+    const user = await getAuthenticatedUser(request.auth.uid);
 
     const hasPermission = allowedRoles.some((role) => user.role === role);
 
@@ -42,5 +40,10 @@ export const withAuthenticatedRole =
       throw httpsError('permission-denied', 'You do not have permission to perform this action.');
     }
 
-    return handler(data, context, user);
+    const context = {
+      auth: request.auth,
+      rawRequest: request.rawRequest
+    };
+
+    return handler(request.data as T, context, user);
   });

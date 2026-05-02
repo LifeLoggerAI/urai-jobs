@@ -4,7 +4,8 @@ import { Job, JobQueueEntry, UserRole, JobLog, NarratorTtsPayloadSchema } from '
 // URAI-JOBS: Job Cleanup and Finalization
 // Version: 1.0.0
 
-import * as functions from 'firebase-functions';
+import { logger } from 'firebase-functions';
+import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { JOBS_COLLECTION, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 
@@ -14,9 +15,12 @@ const TERMINAL_STATUSES: Job['status'][] = ['SUCCESS', 'FAILED', 'CANCELLED', 'D
  * This Firestore-triggered function watches for jobs entering a terminal state
  * and cleans up their corresponding entry in the jobQueue.
  */
-export const cleanupTerminalJobs = functions.firestore
-  .document(`${JOBS_COLLECTION}/{jobId}`)
-  .onUpdate(async (change, context) => {
+export const cleanupTerminalJobs = onDocumentUpdated(
+  { document: `${JOBS_COLLECTION}/{jobId}`, region: 'us-central1' },
+  async (event) => {
+    const change = event.data;
+    if (!change) return;
+    const context = { params: event.params };
     const { jobId } = context.params;
     const before = change.before.data() as any as Job;
     const after = change.after.data() as any as Job;
