@@ -1,7 +1,7 @@
 // URAI-JOBS: System Reconciliation (Retry, Dead-letter, Lease Recovery)
 // Version: 1.0.0
 
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { jobDoc, jobQueueCollection, jobQueueEntryDoc, jobsCollection } from '../core/firestore-paths.js';
 

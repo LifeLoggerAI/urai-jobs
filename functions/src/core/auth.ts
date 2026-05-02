@@ -1,5 +1,4 @@
-import { getFirestore } from 'firebase-admin/firestore';
-import { https } from 'firebase-functions';
+import { https } from 'firebase-functions/v1';
 import type { CallableContext } from 'firebase-functions/v1/https';
 import { User } from '@urai-jobs/shared-types';
 import { httpsError } from './errors.js';
@@ -23,12 +22,11 @@ export async function getAuthenticatedUser(uid: string): Promise<User> {
 /**
  * A Higher-Order Function that wraps a callable function to enforce role-based access control.
  *
- * @param allowedRoles An array of roles that are allowed to call this function.
- * @param handler The function to execute if the user has one of the allowed roles.
- * @returns A callable function that enforces RBAC.
+ * Kept on Firebase Functions v1 callable shape to preserve existing deployed
+ * Gen 1 function names and avoid Gen 1 -> Gen 2 replacement risk.
  */
-export const withAuthenticatedRole = 
-  <T>(allowedRoles: Array<User['role']>, handler: (data: T, context: CallableContext, user: User) => any) => 
+export const withAuthenticatedRole =
+  <T>(allowedRoles: Array<User['role']>, handler: (data: T, context: CallableContext, user: User) => any) =>
   https.onCall(async (data: T, context: CallableContext) => {
     if (!context.auth) {
       throw httpsError('unauthenticated', 'The function must be called while authenticated.');

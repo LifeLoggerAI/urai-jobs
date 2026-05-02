@@ -4,7 +4,7 @@ import { Job, JobQueueEntry, UserRole, JobLog, NarratorTtsPayloadSchema } from '
 // URAI-JOBS: Job Cleanup and Finalization
 // Version: 1.0.0
 
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import { JOBS_COLLECTION, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 
