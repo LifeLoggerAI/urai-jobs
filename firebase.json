@@ -2,10 +2,11 @@
   "functions": [
     {
       "source": "functions",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "codebase": "default",
       "predeploy": [
-        "npm --prefix functions run build"
+        "npx --yes pnpm@8.15.9 --filter @urai-jobs/shared-types build",
+        "npx --yes pnpm@8.15.9 --filter urai-jobs-functions build"
       ]
     }
   ],

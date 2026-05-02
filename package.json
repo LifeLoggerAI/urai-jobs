@@ -27,7 +27,10 @@
     "check:workspace": "node \"$npm_execpath\" -r list --depth -1"
   },
   "devDependencies": {
-    "@types/uuid": "^10.0.0"
+    "@types/uuid": "^10.0.0",
+    "@urai-jobs/shared-types": "workspace:^",
+    "firebase-admin": "^12.1.0",
+    "ulid": "^2.3.0"
   },
   "dependencies": {
     "axios": "^1.15.0"
