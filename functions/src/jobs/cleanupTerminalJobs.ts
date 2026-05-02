@@ -1,11 +1,11 @@
-import { Job, JobQueueEntry, UserRole, JobLog, NarratorTtsPayloadSchema } from '../shared-types';
+import { Job, JobQueueEntry, UserRole, JobLog, NarratorTtsPayloadSchema } from '../shared-types/index.js';
 
 
 // URAI-JOBS: Job Cleanup and Finalization
 // Version: 1.0.0
 
 import * as functions from 'firebase-functions';
-import { JOBS_COLLECTION, jobQueueEntryDoc } from '../core/firestore-paths';
+import { JOBS_COLLECTION, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 
 const TERMINAL_STATUSES: Job['status'][] = ['SUCCESS', 'FAILED', 'CANCELLED', 'DEAD'];

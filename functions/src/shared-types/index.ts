@@ -72,3 +72,14 @@ export interface UserRole {
 }
 
 export interface JobDoc extends Job {}
+
+export interface RoleDoc {
+  roleId: string;
+  permissions: string[];
+  description?: string;
+}
+
+export interface PermissionDoc {
+  permissionId: string;
+  description: string;
+}

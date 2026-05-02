@@ -1,7 +1,7 @@
 import express from 'express'
 import admin from 'firebase-admin'
 import { ulid } from 'ulid'
-import type { JobDoc, JobResultDoc, ResultEnvelope } from '../../types/index.js'
+import type { JobDoc, JobResultDoc, ResultEnvelope } from '../../types/index.js.js.js.js.js'
 
 if (!admin.apps.length) {
   admin.initializeApp()

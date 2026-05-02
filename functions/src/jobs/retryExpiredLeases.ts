@@ -1,50 +1,97 @@
-import * as functions from 'firebase-functions';
-import * as admin from 'firebase-admin';
-import { createLog } from '../core/logging';
-import { handleJobFailure } from './handleJobFailure';
-import { updateQueue } from '../core/lease';
-import { JobDoc } from '../core/types';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { ulid } from 'ulid';
+import { Job, JobQueueEntry } from '@urai-jobs/shared-types';
+import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
-const db = admin.firestore();
+const MAX_RETRIES = 3; 
+const RETRY_BACKOFF_MS = 5 * 1000;
 
-export const retryExpiredLeases = functions.pubsub.schedule('every 5 minutes').onRun(async (context) => {
-  const now = admin.firestore.Timestamp.now();
-  const query = db.collection('jobQueue')
-    .where('status', '==', 'LEASED')
-    .where('leaseExpiresAt', '<=', now);
+export const retryExpiredLeases = onSchedule('every 1 minutes', async (context) => {
+    const db = getFirestore();
+    const tickWorkerId = `retry-${ulid()}`;
 
-  const snapshot = await query.get();
-  if (snapshot.empty) {
-    return;
-  }
+    console.log(`[${tickWorkerId}] Starting expired lease check...`);
 
-  for (const doc of snapshot.docs) {
-    const queueDoc = doc.data();
-    const jobId = queueDoc.jobId;
+    const now = new Date();
 
-    try {
-      const jobRef = db.collection('jobs').doc(jobId);
-      const jobDoc = (await jobRef.get()).data() as JobDoc;
+    // Query the queue for items that are leased and expired
+    const expiredLeaseQuery = db.collection('jobQueue')
+        .where('status', '==', 'LEASED')
+        .where('lease.leaseExpiresAt', '<', now.toISOString());
 
-      if (['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].includes(jobDoc.status)) {
-        // Job is already in a terminal state, just clean up the queue item
-        await updateQueue(jobId, { status: 'DONE' });
-        continue;
-      }
+    const snapshot = await expiredLeaseQuery.get();
 
-      await createLog(
-        jobDoc.tenantId,
-        'WARN',
-        'SYSTEM',
-        'ExpiredLeaseFound',
-        `Job ${jobId} has an expired lease. Attempting to requeue or fail.`
-      );
-      
-      // Re-use the failure handler to determine if it should be retried or moved to dead-letter
-      await handleJobFailure(jobId, new Error('Lease expired and job was not completed.'));
-
-    } catch (error) {
-      console.error(`Failed to process expired lease for job ${jobId}:`, error);
+    if (snapshot.empty) {
+        console.log(`[${tickWorkerId}] No expired leases found.`);
+        return;
     }
-  }
+
+    console.log(`[${tickWorkerId}] Found ${snapshot.size} expired lease(s).`);
+
+    const retryPromises = snapshot.docs.map(async (queueDoc) => {
+        const queueEntry = queueDoc.data() as JobQueueEntry;
+        const jobId = queueEntry.jobId;
+
+        try {
+            await db.runTransaction(async (transaction) => {
+                const jobRef = jobDoc(jobId);
+                const queueRef = jobQueueEntryDoc(jobId);
+
+                const jobSnapshot = await transaction.get(jobRef);
+                if (!jobSnapshot.exists) {
+                    console.error(`[${tickWorkerId}] Job ${jobId} not found for expired queue entry. Cleaning up queue.`);
+                    transaction.update(queueRef, { status: 'DONE', updatedAt: FieldValue.serverTimestamp() });
+                    return;
+                }
+                const job = jobSnapshot.data() as Job;
+                
+                if (['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].includes(job.status)) {
+                    console.log(`[${tickWorkerId}] Job ${jobId} is already in terminal state '${job.status}'. Cleaning up queue entry.`);
+                    transaction.update(queueRef, { status: 'DONE', updatedAt: FieldValue.serverTimestamp() });
+                    return;
+                }
+
+                const currentRetryCount = job.retryCount || 0;
+                const maxRetries = job.execution?.maxAttempts ?? MAX_RETRIES;
+
+                console.warn(`[${tickWorkerId}] Expired lease detected for job ${jobId}. Retry attempt ${currentRetryCount + 1}.`);
+
+                if (currentRetryCount >= maxRetries) {
+                    console.error(`[${tickWorkerId}] Job ${jobId} has exceeded max retries (${maxRetries}). Moving to FAILED.`);
+                    const failureUpdate = {
+                        status: 'FAILED',
+                        lease: FieldValue.delete(),
+                        'execution.error': 'Job failed after exceeding max retry count due to expired leases.',
+                        updatedAt: FieldValue.serverTimestamp(),
+                    };
+                    transaction.update(jobRef, failureUpdate);
+                    transaction.update(queueRef, { status: 'DONE', updatedAt: FieldValue.serverTimestamp() });
+                } else {
+                    console.log(`[${tickWorkerId}] Re-queueing job ${jobId}.`);
+                    const newAvailableAt = new Date(Date.now() + RETRY_BACKOFF_MS * (currentRetryCount + 1));
+                    
+                    const requeueJobUpdate = {
+                        status: 'PENDING',
+                        retryCount: FieldValue.increment(1),
+                        lease: FieldValue.delete(),
+                        updatedAt: FieldValue.serverTimestamp(),
+                    };
+                    const requeueQueueUpdate = {
+                        status: 'PENDING',
+                        availableAt: newAvailableAt,
+                        lease: FieldValue.delete(),
+                        updatedAt: FieldValue.serverTimestamp(),
+                    };
+                    transaction.update(jobRef, requeueJobUpdate);
+                    transaction.update(queueRef, requeueQueueUpdate);
+                }
+            });
+        } catch (error) {
+            console.error(`[${tickWorkerId}] CRITICAL: Failed to process expired lease for job ${jobId}:`, error);
+        }
+    });
+
+    await Promise.all(retryPromises);
+    console.log(`[${tickWorkerId}] Finished expired lease check.`);
 });

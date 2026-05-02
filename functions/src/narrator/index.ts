@@ -1,5 +1,5 @@
-import { NarratorTtsPayload } from '../shared-types';
-import { createJob } from '../core/jobs';
+import { NarratorTtsPayload } from '../shared-types/index.js';
+import { createJob } from '../core/jobs.js';
 
 function isNarratorTtsPayload(value: any): value is NarratorTtsPayload {
   return !!value && typeof value === 'object' && typeof value.text === 'string';

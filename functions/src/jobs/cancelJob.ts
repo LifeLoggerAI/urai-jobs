@@ -1,54 +1,67 @@
-import * as functions from 'firebase-functions';
-import * as admin from 'firebase-admin';
-import { getAuthContext, ensureHasPermission } from '../core/auth';
-import { createLog } from '../core/logging';
-import { updateJob, updateQueue } from '../core/lease';
-import { URAI_Error, logError } from '../core/errors';
+import { FieldValue } from 'firebase-admin/firestore';
+import { z } from 'zod';
+import type { CallableContext } from 'firebase-functions/v1/https';
+import { User } from '@urai-jobs/shared-types';
+import { httpsError } from '../core/errors.js';
+import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
+import { getFirestore } from 'firebase-admin/firestore';
 
-export const cancelJob = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'The function must be called while authenticated.');
+const CancelJobSchema = z.object({
+  jobId: z.string(),
+});
+
+/**
+ * A callable function that allows a user to cancel a job they own, or an admin to cancel any job.
+ * The job can only be cancelled if it is not already in a terminal state.
+ */
+export const cancelJob = async (data: any, context: CallableContext, user: User) => {
+  const validationResult = CancelJobSchema.safeParse(data);
+  if (!validationResult.success) {
+    throw httpsError('invalid-argument', 'Invalid data.', validationResult.error.flatten());
   }
 
-  const { jobId } = data;
+  const { jobId } = validationResult.data;
+  const db = getFirestore();
+
+  const jobRef = jobDoc(jobId);
+  const queueRef = jobQueueEntryDoc(jobId);
 
   try {
-    const authContext = await getAuthContext(context.auth.uid);
-    const jobRef = admin.firestore().collection('jobs').doc(jobId);
-    const jobDoc = (await jobRef.get()).data();
+    await db.runTransaction(async (transaction) => {
+      const jobSnapshot = await transaction.get(jobRef);
 
-    if (!jobDoc) {
-      throw new URAI_Error('NotFound', 'VALIDATION', 'Job not found');
-    }
+      if (!jobSnapshot.exists) {
+        throw httpsError('not-found', 'Job not found.');
+      }
 
-    if (jobDoc.requestedBy.uid === authContext.uid) {
-      ensureHasPermission(authContext, 'jobs.cancel.own');
-    } else {
-      ensureHasPermission(authContext, 'jobs.cancel.any');
-    }
+      const job = jobSnapshot.data();
 
-    if (['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].includes(jobDoc.status)) {
-      return { status: jobDoc.status }; // Already terminal
-    }
+      // RBAC: Check if the user has permission to cancel this job.
+      // An admin can cancel any job, a user can only cancel their own.
+      if (user.role !== 'admin' && job.ownerUid !== user.uid) {
+        throw httpsError('permission-denied', 'You do not have permission to cancel this job.');
+      }
 
-    await updateJob(jobId, { status: 'CANCELLED', 'flags.cancelRequested': true });
-    await updateQueue(jobId, { status: 'DONE' });
+      // A job can only be cancelled if it is not already in a terminal state.
+      if (['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].includes(job.status)) {
+        return;
+      }
 
-    await createLog(
-      jobDoc.tenantId,
-      'INFO',
-      'API',
-      'JobCancelled',
-      `Job ${jobId} was cancelled by user ${authContext.uid}.`
-    );
+      const now = FieldValue.serverTimestamp();
 
-    return { status: 'CANCELLED' };
-
-  } catch (error) {
-    logError(error as URAI_Error | Error);
-    if (error instanceof functions.https.HttpsError) {
-      throw error;
-    }
-    throw new functions.https.HttpsError('internal', 'An internal error occurred while cancelling the job.');
+      transaction.update(jobRef, { 
+        status: 'CANCELLED',
+        updatedAt: now,
+       });
+       
+      transaction.update(queueRef, { 
+        status: 'DONE', 
+        updatedAt: now, 
+      });
+    });
+  } catch (error: any) {
+    throw httpsError('internal', 'Failed to cancel job.', { message: error.message });
   }
-});
+
+  return { status: 'CANCELLED' };
+};

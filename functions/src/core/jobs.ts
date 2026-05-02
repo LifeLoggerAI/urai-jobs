@@ -1,4 +1,4 @@
-import { Job, JobQueueEntry, UserRole, JobLog, NarratorTtsPayloadSchema } from '../shared-types';
+import { Job, JobQueueEntry, UserRole, JobLog, NarratorTtsPayloadSchema } from '../shared-types/index.js';
 
 
 import * as admin from 'firebase-admin';

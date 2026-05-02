@@ -1,59 +1,70 @@
-import { useState } from 'react'
-import { httpsCallable } from 'firebase/functions'
-import { functions } from '../firebase'
+import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 export function CreateJobPage() {
-  const [tenantId, setTenantId] = useState('default')
-  const [orgId, setOrgId] = useState('default')
-  const [type, setType] = useState('generic.task')
-  const [payload, setPayload] = useState('{}')
-  const [jobId, setJobId] = useState('')
-  const [output, setOutput] = useState('')
+  const { tokenResult } = useAuth();
+  const [jobName, setJobName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  async function createJob() {
-    const call = httpsCallable(functions, 'createJob')
-    const result = await call({
-      tenantId,
-      orgId,
-      type,
-      origin: 'API',
-      priority: 'NORMAL',
-      workerClass: 'FUNCTION',
-      payload: JSON.parse(payload || '{}')
-    })
-    const data = result.data as { jobId: string }
-    setJobId(data.jobId)
-    setOutput(JSON.stringify(result.data, null, 2))
-  }
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    setSuccess(null);
 
-  async function getStatus() {
-    if (!jobId) return
-    const call = httpsCallable(functions, 'getJobStatus')
-    const result = await call({ jobId })
-    setOutput(JSON.stringify(result.data, null, 2))
-  }
+    if (!tokenResult) {
+      setError('You must be logged in to create a job.');
+      setIsLoading(false);
+      return;
+    }
 
-  async function cancelJob() {
-    if (!jobId) return
-    const call = httpsCallable(functions, 'cancelJob')
-    const result = await call({ jobId })
-    setOutput(JSON.stringify(result.data, null, 2))
-  }
+    try {
+      const response = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await tokenResult.token}`,
+        },
+        body: JSON.stringify({ name: jobName }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create job');
+      }
+
+      const responseData = await response.json();
+      setSuccess(`Job created successfully! Job ID: ${responseData.id}`);
+      setJobName(''); // Clear the form
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div>
-      <h1>URAI-JOBS</h1>
-      <input value={tenantId} onChange={(e) => setTenantId(e.target.value)} placeholder="tenantId" />
-      <input value={orgId} onChange={(e) => setOrgId(e.target.value)} placeholder="orgId" />
-      <input value={type} onChange={(e) => setType(e.target.value)} placeholder="type" />
-      <textarea value={payload} onChange={(e) => setPayload(e.target.value)} rows={10} cols={80} />
-      <div>
-        <button onClick={createJob}>Create job</button>
-        <button onClick={getStatus}>Get status</button>
-        <button onClick={cancelJob}>Cancel</button>
-      </div>
-      <input value={jobId} onChange={(e) => setJobId(e.target.value)} placeholder="jobId" />
-      <pre>{output}</pre>
+      <h1>Create a New Job</h1>
+      <form onSubmit={handleSubmit}>
+        <div>
+          <label htmlFor="jobName">Job Name:</label>
+          <input
+            id="jobName"
+            type="text"
+            value={jobName}
+            onChange={(e) => setJobName(e.target.value)}
+            required
+          />
+        </div>
+        <button type="submit" disabled={isLoading}>
+          {isLoading ? 'Creating...' : 'Create Job'}
+        </button>
+      </form>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {success && <p style={{ color: 'green' }}>{success}</p>}
     </div>
-  )
+  );
 }

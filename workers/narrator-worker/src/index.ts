@@ -2,7 +2,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
-import { handleJob } from './handlers';
+import { handleJob } from './handlers.js.js.js.js';
 
 const app = express();
 app.use(express.json());

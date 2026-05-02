@@ -19,11 +19,20 @@ The system follows a distributed architecture centered around Firestore for stat
 
 ### Job Lifecycle
 
-1.  **Creation (`PENDING`)**: A job document is created in the `jobs` collection and a corresponding entry is added to the `jobQueue`.
-2.  **Leasing (`LEASED`)**: The `processQueueTick` function leases an available job to a worker class, preventing other workers from picking it up.
-3.  **Execution (`RUNNING`)**: The `executeJob` function calls the appropriate worker. The worker performs the task.
-4.  **Completion (`SUCCESS` or `FAILED`)**: Upon completion, the worker returns a result. A `jobResults` document is created, and the job's status is updated to a terminal state (`SUCCESS`, `FAILED`, `DEAD`).
-5.  **Cleanup**: A periodic function (`cleanupTerminalJobs`) removes completed jobs from the queue.
+The lifecycle of a job can be observed through its state transitions in Firestore and the log output from the worker.
+
+When a worker process is launched, it enters a polling loop, confirmed by the `[WORKER] started` log. At this point, it is idle and waiting for a `PENDING` job to appear in the `jobQueue`.
+
+When a client creates a job, a document is created in the `jobs` collection with a `status` of `PENDING`, and an entry is added to the `jobQueue`.
+
+To see the worker in action, you can create a pending job after the worker has started. The worker will then print:
+
+```text
+[WORKER] picked job <jobId>
+[WORKER] completed job <jobId>
+```
+
+This confirms the entire queue ingress and execution simulation path is working as expected.
 
 ## Core Firebase Functions
 

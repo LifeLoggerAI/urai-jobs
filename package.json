@@ -12,7 +12,11 @@
     "build": "npm run build -ws",
     "deploy:dev": "firebase use dev && firebase deploy",
     "deploy:staging": "firebase use staging && firebase deploy",
-    "deploy:prod": "firebase use prod && firebase deploy"
+    "deploy:prod": "firebase use prod && firebase deploy",
+    "worker:run": "node scripts/run-worker.mjs",
+    "job:queue": "node scripts/queue-job.mjs",
+    "leases:reclaim": "node scripts/reclaim-stale-leases.mjs",
+    "dead:requeue": "node scripts/requeue-dead.mjs"
   },
   "devDependencies": {
     "@types/uuid": "^10.0.0"

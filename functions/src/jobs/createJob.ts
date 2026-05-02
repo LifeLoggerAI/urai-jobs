@@ -2,10 +2,10 @@ import { ulid } from 'ulid';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import type { CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
-import { Job, JobQueueEntry } from '../shared-types';
-import { withAuthenticatedRole } from '../core/auth';
-import { httpsError } from '../core/errors';
-import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths';
+import { Job, JobQueueEntry } from '@urai-jobs/shared-types';
+import { withAuthenticatedRole } from '../core/auth.js';
+import { httpsError } from '../core/errors.js';
+import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 const CreateJobSchema = z.object({
   jobType: z.string().min(3, 'Job type must be at least 3 characters'),
@@ -14,7 +14,10 @@ const CreateJobSchema = z.object({
 });
 
 const handler = async (data: any, context: CallableContext) => {
-  const uid = context.auth?.uid || 'dev-user';
+  const uid = context.auth?.uid;
+  if (!uid) {
+    throw httpsError('unauthenticated', 'User must be authenticated.');
+  }
 
   const validationResult = CreateJobSchema.safeParse(data);
   if (!validationResult.success) {
@@ -26,17 +29,25 @@ const handler = async (data: any, context: CallableContext) => {
   const jobId = ulid();
   const now = FieldValue.serverTimestamp();
 
+  // Enforce Canon Data Model
   const newJob: Job = {
     jobId: jobId,
-    jobType: jobType,
+    type: jobType, // Normalized from jobType
+    status: 'PENDING',
     payload: payload,
-    status: 'PENDING'
+    ownerUid: uid, // Set ownership
+    retryCount: 0,
+    execution: {
+      attemptCount: 0,
+      maxAttempts: 3, // Default max attempts
+    },
   };
 
   const newQueueEntry: JobQueueEntry = {
     jobId: jobId,
     jobType: jobType,
-    status: 'PENDING'
+    status: 'PENDING',
+    attemptCount: 0,
   };
 
   try {
@@ -46,15 +57,15 @@ const handler = async (data: any, context: CallableContext) => {
 
       transaction.create(jobRef, {
         ...newJob,
-        createdBy: uid,
-        createdAt: now as any,
-        updatedAt: now as any
-      } as any);
+        createdAt: now,
+        updatedAt: now,
+      });
 
       transaction.create(queueRef, {
         ...newQueueEntry,
-        createdAt: now as any
-      } as any);
+        availableAt: now, // Make available immediately
+        createdAt: now,
+      });
     });
   } catch (error: any) {
     console.error('Error creating job in transaction:', error);

@@ -1,65 +1,59 @@
-import admin from 'firebase-admin'
-import { Timestamp } from 'firebase-admin/firestore'
-import { RoleDoc, PermissionDoc } from '../../types/index'
+import admin from 'firebase-admin';
+import { User } from '@urai-jobs/shared-types';
 
 if (!admin.apps.length) {
-  admin.initializeApp()
+  admin.initializeApp();
 }
-const db = admin.firestore()
 
-const permissions: PermissionDoc[] = [
-  { permissionId: 'jobs.create', description: 'Create jobs' },
-  { permissionId: 'jobs.read.own', description: 'Read own jobs' },
-  { permissionId: 'jobs.read.any', description: 'Read any jobs' },
-  { permissionId: 'jobs.cancel.own', description: 'Cancel own jobs' },
-  { permissionId: 'jobs.cancel.any', description: 'Cancel any jobs' },
-  { permissionId: 'admin.roles.read', description: 'Read role and permission docs' },
-  { permissionId: 'system.worker', description: 'Run worker operations' }
-]
+const db = admin.firestore();
+const auth = admin.auth();
 
-const roles: RoleDoc[] = [
+const users: Omit<User, 'uid'>[] = [
   {
-    roleId: 'admin',
-    description: 'Administrative user',
-    permissions: permissions.map((p) => p.permissionId)
+    email: 'admin@example.com',
+    role: 'admin',
+    displayName: 'Admin User',
   },
   {
-    roleId: 'client',
-    description: 'Standard client user',
-    permissions: ['jobs.create', 'jobs.read.own', 'jobs.cancel.own']
+    email: 'user@example.com',
+    role: 'user',
+    displayName: 'Regular User',
   },
-  {
-    roleId: 'worker',
-    description: 'System worker',
-    permissions: ['system.worker', 'jobs.read.any']
-  },
-  {
-    roleId: 'viewer',
-    description: 'Read-only support operator',
-    permissions: ['jobs.read.any', 'admin.roles.read']
-  }
-]
+];
 
 async function run() {
-  const now = Timestamp.now().toDate().toISOString()
-  for (const permission of permissions) {
-    await db.collection('permissions').doc(permission.permissionId).set({
-      ...permission,
-      updatedAt: now
-    }, { merge: true })
-  }
+  for (const userData of users) {
+    try {
+      // 1. Create the user in Firebase Auth
+      const userRecord = await auth.createUser({
+        email: userData.email,
+        password: 'password', // Set a default password for local development
+        displayName: userData.displayName,
+      });
 
-  for (const role of roles) {
-    await db.collection('roles').doc(role.roleId).set({
-      ...role,
-      updatedAt: now
-    }, { merge: true })
-  }
+      // 2. Set the custom role claim on the user
+      await auth.setCustomUserClaims(userRecord.uid, { role: userData.role });
 
-  console.log('[PASS] seeded roles and permissions')
+      // 3. Create the user document in Firestore
+      const userDoc: User = {
+        uid: userRecord.uid,
+        ...userData,
+      };
+      await db.collection('users').doc(userRecord.uid).set(userDoc);
+
+      console.log(`[PASS] Seeded user: ${userData.email} (role: ${userData.role})`);
+
+    } catch (error: any) {
+      if (error.code === 'auth/email-already-exists') {
+        console.log(`[INFO] User already exists: ${userData.email}`);
+      } else {
+        console.error(`[FAIL] Error seeding user: ${userData.email}`, error);
+      }
+    }
+  }
 }
 
 run().catch((err) => {
-  console.error(err)
-  process.exit(1)
-})
+  console.error(err);
+  process.exit(1);
+});

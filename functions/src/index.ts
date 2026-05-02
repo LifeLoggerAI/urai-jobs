@@ -1,18 +1,26 @@
-// Canonical single source of truth for all Firebase function exports.
+import { withAuthenticatedRole } from './core/auth.js';
 
-// HTTP-triggered and callable functions
-export * from './jobs/createJob';
-export * from './jobs/getJobStatus';
-export * from './jobs/cancelJob';
+import { createJob as createJobHandler } from './jobs/createJob.js';
+import { getJobStatus } from './jobs/getJobStatus.js';
+import { cancelJob } from './jobs/cancelJob.js';
+import { executeJob } from './jobs/executeJob.js';
+import { processQueueTick } from './jobs/processQueueTick.js';
+import { retryExpiredLeases } from './jobs/retryExpiredLeases.js';
+import { cleanupTerminalJobs } from './jobs/cleanupTerminalJobs.js';
+import { systemReconcile } from './jobs/systemReconcile.js';
+import { onJobTerminalEvent } from './events/onJobTerminalEvent.js';
 
-// Pub/Sub-triggered functions
-export * from './jobs/executeJob';
+// Apply RBAC to the createJob function
+const createJob = withAuthenticatedRole(['user', 'admin'], createJobHandler);
 
-// Scheduled functions (Pub/Sub)
-export * from './jobs/processQueueTick';
-export * from './jobs/retryExpiredLeases';
-export * from './jobs/cleanupTerminalJobs';
-export * from './jobs/systemReconcile';
-
-// Firestore-triggered functions
-export * from './events/onJobTerminalEvent';
+export {
+  createJob,
+  getJobStatus,
+  cancelJob,
+  executeJob,
+  processQueueTick,
+  retryExpiredLeases,
+  cleanupTerminalJobs,
+  systemReconcile,
+  onJobTerminalEvent,
+};

@@ -1,33 +1,63 @@
-import { useState } from 'react'
-import { createUserWithEmailAndPassword } from 'firebase/auth'
-import { Link, useNavigate } from 'react-router-dom'
-import { auth } from '../firebase'
+import { useState } from 'react';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../firebase';
+import { useNavigate } from 'react-router-dom';
 
 export function SignupPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const navigate = useNavigate()
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
+  const handleSignup = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
     try {
-      await createUserWithEmailAndPassword(auth, email, password)
-      navigate('/')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      // This simply creates the user in Firebase Auth
+      await createUserWithEmailAndPassword(auth, email, password);
+
+      // After sign-up, we could also make a call to our backend to create a user profile in Firestore
+      // For now, we'll just redirect to the home page.
+      navigate('/');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
-    <form onSubmit={submit}>
-      <h1>Sign up</h1>
-      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email" />
-      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="password" type="password" />
-      <button type="submit">Create account</button>
-      {error && <pre>{error}</pre>}
-      <p><Link to="/login">Login</Link></p>
-    </form>
-  )
+    <div>
+      <h1>Sign Up</h1>
+      <form onSubmit={handleSignup}>
+        <div>
+          <label htmlFor="email">Email:</label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="password">Password:</label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        <button type="submit" disabled={isLoading}>
+          {isLoading ? 'Signing up...' : 'Sign Up'}
+        </button>
+      </form>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+    </div>
+  );
 }
