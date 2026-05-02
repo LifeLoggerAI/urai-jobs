@@ -1,8 +1,7 @@
 // URAI-JOBS: System Reconciliation (Retry, Dead-letter, Lease Recovery)
 // Version: 1.0.0
 
-import { logger } from 'firebase-functions';
-import { onSchedule } from 'firebase-functions/v2/scheduler';
+import * as functions from 'firebase-functions/v1';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { jobDoc, jobQueueCollection, jobQueueEntryDoc, jobsCollection } from '../core/firestore-paths.js';
 
@@ -100,9 +99,7 @@ async function reconcileStaleRunners(db: FirebaseFirestore.Firestore): Promise<v
 /**
  * A scheduled function that runs periodically to find and fix stuck jobs.
  */
-export const systemReconcile = onSchedule(
-  { schedule: 'every 5 minutes', region: 'us-central1' },
-  async (event) => {
+export const systemReconcile = functions.pubsub.schedule('every 5 minutes').onRun(async (context) => {
   console.log('Starting system reconciliation...');
   const db = getFirestore();
 

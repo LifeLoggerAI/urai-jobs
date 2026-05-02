@@ -1,5 +1,5 @@
-import type { CallableRequest } from 'firebase-functions/v2/https';
-import { onCall } from 'firebase-functions/v2/https';
+import { https } from 'firebase-functions/v1';
+import type { CallableContext } from 'firebase-functions/v1/https';
 import { User } from '@urai-jobs/shared-types';
 import { httpsError } from './errors.js';
 import { userDoc } from './firestore-paths.js';
@@ -22,17 +22,17 @@ export async function getAuthenticatedUser(uid: string): Promise<User> {
 /**
  * A Higher-Order Function that wraps a callable function to enforce role-based access control.
  *
- * This uses the Firebase Functions v2 callable request shape while preserving
- * a small context-compatible object for older handlers.
+ * Kept on Firebase Functions v1 callable shape to preserve existing deployed
+ * Gen 1 function names and avoid Gen 1 -> Gen 2 replacement risk.
  */
 export const withAuthenticatedRole =
-  <T>(allowedRoles: Array<User['role']>, handler: (data: T, context: any, user: User) => any) =>
-  onCall({ region: 'us-central1' }, async (request: CallableRequest<T>) => {
-    if (!request.auth) {
+  <T>(allowedRoles: Array<User['role']>, handler: (data: T, context: CallableContext, user: User) => any) =>
+  https.onCall(async (data: T, context: CallableContext) => {
+    if (!context.auth) {
       throw httpsError('unauthenticated', 'The function must be called while authenticated.');
     }
 
-    const user = await getAuthenticatedUser(request.auth.uid);
+    const user = await getAuthenticatedUser(context.auth.uid);
 
     const hasPermission = allowedRoles.some((role) => user.role === role);
 
@@ -40,10 +40,5 @@ export const withAuthenticatedRole =
       throw httpsError('permission-denied', 'You do not have permission to perform this action.');
     }
 
-    const context = {
-      auth: request.auth,
-      rawRequest: request.rawRequest
-    };
-
-    return handler(request.data as T, context, user);
+    return handler(data, context, user);
   });

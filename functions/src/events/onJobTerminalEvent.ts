@@ -1,13 +1,9 @@
-import { logger } from 'firebase-functions';
-import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import * as functions from 'firebase-functions/v1';
 import { createLog } from '../core/logging.js';
 
-export const onJobTerminalEvent = onDocumentUpdated(
-  { document: 'jobs/{jobId}', region: 'us-central1' },
-  async (event) => {
-    const change = event.data;
-    if (!change) return;
-    const context = { params: event.params };
+export const onJobTerminalEvent = functions.firestore
+  .document('jobs/{jobId}')
+  .onUpdate(async (change, context) => {
     const before = change.before.data();
     const after = change.after.data();
 
