@@ -1,69 +1,95 @@
+import { Link } from "react-router-dom";
 
-import { Link } from 'react-router-dom';
+const features = [
+  {
+    title: "Queue every production workflow",
+    body: "Submit rendering, narration, spatial, asset, analytics, and orchestration jobs into one traceable execution layer."
+  },
+  {
+    title: "Operate with confidence",
+    body: "Monitor status, attempts, failures, retries, cancellations, logs, payloads, and outputs from the admin console."
+  },
+  {
+    title: "Built for URAI systems",
+    body: "Designed around subsystem ownership, RBAC, Firebase Functions, Firestore queues, workers, and production auditability."
+  },
+  {
+    title: "Recover from failures",
+    body: "Retry failed work, cancel active work, inspect errors, and preserve a complete log trail for each job."
+  },
+  {
+    title: "Cloud-native runtime",
+    body: "Runs on Firebase, Cloud Functions, Pub/Sub, Scheduler, and Node.js 22 with deployment gates protecting production."
+  },
+  {
+    title: "Ready to extend",
+    body: "Add new job types and workers without rebuilding every product surface that depends on background execution."
+  }
+];
 
 export function LandingPage() {
   return (
     <div className="landing-page">
-      <header className="header">
-        <div className="logo">URAI Jobs</div>
-        <nav className="nav">
-          <Link to="/login">Login</Link>
-          <Link to="/signup" className="cta-button">Sign Up</Link>
-        </nav>
-      </header>
       <main className="page-shell">
-        <section className="hero">
-          <div className="eyebrow">URAI Jobs</div>
-          <h1>Your Production Backbone for Complex Workflows</h1>
-          <p>
-            A scalable, traceable, and permissioned job orchestration system for the entire URAI ecosystem.
-            Manage everything from rendering and data pre-computation to media transcoding and content delivery in one place.
-          </p>
-          <div className="hero-actions">
-            <Link to="/create" className="cta-button">Get Started</Link>
-            <Link to="/docs" className="secondary-button">Learn More</Link>
+        <section className="hero hero-grid">
+          <div>
+            <div className="eyebrow">URAI Jobs</div>
+            <h1>The production job layer for the URAI ecosystem.</h1>
+            <p>
+              URAI Jobs gives operators and internal systems one reliable place to create,
+              monitor, retry, cancel, and audit complex background work.
+            </p>
+
+            <div className="hero-actions">
+              <Link to="/create" className="cta-button">Create a job</Link>
+              <Link to="/admin" className="secondary-button">Open admin</Link>
+            </div>
           </div>
+
+          <aside className="hero-card">
+            <div className="eyebrow">Live capabilities</div>
+            <ul className="check-list">
+              <li>Firebase-backed job creation</li>
+              <li>Operator admin dashboard</li>
+              <li>Retry and cancel controls</li>
+              <li>Payload, output, and log inspection</li>
+              <li>Node.js 22 functions runtime</li>
+            </ul>
+          </aside>
         </section>
 
-        <section className="features">
-          <h2>Why URAI Jobs?</h2>
+        <section className="section-block">
+          <div className="section-heading">
+            <div className="eyebrow">Why it exists</div>
+            <h2>One backbone for work that cannot disappear.</h2>
+            <p>
+              URAI products need background work that is observable, permissioned,
+              resilient, and easy to reason about under production pressure.
+            </p>
+          </div>
+
           <div className="features-grid">
-            <div className="feature-item">
-              <h3>Unified Execution</h3>
-              <p>Consolidate job requests from URAI Spatial, Studio, Narrator, and Asset Factory into a single, managed pipeline.</p>
-            </div>
-            <div className="feature-item">
-              <h3>Robust & Resilient</h3>
-              <p>With automatic retries, dead-letter queues, and detailed logging, your jobs will run to completion, even when things go wrong.</p>
-            </div>
-            <div className="feature-item">
-              <h3>Secure & Permissioned</h3>
-              <p>A granular RBAC system and tenant isolation ensure that only authorized users and systems can create and manage jobs.</p>
-            </div>
-            <div className="feature-item">
-              <h3>Traceable & Auditable</h3>
-              <p>Every job and its entire lifecycle are recorded, providing a complete audit trail for compliance and debugging.</p>
-            </div>
-            <div className="feature-item">
-              <h3>Scalable & Performant</h3>
-              <p>Leveraging Firebase and Cloud Run, URAI Jobs can scale to handle any workload, from lightweight tasks to heavy-duty rendering.</p>
-            </div>
-            <div className="feature-item">
-              <h3>Extensible & Integrated</h3>
-              <p>A clean API and event-driven architecture make it easy to integrate your own systems and services with URAI Jobs.</p>
-            </div>
+            {features.map((feature) => (
+              <article className="feature-item" key={feature.title}>
+                <h3>{feature.title}</h3>
+                <p>{feature.body}</p>
+              </article>
+            ))}
           </div>
         </section>
 
         <section className="call-to-action">
-          <h2>Ready to take control of your production workflows?</h2>
-          <p>Sign up today and start building more reliable and scalable applications with URAI Jobs.</p>
-          <Link to="/signup" className="cta-button">Sign Up Now</Link>
+          <div>
+            <div className="eyebrow">Operator ready</div>
+            <h2>Submit a smoke job or inspect live queue state.</h2>
+            <p>Use the create page for controlled job submission and the admin page for queue visibility.</p>
+          </div>
+          <div className="hero-actions">
+            <Link to="/create" className="cta-button">Create job</Link>
+            <Link to="/admin" className="secondary-button">View admin</Link>
+          </div>
         </section>
       </main>
-      <footer className="footer">
-        <p>&copy; 2024 URAI. All rights reserved.</p>
-      </footer>
     </div>
   );
 }

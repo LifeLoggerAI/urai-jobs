@@ -31,6 +31,14 @@ function jobLabel(job: JobRecord): string {
   return String(job.jobType || job.type || "unknown");
 }
 
+function ownerLabel(job: JobRecord): string {
+  return String(job.ownerSubsystem || job.ownerUid || job.createdBy || "—");
+}
+
+function statusLabel(status: JobStatus): string {
+  return status.replace(/_/g, " ");
+}
+
 function renderJson(value: unknown) {
   if (value === undefined || value === null || value === "") return "—";
   try {
@@ -57,6 +65,7 @@ export function AdminPage() {
   async function refresh() {
     setLoading(true);
     setError("");
+
     try {
       const entries = await Promise.all(
         STATUSES.map(async (status) => {
@@ -130,109 +139,154 @@ export function AdminPage() {
   }, []);
 
   return (
-    <main style={{ maxWidth: 1180, margin: "0 auto", padding: "2rem" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
+    <main className="page-shell admin-shell">
+      <header className="admin-header">
         <div>
+          <div className="eyebrow">Operator Console</div>
           <h1>URAI Jobs Admin</h1>
-          <p>Live Firebase-backed operator dashboard for queue, execution, retry, cancel, payload, output, and logs.</p>
+          <p>
+            Monitor live queue state, inspect payloads and logs, retry failed work,
+            and cancel active jobs from one production dashboard.
+          </p>
         </div>
-        <button type="button" onClick={() => void refresh()} disabled={loading}>
-          {loading ? "Loading..." : "Refresh"}
-        </button>
+
+        <div className="admin-header-actions">
+          <div className="metric-card">
+            <strong>{totalJobs}</strong>
+            <span>Jobs loaded</span>
+          </div>
+          <button type="button" onClick={() => void refresh()} disabled={loading}>
+            {loading ? "Loading..." : "Refresh"}
+          </button>
+        </div>
       </header>
 
       {error && (
-        <section style={{ border: "1px solid #b91c1c", padding: "1rem", margin: "1rem 0" }}>
+        <section className="notice error">
           <strong>Error</strong>
           <p>{error}</p>
         </section>
       )}
 
       {notice && (
-        <section style={{ border: "1px solid #15803d", padding: "1rem", margin: "1rem 0" }}>
+        <section className="notice success">
           <strong>Success</strong>
           <p>{notice}</p>
         </section>
       )}
 
-      {loading && <p>Loading live job data...</p>}
-      {!loading && totalJobs === 0 && <p>No jobs returned by the backend yet.</p>}
+      {loading && <p className="muted">Loading live job data...</p>}
+      {!loading && totalJobs === 0 && (
+        <section className="empty-state">
+          <div className="eyebrow">No jobs yet</div>
+          <h2>The queue is clear.</h2>
+          <p>Create a smoke job to verify production job creation and admin visibility.</p>
+          <a className="secondary-button" href="/create">Create job</a>
+        </section>
+      )}
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "1rem" }}>
+      <section className="job-board">
         {STATUSES.map((status) => (
-          <article key={status} style={{ border: "1px solid #ccc", borderRadius: 8, padding: "1rem" }}>
-            <h2 style={{ textTransform: "capitalize" }}>
-              {status.replace("_", " ")} ({jobsByStatus[status].length})
-            </h2>
+          <article className="status-column" key={status}>
+            <header className="status-column-header">
+              <span className={`status-badge status-${status.replace(/_/g, "-")}`}>
+                {statusLabel(status)}
+              </span>
+              <strong>{jobsByStatus[status].length}</strong>
+            </header>
 
             {jobsByStatus[status].length === 0 ? (
-              <p>No {status.replace("_", " ")} jobs.</p>
+              <p className="muted">No {statusLabel(status)} jobs.</p>
             ) : (
-              jobsByStatus[status].map((job) => {
-                const id = jobKey(job);
-                const canRetry = status === "failed" || status === "retry_needed";
-                const canCancel = status === "queued" || status === "running";
+              <div className="job-card-stack">
+                {jobsByStatus[status].map((job) => {
+                  const id = jobKey(job);
+                  const canRetry = status === "failed" || status === "retry_needed";
+                  const canCancel = status === "queued" || status === "running";
 
-                return (
-                  <div key={id} style={{ borderTop: "1px solid #ddd", paddingTop: "0.75rem", marginTop: "0.75rem" }}>
-                    <strong>{jobLabel(job)}</strong>
-                    <p>ID: {id}</p>
-                    <p>Owner: {String(job.ownerSubsystem || job.ownerUid || job.createdBy || "—")}</p>
-                    <p>
-                      Attempts: {job.attempts ?? 0}
-                      {job.maxAttempts !== undefined ? ` / ${job.maxAttempts}` : ""}
-                    </p>
-                    {job.error !== undefined && <pre>{renderJson(job.error)}</pre>}
+                  return (
+                    <article className="job-card" key={id}>
+                      <div className="job-card-topline">
+                        <strong>{jobLabel(job)}</strong>
+                        <span>{job.attempts ?? 0}{job.maxAttempts !== undefined ? `/${job.maxAttempts}` : ""} attempts</span>
+                      </div>
 
-                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                      <button type="button" onClick={() => void openJob(job)} disabled={Boolean(actionPending)}>
-                        View details
-                      </button>
-                      {canRetry && (
-                        <button type="button" onClick={() => void retry(id)} disabled={Boolean(actionPending)}>
-                          Retry
-                        </button>
+                      <dl className="job-meta">
+                        <div>
+                          <dt>ID</dt>
+                          <dd>{id}</dd>
+                        </div>
+                        <div>
+                          <dt>Owner</dt>
+                          <dd>{ownerLabel(job)}</dd>
+                        </div>
+                      </dl>
+
+                      {job.error !== undefined && (
+                        <pre className="compact-pre">{renderJson(job.error)}</pre>
                       )}
-                      {canCancel && (
-                        <button type="button" onClick={() => void cancel(id)} disabled={Boolean(actionPending)}>
-                          Cancel
+
+                      <div className="job-actions">
+                        <button type="button" onClick={() => void openJob(job)} disabled={Boolean(actionPending)}>
+                          Details
                         </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
+                        {canRetry && (
+                          <button type="button" onClick={() => void retry(id)} disabled={Boolean(actionPending)}>
+                            Retry
+                          </button>
+                        )}
+                        {canCancel && (
+                          <button type="button" onClick={() => void cancel(id)} disabled={Boolean(actionPending)}>
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
             )}
           </article>
         ))}
       </section>
 
       {selectedJob && (
-        <section style={{ border: "1px solid #ccc", borderRadius: 8, padding: "1rem", marginTop: "2rem" }}>
-          <h2>Job Detail</h2>
-          <p>ID: {jobKey(selectedJob)}</p>
-          <p>Type: {jobLabel(selectedJob)}</p>
-          <p>Status: {String(selectedJob.status || "—")}</p>
+        <section className="detail-panel">
+          <header className="detail-header">
+            <div>
+              <div className="eyebrow">Job Detail</div>
+              <h2>{jobLabel(selectedJob)}</h2>
+              <p>{jobKey(selectedJob)}</p>
+            </div>
+            <span className={`status-badge status-${String(selectedJob.status || "unknown").replace(/_/g, "-")}`}>
+              {String(selectedJob.status || "unknown").replace(/_/g, " ")}
+            </span>
+          </header>
 
-          <h3>Payload</h3>
-          <pre style={{ whiteSpace: "pre-wrap" }}>{renderJson(selectedJob.payload)}</pre>
-
-          <h3>Output</h3>
-          <pre style={{ whiteSpace: "pre-wrap" }}>{renderJson(selectedJob.output)}</pre>
-
-          <h3>Error</h3>
-          <pre style={{ whiteSpace: "pre-wrap" }}>{renderJson(selectedJob.error)}</pre>
-
-          <h3>Logs</h3>
-          {selectedLogs.length === 0 ? (
-            <p>No logs returned.</p>
-          ) : (
-            selectedLogs.map((log, index) => (
-              <pre key={`${log.jobId || "log"}-${index}`} style={{ whiteSpace: "pre-wrap" }}>
-                {renderJson(log)}
-              </pre>
-            ))
-          )}
+          <div className="detail-grid">
+            <article>
+              <h3>Payload</h3>
+              <pre>{renderJson(selectedJob.payload)}</pre>
+            </article>
+            <article>
+              <h3>Output</h3>
+              <pre>{renderJson(selectedJob.output)}</pre>
+            </article>
+            <article>
+              <h3>Error</h3>
+              <pre>{renderJson(selectedJob.error)}</pre>
+            </article>
+            <article>
+              <h3>Logs</h3>
+              {selectedLogs.length === 0 ? (
+                <p className="muted">No logs returned.</p>
+              ) : (
+                selectedLogs.map((log, index) => (
+                  <pre key={`${log.jobId || "log"}-${index}`}>{renderJson(log)}</pre>
+                ))
+              )}
+            </article>
+          </div>
         </section>
       )}
     </main>
