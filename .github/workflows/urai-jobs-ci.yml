@@ -1,0 +1,61 @@
+name: URAI Jobs CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  gates:
+    name: Build, typecheck, smoke, emulator E2E
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9
+
+      - name: Setup Java for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Verify functions npm lockfile
+        run: npm --prefix functions ci --ignore-scripts
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Firebase SDK versions
+        run: pnpm --filter urai-jobs-functions list firebase-functions firebase-admin --depth 0
+
+      - name: Build
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Verify URAI Jobs contracts
+        run: pnpm urai-jobs:verify
+
+      - name: Smoke test URAI Jobs logic
+        run: pnpm urai-jobs:smoke
+
+      - name: Emulator E2E
+        run: npx --yes firebase-tools@latest emulators:exec --only firestore,auth "node scripts/urai-jobs-e2e.mjs"
+
+      - name: Deploy precheck
+        run: pnpm urai-jobs:deploy-precheck
