@@ -12,6 +12,12 @@ on:
         required: false
         default: "https://www.uraijobs.com"
         type: string
+      skip_smoke:
+        description: "Skip production smoke after deploy"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
 
 jobs:
   deploy:
@@ -22,7 +28,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Require explicit launch unlock
-        run: test "${{ github.event.inputs.confirm_launch_unlock }}" = "LAUNCH-UNLOCK"
+        run: |
+          if [ "${{ github.event.inputs.confirm_launch_unlock }}" != "LAUNCH-UNLOCK" ]; then
+            echo "confirm_launch_unlock must exactly equal LAUNCH-UNLOCK."
+            exit 1
+          fi
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -47,21 +57,33 @@ jobs:
           pnpm --dir web build
           pnpm --filter @urai-jobs/shared-types build
           pnpm --filter urai-jobs-functions build
+      - name: Verify Firebase deploy secrets
+        run: |
+          if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT_URAI_JOBS }}" ]; then
+            echo "Missing GitHub secret: FIREBASE_SERVICE_ACCOUNT_URAI_JOBS"
+            exit 1
+          fi
+          if [ -z "${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}" ]; then
+            echo "Missing GitHub secret: URAI_JOBS_FIREBASE_PROJECT_ID"
+            exit 1
+          fi
+          echo "Firebase deploy secrets are present."
       - name: Install Firebase Tools
         run: npm install -g firebase-tools
       - name: Write Firebase service account
         run: |
-          test -n "${{ secrets.FIREBASE_SERVICE_ACCOUNT_URAI_JOBS }}"
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_URAI_JOBS }}' > "$RUNNER_TEMP/firebase-service-account.json"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-service-account.json" >> "$GITHUB_ENV"
-      - name: Verify Firebase project secret
-        run: test -n "${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}"
       - name: Deploy Firebase target
-        run: firebase deploy --project "${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}" --only firestore:rules,firestore:indexes,functions,hosting
+        run: firebase deploy --project "${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}" --only firestore:rules,firestore:indexes,functions,hosting --non-interactive
       - name: Production smoke
+        if: ${{ github.event.inputs.skip_smoke != 'true' }}
         run: |
           URL="${{ github.event.inputs.production_url }}"
           curl -fsS "$URL" | grep -q "URAI Jobs"
           curl -fsS "$URL/privacy" | grep -q "Privacy"
           curl -fsS "$URL/terms" | grep -q "Terms"
           curl -fsS "$URL/trust" | grep -q "Trust"
+      - name: Smoke skipped notice
+        if: ${{ github.event.inputs.skip_smoke == 'true' }}
+        run: echo "Production smoke was skipped by workflow input. Run URAI Jobs Live Verification after DNS/SSL is ready."
