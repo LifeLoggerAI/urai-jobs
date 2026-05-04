@@ -7,6 +7,11 @@ on:
         description: "Type LAUNCH-UNLOCK to confirm signoffs are complete"
         required: true
         type: string
+      production_url:
+        description: "Production base URL for smoke checks"
+        required: false
+        default: "https://www.uraijobs.com"
+        type: string
 
 jobs:
   deploy:
@@ -54,10 +59,8 @@ jobs:
       - name: Deploy Firebase target
         run: firebase deploy --project "${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}" --only firestore:rules,firestore:indexes,functions,hosting
       - name: Production smoke
-        env:
-          URAI_JOBS_PRODUCTION_URL: ${{ vars.URAI_JOBS_PRODUCTION_URL }}
         run: |
-          URL="${URAI_JOBS_PRODUCTION_URL:-https://urai-jobs-c2057.web.app}"
+          URL="${{ github.event.inputs.production_url }}"
           curl -fsS "$URL" | grep -q "URAI Jobs"
           curl -fsS "$URL/privacy" | grep -q "Privacy"
           curl -fsS "$URL/terms" | grep -q "Terms"
