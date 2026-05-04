@@ -1,0 +1,43 @@
+name: URAI Jobs Live Verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      production_url:
+        description: "Production base URL to verify"
+        required: false
+        default: "https://urai-jobs-c2057.web.app"
+        type: string
+
+jobs:
+  verify:
+    name: Verify URAI Jobs live setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify required GitHub secrets are present
+        run: |
+          test -n "${{ secrets.FIREBASE_SERVICE_ACCOUNT_URAI_JOBS }}"
+          test -n "${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}"
+      - name: Verify launch files
+        run: |
+          test -f verification/launch-lock.json
+          test -f verification/signoffs.md
+          test -f docs/LAUNCH_RUNBOOK.md
+          grep -q "locked_until_verified" verification/launch-lock.json
+          grep -q "LAUNCH-UNLOCK" docs/LAUNCH_RUNBOOK.md
+      - name: Verify production routes
+        run: |
+          URL="${{ github.event.inputs.production_url }}"
+          curl -fsS "$URL" | grep -q "URAI Jobs"
+          curl -fsS "$URL/privacy" | grep -q "Privacy"
+          curl -fsS "$URL/terms" | grep -q "Terms"
+          curl -fsS "$URL/trust" | grep -q "Trust"
+      - name: Report signoff lock state
+        run: |
+          if grep -q "Status: PENDING" verification/signoffs.md; then
+            echo "Signoff ledger still contains pending approvals. Production deploy remains locked."
+            exit 1
+          fi
+          echo "No pending signoffs found."
