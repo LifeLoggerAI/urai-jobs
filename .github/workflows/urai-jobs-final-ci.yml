@@ -1,0 +1,105 @@
+name: URAI Jobs Final CI
+
+on:
+  pull_request:
+    paths:
+      - "**"
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Verify workspace and launch lock
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --no-frozen-lockfile
+      - name: Verify URAI Jobs contracts
+        run: pnpm urai-jobs:verify
+      - name: Verify legal routes and launch lock
+        run: |
+          test -f verification/launch-lock.json
+          test -f verification/signoffs.md
+          test -f docs/LAUNCH_RUNBOOK.md
+          grep -q "locked_until_verified" verification/launch-lock.json
+          grep -q "Status: PENDING" verification/signoffs.md
+          grep -q "LAUNCH-UNLOCK" docs/LAUNCH_RUNBOOK.md
+          grep -q "PrivacyPage" web/src/pages/LegalPages.tsx
+          grep -q "TermsPage" web/src/pages/LegalPages.tsx
+          grep -q "TrustSafetyPage" web/src/pages/LegalPages.tsx
+          grep -q "/privacy" web/src/App.tsx
+          grep -q "/terms" web/src/App.tsx
+          grep -q "/trust" web/src/App.tsx
+
+  web:
+    name: Web typecheck and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --no-frozen-lockfile
+      - name: Typecheck web
+        run: pnpm --dir web typecheck
+      - name: Build web
+        run: pnpm --dir web build
+
+  functions:
+    name: Functions build and tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --no-frozen-lockfile
+      - name: Build functions
+        run: pnpm --filter urai-jobs-functions build
+      - name: Test functions
+        run: pnpm --filter urai-jobs-functions test
+
+  firebase-config:
+    name: Firebase config smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate Firebase JSON
+        run: |
+          python -m json.tool firebase.json > /dev/null
+          python -m json.tool firestore.indexes.json > /dev/null
+      - name: Verify Firebase deployment config
+        run: |
+          grep -q "nodejs22" firebase.json
+          grep -q "web/dist" firebase.json
+          grep -q "firestore.rules" firebase.json
+          test -f firestore.rules
+          test -f firestore.indexes.json
