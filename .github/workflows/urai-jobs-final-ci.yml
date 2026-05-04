@@ -33,7 +33,8 @@ jobs:
           test -f verification/signoffs.md
           test -f docs/LAUNCH_RUNBOOK.md
           grep -q "locked_until_verified" verification/launch-lock.json
-          grep -q "Status: PENDING" verification/signoffs.md
+          grep -q "Status: APPROVED" verification/signoffs.md
+          ! grep -q "Status: PENDING" verification/signoffs.md
           grep -q "LAUNCH-UNLOCK" docs/LAUNCH_RUNBOOK.md
           grep -q "PrivacyPage" web/src/pages/LegalPages.tsx
           grep -q "TermsPage" web/src/pages/LegalPages.tsx
