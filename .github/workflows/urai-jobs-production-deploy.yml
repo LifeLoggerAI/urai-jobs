@@ -1,0 +1,64 @@
+name: URAI Jobs Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_launch_unlock:
+        description: "Type LAUNCH-UNLOCK to confirm signoffs are complete"
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    name: Deploy URAI Jobs to Firebase
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Require explicit launch unlock
+        run: test "${{ github.event.inputs.confirm_launch_unlock }}" = "LAUNCH-UNLOCK"
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --no-frozen-lockfile
+      - name: Verify launch signoffs complete
+        run: |
+          pnpm urai-jobs:verify
+          if grep -q "Status: PENDING" verification/signoffs.md; then
+            echo "Launch signoffs are still pending. Complete verification/signoffs.md before production deploy."
+            exit 1
+          fi
+      - name: Build web and functions
+        run: |
+          pnpm --dir web typecheck
+          pnpm --dir web build
+          pnpm --filter @urai-jobs/shared-types build
+          pnpm --filter urai-jobs-functions build
+      - name: Install Firebase Tools
+        run: npm install -g firebase-tools
+      - name: Write Firebase service account
+        run: |
+          test -n "${{ secrets.FIREBASE_SERVICE_ACCOUNT_URAI_JOBS }}"
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_URAI_JOBS }}' > "$RUNNER_TEMP/firebase-service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-service-account.json" >> "$GITHUB_ENV"
+      - name: Verify Firebase project secret
+        run: test -n "${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}"
+      - name: Deploy Firebase target
+        run: firebase deploy --project "${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}" --only firestore:rules,firestore:indexes,functions,hosting
+      - name: Production smoke
+        env:
+          URAI_JOBS_PRODUCTION_URL: ${{ vars.URAI_JOBS_PRODUCTION_URL }}
+        run: |
+          URL="${URAI_JOBS_PRODUCTION_URL:-https://urai-jobs-c2057.web.app}"
+          curl -fsS "$URL" | grep -q "URAI Jobs"
+          curl -fsS "$URL/privacy" | grep -q "Privacy"
+          curl -fsS "$URL/terms" | grep -q "Terms"
+          curl -fsS "$URL/trust" | grep -q "Trust"
