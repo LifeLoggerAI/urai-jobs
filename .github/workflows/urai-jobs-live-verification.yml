@@ -6,7 +6,7 @@ on:
       production_url:
         description: "Production base URL to verify"
         required: false
-        default: "https://urai-jobs-c2057.web.app"
+        default: "https://www.uraijobs.com"
         type: string
 
 jobs:
