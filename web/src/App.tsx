@@ -3,6 +3,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { LandingPage } from "./pages/LandingPage";
 import { CreateJobPage } from "./pages/CreateJobPage";
 import { AdminPage } from "./pages/AdminPage";
+import { PrivacyPage, TermsPage, TrustSafetyPage } from "./pages/LegalPages";
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
@@ -32,6 +33,9 @@ function routeForPath(pathname: string) {
   if (pathname.startsWith("/login")) return <LoginPage />;
   if (pathname.startsWith("/admin")) return <AdminPage />;
   if (pathname.startsWith("/create")) return <CreateJobPage />;
+  if (pathname.startsWith("/privacy")) return <PrivacyPage />;
+  if (pathname.startsWith("/terms")) return <TermsPage />;
+  if (pathname.startsWith("/trust")) return <TrustSafetyPage />;
   return <LandingPage />;
 }
 
@@ -45,6 +49,9 @@ export default function App() {
             <a href="/login">Login</a>
             <a href="/create">Create</a>
             <a href="/admin">Admin</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+            <a href="/trust">Trust</a>
           </div>
         </nav>
         {routeForPath(window.location.pathname)}
