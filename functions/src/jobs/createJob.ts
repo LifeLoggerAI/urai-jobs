@@ -8,9 +8,9 @@ import { httpsError } from '../core/errors.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 const CreateJobSchema = z.object({
-  jobType: z.string().min(3, 'Job type must be at least 3 characters'),
-  payload: z.record(z.any()),
-  idempotencyKey: z.string().optional(),
+  jobType: z.string().min(3, 'Job type must be at least 3 characters').trim(),
+  payload: z.record(z.any()).default({}),
+  idempotencyKey: z.string().trim().optional(),
 });
 
 const handler = async (data: any, context: CallableContext) => {
@@ -24,28 +24,30 @@ const handler = async (data: any, context: CallableContext) => {
     throw httpsError('invalid-argument', 'Invalid job data.', validationResult.error.flatten());
   }
 
-  const { jobType, payload } = validationResult.data;
+  const { jobType, payload, idempotencyKey } = validationResult.data;
   const db = getFirestore();
   const jobId = ulid();
   const now = FieldValue.serverTimestamp();
 
-  // Enforce Canon Data Model
   const newJob: Job = {
-    jobId: jobId,
-    type: jobType, // Normalized from jobType
+    jobId,
+    jobType,
+    type: jobType,
     status: 'PENDING',
-    payload: payload,
-    ownerUid: uid, // Set ownership
+    payload,
+    ownerUid: uid,
+    createdBy: uid,
     retryCount: 0,
     execution: {
       attemptCount: 0,
-      maxAttempts: 3, // Default max attempts
+      maxAttempts: 3,
     },
-  };
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+  } as Job;
 
   const newQueueEntry: JobQueueEntry = {
-    jobId: jobId,
-    jobType: jobType,
+    jobId,
+    jobType,
     status: 'PENDING',
     attemptCount: 0,
   };
@@ -63,8 +65,9 @@ const handler = async (data: any, context: CallableContext) => {
 
       transaction.create(queueRef, {
         ...newQueueEntry,
-        availableAt: now, // Make available immediately
+        availableAt: now,
         createdAt: now,
+        updatedAt: now,
       });
     });
   } catch (error: any) {
