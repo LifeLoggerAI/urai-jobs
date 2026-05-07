@@ -10,17 +10,19 @@ import {
   type JobStatus
 } from "../lib/jobsApi";
 
-const STATUSES: JobStatus[] = ["queued", "running", "succeeded", "failed", "retry_needed", "cancelled"];
+const STATUSES: JobStatus[] = ["PENDING", "LEASED", "RUNNING", "SUCCESS", "FAILED", "DEAD", "CANCELLED"];
 
 type JobsByStatus = Record<JobStatus, JobRecord[]>;
 
 const emptyJobsByStatus = (): JobsByStatus => ({
-  queued: [],
-  running: [],
-  succeeded: [],
-  failed: [],
-  retry_needed: [],
-  cancelled: []
+  PENDING: [],
+  LEASED: [],
+  RUNNING: [],
+  SUCCESS: [],
+  FAILED: [],
+  DEAD: [],
+  CANCELLED: [],
+  DONE: []
 });
 
 function jobKey(job: JobRecord): string {
@@ -35,8 +37,18 @@ function ownerLabel(job: JobRecord): string {
   return String(job.ownerSubsystem || job.ownerUid || job.createdBy || "—");
 }
 
-function statusLabel(status: JobStatus): string {
-  return status.replace(/_/g, " ");
+function statusLabel(status: string): string {
+  return status.replace(/_/g, " ").toLowerCase();
+}
+
+function statusClass(status: string): string {
+  return status.toLowerCase().replace(/_/g, "-");
+}
+
+function attemptLabel(job: JobRecord): string {
+  const attempts = job.execution?.attemptCount ?? job.retryCount ?? job.attempts ?? 0;
+  const maxAttempts = job.execution?.maxAttempts ?? job.maxAttempts;
+  return `${attempts}${maxAttempts !== undefined ? `/${maxAttempts}` : ""} attempts`;
 }
 
 function renderJson(value: unknown) {
@@ -162,14 +174,14 @@ export function AdminPage() {
       </header>
 
       {error && (
-        <section className="notice error">
+        <section className="notice error" role="alert">
           <strong>Error</strong>
           <p>{error}</p>
         </section>
       )}
 
       {notice && (
-        <section className="notice success">
+        <section className="notice success" role="status">
           <strong>Success</strong>
           <p>{notice}</p>
         </section>
@@ -185,11 +197,11 @@ export function AdminPage() {
         </section>
       )}
 
-      <section className="job-board">
+      <section className="job-board" aria-label="Jobs grouped by status">
         {STATUSES.map((status) => (
           <article className="status-column" key={status}>
             <header className="status-column-header">
-              <span className={`status-badge status-${status.replace(/_/g, "-")}`}>
+              <span className={`status-badge status-${statusClass(status)}`}>
                 {statusLabel(status)}
               </span>
               <strong>{jobsByStatus[status].length}</strong>
@@ -201,14 +213,14 @@ export function AdminPage() {
               <div className="job-card-stack">
                 {jobsByStatus[status].map((job) => {
                   const id = jobKey(job);
-                  const canRetry = status === "failed" || status === "retry_needed";
-                  const canCancel = status === "queued" || status === "running";
+                  const canRetry = status === "FAILED" || status === "DEAD" || status === "CANCELLED";
+                  const canCancel = status === "PENDING" || status === "LEASED" || status === "RUNNING";
 
                   return (
                     <article className="job-card" key={id}>
                       <div className="job-card-topline">
                         <strong>{jobLabel(job)}</strong>
-                        <span>{job.attempts ?? 0}{job.maxAttempts !== undefined ? `/${job.maxAttempts}` : ""} attempts</span>
+                        <span>{attemptLabel(job)}</span>
                       </div>
 
                       <dl className="job-meta">
@@ -258,8 +270,8 @@ export function AdminPage() {
               <h2>{jobLabel(selectedJob)}</h2>
               <p>{jobKey(selectedJob)}</p>
             </div>
-            <span className={`status-badge status-${String(selectedJob.status || "unknown").replace(/_/g, "-")}`}>
-              {String(selectedJob.status || "unknown").replace(/_/g, " ")}
+            <span className={`status-badge status-${statusClass(String(selectedJob.status || "unknown"))}`}>
+              {statusLabel(String(selectedJob.status || "unknown"))}
             </span>
           </header>
 
@@ -270,7 +282,7 @@ export function AdminPage() {
             </article>
             <article>
               <h3>Output</h3>
-              <pre>{renderJson(selectedJob.output)}</pre>
+              <pre>{renderJson(selectedJob.output ?? selectedJob.result)}</pre>
             </article>
             <article>
               <h3>Error</h3>
