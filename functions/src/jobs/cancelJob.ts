@@ -27,6 +27,25 @@ function authUid(auth: unknown): string {
   return String(asRecord(auth).uid || "");
 }
 
+function normalizeStatus(value: unknown): string {
+  const raw = String(value || "").trim();
+  const aliases: Record<string, string> = {
+    queued: "PENDING",
+    pending: "PENDING",
+    leased: "LEASED",
+    running: "RUNNING",
+    retry_needed: "FAILED",
+    failed: "FAILED",
+    cancelled: "CANCELLED",
+    canceled: "CANCELLED",
+    succeeded: "SUCCESS",
+    success: "SUCCESS",
+    done: "DONE",
+    dead: "DEAD"
+  };
+  return aliases[raw.toLowerCase()] || raw.toUpperCase();
+}
+
 export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication is required.");
@@ -49,21 +68,22 @@ export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
     }
 
     const job = jobSnap.data() || {};
-    const status = String(job.status || "");
+    const status = normalizeStatus(job.status);
     const ownerUid = String(job.ownerUid || job.createdBy || "");
 
     if (!hasOperatorAccess(request.auth) && ownerUid !== authUid(request.auth)) {
       throw new HttpsError("permission-denied", "You do not have access to cancel this job.");
     }
 
-    if (!["queued", "running", "retry_needed"].includes(status)) {
+    if (!["PENDING", "LEASED", "RUNNING", "FAILED"].includes(status)) {
       throw new HttpsError("failed-precondition", `Job ${jobId} cannot be cancelled from status ${status}.`);
     }
 
     transaction.set(
       jobRef,
       {
-        status: "cancelled",
+        status: "CANCELLED",
+        lease: FieldValue.delete(),
         cancelledAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       },
@@ -73,7 +93,8 @@ export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
     transaction.set(
       queueRef,
       {
-        status: "cancelled",
+        status: "DONE",
+        lease: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp()
       },
       { merge: true }
@@ -87,5 +108,5 @@ export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
     source: "cancelJob"
   });
 
-  return { jobId, status: "cancelled" };
+  return { jobId, status: "CANCELLED" };
 });
