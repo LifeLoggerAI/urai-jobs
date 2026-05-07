@@ -1,12 +1,37 @@
-export type JobStatus =
-  | 'PENDING'
-  | 'LEASED'
-  | 'RUNNING'
-  | 'SUCCESS'
-  | 'FAILED'
-  | 'DEAD'
-  | 'CANCELLED'
-  | 'DONE';
+export const JOB_STATUSES = [
+  'PENDING',
+  'LEASED',
+  'RUNNING',
+  'SUCCESS',
+  'FAILED',
+  'DEAD',
+  'CANCELLED',
+] as const;
+
+export type JobStatus = (typeof JOB_STATUSES)[number];
+
+export const TERMINAL_JOB_STATUSES: JobStatus[] = ['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'];
+export const RETRYABLE_JOB_STATUSES: JobStatus[] = ['FAILED', 'DEAD'];
+export const CANCELLABLE_JOB_STATUSES: JobStatus[] = ['PENDING', 'LEASED', 'RUNNING'];
+
+export function normalizeJobStatus(status: unknown): JobStatus | undefined {
+  if (typeof status !== 'string') return undefined;
+  const normalized = status.toUpperCase();
+  const legacyMap: Record<string, JobStatus> = {
+    QUEUED: 'PENDING',
+    RETRY_NEEDED: 'FAILED',
+    SUCCEEDED: 'SUCCESS',
+    CANCELLED: 'CANCELLED',
+    CANCELED: 'CANCELLED',
+  };
+  const candidate = legacyMap[normalized] ?? normalized;
+  return (JOB_STATUSES as readonly string[]).includes(candidate) ? (candidate as JobStatus) : undefined;
+}
+
+export function isTerminalJobStatus(status: unknown): boolean {
+  const normalized = normalizeJobStatus(status);
+  return normalized ? TERMINAL_JOB_STATUSES.includes(normalized) : false;
+}
 
 export interface NarratorTtsPayload {
   text: string;
@@ -39,8 +64,8 @@ export interface JobLease {
 
 export interface Job {
   jobId: string;
-  jobType?: string;
-  type?: string;
+  jobType: string;
+  type: string;
   status: JobStatus;
   payload?: unknown;
   tenantId?: string;
@@ -52,10 +77,11 @@ export interface Job {
   ownerSubsystem?: string;
   createdBy?: string;
   output?: unknown;
-  attempts?: number;
-  maxAttempts?: number;
+  result?: unknown;
   error?: unknown;
   logs?: unknown[];
+  attempts?: number;
+  maxAttempts?: number;
   createdAt?: unknown;
   updatedAt?: unknown;
   startedAt?: unknown;
@@ -64,9 +90,10 @@ export interface Job {
 
 export interface JobQueueEntry {
   jobId: string;
-  jobType?: string;
-  status: string;
+  jobType: string;
+  status: JobStatus;
   leaseId?: string;
+  leaseToken?: string;
   availableAt?: unknown;
   attemptCount?: number;
   priority?: number;
@@ -89,11 +116,10 @@ export interface UserRole {
 
 export interface JobDoc extends Job {}
 
-
 export interface User {
   uid: string;
   email?: string | null;
   displayName?: string | null;
-  role?: "user" | "admin" | "operator" | string;
+  role?: 'user' | 'admin' | 'operator' | string;
   roles?: string[];
 }
