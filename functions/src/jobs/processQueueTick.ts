@@ -1,8 +1,8 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { PubSub } from '@google-cloud/pubsub';
 import { ulid } from 'ulid';
-import { JobQueueEntry, JobLease, Job } from '@urai-jobs/shared-types';
+import { JobQueueEntry, JobLease } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
@@ -11,21 +11,21 @@ const LEASE_DURATION_MS = 60 * 1000; // 1 minute
 
 const pubsub = new PubSub();
 
-function createLease(workerId: string): JobLease {
+function createLease(workerId: string): JobLease & { leaseExpiresAt: Timestamp } {
   const leaseId = ulid();
   const leaseToken = ulid();
-  const now = Date.now();
-  const expiresAt = new Date(now + LEASE_DURATION_MS);
+  const expiresAt = Timestamp.fromMillis(Date.now() + LEASE_DURATION_MS);
 
   return {
     leaseId,
     leaseToken,
     workerId,
-    expiresAt: expiresAt.toISOString(),
-  };
+    expiresAt,
+    leaseExpiresAt: expiresAt,
+  } as JobLease & { leaseExpiresAt: Timestamp };
 }
 
-export const processQueueTick = onSchedule('every 1 minutes', async (context) => {
+export const processQueueTick = onSchedule('every 1 minutes', async () => {
   const db = getFirestore();
   const tickWorkerId = `tick-${ulid()}`;
 
@@ -77,7 +77,7 @@ export const processQueueTick = onSchedule('every 1 minutes', async (context) =>
 
       if (lease && lease.leaseToken) {
         const message = {
-          jobId: jobId,
+          jobId,
           leaseToken: lease.leaseToken,
         };
         await pubsub.topic(JOB_EXECUTION_TOPIC).publishMessage({ json: message });
