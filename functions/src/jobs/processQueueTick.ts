@@ -1,8 +1,8 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { PubSub } from '@google-cloud/pubsub';
 import { ulid } from 'ulid';
-import { JobQueueEntry, JobLease, Job } from '@urai-jobs/shared-types';
+import { JobQueueEntry, JobLease } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
@@ -14,18 +14,19 @@ const pubsub = new PubSub();
 function createLease(workerId: string): JobLease {
   const leaseId = ulid();
   const leaseToken = ulid();
-  const now = Date.now();
-  const expiresAt = new Date(now + LEASE_DURATION_MS);
+  const expiresAt = Timestamp.fromMillis(Date.now() + LEASE_DURATION_MS);
 
   return {
     leaseId,
     leaseToken,
     workerId,
-    expiresAt: expiresAt.toISOString(),
+    leaseExpiresAt: expiresAt.toDate().toISOString(),
+    expiresAt,
+    heartbeatAt: FieldValue.serverTimestamp() as any,
   };
 }
 
-export const processQueueTick = onSchedule('every 1 minutes', async (context) => {
+export const processQueueTick = onSchedule('every 1 minutes', async () => {
   const db = getFirestore();
   const tickWorkerId = `tick-${ulid()}`;
 
@@ -33,7 +34,7 @@ export const processQueueTick = onSchedule('every 1 minutes', async (context) =>
 
   const pendingJobsQuery = db.collection('jobQueue')
     .where('status', '==', 'PENDING')
-    .where('availableAt', '<=', new Date())
+    .where('availableAt', '<=', Timestamp.now())
     .orderBy('availableAt')
     .limit(MAX_JOBS_TO_LEASE_PER_TICK);
 
@@ -65,6 +66,8 @@ export const processQueueTick = onSchedule('every 1 minutes', async (context) =>
         const leaseUpdate = {
           status: 'LEASED',
           lease: newLease,
+          leaseToken: newLease.leaseToken,
+          leaseExpiresAt: newLease.expiresAt,
           updatedAt: now,
         };
 
@@ -75,12 +78,10 @@ export const processQueueTick = onSchedule('every 1 minutes', async (context) =>
         return newLease;
       });
 
-      if (lease && lease.leaseToken) {
-        const message = {
-          jobId: jobId,
-          leaseToken: lease.leaseToken,
-        };
-        await pubsub.topic(JOB_EXECUTION_TOPIC).publishMessage({ json: message });
+      if (lease?.leaseToken) {
+        await pubsub.topic(JOB_EXECUTION_TOPIC).publishMessage({
+          json: { jobId, leaseToken: lease.leaseToken },
+        });
         console.log(`[${tickWorkerId}] Published execution message for job ${jobId}`);
       }
     } catch (error) {
