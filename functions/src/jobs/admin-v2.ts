@@ -5,20 +5,39 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 if (getApps().length === 0) initializeApp();
 
 type JobStatus =
-  | "queued"
-  | "running"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
-  | "retry_needed";
+  | "PENDING"
+  | "LEASED"
+  | "RUNNING"
+  | "SUCCESS"
+  | "FAILED"
+  | "DEAD"
+  | "CANCELLED"
+  | "DONE";
+
+const STATUS_ALIASES: Record<string, JobStatus> = {
+  queued: "PENDING",
+  pending: "PENDING",
+  leased: "LEASED",
+  running: "RUNNING",
+  succeeded: "SUCCESS",
+  success: "SUCCESS",
+  done: "DONE",
+  failed: "FAILED",
+  dead: "DEAD",
+  retry_needed: "FAILED",
+  cancelled: "CANCELLED",
+  canceled: "CANCELLED"
+};
 
 const ALLOWED_STATUSES = new Set<JobStatus>([
-  "queued",
-  "running",
-  "succeeded",
-  "failed",
-  "cancelled",
-  "retry_needed"
+  "PENDING",
+  "LEASED",
+  "RUNNING",
+  "SUCCESS",
+  "FAILED",
+  "DEAD",
+  "CANCELLED",
+  "DONE"
 ]);
 
 const callableOptions = {
@@ -28,6 +47,16 @@ const callableOptions = {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function normalizeStatus(value: unknown): JobStatus | undefined {
+  const raw = String(value || "").trim();
+  if (!raw) return undefined;
+  const normalized = STATUS_ALIASES[raw.toLowerCase()] || raw.toUpperCase();
+  if (!ALLOWED_STATUSES.has(normalized as JobStatus)) {
+    throw new HttpsError("invalid-argument", `Invalid job status: ${raw}`);
+  }
+  return normalized as JobStatus;
 }
 
 function hasOperatorAccess(auth: unknown): boolean {
@@ -73,17 +102,13 @@ export const listJobsV2 = onCall(callableOptions, async (request) => {
   requireOperator(request.auth);
 
   const input = asRecord(request.data);
-  const statusRaw = String(input.status || "").trim();
+  const status = normalizeStatus(input.status);
   const limit = normalizeLimit(input.limit, 50);
 
   let query: FirebaseFirestore.Query = getFirestore().collection("jobs");
 
-  if (statusRaw) {
-    if (!ALLOWED_STATUSES.has(statusRaw as JobStatus)) {
-      throw new HttpsError("invalid-argument", `Invalid job status: ${statusRaw}`);
-    }
-
-    query = query.where("status", "==", statusRaw);
+  if (status) {
+    query = query.where("status", "==", status);
   }
 
   const snap = await query.limit(limit).get();
@@ -140,17 +165,18 @@ export const retryJobV2 = onCall(callableOptions, async (request) => {
     }
 
     const job = jobSnap.data() || {};
-    const status = String(job.status || "");
+    const status = normalizeStatus(job.status);
 
-    if (!["failed", "retry_needed"].includes(status)) {
-      throw new HttpsError("failed-precondition", `Job ${jobId} cannot be retried from status ${status}.`);
+    if (!["FAILED", "DEAD", "CANCELLED"].includes(status || "")) {
+      throw new HttpsError("failed-precondition", `Job ${jobId} cannot be retried from status ${status || "unknown"}.`);
     }
 
     transaction.set(
       jobRef,
       {
-        status: "queued",
-        attempts: Number(job.attempts || 0),
+        status: "PENDING",
+        retryCount: Number(job.retryCount || job.attempts || 0),
+        lease: FieldValue.delete(),
         retriedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       },
@@ -161,7 +187,10 @@ export const retryJobV2 = onCall(callableOptions, async (request) => {
       queueRef,
       {
         jobId,
-        status: "queued",
+        jobType: job.jobType || job.type,
+        status: "PENDING",
+        lease: FieldValue.delete(),
+        availableAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       },
       { merge: true }
@@ -175,5 +204,5 @@ export const retryJobV2 = onCall(callableOptions, async (request) => {
     source: "retryJobV2"
   });
 
-  return { jobId, status: "queued" };
+  return { jobId, status: "PENDING" };
 });
