@@ -29,23 +29,23 @@ const handler = async (data: any, context: CallableContext) => {
   const jobId = ulid();
   const now = FieldValue.serverTimestamp();
 
-  // Enforce Canon Data Model
   const newJob: Job = {
-    jobId: jobId,
-    type: jobType, // Normalized from jobType
+    jobId,
+    jobType,
+    type: jobType,
     status: 'PENDING',
-    payload: payload,
-    ownerUid: uid, // Set ownership
+    payload,
+    ownerUid: uid,
     retryCount: 0,
     execution: {
       attemptCount: 0,
-      maxAttempts: 3, // Default max attempts
+      maxAttempts: 3,
     },
   };
 
   const newQueueEntry: JobQueueEntry = {
-    jobId: jobId,
-    jobType: jobType,
+    jobId,
+    jobType,
     status: 'PENDING',
     attemptCount: 0,
   };
@@ -63,8 +63,9 @@ const handler = async (data: any, context: CallableContext) => {
 
       transaction.create(queueRef, {
         ...newQueueEntry,
-        availableAt: now, // Make available immediately
+        availableAt: now,
         createdAt: now,
+        updatedAt: now,
       });
     });
   } catch (error: any) {
