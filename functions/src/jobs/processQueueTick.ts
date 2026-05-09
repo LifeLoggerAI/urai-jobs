@@ -2,7 +2,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { PubSub } from '@google-cloud/pubsub';
 import { ulid } from 'ulid';
-import { JobQueueEntry, JobLease, Job } from '@urai-jobs/shared-types';
+import { JobQueueEntry, JobLease } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
@@ -14,14 +14,13 @@ const pubsub = new PubSub();
 function createLease(workerId: string): JobLease {
   const leaseId = ulid();
   const leaseToken = ulid();
-  const now = Date.now();
-  const expiresAt = new Date(now + LEASE_DURATION_MS);
+  const expiresAt = new Date(Date.now() + LEASE_DURATION_MS);
 
   return {
     leaseId,
     leaseToken,
     workerId,
-    expiresAt: expiresAt.toISOString(),
+    expiresAt,
   };
 }
 
@@ -75,9 +74,9 @@ export const processQueueTick = onSchedule('every 1 minutes', async (context) =>
         return newLease;
       });
 
-      if (lease && lease.leaseToken) {
+      if (lease?.leaseToken) {
         const message = {
-          jobId: jobId,
+          jobId,
           leaseToken: lease.leaseToken,
         };
         await pubsub.topic(JOB_EXECUTION_TOPIC).publishMessage({ json: message });
