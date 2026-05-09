@@ -31,7 +31,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "lease.leaseExpiresAt", "order": "ASCENDING" }
+        { "fieldPath": "lease.expiresAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "jobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "lease.heartbeatAt", "order": "ASCENDING" }
       ]
     }
   ],
