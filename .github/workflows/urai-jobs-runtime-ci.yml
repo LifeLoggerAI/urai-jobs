@@ -67,6 +67,12 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Setup Java 21 for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -80,7 +86,21 @@ jobs:
         run: |
           firebase emulators:start --only firestore,auth,functions,pubsub --project demo-urai-jobs > /tmp/urai-jobs-emulators.log 2>&1 &
           echo $! > /tmp/urai-jobs-emulators.pid
-          sleep 30
+          for attempt in $(seq 1 60); do
+            if nc -z 127.0.0.1 8080 && nc -z 127.0.0.1 9099 && nc -z 127.0.0.1 5001; then
+              echo "Firebase emulators are ready."
+              exit 0
+            fi
+            if ! kill -0 $(cat /tmp/urai-jobs-emulators.pid) 2>/dev/null; then
+              echo "Firebase emulators exited early."
+              cat /tmp/urai-jobs-emulators.log || true
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "Timed out waiting for Firebase emulators."
+          cat /tmp/urai-jobs-emulators.log || true
+          exit 1
 
       - name: Run callable E2E
         env:
