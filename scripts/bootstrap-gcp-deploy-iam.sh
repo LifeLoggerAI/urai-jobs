@@ -40,18 +40,21 @@ gcloud config set project "$PROJECT_ID"
 
 echo "[INFO] Enabling required APIs."
 gcloud services enable \
+  artifactregistry.googleapis.com \
+  cloudbilling.googleapis.com \
   cloudbuild.googleapis.com \
   cloudfunctions.googleapis.com \
   firebase.googleapis.com \
+  firebaseextensions.googleapis.com \
   firebasehosting.googleapis.com \
   firestore.googleapis.com \
   run.googleapis.com \
-  artifactregistry.googleapis.com \
   serviceusage.googleapis.com \
   --project "$PROJECT_ID"
 
 ROLES=(
   roles/artifactregistry.writer
+  roles/billing.viewer
   roles/cloudbuild.builds.editor
   roles/cloudfunctions.admin
   roles/datastore.indexAdmin
