@@ -1,4 +1,4 @@
-const statuses = ["queued", "running", "succeeded", "failed", "cancelled", "retry_needed"];
+const statuses = ["PENDING", "LEASED", "RUNNING", "SUCCESS", "FAILED", "DEAD", "CANCELLED"];
 
 function assert(name, condition) {
   if (!condition) {
@@ -10,11 +10,11 @@ function assert(name, condition) {
 }
 
 function canRetry(status) {
-  return status === "failed" || status === "retry_needed";
+  return status === "FAILED";
 }
 
 function canCancel(status) {
-  return status === "queued" || status === "running";
+  return status === "PENDING" || status === "LEASED" || status === "RUNNING";
 }
 
 const ownerByPrefix = {
@@ -35,13 +35,15 @@ function inferOwner(jobType) {
   return ownerByPrefix[prefix] ?? "unknown";
 }
 
-assert("queued is cancellable", canCancel("queued"));
-assert("running is cancellable", canCancel("running"));
-assert("failed is retryable", canRetry("failed"));
-assert("retry_needed is retryable", canRetry("retry_needed"));
-assert("succeeded is not retryable", !canRetry("succeeded"));
-assert("cancelled is not cancellable", !canCancel("cancelled"));
-assert("known statuses include retry_needed", statuses.includes("retry_needed"));
+assert("PENDING is cancellable", canCancel("PENDING"));
+assert("LEASED is cancellable", canCancel("LEASED"));
+assert("RUNNING is cancellable", canCancel("RUNNING"));
+assert("FAILED is retryable", canRetry("FAILED"));
+assert("SUCCESS is not retryable", !canRetry("SUCCESS"));
+assert("DEAD is not retryable", !canRetry("DEAD"));
+assert("CANCELLED is not cancellable", !canCancel("CANCELLED"));
+assert("known statuses include DEAD", statuses.includes("DEAD"));
+assert("known statuses do not include retry_needed", !statuses.includes("retry_needed"));
 assert("spatial owner maps", inferOwner("spatial.memory.snapshot") === "urai-spatial");
 assert("privacy owner maps", inferOwner("privacy.delete.run") === "privacy-consent");
 assert("narrator owner maps", inferOwner("narrator.tts") === "narrator");
