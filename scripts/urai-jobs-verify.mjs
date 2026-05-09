@@ -68,6 +68,37 @@ check("backend cancelJob exists", cancelFn.includes("cancelJob") || adminFns.inc
 const contracts = read("docs/URAI_JOBS_INTEGRATION_CONTRACTS.md");
 check("integration contracts exist", contracts.includes("spatial.memory.snapshot") && contracts.includes("privacy.delete.run"));
 
+const leaseFiles = [
+  "packages/shared-types/src/index.ts",
+  "functions/src/jobs/processQueueTick.ts",
+  "functions/src/jobs/retryExpiredLeases.ts",
+  "functions/src/jobs/systemReconcile.ts",
+  "firestore.indexes.json",
+];
+
+const legacyLeaseExpiryOffenders = leaseFiles.filter((file) => {
+  const content = read(file);
+  return content.includes("leaseExpiresAt") || content.includes("lease.leaseExpiresAt");
+});
+
+if (legacyLeaseExpiryOffenders.length) {
+  console.error("[DETAIL] legacy lease expiry offenders:");
+  for (const file of legacyLeaseExpiryOffenders) console.error(`- ${file}`);
+}
+
+check("lease recovery uses canonical lease.expiresAt", legacyLeaseExpiryOffenders.length === 0);
+
+const processQueueTick = read("functions/src/jobs/processQueueTick.ts");
+const retryExpiredLeases = read("functions/src/jobs/retryExpiredLeases.ts");
+const systemReconcile = read("functions/src/jobs/systemReconcile.ts");
+const indexes = read("firestore.indexes.json");
+
+check("processQueueTick writes lease.expiresAt", processQueueTick.includes("expiresAt"));
+check("retryExpiredLeases queries lease.expiresAt", retryExpiredLeases.includes("lease.expiresAt"));
+check("systemReconcile queries lease.expiresAt", systemReconcile.includes("lease.expiresAt"));
+check("firestore index covers lease.expiresAt", indexes.includes("lease.expiresAt"));
+check("firestore index covers stale heartbeat reconciliation", indexes.includes("lease.heartbeatAt"));
+
 const pkg = JSON.parse(read("package.json") || "{}");
 check("urai-jobs:verify script exists", Boolean(pkg.scripts?.["urai-jobs:verify"]));
 check("urai-jobs:smoke script exists", Boolean(pkg.scripts?.["urai-jobs:smoke"]));
