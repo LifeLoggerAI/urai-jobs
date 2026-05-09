@@ -47,7 +47,6 @@ const handler = async (data: any, context: CallableContext) => {
 
   const newQueueEntry: JobQueueEntry = {
     jobId: jobId,
-    type: jobType,
     jobType: jobType,
     status: 'PENDING',
     attemptCount: 0,
