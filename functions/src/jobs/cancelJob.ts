@@ -56,14 +56,14 @@ export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
       throw new HttpsError("permission-denied", "You do not have access to cancel this job.");
     }
 
-    if (!["queued", "running", "retry_needed"].includes(status)) {
+    if (!["PENDING", "LEASED", "RUNNING"].includes(status)) {
       throw new HttpsError("failed-precondition", `Job ${jobId} cannot be cancelled from status ${status}.`);
     }
 
     transaction.set(
       jobRef,
       {
-        status: "cancelled",
+        status: "CANCELLED",
         cancelledAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       },
@@ -73,7 +73,7 @@ export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
     transaction.set(
       queueRef,
       {
-        status: "cancelled",
+        status: "CANCELLED",
         updatedAt: FieldValue.serverTimestamp()
       },
       { merge: true }
@@ -87,5 +87,5 @@ export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
     source: "cancelJob"
   });
 
-  return { jobId, status: "cancelled" };
+  return { jobId, status: "CANCELLED" };
 });
