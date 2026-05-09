@@ -8,7 +8,7 @@ const PRESETS = {
       text: "URAI Jobs production smoke test",
       voice: "en-US-Wavenet-D",
       locale: "en-US",
-      format: "mp3",
+      format: "MP3",
       outputPrefix: "prod-smoke-test"
     }
   },
