@@ -59,12 +59,27 @@ for (const name of ["listJobs", "getJob", "retryJob", "cancelJob", "listJobLogs"
 const adminFns = read("functions/src/jobs/admin.ts");
 const adminFnsV2 = read("functions/src/jobs/admin-v2.ts");
 const cancelFn = read("functions/src/jobs/cancelJob.ts");
+const createJob = read("functions/src/jobs/createJob.ts");
+const executeJob = read("functions/src/jobs/executeJob.ts");
+const workerHandler = read("workers/narrator-worker/src/handlers/index.ts");
+const narratorTts = read("workers/narrator-worker/src/handlers/narrator-tts.ts");
+const createJobPage = read("web/src/pages/CreateJobPage.tsx");
 const index = read("functions/src/index.ts");
 
 check("backend listJobs exists", adminFns.includes("listJobs") || index.includes("listJobs"));
 check("backend retryJob exists", adminFns.includes("retryJob") || index.includes("retryJob"));
 check("backend listJobLogs exists", adminFns.includes("listJobLogs") || index.includes("listJobLogs"));
 check("backend cancelJob exists", cancelFn.includes("cancelJob") || adminFns.includes("cancelJob") || index.includes("cancelJob"));
+
+check("createJob writes canonical type", createJob.includes("type: jobType"));
+check("createJob writes compatibility jobType", createJob.includes("jobType: jobType") || createJob.includes("jobType,"));
+check("executeJob posts to narrator /execute-job", executeJob.includes("/execute-job"));
+check("executeJob does not post to stale /execute route", !executeJob.includes("${NARRATOR_WORKER_URL}/execute`"));
+check("worker handler resolves type or jobType", workerHandler.includes("job.type") && workerHandler.includes("job.jobType"));
+check("narrator worker does not import uuid package", !/from ['\"]uuid['\"]/.test(narratorTts));
+check("narrator worker uses randomUUID", narratorTts.includes("randomUUID"));
+check("narrator worker requires GCS_BUCKET_NAME", narratorTts.includes("GCS_BUCKET_NAME environment variable is required"));
+check("narrator preset uses MP3", createJobPage.includes('format: "MP3"'));
 
 const backendStatusFiles = [
   "functions/src/jobs/admin.ts",
