@@ -3,7 +3,8 @@ FROM node:22-slim
 WORKDIR /app
 
 COPY package.json ./
-RUN npm install
+RUN node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));delete pkg.dependencies['@urai-jobs/shared-types'];fs.writeFileSync('package.json',JSON.stringify(pkg,null,2));" \
+  && npm install
 
 COPY tsconfig.json ./tsconfig.json
 COPY src ./src
