@@ -5,20 +5,22 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 if (getApps().length === 0) initializeApp();
 
 type JobStatus =
-  | "queued"
-  | "running"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
-  | "retry_needed";
+  | "PENDING"
+  | "LEASED"
+  | "RUNNING"
+  | "SUCCESS"
+  | "FAILED"
+  | "DEAD"
+  | "CANCELLED";
 
 const ALLOWED_STATUSES = new Set<JobStatus>([
-  "queued",
-  "running",
-  "succeeded",
-  "failed",
-  "cancelled",
-  "retry_needed"
+  "PENDING",
+  "LEASED",
+  "RUNNING",
+  "SUCCESS",
+  "FAILED",
+  "DEAD",
+  "CANCELLED"
 ]);
 
 const callableOptions = {
@@ -142,15 +144,15 @@ export const retryJobV2 = onCall(callableOptions, async (request) => {
     const job = jobSnap.data() || {};
     const status = String(job.status || "");
 
-    if (!["failed", "retry_needed"].includes(status)) {
+    if (status !== "FAILED") {
       throw new HttpsError("failed-precondition", `Job ${jobId} cannot be retried from status ${status}.`);
     }
 
     transaction.set(
       jobRef,
       {
-        status: "queued",
-        attempts: Number(job.attempts || 0),
+        status: "PENDING",
+        retryCount: Number(job.retryCount || 0),
         retriedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       },
@@ -161,7 +163,8 @@ export const retryJobV2 = onCall(callableOptions, async (request) => {
       queueRef,
       {
         jobId,
-        status: "queued",
+        status: "PENDING",
+        availableAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       },
       { merge: true }
@@ -175,5 +178,5 @@ export const retryJobV2 = onCall(callableOptions, async (request) => {
     source: "retryJobV2"
   });
 
-  return { jobId, status: "queued" };
+  return { jobId, status: "PENDING" };
 });
