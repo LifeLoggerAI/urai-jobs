@@ -100,6 +100,14 @@ check("cancel accepts uppercase cancellable states", cancelFn.includes('"PENDING
 check("jobsApi uses canonical JobStatus", jobsApi.includes('"PENDING"') && jobsApi.includes('"CANCELLED"'));
 check("AdminPage uses canonical status columns", adminPage.includes('value: "PENDING"') && adminPage.includes('value: "FAILED"'));
 
+const e2e = read("scripts/urai-jobs-e2e.mjs");
+check("E2E calls createJob callable", e2e.includes("callCallable('createJob'") || e2e.includes('callCallable("createJob"'));
+check("E2E calls listJobsV2 callable", e2e.includes("callCallable('listJobsV2'") || e2e.includes('callCallable("listJobsV2"'));
+check("E2E calls cancelJob callable", e2e.includes("callCallable('cancelJob'") || e2e.includes('callCallable("cancelJob"'));
+check("E2E does not create jobs directly in Firestore", !/collection\(['"]jobs['"]\)\.doc\([^)]*\)\.set\(/.test(e2e));
+check("E2E does not create queue entries directly in Firestore", !/collection\(['"]jobQueue['"]\)\.doc\([^)]*\)\.set\(/.test(e2e));
+check("E2E signs in through Auth emulator", e2e.includes("accounts:signInWithPassword"));
+
 const contracts = read("docs/URAI_JOBS_INTEGRATION_CONTRACTS.md");
 check("integration contracts exist", contracts.includes("spatial.memory.snapshot") && contracts.includes("privacy.delete.run"));
 
