@@ -32,9 +32,12 @@ export interface JobLease {
   leaseToken?: string;
   ownerId?: string;
   workerId?: string;
-  leaseExpiresAt?: string;
-  expiresAt?: { toMillis?: () => number } | string;
-  heartbeatAt?: { toMillis?: () => number } | string;
+  /**
+   * Canonical lease expiry field. Firestore stores Date values as Timestamp
+   * values, but shared types keep this provider-neutral for web/functions use.
+   */
+  expiresAt?: unknown;
+  heartbeatAt?: unknown;
 }
 
 export interface Job {
@@ -66,12 +69,11 @@ export interface JobQueueEntry {
   jobId: string;
   jobType?: string;
   status: string;
-  leaseId?: string;
+  lease?: JobLease;
   availableAt?: unknown;
   attemptCount?: number;
   priority?: number;
   leaseOwner?: string | null;
-  leaseExpiresAt?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
