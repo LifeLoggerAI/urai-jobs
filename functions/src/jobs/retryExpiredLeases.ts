@@ -4,7 +4,7 @@ import { ulid } from 'ulid';
 import { Job, JobQueueEntry } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
-const MAX_RETRIES = 3; 
+const MAX_RETRIES = 3;
 const RETRY_BACKOFF_MS = 5 * 1000;
 
 export const retryExpiredLeases = onSchedule('every 1 minutes', async (context) => {
@@ -15,10 +15,11 @@ export const retryExpiredLeases = onSchedule('every 1 minutes', async (context) 
 
     const now = new Date();
 
-    // Query the queue for items that are leased and expired
+    // Query the queue for items that are leased and expired.
+    // processQueueTick writes lease.expiresAt as a Date, which Firestore stores as a Timestamp.
     const expiredLeaseQuery = db.collection('jobQueue')
         .where('status', '==', 'LEASED')
-        .where('lease.leaseExpiresAt', '<', now.toISOString());
+        .where('lease.expiresAt', '<', now);
 
     const snapshot = await expiredLeaseQuery.get();
 
@@ -45,7 +46,7 @@ export const retryExpiredLeases = onSchedule('every 1 minutes', async (context) 
                     return;
                 }
                 const job = jobSnapshot.data() as Job;
-                
+
                 if (['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].includes(job.status)) {
                     console.log(`[${tickWorkerId}] Job ${jobId} is already in terminal state '${job.status}'. Cleaning up queue entry.`);
                     transaction.update(queueRef, { status: 'DONE', updatedAt: FieldValue.serverTimestamp() });
@@ -70,7 +71,7 @@ export const retryExpiredLeases = onSchedule('every 1 minutes', async (context) 
                 } else {
                     console.log(`[${tickWorkerId}] Re-queueing job ${jobId}.`);
                     const newAvailableAt = new Date(Date.now() + RETRY_BACKOFF_MS * (currentRetryCount + 1));
-                    
+
                     const requeueJobUpdate = {
                         status: 'PENDING',
                         retryCount: FieldValue.increment(1),
