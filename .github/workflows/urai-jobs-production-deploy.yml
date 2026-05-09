@@ -27,6 +27,9 @@ on:
         default: false
         type: boolean
 
+env:
+  DEPLOY_PROJECT_ID: ${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID || secrets.GCLOUD_PROJECT || secrets.GOOGLE_CLOUD_PROJECT }}
+
 jobs:
   deploy:
     name: Deploy URAI Jobs Runtime
@@ -65,10 +68,12 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON || secrets.FIREBASE_SERVICE_ACCOUNT_URAI_JOBS }}
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_URAI_JOBS || secrets.GCP_SERVICE_ACCOUNT_JSON }}
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.DEPLOY_PROJECT_ID }}
 
       - name: Install Firebase CLI
         run: pnpm add -g firebase-tools
@@ -80,9 +85,9 @@ jobs:
         env:
           URAI_ENV: prod
           NODE_ENV: production
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID || secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}
-          GCLOUD_PROJECT: ${{ secrets.GCLOUD_PROJECT || secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}
-          GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT || secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}
+          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           GCP_REGION: ${{ secrets.GCP_REGION }}
           API_ALLOWED_ORIGINS: ${{ secrets.API_ALLOWED_ORIGINS }}
           WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
@@ -108,7 +113,7 @@ jobs:
         if: ${{ inputs.deploy_workers }}
         env:
           URAI_ENV: prod
-          GCLOUD_PROJECT: ${{ secrets.GCLOUD_PROJECT || secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           GCP_REGION: ${{ secrets.GCP_REGION }}
           GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
         run: pnpm deploy:workers
@@ -116,9 +121,9 @@ jobs:
       - name: Deploy Firebase runtime
         env:
           URAI_ENV: prod
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID || secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}
-          GCLOUD_PROJECT: ${{ secrets.GCLOUD_PROJECT || secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}
-          GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT || secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}
+          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           GCP_REGION: ${{ secrets.GCP_REGION }}
           API_ALLOWED_ORIGINS: ${{ secrets.API_ALLOWED_ORIGINS }}
           WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
@@ -135,8 +140,8 @@ jobs:
       - name: Production callable smoke
         if: ${{ inputs.run_smoke }}
         env:
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID || secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}
-          GCLOUD_PROJECT: ${{ secrets.GCLOUD_PROJECT || secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}
+          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           GCP_REGION: ${{ secrets.GCP_REGION }}
           PROD_SMOKE_ID_TOKEN: ${{ secrets.PROD_SMOKE_ID_TOKEN }}
           PROD_SMOKE_JOB_TYPE: narrator.tts
