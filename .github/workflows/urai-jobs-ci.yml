@@ -55,7 +55,7 @@ jobs:
         run: pnpm urai-jobs:smoke
 
       - name: Emulator E2E
-        run: npx --yes firebase-tools@latest emulators:exec --only firestore,auth "node scripts/urai-jobs-e2e.mjs"
+        run: npx --yes firebase-tools@latest emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs"
 
       - name: Deploy precheck
         run: pnpm urai-jobs:deploy-precheck
