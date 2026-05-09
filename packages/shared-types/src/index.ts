@@ -5,8 +5,7 @@ export type JobStatus =
   | 'SUCCESS'
   | 'FAILED'
   | 'DEAD'
-  | 'CANCELLED'
-  | 'DONE';
+  | 'CANCELLED';
 
 export interface NarratorTtsPayload {
   text: string;
@@ -68,7 +67,7 @@ export interface Job {
 export interface JobQueueEntry {
   jobId: string;
   jobType?: string;
-  status: string;
+  status: JobStatus;
   lease?: JobLease;
   availableAt?: unknown;
   attemptCount?: number;
@@ -90,7 +89,6 @@ export interface UserRole {
 }
 
 export interface JobDoc extends Job {}
-
 
 export interface User {
   uid: string;
