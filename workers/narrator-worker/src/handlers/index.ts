@@ -1,5 +1,13 @@
-import { Job } from '@urai-jobs/shared-types';
 import { handleNarratorTts } from './narrator-tts.js';
+
+export interface Job {
+  jobId: string;
+  jobType?: string;
+  type?: string;
+  status?: string;
+  payload?: unknown;
+  [key: string]: unknown;
+}
 
 export async function handleJob(job: Job): Promise<any> {
   const jobType = job.type || job.jobType;
