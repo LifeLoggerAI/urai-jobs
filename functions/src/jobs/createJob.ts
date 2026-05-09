@@ -29,22 +29,25 @@ const handler = async (data: any, context: CallableContext) => {
   const jobId = ulid();
   const now = FieldValue.serverTimestamp();
 
-  // Enforce Canon Data Model
+  // Store both fields during migration. `type` is canonical; `jobType` keeps
+  // worker and integration callers compatible until every surface reads `type`.
   const newJob: Job = {
     jobId: jobId,
-    type: jobType, // Normalized from jobType
+    type: jobType,
+    jobType: jobType,
     status: 'PENDING',
     payload: payload,
-    ownerUid: uid, // Set ownership
+    ownerUid: uid,
     retryCount: 0,
     execution: {
       attemptCount: 0,
-      maxAttempts: 3, // Default max attempts
+      maxAttempts: 3,
     },
   };
 
   const newQueueEntry: JobQueueEntry = {
     jobId: jobId,
+    type: jobType,
     jobType: jobType,
     status: 'PENDING',
     attemptCount: 0,
@@ -63,7 +66,7 @@ const handler = async (data: any, context: CallableContext) => {
 
       transaction.create(queueRef, {
         ...newQueueEntry,
-        availableAt: now, // Make available immediately
+        availableAt: now,
         createdAt: now,
       });
     });
