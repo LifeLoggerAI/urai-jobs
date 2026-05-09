@@ -41,16 +41,27 @@ gcloud config set project "$PROJECT_ID"
 echo "[INFO] Enabling required APIs."
 gcloud services enable \
   cloudbuild.googleapis.com \
+  cloudfunctions.googleapis.com \
+  firebase.googleapis.com \
+  firebasehosting.googleapis.com \
+  firestore.googleapis.com \
   run.googleapis.com \
   artifactregistry.googleapis.com \
+  serviceusage.googleapis.com \
   --project "$PROJECT_ID"
 
 ROLES=(
-  roles/cloudbuild.builds.editor
-  roles/run.admin
-  roles/storage.admin
   roles/artifactregistry.writer
+  roles/cloudbuild.builds.editor
+  roles/cloudfunctions.admin
+  roles/datastore.indexAdmin
+  roles/datastore.owner
+  roles/firebase.admin
+  roles/firebasehosting.admin
   roles/iam.serviceAccountUser
+  roles/run.admin
+  roles/serviceusage.serviceUsageAdmin
+  roles/storage.admin
 )
 
 for role in "${ROLES[@]}"; do
@@ -62,4 +73,4 @@ for role in "${ROLES[@]}"; do
   echo "[PASS] $role"
 done
 
-echo "[PASS] GCP deploy IAM bootstrap complete. Rerun URAI Jobs Production Deploy with deploy_workers=true and run_smoke=false."
+echo "[PASS] GCP deploy IAM bootstrap complete. Rerun URAI Jobs Production Deploy with deploy_workers=false and run_smoke=false to continue Firebase deploy."
