@@ -10,17 +10,28 @@ import {
   type JobStatus
 } from "../lib/jobsApi";
 
-const STATUSES: JobStatus[] = ["queued", "running", "succeeded", "failed", "retry_needed", "cancelled"];
+const STATUS_COLUMNS: Array<{ value: JobStatus; label: string; className: string }> = [
+  { value: "PENDING", label: "Queued", className: "queued" },
+  { value: "LEASED", label: "Leased", className: "leased" },
+  { value: "RUNNING", label: "Running", className: "running" },
+  { value: "SUCCESS", label: "Succeeded", className: "succeeded" },
+  { value: "FAILED", label: "Failed", className: "failed" },
+  { value: "DEAD", label: "Dead", className: "dead" },
+  { value: "CANCELLED", label: "Cancelled", className: "cancelled" }
+];
+
+const STATUSES = STATUS_COLUMNS.map((column) => column.value);
 
 type JobsByStatus = Record<JobStatus, JobRecord[]>;
 
 const emptyJobsByStatus = (): JobsByStatus => ({
-  queued: [],
-  running: [],
-  succeeded: [],
-  failed: [],
-  retry_needed: [],
-  cancelled: []
+  PENDING: [],
+  LEASED: [],
+  RUNNING: [],
+  SUCCESS: [],
+  FAILED: [],
+  DEAD: [],
+  CANCELLED: []
 });
 
 function jobKey(job: JobRecord): string {
@@ -35,8 +46,12 @@ function ownerLabel(job: JobRecord): string {
   return String(job.ownerSubsystem || job.ownerUid || job.createdBy || "—");
 }
 
-function statusLabel(status: JobStatus): string {
-  return status.replace(/_/g, " ");
+function statusDisplay(status?: string) {
+  return STATUS_COLUMNS.find((column) => column.value === status) ?? {
+    value: status || "UNKNOWN",
+    label: status || "Unknown",
+    className: "unknown"
+  };
 }
 
 function renderJson(value: unknown) {
@@ -186,23 +201,24 @@ export function AdminPage() {
       )}
 
       <section className="job-board">
-        {STATUSES.map((status) => (
-          <article className="status-column" key={status}>
+        {STATUS_COLUMNS.map((column) => (
+          <article className="status-column" key={column.value}>
             <header className="status-column-header">
-              <span className={`status-badge status-${status.replace(/_/g, "-")}`}>
-                {statusLabel(status)}
+              <span className={`status-badge status-${column.className}`}>
+                {column.label}
               </span>
-              <strong>{jobsByStatus[status].length}</strong>
+              <strong>{jobsByStatus[column.value].length}</strong>
             </header>
 
-            {jobsByStatus[status].length === 0 ? (
-              <p className="muted">No {statusLabel(status)} jobs.</p>
+            {jobsByStatus[column.value].length === 0 ? (
+              <p className="muted">No {column.label.toLowerCase()} jobs.</p>
             ) : (
               <div className="job-card-stack">
-                {jobsByStatus[status].map((job) => {
+                {jobsByStatus[column.value].map((job) => {
                   const id = jobKey(job);
-                  const canRetry = status === "failed" || status === "retry_needed";
-                  const canCancel = status === "queued" || status === "running";
+                  const status = String(job.status || column.value);
+                  const canRetry = status === "FAILED";
+                  const canCancel = status === "PENDING" || status === "LEASED" || status === "RUNNING";
 
                   return (
                     <article className="job-card" key={id}>
@@ -250,45 +266,48 @@ export function AdminPage() {
         ))}
       </section>
 
-      {selectedJob && (
-        <section className="detail-panel">
-          <header className="detail-header">
-            <div>
-              <div className="eyebrow">Job Detail</div>
-              <h2>{jobLabel(selectedJob)}</h2>
-              <p>{jobKey(selectedJob)}</p>
-            </div>
-            <span className={`status-badge status-${String(selectedJob.status || "unknown").replace(/_/g, "-")}`}>
-              {String(selectedJob.status || "unknown").replace(/_/g, " ")}
-            </span>
-          </header>
+      {selectedJob && (() => {
+        const selectedStatus = statusDisplay(String(selectedJob.status || "UNKNOWN"));
+        return (
+          <section className="detail-panel">
+            <header className="detail-header">
+              <div>
+                <div className="eyebrow">Job Detail</div>
+                <h2>{jobLabel(selectedJob)}</h2>
+                <p>{jobKey(selectedJob)}</p>
+              </div>
+              <span className={`status-badge status-${selectedStatus.className}`}>
+                {selectedStatus.label}
+              </span>
+            </header>
 
-          <div className="detail-grid">
-            <article>
-              <h3>Payload</h3>
-              <pre>{renderJson(selectedJob.payload)}</pre>
-            </article>
-            <article>
-              <h3>Output</h3>
-              <pre>{renderJson(selectedJob.output)}</pre>
-            </article>
-            <article>
-              <h3>Error</h3>
-              <pre>{renderJson(selectedJob.error)}</pre>
-            </article>
-            <article>
-              <h3>Logs</h3>
-              {selectedLogs.length === 0 ? (
-                <p className="muted">No logs returned.</p>
-              ) : (
-                selectedLogs.map((log, index) => (
-                  <pre key={`${log.jobId || "log"}-${index}`}>{renderJson(log)}</pre>
-                ))
-              )}
-            </article>
-          </div>
-        </section>
-      )}
+            <div className="detail-grid">
+              <article>
+                <h3>Payload</h3>
+                <pre>{renderJson(selectedJob.payload)}</pre>
+              </article>
+              <article>
+                <h3>Output</h3>
+                <pre>{renderJson(selectedJob.output)}</pre>
+              </article>
+              <article>
+                <h3>Error</h3>
+                <pre>{renderJson(selectedJob.error)}</pre>
+              </article>
+              <article>
+                <h3>Logs</h3>
+                {selectedLogs.length === 0 ? (
+                  <p className="muted">No logs returned.</p>
+                ) : (
+                  selectedLogs.map((log, index) => (
+                    <pre key={`${log.jobId || "log"}-${index}`}>{renderJson(log)}</pre>
+                  ))
+                )}
+              </article>
+            </div>
+          </section>
+        );
+      })()}
     </main>
   );
 }
