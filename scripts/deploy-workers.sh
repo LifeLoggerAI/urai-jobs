@@ -30,7 +30,9 @@ deploy_worker() {
   fi
 
   echo "[INFO] Building $worker -> $image"
-  gcloud builds submit "$dir" --tag "$image"
+  gcloud builds submit "$dir" \
+    --tag "$image" \
+    --suppress-logs
 
   echo "[INFO] Deploying $worker to Cloud Run in $GCP_REGION"
   gcloud run deploy "$worker" \
