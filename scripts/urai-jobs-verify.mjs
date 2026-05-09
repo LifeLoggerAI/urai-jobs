@@ -57,6 +57,7 @@ for (const name of ["listJobs", "getJob", "retryJob", "cancelJob", "listJobLogs"
 }
 
 const adminFns = read("functions/src/jobs/admin.ts");
+const adminFnsV2 = read("functions/src/jobs/admin-v2.ts");
 const cancelFn = read("functions/src/jobs/cancelJob.ts");
 const index = read("functions/src/index.ts");
 
@@ -64,6 +65,40 @@ check("backend listJobs exists", adminFns.includes("listJobs") || index.includes
 check("backend retryJob exists", adminFns.includes("retryJob") || index.includes("retryJob"));
 check("backend listJobLogs exists", adminFns.includes("listJobLogs") || index.includes("listJobLogs"));
 check("backend cancelJob exists", cancelFn.includes("cancelJob") || adminFns.includes("cancelJob") || index.includes("cancelJob"));
+
+const backendStatusFiles = [
+  "functions/src/jobs/admin.ts",
+  "functions/src/jobs/admin-v2.ts",
+  "functions/src/jobs/cancelJob.ts"
+];
+
+const lowercaseStatusPatterns = [
+  /status:\s*["']queued["']/,
+  /status:\s*["']running["']/,
+  /status:\s*["']succeeded["']/,
+  /status:\s*["']failed["']/,
+  /status:\s*["']cancelled["']/,
+  /status:\s*["']retry_needed["']/,
+  /["']queued["']\s*,\s*["']running["']/,
+  /["']failed["']\s*,\s*["']retry_needed["']/
+];
+
+const lowercaseStatusOffenders = backendStatusFiles.filter((file) => {
+  const content = read(file);
+  return lowercaseStatusPatterns.some((pattern) => pattern.test(content));
+});
+
+if (lowercaseStatusOffenders.length) {
+  console.error("[DETAIL] lowercase backend status offenders:");
+  for (const file of lowercaseStatusOffenders) console.error(`- ${file}`);
+}
+
+check("backend admin writes canonical uppercase statuses", lowercaseStatusOffenders.length === 0);
+check("admin v1 accepts PENDING statuses", adminFns.includes('"PENDING"'));
+check("admin v2 accepts PENDING statuses", adminFnsV2.includes('"PENDING"'));
+check("cancel accepts uppercase cancellable states", cancelFn.includes('"PENDING"') && cancelFn.includes('"LEASED"') && cancelFn.includes('"RUNNING"'));
+check("jobsApi uses canonical JobStatus", jobsApi.includes('"PENDING"') && jobsApi.includes('"CANCELLED"'));
+check("AdminPage uses canonical status columns", adminPage.includes('value: "PENDING"') && adminPage.includes('value: "FAILED"'));
 
 const contracts = read("docs/URAI_JOBS_INTEGRATION_CONTRACTS.md");
 check("integration contracts exist", contracts.includes("spatial.memory.snapshot") && contracts.includes("privacy.delete.run"));
