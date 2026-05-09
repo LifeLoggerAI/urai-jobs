@@ -2,12 +2,13 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { firebaseApp } from "./firebase";
 
 export type JobStatus =
-  | "queued"
-  | "running"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
-  | "retry_needed";
+  | "PENDING"
+  | "LEASED"
+  | "RUNNING"
+  | "SUCCESS"
+  | "FAILED"
+  | "DEAD"
+  | "CANCELLED";
 
 export type JobRecord = {
   id?: string;
@@ -54,21 +55,6 @@ export async function createJob(jobType: string, payload: unknown): Promise<{ jo
   });
 }
 
-
-const BACKEND_STATUS_BY_UI: Record<string, string> = {
-  queued: "PENDING",
-  running: "RUNNING",
-  succeeded: "DONE",
-  failed: "FAILED",
-  retry_needed: "RETRY_NEEDED",
-  cancelled: "CANCELLED",
-};
-
-function toBackendStatus(status?: JobStatus): string | undefined {
-  if (!status) return undefined;
-  return BACKEND_STATUS_BY_UI[String(status)] ?? String(status).toUpperCase();
-}
-
 export async function listJobs(status?: JobStatus, limit = 50): Promise<{ jobs: JobRecord[] }> {
   const input: { status?: JobStatus; limit: number } = { limit };
   if (status) input.status = status;
@@ -79,12 +65,12 @@ export async function getJob(jobId: string): Promise<{ job: JobRecord; logs?: Jo
   return callFunction<{ jobId: string }, { job: JobRecord; logs?: JobLogRecord[] }>("getJob", { jobId });
 }
 
-export async function retryJob(jobId: string): Promise<{ jobId: string; status: "queued" }> {
-  return callFunction<{ jobId: string }, { jobId: string; status: "queued" }>("retryJobV2", { jobId });
+export async function retryJob(jobId: string): Promise<{ jobId: string; status: "PENDING" }> {
+  return callFunction<{ jobId: string }, { jobId: string; status: "PENDING" }>("retryJobV2", { jobId });
 }
 
-export async function cancelJob(jobId: string): Promise<{ jobId: string; status: "cancelled" }> {
-  return callFunction<{ jobId: string }, { jobId: string; status: "cancelled" }>("cancelJob", { jobId });
+export async function cancelJob(jobId: string): Promise<{ jobId: string; status: "CANCELLED" }> {
+  return callFunction<{ jobId: string }, { jobId: string; status: "CANCELLED" }>("cancelJob", { jobId });
 }
 
 export async function listJobLogs(jobId: string, limit = 100): Promise<{ logs: JobLogRecord[] }> {
