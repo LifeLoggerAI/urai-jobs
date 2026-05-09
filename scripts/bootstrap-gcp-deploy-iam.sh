@@ -1,8 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_ID="${PROJECT_ID:-urai-jobs-60331881}"
+PROJECT_ID="${PROJECT_ID:-urai-jobs}"
 DEPLOY_SA="${DEPLOY_SA:-}"
+
+command -v gcloud >/dev/null 2>&1 || {
+  echo "[FAIL] gcloud CLI is required." >&2
+  exit 1
+}
+
+if ! gcloud projects describe "$PROJECT_ID" >/dev/null 2>&1; then
+  echo "[FAIL] GCP project '$PROJECT_ID' was not found or your active account cannot access it." >&2
+  echo "[INFO] Active gcloud account:" >&2
+  gcloud config get-value account >&2 || true
+  echo "[INFO] Accessible projects:" >&2
+  gcloud projects list --format='table(projectId,name)' >&2 || true
+  echo "[INFO] Set PROJECT_ID to one of the projectId values above and rerun." >&2
+  exit 1
+fi
 
 if [ -z "$DEPLOY_SA" ]; then
   DEPLOY_SA="$(gcloud iam service-accounts list \
@@ -17,11 +32,6 @@ if [ -z "$DEPLOY_SA" ]; then
   echo "Set DEPLOY_SA explicitly, then rerun." >&2
   exit 1
 fi
-
-command -v gcloud >/dev/null 2>&1 || {
-  echo "[FAIL] gcloud CLI is required." >&2
-  exit 1
-}
 
 echo "[INFO] Project: $PROJECT_ID"
 echo "[INFO] Deploy service account: $DEPLOY_SA"
