@@ -54,7 +54,6 @@ gcloud services enable \
 
 ROLES=(
   roles/artifactregistry.writer
-  roles/billing.viewer
   roles/cloudbuild.builds.editor
   roles/cloudfunctions.admin
   roles/datastore.indexAdmin
