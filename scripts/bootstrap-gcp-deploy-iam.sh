@@ -44,23 +44,30 @@ gcloud services enable \
   cloudbilling.googleapis.com \
   cloudbuild.googleapis.com \
   cloudfunctions.googleapis.com \
+  cloudscheduler.googleapis.com \
+  eventarc.googleapis.com \
   firebase.googleapis.com \
   firebaseextensions.googleapis.com \
   firebasehosting.googleapis.com \
   firestore.googleapis.com \
+  pubsub.googleapis.com \
   run.googleapis.com \
   serviceusage.googleapis.com \
+  storage.googleapis.com \
   --project "$PROJECT_ID"
 
 ROLES=(
   roles/artifactregistry.writer
   roles/cloudbuild.builds.editor
   roles/cloudfunctions.admin
+  roles/cloudscheduler.admin
   roles/datastore.indexAdmin
   roles/datastore.owner
+  roles/eventarc.admin
   roles/firebase.admin
   roles/firebasehosting.admin
   roles/iam.serviceAccountUser
+  roles/pubsub.admin
   roles/run.admin
   roles/serviceusage.serviceUsageAdmin
   roles/storage.admin
