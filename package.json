@@ -25,6 +25,7 @@
     "deploy:iam:bootstrap": "bash scripts/bootstrap-gcp-deploy-iam.sh",
     "prod:precheck": "node scripts/prod-env-precheck.mjs",
     "prod:smoke": "node scripts/prod-smoke.mjs",
+    "prod:smoke-token": "node scripts/prod-smoke-token.mjs",
     "worker:run": "node scripts/run-worker.mjs",
     "job:queue": "node scripts/queue-job.mjs",
     "leases:reclaim": "node scripts/reclaim-stale-leases.mjs",
