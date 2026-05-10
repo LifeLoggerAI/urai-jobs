@@ -53,11 +53,11 @@ async function main() {
   if (!jobId) fail(`createJob did not return jobId: ${JSON.stringify(createResult)}`);
   pass(`createJob returned ${jobId}`);
 
-  const statusResult = await callCallable("getJobStatus", { jobId });
-  if (!statusResult) fail("getJobStatus returned empty result.");
-  pass(`getJobStatus returned ${JSON.stringify(statusResult)}`);
+  const getJobResult = await callCallable("getJob", { jobId });
+  if (!getJobResult?.job) fail(`getJob returned empty job result: ${JSON.stringify(getJobResult)}`);
+  pass(`getJob returned ${JSON.stringify(getJobResult.job)}`);
 
-  console.log("[PASS] URAI Jobs Runtime production smoke submitted and status callable responded.");
+  console.log("[PASS] URAI Jobs Runtime production smoke submitted and getJob callable responded.");
   console.log("[INFO] Confirm worker terminal state and artifacts in Firebase/GCS dashboards for job:", jobId);
 }
 
