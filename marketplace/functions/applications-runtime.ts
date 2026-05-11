@@ -32,6 +32,7 @@ export const createApplicationRuntime = () => {
           employerId: input.employerId,
           resumeUrl: input.resumeUrl ?? null,
           createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
           status: 'submitted',
         });
 
@@ -40,6 +41,28 @@ export const createApplicationRuntime = () => {
           applicationId: uniqueKey,
         };
       });
+    },
+
+    async listByCandidate(candidateUid: string) {
+      const snapshot = await db
+        .collection(marketplaceCollections.applications)
+        .where('candidateUid', '==', candidateUid)
+        .orderBy('createdAt', 'desc')
+        .limit(50)
+        .get();
+
+      return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    },
+
+    async listByEmployer(employerId: string) {
+      const snapshot = await db
+        .collection(marketplaceCollections.applications)
+        .where('employerId', '==', employerId)
+        .orderBy('createdAt', 'desc')
+        .limit(100)
+        .get();
+
+      return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     },
   };
 };
