@@ -3,7 +3,8 @@ set -euo pipefail
 
 TARGET="${1:-prod}"
 HOSTING_SITE="${FIREBASE_HOSTING_SITE:-urai-jobs}"
-FALLBACK_HOSTING_SITE="${FIREBASE_FALLBACK_HOSTING_SITE:-urai-jobs-563121397472}"
+FALLBACK_HOSTING_SITE="${FIREBASE_FALLBACK_HOSTING_SITE:-}"
+ALLOW_CREATE_HOSTING_SITE="${ALLOW_CREATE_HOSTING_SITE:-false}"
 
 : "${FIREBASE_PROJECT_ID:?FIREBASE_PROJECT_ID is required}"
 : "${GCLOUD_PROJECT:?GCLOUD_PROJECT is required}"
@@ -45,7 +46,6 @@ NODE
 
 ensure_hosting_site() {
   local site="$1"
-  local create_output=""
 
   echo "[INFO] Ensuring Firebase Hosting site exists: $site"
   if firebase hosting:sites:get "$site" --project "$FIREBASE_PROJECT_ID" >/dev/null 2>&1; then
@@ -54,21 +54,17 @@ ensure_hosting_site() {
     return 0
   fi
 
-  echo "[INFO] Hosting site $site not found; creating it in project $FIREBASE_PROJECT_ID"
-  set +e
-  create_output="$(firebase hosting:sites:create "$site" --project "$FIREBASE_PROJECT_ID" 2>&1)"
-  local create_status=$?
-  set -e
-
-  if [ "$create_status" -eq 0 ]; then
-    echo "$create_output"
-    echo "[PASS] Created hosting site: $site"
-    HOSTING_SITE="$site"
-    return 0
+  if [ "$ALLOW_CREATE_HOSTING_SITE" != "true" ]; then
+    echo "[FAIL] Hosting site '$site' was not found in project '$FIREBASE_PROJECT_ID'." >&2
+    echo "[FAIL] Refusing to create hosting sites during production deploy." >&2
+    echo "[INFO] Set FIREBASE_HOSTING_SITE to an existing site, or run with ALLOW_CREATE_HOSTING_SITE=true intentionally." >&2
+    return 1
   fi
 
-  echo "$create_output" >&2
-  return "$create_status"
+  echo "[WARN] Creating hosting site $site in project $FIREBASE_PROJECT_ID because ALLOW_CREATE_HOSTING_SITE=true"
+  firebase hosting:sites:create "$site" --project "$FIREBASE_PROJECT_ID" --non-interactive
+  echo "[PASS] Created hosting site: $site"
+  HOSTING_SITE="$site"
 }
 
 echo "[INFO] Running production precheck for target=$TARGET"
@@ -79,18 +75,22 @@ pnpm --filter @urai-jobs/shared-types build
 pnpm --filter urai-jobs-functions build
 pnpm --filter urai-jobs-web build
 
-echo "[INFO] Selecting Firebase target: $TARGET"
-firebase use "$TARGET" || firebase use "$FIREBASE_PROJECT_ID"
+echo "[INFO] Selecting Firebase project: $FIREBASE_PROJECT_ID"
+firebase use "$FIREBASE_PROJECT_ID"
 
 if ! ensure_hosting_site "$HOSTING_SITE"; then
-  echo "[WARN] Primary hosting site '$HOSTING_SITE' is unavailable. Falling back to '$FALLBACK_HOSTING_SITE'."
-  ensure_hosting_site "$FALLBACK_HOSTING_SITE"
+  if [ -n "$FALLBACK_HOSTING_SITE" ]; then
+    echo "[WARN] Primary hosting site '$HOSTING_SITE' is unavailable. Trying fallback '$FALLBACK_HOSTING_SITE'."
+    ensure_hosting_site "$FALLBACK_HOSTING_SITE"
+  else
+    exit 1
+  fi
 fi
 
 echo "[INFO] Setting firebase.json hosting.site to $HOSTING_SITE"
 set_hosting_site_in_firebase_json "$HOSTING_SITE"
 
 echo "[INFO] Deploying Firebase Functions, Firestore rules/indexes, and Hosting"
-firebase deploy --only functions,firestore,hosting --project "$FIREBASE_PROJECT_ID"
+firebase deploy --only functions,firestore,hosting --project "$FIREBASE_PROJECT_ID" --non-interactive
 
 echo "[PASS] Firebase deployment completed for $FIREBASE_PROJECT_ID"
