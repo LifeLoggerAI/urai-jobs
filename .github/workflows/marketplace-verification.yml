@@ -28,6 +28,16 @@ jobs:
       - name: Verify marketplace security boundaries
         run: node marketplace/tests/security-boundaries.mjs
 
+      - name: Verify marketplace preflight
+        run: node marketplace/tests/preflight.mjs
+
+      - name: Verify marketplace routes smoke
+        run: node marketplace/tests/routes-smoke.mjs
+
+      - name: Verify marketplace integration runtime scaffold
+        run: node marketplace/tests/integration-runtime.mjs
+        continue-on-error: true
+
       - name: Verify marketplace smoke scaffold
         run: node marketplace/tests/smoke.mjs
         continue-on-error: true
