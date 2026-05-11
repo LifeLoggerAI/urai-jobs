@@ -1,0 +1,21 @@
+{
+  "name": "@urai-jobs/marketplace-functions",
+  "private": true,
+  "version": "0.0.0-launch-gated",
+  "type": "module",
+  "main": "lib/firebase-functions-entry.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "preflight": "node ../tests/preflight.mjs",
+    "routes:smoke": "node ../tests/routes-smoke.mjs",
+    "integration:scaffold": "node ../tests/integration-runtime.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
