@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { jobsApi, type JobRecord } from "../lib/jobsApi";
 import { trackJobsEvent } from "../lib/analytics";
+import { notificationTemplates, queueNotificationDraft } from "../lib/notifications";
 
 const PUBLIC_STATUSES = ["PENDING", "RUNNING", "COMPLETED", "SUCCESS", "FAILED", "DEAD", "CANCELLED"] as const;
 
@@ -130,9 +131,18 @@ export function JobDetailPage({ jobId }: { jobId: string }) {
 }
 
 export function ApplyPage({ jobId }: { jobId: string }) {
+  const [submitted, setSubmitted] = useState(false);
+
   useEffect(() => {
     trackJobsEvent("apply_viewed", { job_id_present: Boolean(jobId) });
   }, [jobId]);
+
+  function submitApplication(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitted(true);
+    trackJobsEvent("application_submitted", { job_id_present: Boolean(jobId), consent_checked: true });
+    queueNotificationDraft(notificationTemplates.applicationSubmitted(jobId));
+  }
 
   return (
     <main className="page-shell">
@@ -140,20 +150,35 @@ export function ApplyPage({ jobId }: { jobId: string }) {
         <div className="eyebrow">Apply</div>
         <h1>Candidate application</h1>
         <p>
-          Applications for job <strong>{jobId}</strong> will collect candidate profile, resume, consent, and contact details.
-          This route is scaffolded for the public marketplace workflow and should be connected to the signed upload and
-          application callable before public launch.
+          Applications for job <strong>{jobId}</strong> collect candidate details, resume references, and consent.
+          This launch scaffold records client-side analytics and notification drafts until the application callable is connected.
         </p>
-        <div className="notice">Candidate consent, resume upload, and application submission remain tracked in Issue #33 and #34.</div>
+        <form className="form-stack" onSubmit={submitApplication}>
+          <label>Full name<input required placeholder="Candidate name" /></label>
+          <label>Email<input required type="email" placeholder="candidate@example.com" /></label>
+          <label>Resume link<input placeholder="Private resume or portfolio link" /></label>
+          <label>Why this role?<textarea rows={4} placeholder="Brief candidate note" /></label>
+          <label className="checkbox-row"><input required type="checkbox" /> I consent to URAI Jobs processing this application and related profile data.</label>
+          <button type="submit">Submit application draft</button>
+        </form>
+        {submitted && <div className="notice success">Application draft captured. Notification draft queued for delivery integration.</div>}
       </section>
     </main>
   );
 }
 
 export function CandidateProfilePage() {
+  const [saved, setSaved] = useState(false);
+
   useEffect(() => {
     trackJobsEvent("candidate_profile_viewed", { surface: "marketplace" });
   }, []);
+
+  function saveProfile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaved(true);
+    trackJobsEvent("candidate_profile_saved", { has_resume_link: true });
+  }
 
   return (
     <main className="page-shell">
@@ -161,20 +186,32 @@ export function CandidateProfilePage() {
         <div className="eyebrow">Candidate</div>
         <h1>Candidate profile</h1>
         <p>Profile management, resume upload, saved jobs, and application history will live here.</p>
-        <div className="features-grid">
-          <article className="feature-item"><h3>Profile</h3><p>Headline, location, portfolio, and skill signals.</p></article>
-          <article className="feature-item"><h3>Resume</h3><p>Signed upload flow and private artifact storage.</p></article>
-          <article className="feature-item"><h3>Applications</h3><p>Status history and employer responses.</p></article>
-        </div>
+        <form className="form-stack" onSubmit={saveProfile}>
+          <label>Headline<input placeholder="AI operations specialist" /></label>
+          <label>Location<input placeholder="Remote / city" /></label>
+          <label>Skills<input placeholder="Firebase, React, Cloud Run" /></label>
+          <label>Resume URL<input placeholder="Private signed-upload URL placeholder" /></label>
+          <button type="submit">Save profile draft</button>
+        </form>
+        {saved && <div className="notice success">Candidate profile draft saved locally for launch workflow validation.</div>}
       </section>
     </main>
   );
 }
 
 export function EmployersPage() {
+  const [submitted, setSubmitted] = useState(false);
+
   useEffect(() => {
     trackJobsEvent("employers_viewed", { surface: "marketplace" });
   }, []);
+
+  function submitJobPost(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitted(true);
+    trackJobsEvent("job_post_submitted", { consent_checked: true });
+    queueNotificationDraft(notificationTemplates.jobPostSubmitted());
+  }
 
   return (
     <main className="page-shell">
@@ -182,11 +219,14 @@ export function EmployersPage() {
         <div className="eyebrow">Employers</div>
         <h1>Employer workspace</h1>
         <p>Employer onboarding, job posting, applicant review, and billing/plan controls will live here.</p>
-        <div className="features-grid">
-          <article className="feature-item"><h3>Onboarding</h3><p>Company profile, member access, and verification status.</p></article>
-          <article className="feature-item"><h3>Job posts</h3><p>Create, submit for review, pause, close, and feature roles.</p></article>
-          <article className="feature-item"><h3>Applicants</h3><p>Review candidates, update statuses, and preserve audit history.</p></article>
-        </div>
+        <form className="form-stack" onSubmit={submitJobPost}>
+          <label>Company name<input required placeholder="URAI Labs partner" /></label>
+          <label>Role title<input required placeholder="AI systems engineer" /></label>
+          <label>Role summary<textarea required rows={4} placeholder="What should candidates know?" /></label>
+          <label className="checkbox-row"><input required type="checkbox" /> I agree to submit truthful role information for moderation.</label>
+          <button type="submit">Submit job post draft</button>
+        </form>
+        {submitted && <div className="notice success">Employer job post draft queued for moderation workflow integration.</div>}
       </section>
     </main>
   );
