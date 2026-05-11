@@ -11,6 +11,7 @@ import { createEmployerRuntime } from './employer-runtime';
 import { createJobRuntime } from './job-runtime';
 import { createMarketplaceAdminRuntime } from './admin-runtime';
 import { fromError, fail, ok } from './responses';
+import { optionalBoolean, optionalString, requireString } from './validation';
 
 export type MarketplaceRuntimeRequest = {
   method: string;
@@ -19,10 +20,8 @@ export type MarketplaceRuntimeRequest = {
   body?: Record<string, unknown>;
 };
 
-const readString = (body: Record<string, unknown> | undefined, key: string) => {
-  const value = body?.[key];
-  return typeof value === 'string' ? value : undefined;
-};
+const jobIdFromPath = (path: string, prefix: string) =>
+  path.replace(prefix, '').split('/')[0];
 
 export const routeMarketplaceRuntimeRequest = async (
   request: MarketplaceRuntimeRequest,
@@ -43,14 +42,10 @@ export const routeMarketplaceRuntimeRequest = async (
     if (request.method === 'POST' && request.path === '/api/marketplace/jobs') {
       const auth = await verifyFirebaseIdToken(request.authorization);
       const uid = requireSignedIn(auth);
-      const employerId = readString(request.body, 'employerId');
-      const jobId = readString(request.body, 'jobId');
-      const title = readString(request.body, 'title');
-      const description = readString(request.body, 'description');
-
-      if (!employerId || !jobId || !title || !description) {
-        return fail('INVALID_JOB_INPUT', 'employerId, jobId, title, and description are required');
-      }
+      const employerId = requireString(request.body, 'employerId');
+      const jobId = requireString(request.body, 'jobId');
+      const title = requireString(request.body, 'title');
+      const description = requireString(request.body, 'description');
 
       const jobs = createJobRuntime();
       return ok(await jobs.createJob({
@@ -59,9 +54,39 @@ export const routeMarketplaceRuntimeRequest = async (
         createdBy: uid,
         title,
         description,
-        location: readString(request.body, 'location'),
-        employmentType: readString(request.body, 'employmentType'),
-        remote: request.body?.remote === true,
+        location: optionalString(request.body, 'location'),
+        employmentType: optionalString(request.body, 'employmentType'),
+        remote: optionalBoolean(request.body, 'remote'),
+      }));
+    }
+
+    if (
+      request.method === 'POST' &&
+      request.path.startsWith('/api/marketplace/jobs/') &&
+      request.path.endsWith('/close')
+    ) {
+      const auth = await verifyFirebaseIdToken(request.authorization);
+      const uid = requireSignedIn(auth);
+      const jobId = jobIdFromPath(request.path, '/api/marketplace/jobs/');
+      const jobs = createJobRuntime();
+      return ok(await jobs.closeJob({ jobId, closedBy: uid }));
+    }
+
+    if (
+      request.method === 'POST' &&
+      request.path.startsWith('/api/marketplace/jobs/') &&
+      request.path.endsWith('/update')
+    ) {
+      await verifyFirebaseIdToken(request.authorization).then(requireSignedIn);
+      const jobId = jobIdFromPath(request.path, '/api/marketplace/jobs/');
+      const jobs = createJobRuntime();
+      return ok(await jobs.updateJob({
+        jobId,
+        title: optionalString(request.body, 'title'),
+        description: optionalString(request.body, 'description'),
+        location: optionalString(request.body, 'location'),
+        employmentType: optionalString(request.body, 'employmentType'),
+        remote: optionalBoolean(request.body, 'remote'),
       }));
     }
 
@@ -71,10 +96,10 @@ export const routeMarketplaceRuntimeRequest = async (
       const profiles = createProfileRuntime();
       return ok(await profiles.upsertProfile({
         uid,
-        displayName: readString(request.body, 'displayName'),
-        email: readString(request.body, 'email') ?? auth.email,
-        location: readString(request.body, 'location'),
-        resumePath: readString(request.body, 'resumePath'),
+        displayName: optionalString(request.body, 'displayName'),
+        email: optionalString(request.body, 'email') ?? auth.email,
+        location: optionalString(request.body, 'location'),
+        resumePath: optionalString(request.body, 'resumePath'),
       }));
     }
 
@@ -89,20 +114,16 @@ export const routeMarketplaceRuntimeRequest = async (
     if (request.method === 'POST' && request.path === '/api/marketplace/employers') {
       const auth = await verifyFirebaseIdToken(request.authorization);
       const uid = requireSignedIn(auth);
-      const employerId = readString(request.body, 'employerId');
-      const companyName = readString(request.body, 'companyName');
-
-      if (!employerId || !companyName) {
-        return fail('INVALID_EMPLOYER_INPUT', 'employerId and companyName are required');
-      }
+      const employerId = requireString(request.body, 'employerId');
+      const companyName = requireString(request.body, 'companyName');
 
       const employers = createEmployerRuntime();
       return ok(await employers.createEmployer({
         employerId,
         ownerUid: uid,
         companyName,
-        website: readString(request.body, 'website'),
-        description: readString(request.body, 'description'),
+        website: optionalString(request.body, 'website'),
+        description: optionalString(request.body, 'description'),
       }));
     }
 
@@ -110,11 +131,7 @@ export const routeMarketplaceRuntimeRequest = async (
       request.method === 'POST' &&
       request.path === '/api/marketplace/resume-intent'
     ) {
-      const contentType = request.body?.contentType;
-
-      if (typeof contentType !== 'string') {
-        return fail('INVALID_CONTENT_TYPE', 'contentType is required');
-      }
+      const contentType = requireString(request.body, 'contentType');
 
       return runtimeCreateResumeUploadHandler({
         authorization: request.authorization,
@@ -126,19 +143,15 @@ export const routeMarketplaceRuntimeRequest = async (
       request.method === 'POST' &&
       request.path === '/api/marketplace/applications'
     ) {
-      const jobId = request.body?.jobId;
-      const employerId = request.body?.employerId;
-      const resumeUrl = request.body?.resumeUrl;
-
-      if (typeof jobId !== 'string' || typeof employerId !== 'string') {
-        return fail('INVALID_APPLICATION_INPUT', 'jobId and employerId are required');
-      }
+      const jobId = requireString(request.body, 'jobId');
+      const employerId = requireString(request.body, 'employerId');
+      const resumeUrl = optionalString(request.body, 'resumeUrl');
 
       return runtimeCreateApplicationHandler({
         authorization: request.authorization,
         jobId,
         employerId,
-        resumeUrl: typeof resumeUrl === 'string' ? resumeUrl : undefined,
+        resumeUrl,
       });
     }
 
@@ -148,6 +161,31 @@ export const routeMarketplaceRuntimeRequest = async (
       const admin = createMarketplaceAdminRuntime();
       const snapshot = await admin.listModerationQueue();
       return ok({ jobs: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) });
+    }
+
+    if (
+      request.method === 'POST' &&
+      request.path.startsWith('/api/marketplace/admin/jobs/') &&
+      request.path.endsWith('/approve')
+    ) {
+      const auth = await verifyFirebaseIdToken(request.authorization);
+      const adminUid = requireAdmin(auth);
+      const jobId = jobIdFromPath(request.path, '/api/marketplace/admin/jobs/');
+      const admin = createMarketplaceAdminRuntime();
+      return ok(await admin.approveJob({ adminUid, jobId }));
+    }
+
+    if (
+      request.method === 'POST' &&
+      request.path.startsWith('/api/marketplace/admin/jobs/') &&
+      request.path.endsWith('/reject')
+    ) {
+      const auth = await verifyFirebaseIdToken(request.authorization);
+      const adminUid = requireAdmin(auth);
+      const jobId = jobIdFromPath(request.path, '/api/marketplace/admin/jobs/');
+      const reason = optionalString(request.body, 'reason');
+      const admin = createMarketplaceAdminRuntime();
+      return ok(await admin.rejectJob({ adminUid, jobId, reason }));
     }
 
     return fail('ROUTE_NOT_FOUND', 'Route not found', 404);
