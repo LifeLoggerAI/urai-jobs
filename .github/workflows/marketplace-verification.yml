@@ -1,0 +1,33 @@
+name: Marketplace Verification
+
+on:
+  push:
+    paths:
+      - 'marketplace/**'
+      - '.github/workflows/marketplace-verification.yml'
+  pull_request:
+    paths:
+      - 'marketplace/**'
+
+jobs:
+  marketplace-contracts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify marketplace contracts
+        run: node marketplace/tests/contract-check.mjs
+
+      - name: Verify marketplace security boundaries
+        run: node marketplace/tests/security-boundaries.mjs
+
+      - name: Verify marketplace smoke scaffold
+        run: node marketplace/tests/smoke.mjs
+        continue-on-error: true
