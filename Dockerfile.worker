@@ -11,23 +11,12 @@ WORKDIR /app
 
 RUN corepack enable
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/shared-types/package.json packages/shared-types/package.json
-COPY functions/package.json functions/package.json
-COPY web/package.json web/package.json
-COPY workers/asset-worker/package.json workers/asset-worker/package.json
-COPY workers/narrator-worker/package.json workers/narrator-worker/package.json
-COPY workers/spatial-worker/package.json workers/spatial-worker/package.json
-COPY workers/studio-worker/package.json workers/studio-worker/package.json
-
-# Install dev dependencies for TypeScript build steps. NODE_ENV must not be
-# production here because the root postinstall builds @urai-jobs/shared-types
-# and requires tsc from devDependencies.
-ENV NODE_ENV=development
-RUN pnpm install --frozen-lockfile
-
+# Copy the full workspace before dependency installation because the root
+# postinstall builds @urai-jobs/shared-types and needs its tsconfig/source files.
 COPY . .
 
+ENV NODE_ENV=development
+RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @urai-jobs/shared-types build
 RUN pnpm prune --prod
 
