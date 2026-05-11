@@ -2,16 +2,20 @@ import { verifyFirebaseIdToken } from './auth-runtime';
 import { createApplicationRuntime } from './applications-runtime';
 import { createSignedUploadRuntime } from './signed-upload-runtime';
 import { createMarketplaceCrudRuntime } from './firestore-crud';
+import { createJobSearchRuntime } from './job-search-runtime';
 import { requireSignedIn } from './auth';
 import { fail, ok } from './responses';
 
-export const runtimeListJobsHandler = async () => {
-  const crud = createMarketplaceCrudRuntime();
-  const snapshot = await crud.jobs.list();
+export const runtimeListJobsHandler = async (input?: {
+  search?: string;
+  location?: string;
+  remote?: boolean;
+  employmentType?: string;
+  limit?: number;
+}) => {
+  const jobs = createJobSearchRuntime();
 
-  return ok({
-    jobs: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
-  });
+  return ok(await jobs.listPublishedJobs(input));
 };
 
 export const runtimeGetJobHandler = async (jobId: string) => {
