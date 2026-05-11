@@ -63,11 +63,10 @@ if ! gcloud artifacts repositories describe "${REPOSITORY}" --location "${REGION
 fi
 
 echo "[INFO] Building worker image"
-gcloud builds submit \
+gcloud builds submit . \
   --project "${PROJECT_ID}" \
-  --tag "${IMAGE}" \
-  --file Dockerfile.worker \
-  .
+  --config ops/cloudbuild-worker.yaml \
+  --substitutions "_IMAGE=${IMAGE}"
 
 echo "[INFO] Deploying Cloud Run worker"
 gcloud run deploy "${SERVICE_NAME}" \
