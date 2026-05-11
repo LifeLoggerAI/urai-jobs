@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    match /marketplacePublicJobs/{jobId} {
+      allow read: if resource.data.status == 'published';
+      allow write: if false;
+    }
+
+    match /marketplaceCandidateProfiles/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /marketplaceJobApplications/{applicationId} {
+      allow create: if isSignedIn();
+      allow read: if isSignedIn() && resource.data.candidateUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /marketplaceEmployers/{employerId} {
+      allow read, write: if false;
+    }
+
+    match /marketplaceAdminReviews/{reviewId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
