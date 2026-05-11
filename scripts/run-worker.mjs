@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import http from 'node:http';
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -12,6 +13,45 @@ const JOB_TYPE_FILTER = process.env.URAI_JOB_TYPE || '';
 const WORKER_NAME = process.env.URAI_WORKER_NAME || 'local-worker';
 const LEASE_MS = Number(process.env.URAI_LEASE_MS || 60000);
 const MAX_ATTEMPTS = Number(process.env.URAI_MAX_ATTEMPTS || 3);
+const PORT = Number(process.env.PORT || 0);
+let lastLoopAt = Date.now();
+let lastClaimedJobId = '';
+let completedCount = 0;
+let failedCount = 0;
+
+function startHealthServer() {
+  if (!PORT) return null;
+
+  const server = http.createServer((req, res) => {
+    const payload = JSON.stringify({
+      ok: true,
+      workerName: WORKER_NAME,
+      jobType: JOB_TYPE_FILTER || null,
+      shuttingDown,
+      lastLoopAt,
+      lastClaimedJobId: lastClaimedJobId || null,
+      completedCount,
+      failedCount
+    });
+
+    if (req.url === '/healthz' || req.url === '/readyz' || req.url === '/') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(payload);
+      return;
+    }
+
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'not_found' }));
+  });
+
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`[WORKER] health server listening port=${PORT}`);
+  });
+
+  return server;
+}
+
+const healthServer = startHealthServer();
 
 console.log(
   `[WORKER] started name=${WORKER_NAME} pollMs=${POLL_MS} leaseMs=${LEASE_MS} maxAttempts=${MAX_ATTEMPTS}` +
@@ -320,6 +360,7 @@ async function failJob(jobId, err) {
     }
   });
 
+  failedCount += 1;
   await writeLog(jobId, 'error', message);
   console.error(`[WORKER] failed job=${jobId} error=${message}`);
 }
@@ -328,6 +369,7 @@ let shuttingDown = false;
 
 async function loop() {
   while (!shuttingDown) {
+    lastLoopAt = Date.now();
     try {
       await reclaimStaleLeases();
 
@@ -337,11 +379,13 @@ async function loop() {
         continue;
       }
 
+      lastClaimedJobId = claimed.jobId;
       console.log(`[WORKER] picked job ${claimed.jobId}`);
 
       try {
         await executeJob(claimed.jobId);
         await completeJob(claimed.jobId, claimed.leaseToken);
+        completedCount += 1;
         console.log(`[WORKER] completed job ${claimed.jobId}`);
       } catch (err) {
         await failJob(claimed.jobId, err);
@@ -357,10 +401,12 @@ async function loop() {
 process.on('SIGINT', () => {
   shuttingDown = true;
   console.log('[WORKER] stopping (SIGINT)');
+  healthServer?.close();
 });
 process.on('SIGTERM', () => {
   shuttingDown = true;
   console.log('[WORKER] stopping (SIGTERM)');
+  healthServer?.close();
 });
 
 await loop();
