@@ -11,19 +11,6 @@ export async function createJob(jobType, payload) {
         payload
     });
 }
-const BACKEND_STATUS_BY_UI = {
-    queued: "PENDING",
-    running: "RUNNING",
-    succeeded: "DONE",
-    failed: "FAILED",
-    retry_needed: "RETRY_NEEDED",
-    cancelled: "CANCELLED",
-};
-function toBackendStatus(status) {
-    if (!status)
-        return undefined;
-    return BACKEND_STATUS_BY_UI[String(status)] ?? String(status).toUpperCase();
-}
 export async function listJobs(status, limit = 50) {
     const input = { limit };
     if (status)
