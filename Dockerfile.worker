@@ -4,7 +4,6 @@
 
 FROM node:22-slim AS base
 
-ENV NODE_ENV=production
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 
@@ -21,10 +20,17 @@ COPY workers/narrator-worker/package.json workers/narrator-worker/package.json
 COPY workers/spatial-worker/package.json workers/spatial-worker/package.json
 COPY workers/studio-worker/package.json workers/studio-worker/package.json
 
+# Install dev dependencies for TypeScript build steps. NODE_ENV must not be
+# production here because the root postinstall builds @urai-jobs/shared-types
+# and requires tsc from devDependencies.
+ENV NODE_ENV=development
 RUN pnpm install --frozen-lockfile
 
 COPY . .
 
 RUN pnpm --filter @urai-jobs/shared-types build
+RUN pnpm prune --prod
+
+ENV NODE_ENV=production
 
 CMD ["pnpm", "run", "worker:run"]
