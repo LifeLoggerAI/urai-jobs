@@ -75,6 +75,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --image "${IMAGE}" \
   --service-account "${SERVICE_ACCOUNT}" \
   --no-allow-unauthenticated \
+  --no-cpu-throttling \
   --min-instances "${URAI_WORKER_MIN_INSTANCES:-1}" \
   --max-instances "${URAI_WORKER_MAX_INSTANCES:-2}" \
   --cpu "${URAI_WORKER_CPU:-1}" \
