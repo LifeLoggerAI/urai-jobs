@@ -11,6 +11,7 @@ import { createEmployerRuntime } from './employer-runtime';
 import { createJobRuntime } from './job-runtime';
 import { createMarketplaceAdminRuntime } from './admin-runtime';
 import { createOwnershipRuntime } from './ownership-runtime';
+import { createApplicationRuntime } from './applications-runtime';
 import { fromError, fail, ok } from './responses';
 import { optionalBoolean, optionalString, requireString } from './validation';
 
@@ -22,6 +23,9 @@ export type MarketplaceRuntimeRequest = {
 };
 
 const jobIdFromPath = (path: string, prefix: string) =>
+  path.replace(prefix, '').split('/')[0];
+
+const employerIdFromPath = (path: string, prefix: string) =>
   path.replace(prefix, '').split('/')[0];
 
 export const routeMarketplaceRuntimeRequest = async (
@@ -136,6 +140,20 @@ export const routeMarketplaceRuntimeRequest = async (
     }
 
     if (
+      request.method === 'GET' &&
+      request.path.startsWith('/api/marketplace/employers/') &&
+      request.path.endsWith('/applications')
+    ) {
+      const auth = await verifyFirebaseIdToken(request.authorization);
+      const uid = requireSignedIn(auth);
+      const employerId = employerIdFromPath(request.path, '/api/marketplace/employers/');
+      const ownership = createOwnershipRuntime();
+      await ownership.requireEmployerOwner({ employerId, uid });
+      const applications = createApplicationRuntime();
+      return ok({ applications: await applications.listByEmployer(employerId) });
+    }
+
+    if (
       request.method === 'POST' &&
       request.path === '/api/marketplace/resume-intent'
     ) {
@@ -161,6 +179,13 @@ export const routeMarketplaceRuntimeRequest = async (
         employerId,
         resumeUrl,
       });
+    }
+
+    if (request.method === 'GET' && request.path === '/api/marketplace/applications/me') {
+      const auth = await verifyFirebaseIdToken(request.authorization);
+      const uid = requireSignedIn(auth);
+      const applications = createApplicationRuntime();
+      return ok({ applications: await applications.listByCandidate(uid) });
     }
 
     if (request.method === 'GET' && request.path === '/api/marketplace/admin/review-queue') {
