@@ -10,6 +10,7 @@ import { createProfileRuntime } from './profile-runtime';
 import { createEmployerRuntime } from './employer-runtime';
 import { createJobRuntime } from './job-runtime';
 import { createMarketplaceAdminRuntime } from './admin-runtime';
+import { createOwnershipRuntime } from './ownership-runtime';
 import { fromError, fail, ok } from './responses';
 import { optionalBoolean, optionalString, requireString } from './validation';
 
@@ -46,6 +47,8 @@ export const routeMarketplaceRuntimeRequest = async (
       const jobId = requireString(request.body, 'jobId');
       const title = requireString(request.body, 'title');
       const description = requireString(request.body, 'description');
+      const ownership = createOwnershipRuntime();
+      await ownership.requireEmployerOwner({ employerId, uid });
 
       const jobs = createJobRuntime();
       return ok(await jobs.createJob({
@@ -68,6 +71,8 @@ export const routeMarketplaceRuntimeRequest = async (
       const auth = await verifyFirebaseIdToken(request.authorization);
       const uid = requireSignedIn(auth);
       const jobId = jobIdFromPath(request.path, '/api/marketplace/jobs/');
+      const ownership = createOwnershipRuntime();
+      await ownership.requireJobOwner({ jobId, uid });
       const jobs = createJobRuntime();
       return ok(await jobs.closeJob({ jobId, closedBy: uid }));
     }
@@ -77,8 +82,11 @@ export const routeMarketplaceRuntimeRequest = async (
       request.path.startsWith('/api/marketplace/jobs/') &&
       request.path.endsWith('/update')
     ) {
-      await verifyFirebaseIdToken(request.authorization).then(requireSignedIn);
+      const auth = await verifyFirebaseIdToken(request.authorization);
+      const uid = requireSignedIn(auth);
       const jobId = jobIdFromPath(request.path, '/api/marketplace/jobs/');
+      const ownership = createOwnershipRuntime();
+      await ownership.requireJobOwner({ jobId, uid });
       const jobs = createJobRuntime();
       return ok(await jobs.updateJob({
         jobId,
