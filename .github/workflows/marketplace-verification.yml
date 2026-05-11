@@ -34,6 +34,9 @@ jobs:
       - name: Verify marketplace routes smoke
         run: node marketplace/tests/routes-smoke.mjs
 
+      - name: Verify marketplace route coverage
+        run: node marketplace/tests/route-coverage.mjs
+
       - name: Verify marketplace firestore runtime scaffold
         run: node marketplace/tests/firestore-runtime.mjs
         continue-on-error: true
