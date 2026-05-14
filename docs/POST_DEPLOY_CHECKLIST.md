@@ -50,30 +50,9 @@ curl -I https://www.uraijobs.com
 
 ## 4. Authenticated callable smoke
 
-Generate a short-lived ID token:
+Generate a short-lived ID token using the production smoke-token helper, then run:
 
 ```bash
-export FIREBASE_WEB_API_KEY=<real Firebase Web API key>
-export SMOKE_EMAIL=smoke@urailabs.com
-read -s -p "Password: " SMOKE_PASSWORD
-echo
-export SMOKE_PASSWORD
-export PROD_SMOKE_ID_TOKEN="$(pnpm run --silent prod:smoke-token)"
-echo "$PROD_SMOKE_ID_TOKEN" | cut -c1-30
-```
-
-Expected token prefix:
-
-```text
-eyJ
-```
-
-Run smoke:
-
-```bash
-export FIREBASE_PROJECT_ID=urai-jobs
-export GCLOUD_PROJECT=urai-jobs
-export GCP_REGION=us-central1
 pnpm run prod:smoke
 ```
 
@@ -81,23 +60,12 @@ Expected:
 
 - `createJob` returns a job ID.
 - `getJob` returns the same job.
-- Job starts as `PENDING`.
+- The job starts as `CREATED` or `QUEUED`.
+- The queue entry starts as `READY`.
 
 ## 5. Worker processing smoke
 
-For local production-connected validation only:
-
-```bash
-gcloud auth application-default login
-gcloud config set project urai-jobs
-export FIREBASE_PROJECT_ID=urai-jobs
-export GCLOUD_PROJECT=urai-jobs
-export GOOGLE_CLOUD_PROJECT=urai-jobs
-export GCP_REGION=us-central1
-export URAI_WORKER_NAME=prod-local-worker
-export URAI_JOB_TYPE=narrator.tts
-pnpm run worker:run
-```
+For local production-connected validation only, run the worker with production project, region, worker name, and job type environment configured.
 
 Expected worker logs:
 
@@ -110,7 +78,8 @@ Expected worker logs:
 Expected Firestore lifecycle:
 
 ```text
-PENDING -> RUNNING -> COMPLETED
+job: CREATED or QUEUED -> RUNNING -> SUCCESS
+queue: READY -> LEASED -> DONE
 ```
 
 ## 6. Firestore verification
@@ -124,8 +93,8 @@ Check:
 
 Expected:
 
-- job status `COMPLETED`
-- queue status `COMPLETED`
+- job status `SUCCESS`
+- queue status `DONE`
 - result document exists
 - worker log exists
 
@@ -144,18 +113,4 @@ Expected:
 - [ ] External worker URLs verified.
 - [ ] GCS artifact output verified.
 - [ ] Monitoring/alerts configured.
-- [ ] Marketplace UX routes completed.
-- [ ] Legal/privacy/deletion/export flows completed.
-- [ ] Analytics and notifications integrated.
-
-## 9. Evidence capture
-
-Record in `docs/PRODUCTION_VALIDATION_<date>.md`:
-
-- deploy timestamp
-- deployed commit SHA
-- hosting URL
-- smoke job IDs
-- worker completed job IDs
-- custom domain status
-- known follow-ups
+- [ ] Runtime release evidence recorded.

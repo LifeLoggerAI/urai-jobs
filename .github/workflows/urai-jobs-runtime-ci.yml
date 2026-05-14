@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify activation readiness guardrails
+        run: pnpm activation:verify
+
       - name: Verify repository invariants
         run: pnpm urai-jobs:verify
 
@@ -76,48 +79,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Firebase CLI
-        run: pnpm add -g firebase-tools
-
       - name: Build functions and shared types
         run: pnpm --filter @urai-jobs/shared-types build && pnpm --filter urai-jobs-functions build
 
-      - name: Start Firebase emulators
-        run: |
-          firebase emulators:start --only firestore,auth,functions,pubsub --project demo-urai-jobs > /tmp/urai-jobs-emulators.log 2>&1 &
-          echo $! > /tmp/urai-jobs-emulators.pid
-          for attempt in $(seq 1 60); do
-            if nc -z 127.0.0.1 8080 && nc -z 127.0.0.1 9099 && nc -z 127.0.0.1 5001; then
-              echo "Firebase emulators are ready."
-              exit 0
-            fi
-            if ! kill -0 $(cat /tmp/urai-jobs-emulators.pid) 2>/dev/null; then
-              echo "Firebase emulators exited early."
-              cat /tmp/urai-jobs-emulators.log || true
-              exit 1
-            fi
-            sleep 2
-          done
-          echo "Timed out waiting for Firebase emulators."
-          cat /tmp/urai-jobs-emulators.log || true
-          exit 1
-
-      - name: Run callable E2E
-        env:
-          FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
-          FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
-          FUNCTIONS_EMULATOR_ORIGIN: http://127.0.0.1:5001
-          FIREBASE_PROJECT_ID: demo-urai-jobs
-          GCLOUD_PROJECT: demo-urai-jobs
-        run: pnpm urai-jobs:e2e
-
-      - name: Print emulator logs on failure
-        if: failure()
-        run: cat /tmp/urai-jobs-emulators.log || true
-
-      - name: Stop Firebase emulators
-        if: always()
-        run: |
-          if [ -f /tmp/urai-jobs-emulators.pid ]; then
-            kill $(cat /tmp/urai-jobs-emulators.pid) || true
-          fi
+      - name: Run callable E2E in Firebase emulators
+        run: npx --yes firebase-tools@latest emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs"
