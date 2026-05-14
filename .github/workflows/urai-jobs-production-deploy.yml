@@ -101,6 +101,9 @@ jobs:
           WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
         run: pnpm prod:precheck
 
+      - name: Activation readiness guard
+        run: pnpm activation:verify
+
       - name: Build and verify
         run: |
           pnpm urai-jobs:verify
