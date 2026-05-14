@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify activation readiness guardrails
+        run: pnpm activation:verify
+
       - name: Verify repository invariants
         run: pnpm urai-jobs:verify
 
@@ -114,10 +117,3 @@ jobs:
       - name: Print emulator logs on failure
         if: failure()
         run: cat /tmp/urai-jobs-emulators.log || true
-
-      - name: Stop Firebase emulators
-        if: always()
-        run: |
-          if [ -f /tmp/urai-jobs-emulators.pid ]; then
-            kill $(cat /tmp/urai-jobs-emulators.pid) || true
-          fi
