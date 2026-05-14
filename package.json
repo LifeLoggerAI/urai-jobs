@@ -9,7 +9,8 @@
     "workers/*"
   ],
   "scripts": {
-    "urai-jobs:verify": "node scripts/urai-jobs-verify.mjs",
+    "urai-jobs:verify": "node scripts/urai-jobs-verify.mjs && node scripts/activation-readiness-verify.mjs",
+    "activation:verify": "node scripts/activation-readiness-verify.mjs",
     "urai-jobs:smoke": "node scripts/urai-jobs-smoke.mjs",
     "urai-jobs:e2e": "node scripts/urai-jobs-e2e.mjs",
     "postinstall": "node \"$npm_execpath\" --filter @urai-jobs/shared-types build",
