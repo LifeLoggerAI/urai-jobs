@@ -1,91 +1,65 @@
 # URAI Jobs Post-Deploy Checklist
 
-Use this after every production deploy.
+Use this checklist after production deployment to verify the runtime can accept, execute, observe, and recover jobs.
 
-## 1. Local/repo checks
+## 1. Environment confirmation
 
 ```bash
-pnpm install
-pnpm run urai-jobs:verify
-pnpm run urai-jobs:smoke
-pnpm run lint
-pnpm run typecheck
-pnpm run test
-pnpm run build
-pnpm run urai-jobs:deploy-precheck
+gcloud auth application-default login
+gcloud config set project urai-jobs
+export FIREBASE_PROJECT_ID=urai-jobs
+export GCLOUD_PROJECT=urai-jobs
+export GOOGLE_CLOUD_PROJECT=urai-jobs
+export GCP_REGION=us-central1
+```
+
+Confirm:
+
+- Firebase project is correct.
+- Firestore is reachable.
+- Cloud Functions are deployed.
+- Worker service account is available.
+- No local emulator variables are set for production checks.
+
+## 2. Run production precheck
+
+```bash
 pnpm run prod:precheck
 ```
 
-## 2. Firebase deploy
-
-```bash
-pnpm run deploy:firebase:prod
-```
-
 Expected:
 
-- Firestore rules released.
-- Firestore indexes deployed.
-- Firebase Hosting release completed.
-- Cloud Functions updated successfully.
+- required production env vars pass.
+- Firebase/GCP identifiers match the production project.
+- no placeholder values are present.
 
-## 3. Public hosting smoke
-
-```bash
-curl -I https://urai-jobs.web.app
-curl -s https://urai-jobs.web.app | head
-```
-
-Expected:
-
-- HTTP `200`.
-- URAI Jobs app shell is served.
-
-After custom domain connection, also run:
+## 3. Run production smoke
 
 ```bash
-curl -I https://uraijobs.com
-curl -I https://www.uraijobs.com
-```
-
-## 4. Authenticated callable smoke
-
-Generate a short-lived ID token:
-
-```bash
-export FIREBASE_WEB_API_KEY=<real Firebase Web API key>
-export SMOKE_EMAIL=smoke@urailabs.com
-read -s -p "Password: " SMOKE_PASSWORD
-echo
-export SMOKE_PASSWORD
-export PROD_SMOKE_ID_TOKEN="$(pnpm run --silent prod:smoke-token)"
-echo "$PROD_SMOKE_ID_TOKEN" | cut -c1-30
-```
-
-Expected token prefix:
-
-```text
-eyJ
-```
-
-Run smoke:
-
-```bash
-export FIREBASE_PROJECT_ID=urai-jobs
-export GCLOUD_PROJECT=urai-jobs
-export GCP_REGION=us-central1
 pnpm run prod:smoke
 ```
 
 Expected:
 
-- `createJob` returns a job ID.
-- `getJob` returns the same job.
-- Job starts as `PENDING`.
+- smoke user obtains a valid Firebase Auth ID token.
+- `createJob` callable succeeds.
+- `getJob` callable succeeds.
+- job ID is recorded for follow-up verification.
 
-## 5. Worker processing smoke
+## 4. Queue a narrator test job manually if needed
 
-For local production-connected validation only:
+```bash
+pnpm run job:queue -- --type narrator.tts --payload '{"text":"URAI Jobs production smoke test."}'
+```
+
+Expected:
+
+- job document exists.
+- queue entry exists.
+- initial job status is `CREATED` or `QUEUED`.
+- initial queue status is `READY`.
+
+## 5. Run local production worker if managed worker is not active
 
 ```bash
 gcloud auth application-default login
@@ -110,7 +84,8 @@ Expected worker logs:
 Expected Firestore lifecycle:
 
 ```text
-PENDING -> RUNNING -> COMPLETED
+job: CREATED or QUEUED -> RUNNING -> SUCCESS
+queue: READY -> LEASED -> DONE
 ```
 
 ## 6. Firestore verification
@@ -124,8 +99,8 @@ Check:
 
 Expected:
 
-- job status `COMPLETED`
-- queue status `COMPLETED`
+- job status `SUCCESS`
+- queue status `DONE`
 - result document exists
 - worker log exists
 
@@ -139,23 +114,7 @@ Expected:
 
 ## 8. Production hardening follow-up
 
-- [ ] Managed worker deployed to Cloud Run or equivalent.
-- [ ] Custom domains connected and verified.
-- [ ] External worker URLs verified.
-- [ ] GCS artifact output verified.
-- [ ] Monitoring/alerts configured.
-- [ ] Marketplace UX routes completed.
-- [ ] Legal/privacy/deletion/export flows completed.
-- [ ] Analytics and notifications integrated.
-
-## 9. Evidence capture
-
-Record in `docs/PRODUCTION_VALIDATION_<date>.md`:
-
-- deploy timestamp
-- deployed commit SHA
-- hosting URL
-- smoke job IDs
-- worker completed job IDs
-- custom domain status
-- known follow-ups
+- [ ] Record smoke job ID and workflow URL in release evidence.
+- [ ] Confirm alerts/logging are visible to operators.
+- [ ] Confirm rollback path is known.
+- [ ] File follow-up issues for any non-blocking warnings.
