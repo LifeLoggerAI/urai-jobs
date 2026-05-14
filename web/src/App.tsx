@@ -4,14 +4,6 @@ import { LandingPage } from "./pages/LandingPage";
 import { CreateJobPage } from "./pages/CreateJobPage";
 import { AdminPage } from "./pages/AdminPage";
 import { PrivacyPage, TermsPage, TrustSafetyPage } from "./pages/LegalPages";
-import {
-  ApplyPage,
-  CandidateProfilePage,
-  EmployersPage,
-  JobDetailPage,
-  JobsPage,
-  PricingPage
-} from "./pages/MarketplacePages";
 import { trackJobsEvent } from "./lib/analytics";
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -44,12 +36,6 @@ function routeForPath(pathname: string) {
   if (pathname.startsWith("/login")) return <LoginPage />;
   if (pathname.startsWith("/admin")) return <AdminPage />;
   if (pathname.startsWith("/create")) return <CreateJobPage />;
-  if (pathname === "/jobs" || pathname === "/jobs/") return <JobsPage />;
-  if (pathname.startsWith("/jobs/")) return <JobDetailPage jobId={decodeURIComponent(pathname.replace(/^\/jobs\//, ""))} />;
-  if (pathname.startsWith("/apply/")) return <ApplyPage jobId={decodeURIComponent(pathname.replace(/^\/apply\//, ""))} />;
-  if (pathname.startsWith("/candidate")) return <CandidateProfilePage />;
-  if (pathname.startsWith("/employers")) return <EmployersPage />;
-  if (pathname.startsWith("/pricing")) return <PricingPage />;
   if (pathname.startsWith("/privacy")) return <PrivacyPage />;
   if (pathname.startsWith("/terms")) return <TermsPage />;
   if (pathname.startsWith("/trust")) return <TrustSafetyPage />;
@@ -63,10 +49,6 @@ export default function App() {
         <nav className="top-nav">
           <a className="brand" href="/">URAI Jobs</a>
           <div>
-            <a href="/jobs">Jobs</a>
-            <a href="/candidate">Candidate</a>
-            <a href="/employers">Employers</a>
-            <a href="/pricing">Pricing</a>
             <a href="/login">Login</a>
             <a href="/create">Create</a>
             <a href="/admin">Admin</a>
