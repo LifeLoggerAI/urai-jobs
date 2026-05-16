@@ -3,53 +3,52 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- Helper Functions ---
+    function signedIn() {
+      return request.auth != null;
+    }
 
-    // Get the role of the requesting user.
     function getUserRole() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
-    // Check if the requesting user is an admin.
     function isAdmin() {
-      return getUserRole() == 'admin';
+      return signedIn() && getUserRole() == 'admin';
     }
 
-    // Check if the requesting user is the owner of the resource.
     function isOwner(resource) {
-      return request.auth.uid == resource.data.ownerUid;
+      return signedIn() && request.auth.uid == resource.data.ownerUid;
     }
 
-    // --- Collection Rules ---
+    function userProfileFieldsUnchanged() {
+      return request.resource.data.role == resource.data.role
+        && request.resource.data.orgId == resource.data.orgId
+        && request.resource.data.permissions == resource.data.permissions
+        && request.resource.data.disabled == resource.data.disabled;
+    }
 
-    // Users can read their own document, and admins can read any user document.
-    // Users CANNOT change their own role.
     match /users/{uid} {
-      allow read: if request.auth.uid == uid || isAdmin();
-      allow create: if false; // Users are created via Firebase Auth, not directly in Firestore.
-      allow update: if request.auth.uid == uid && request.resource.data.role == resource.data.role;
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if false;
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && userProfileFieldsUnchanged();
       allow delete: if false;
     }
 
-    // Jobs can be read by their owner or by an admin.
-    // All write operations are forbidden; they must go through secured backend functions.
     match /jobs/{jobId} {
       allow read: if isOwner(resource) || isAdmin();
       allow write: if false;
 
-      // Logs for a job can be read by the job owner or an admin.
       match /logs/{logId} {
         allow read: if isOwner(get(/databases/$(database)/documents/jobs/$(jobId))) || isAdmin();
         allow write: if false;
       }
     }
 
-    // The jobQueue is a backend-only collection. No client access is allowed.
     match /jobQueue/{jobId} {
       allow read, write: if false;
     }
 
-    // Default-deny all other collections.
     match /{document=**} {
       allow read, write: if false;
     }
