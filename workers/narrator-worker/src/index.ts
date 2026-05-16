@@ -3,6 +3,7 @@ dotenv.config();
 
 import express from 'express';
 import { handleJob } from './handlers/index.js';
+import { errorMessage, getHost, getPort, log } from './runtime.js';
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -16,18 +17,32 @@ app.get('/healthz', (_req: any, res: any) => {
 });
 
 app.post('/execute-job', async (req: any, res: any) => {
+  const jobId = req.body?.jobId || req.body?.id;
+
   try {
+    log('INFO', 'job_execution_started', { jobId });
+
     const result = await handleJob(req.body);
+
+    log('INFO', 'job_execution_completed', { jobId });
+
     res.status(200).send(result);
   } catch (error) {
-    console.error('Error handling job:', error);
+    log('ERROR', 'job_execution_failed', {
+      jobId,
+      error: errorMessage(error),
+    });
+
     res.status(500).send({ error: 'Failed to handle job.' });
   }
 });
 
-const port = Number(process.env.PORT || 8080);
-const host = process.env.HOST || '0.0.0.0';
+const port = getPort();
+const host = getHost();
 
 app.listen(port, host, () => {
-  console.log(`narrator-worker listening on ${host}:${port}`);
+  log('INFO', 'worker_started', {
+    host,
+    port,
+  });
 });
