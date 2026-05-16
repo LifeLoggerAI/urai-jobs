@@ -45,7 +45,7 @@ app.post('/', async (req, res) => {
   res.status(200).send({ success: true });
 });
 
-const port = Number(process.env.PORT || 8080);
+const port = Number(process.env.PORT) || 8080;
 const host = process.env.HOST || '0.0.0.0';
 app.listen(port, host, () => {
   console.log(`asset-worker listening on ${host}:${port}`);
