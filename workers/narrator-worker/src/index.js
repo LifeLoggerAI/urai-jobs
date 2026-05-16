@@ -41,7 +41,13 @@ dotenv.config();
 const express_1 = __importDefault(require("express"));
 const index_js_1 = require("./handlers/index.js");
 const app = (0, express_1.default)();
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: '1mb' }));
+app.get('/', (_req, res) => {
+    res.status(200).send({ service: 'narrator-worker', ok: true });
+});
+app.get('/healthz', (_req, res) => {
+    res.status(200).send({ ok: true });
+});
 app.post('/execute-job', async (req, res) => {
     try {
         const result = await (0, index_js_1.handleJob)(req.body);
@@ -52,7 +58,8 @@ app.post('/execute-job', async (req, res) => {
         res.status(500).send({ error: 'Failed to handle job.' });
     }
 });
-const port = process.env.PORT || 8080;
-app.listen(port, () => {
-    console.log(`narrator-worker listening on port ${port}`);
+const port = Number(process.env.PORT || 8080);
+const host = process.env.HOST || '0.0.0.0';
+app.listen(port, host, () => {
+    console.log(`narrator-worker listening on ${host}:${port}`);
 });
