@@ -1,14 +1,19 @@
-import fs from "fs";
+import fs from "node:fs";
 
-let failed = 0;
+let failed = false;
 
-function check(name, condition, detail = "") {
-  if (condition) {
-    console.log(`[PASS] ${name}`);
-  } else {
-    failed += 1;
-    console.error(`[FAIL] ${name}${detail ? ` — ${detail}` : ""}`);
-  }
+function pass(message) {
+  console.log(`[PASS] ${message}`);
+}
+
+function fail(message) {
+  failed = true;
+  console.error(`[FAIL] ${message}`);
+}
+
+function check(condition, message) {
+  if (condition) pass(message);
+  else fail(message);
 }
 
 function exists(path) {
@@ -19,68 +24,53 @@ function readJson(path) {
   return JSON.parse(fs.readFileSync(path, "utf8"));
 }
 
-check("firebase.json exists", exists("firebase.json"));
-check(".firebaserc exists", exists(".firebaserc"));
-check("firestore.rules exists", exists("firestore.rules"));
-check("firestore.indexes.json exists", exists("firestore.indexes.json"));
-check("functions/src/index.ts exists", exists("functions/src/index.ts"));
-check("web/dist/index.html exists", exists("web/dist/index.html"));
-check("scripts/urai-jobs-e2e.mjs exists", exists("scripts/urai-jobs-e2e.mjs"));
-check("scripts/urai-jobs-verify.mjs exists", exists("scripts/urai-jobs-verify.mjs"));
-check("scripts/urai-jobs-smoke.mjs exists", exists("scripts/urai-jobs-smoke.mjs"));
-check("docs/URAI_JOBS_DEPLOYMENT_READINESS.md exists", exists("docs/URAI_JOBS_DEPLOYMENT_READINESS.md"));
+check(exists("firebase.json"), "firebase.json exists");
+check(exists(".firebaserc"), ".firebaserc exists");
+check(exists("firestore.rules"), "firestore.rules exists");
+check(exists("firestore.indexes.json"), "firestore.indexes.json exists");
+check(exists("storage.rules"), "storage.rules exists");
+check(exists("functions/src/index.ts"), "functions/src/index.ts exists");
+check(exists("web/dist/index.html"), "web/dist/index.html exists");
+check(exists("scripts/urai-jobs-e2e.mjs"), "scripts/urai-jobs-e2e.mjs exists");
+check(exists("scripts/urai-jobs-verify.mjs"), "scripts/urai-jobs-verify.mjs exists");
+check(exists("scripts/urai-jobs-smoke.mjs"), "scripts/urai-jobs-smoke.mjs exists");
+check(exists("docs/URAI_JOBS_DEPLOYMENT_READINESS.md"), "docs/URAI_JOBS_DEPLOYMENT_READINESS.md exists");
 
-if (exists("firebase.json")) {
-  const firebase = readJson("firebase.json");
+const firebaseJson = readJson("firebase.json");
 
-  const hasHosting =
-    Boolean(firebase.hosting) &&
-    (
-      Boolean(firebase.hosting.public) ||
-      Boolean(firebase.hosting.site) ||
-      Boolean(firebase.hosting.target) ||
-      Array.isArray(firebase.hosting)
-    );
+check(Boolean(firebaseJson.hosting), "firebase hosting configured");
+check(Boolean(firebaseJson.functions), "firebase functions configured");
+check(firebaseJson.firestore?.rules === "firestore.rules", "firebase firestore rules configured");
+check(firebaseJson.firestore?.indexes === "firestore.indexes.json", "firebase firestore indexes configured");
+check(firebaseJson.storage?.rules === "storage.rules", "firebase storage rules configured");
+check(Boolean(firebaseJson.emulators), "firebase emulators configured");
+check(Boolean(firebaseJson.emulators?.storage), "firebase storage emulator configured");
 
-  const hasFunctions =
-    Boolean(firebase.functions) &&
-    (
-      Boolean(firebase.functions.source) ||
-      Array.isArray(firebase.functions)
-    );
+const storageRules = fs.readFileSync("storage.rules", "utf8");
 
-  const firestoreConfigs = Array.isArray(firebase.firestore)
-    ? firebase.firestore
-    : firebase.firestore
-      ? [firebase.firestore]
-      : [];
+check(
+  !storageRules.includes("allow read, write: if request.auth != null"),
+  "storage.rules does not allow broad authenticated read/write"
+);
 
-  const hasFirestoreRules =
-    firestoreConfigs.some((cfg) => Boolean(cfg?.rules)) ||
-    exists("firestore.rules");
+check(
+  storageRules.includes("match /{allPaths=**}") &&
+    storageRules.includes("allow read, write: if false"),
+  "storage.rules has default deny"
+);
 
-  const hasFirestoreIndexes =
-    firestoreConfigs.some((cfg) => Boolean(cfg?.indexes)) ||
-    exists("firestore.indexes.json");
+const packageJson = readJson("package.json");
+const scripts = packageJson.scripts || {};
 
-  check("firebase hosting configured", hasHosting);
-  check("firebase functions configured", hasFunctions);
-  check("firebase firestore rules configured", hasFirestoreRules);
-  check("firebase firestore indexes configured", hasFirestoreIndexes);
-  check("firebase emulators configured", Boolean(firebase.emulators));
-}
+check(Boolean(scripts.build), "package script build exists");
+check(Boolean(scripts.typecheck), "package script typecheck exists");
+check(Boolean(scripts["urai-jobs:verify"]), "package script urai-jobs:verify exists");
+check(Boolean(scripts["urai-jobs:smoke"]), "package script urai-jobs:smoke exists");
+check(Boolean(scripts["urai-jobs:e2e"]), "package script urai-jobs:e2e exists");
+check(Boolean(scripts["urai-jobs:deploy-precheck"]), "package script urai-jobs:deploy-precheck exists");
 
-if (exists("package.json")) {
-  const pkg = readJson("package.json");
-  const scripts = pkg.scripts || {};
-  for (const name of ["build", "typecheck", "urai-jobs:verify", "urai-jobs:smoke", "urai-jobs:e2e", "urai-jobs:deploy-precheck"]) {
-    check(`package script ${name} exists`, Boolean(scripts[name]));
-  }
-}
+check(!failed, "URAI_JOBS_DEPLOY_PRECHECK");
 
-if (failed > 0) {
-  console.error(`[FAIL] URAI_JOBS_DEPLOY_PRECHECK ${failed} checks failed`);
+if (failed) {
   process.exit(1);
 }
-
-console.log("[PASS] URAI_JOBS_DEPLOY_PRECHECK");
