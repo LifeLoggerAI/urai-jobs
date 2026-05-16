@@ -100,6 +100,17 @@ function shouldUseProvidedToken(token) {
   return Boolean(token && token.startsWith('eyJ') && token.length > 100);
 }
 
+function hasPlaceholderSmokeToken(token) {
+  return Boolean(
+    token &&
+      (token.includes('PASTE_') ||
+        token.includes('REAL_FIREBASE_ID_TOKEN') ||
+        token.includes('TOKEN_HERE') ||
+        token === 'eyJ...' ||
+        token.length <= 100)
+  );
+}
+
 if (!PROJECT_ID) fail('FIREBASE_PROJECT_ID or GCLOUD_PROJECT is required.');
 
 async function callCallable(idToken, name, data) {
@@ -123,6 +134,11 @@ async function callCallable(idToken, name, data) {
 
 async function main() {
   console.log(`[INFO] Running production smoke against project=${PROJECT_ID}, region=${REGION}`);
+
+  if (hasPlaceholderSmokeToken(PROVIDED_ID_TOKEN)) {
+    fail('PROD_SMOKE_ID_TOKEN is set but is not a real Firebase Auth ID token. Paste a full token starting with eyJ, or unset PROD_SMOKE_ID_TOKEN to let the script mint one.');
+  }
+
   const hasProvidedToken = shouldUseProvidedToken(PROVIDED_ID_TOKEN);
   const idToken = hasProvidedToken ? PROVIDED_ID_TOKEN : await mintSmokeIdToken();
   if (hasProvidedToken) pass('Using provided Firebase Auth ID token for smoke.');
