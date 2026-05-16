@@ -29,6 +29,7 @@
     "prod:precheck": "node scripts/prod-env-precheck.mjs",
     "prod:smoke": "node scripts/prod-smoke.mjs",
     "prod:smoke-token": "node scripts/prod-smoke-token.mjs",
+    "prod:verify-workers": "node scripts/verify-worker-health.mjs",
     "worker:precheck": "node scripts/managed-worker-precheck.mjs",
     "worker:run": "node scripts/run-worker.mjs",
     "domains:verify": "node scripts/verify-custom-domains.mjs",
