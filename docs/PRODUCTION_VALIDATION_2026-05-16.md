@@ -141,3 +141,22 @@ Compatibility statuses verified:
 Decision notes:
 
 URAI Jobs runtime infrastructure is deployed to production Firebase and Cloud Run. Final done-done production readiness remains pending authenticated production smoke, terminal job/queue verification, logs/artifact verification, and admin/operator auth verification.
+
+## Production authenticated smoke evidence
+
+- Result: PASS
+- Job ID: 01KRSARZS653XRZW19R92TVTK9
+- Job type: narrator.tts
+- Auth mode: provided Firebase Auth ID token
+- Callable createJob: PASS
+- Callable getJob: PASS
+- Observed terminal status: COMPLETED
+- Worker lease: cloud-run-worker
+- Payload outputPrefix: prod-smoke/1778966624134
+
+Terminal evidence:
+
+[PASS] Using provided Firebase Auth ID token for smoke.
+[PASS] createJob returned 01KRSARZS653XRZW19R92TVTK9
+[PASS] getJob returned status COMPLETED
+[PASS] URAI Jobs Runtime production smoke submitted and status callable responded.
