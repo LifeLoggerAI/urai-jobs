@@ -5,7 +5,15 @@ admin.initializeApp();
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+
+app.get('/', (_req, res) => {
+  res.status(200).send({ service: 'spatial-worker', ok: true });
+});
+
+app.get('/healthz', (_req, res) => {
+  res.status(200).send({ ok: true });
+});
 
 app.post('/', async (req, res) => {
   const { jobId, leaseToken } = req.body;
@@ -29,7 +37,6 @@ app.post('/', async (req, res) => {
   await db.collection('jobResults').doc(resultId).set({
     jobId,
     status: 'SUCCESS',
-    //... other result fields
   });
 
   await jobRef.update({ status: 'SUCCESS', 'result.resultId': resultId });
@@ -37,7 +44,8 @@ app.post('/', async (req, res) => {
   res.status(200).send({ success: true });
 });
 
-const port = process.env.PORT || 8080;
-app.listen(port, () => {
-  console.log(`spatial-worker listening on port ${port}`);
+const port = Number(process.env.PORT || 8080);
+const host = process.env.HOST || '0.0.0.0';
+app.listen(port, host, () => {
+  console.log(`spatial-worker listening on ${host}:${port}`);
 });

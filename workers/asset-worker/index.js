@@ -5,7 +5,15 @@ admin.initializeApp();
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+
+app.get('/', (_req, res) => {
+  res.status(200).send({ service: 'asset-worker', ok: true });
+});
+
+app.get('/healthz', (_req, res) => {
+  res.status(200).send({ ok: true });
+});
 
 app.post('/', async (req, res) => {
   const { jobId, leaseToken } = req.body;
@@ -37,7 +45,8 @@ app.post('/', async (req, res) => {
   res.status(200).send({ success: true });
 });
 
-const port = process.env.PORT || 8080;
-app.listen(port, () => {
-  console.log(`asset-worker listening on port ${port}`);
+const port = Number(process.env.PORT || 8080);
+const host = process.env.HOST || '0.0.0.0';
+app.listen(port, host, () => {
+  console.log(`asset-worker listening on ${host}:${port}`);
 });
