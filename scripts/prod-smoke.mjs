@@ -123,7 +123,9 @@ async function callCallable(idToken, name, data) {
 
 async function main() {
   console.log(`[INFO] Running production smoke against project=${PROJECT_ID}, region=${REGION}`);
-  const idToken = shouldUseProvidedToken(PROVIDED_ID_TOKEN) ? PROVIDED_ID_TOKEN : await mintSmokeIdToken();
+  const hasProvidedToken = shouldUseProvidedToken(PROVIDED_ID_TOKEN);
+  const idToken = hasProvidedToken ? PROVIDED_ID_TOKEN : await mintSmokeIdToken();
+  if (hasProvidedToken) pass('Using provided Firebase Auth ID token for smoke.');
 
   const createResult = await callCallable(idToken, 'createJob', {
     jobType: JOB_TYPE,

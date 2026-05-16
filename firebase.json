@@ -17,7 +17,7 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "site": "urai-jobs-30c86",
+    "site": "urai-jobs-563121397472",
     "rewrites": [
       {
         "source": "**",
