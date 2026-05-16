@@ -4,16 +4,16 @@
 
 - Release date: 2026-05-16
 - Release owner: URAI Labs
-- Commit SHA: 39eac330ff5fb145974c3988adfaab4561b28da1
-- Pull request: #40
-- Target environment: production-ready main branch
-- Firebase project: pending operator confirmation
-- Hosting URL: pending deploy confirmation
-- Custom domain status: pending deploy confirmation
+- Commit SHA: main as of production deploy
+- Pull request: #40, #41
+- Target environment: production
+- Firebase project: urai-jobs
+- Hosting URL: https://urai-jobs-563121397472.web.app
+- Custom domain status: pending
 
 ## Scope
 
-This release promotes URAI Jobs as the hardened internal runtime system-of-systems release.
+This release promotes URAI Jobs as the hardened internal runtime system-of-systems runtime.
 
 Included changes:
 
@@ -22,6 +22,8 @@ Included changes:
 - Firebase Storage deploy and security gates
 - Storage rules validation in deploy precheck
 - Narrator worker compatibility and Cloud Run readiness
+- Cloud Run worker deployment
+- Firebase Functions, Firestore rules/indexes, and Hosting deployment
 
 ## Runtime boundary confirmation
 
@@ -33,31 +35,49 @@ Included changes:
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| `pnpm run activation:verify` | PASS | Terminal validation |
-| `pnpm run urai-jobs:verify` | PASS | Terminal validation |
-| `pnpm run urai-jobs:smoke` | PASS | Terminal validation |
-| `pnpm run typecheck` | PASS | Terminal validation |
-| `pnpm run build` | PASS | Terminal validation |
-| `pnpm run urai-jobs:deploy-precheck` | PASS | Terminal validation |
-| `pnpm run urai-jobs:e2e` | Not run in final local gate | Requires emulator/live operator run |
-| `pnpm run prod:precheck` | Not run | Requires production environment |
-| `pnpm run prod:smoke` | Not run | Requires production environment |
+| `pnpm urai-jobs:verify` | PASS | Terminal validation |
+| `pnpm urai-jobs:smoke` | PASS | Terminal validation |
+| `pnpm urai-jobs:deploy-precheck` | PASS | Terminal validation |
+| `pnpm build` | PASS | Terminal validation |
+| `pnpm typecheck` | PASS | Terminal validation |
+| `pnpm deploy:workers` | PASS | Cloud Run deployed narrator, asset, spatial, and studio workers |
+| `pnpm deploy:firebase:prod -- prod` | PASS | Firebase deploy completed for project `urai-jobs` |
+| `pnpm prod:smoke` | PENDING | Requires real short-lived Firebase Auth ID token |
+
+## Deployment evidence
+
+- Firebase project: urai-jobs
+- Hosting site: urai-jobs-563121397472
+- Hosting URL: https://urai-jobs-563121397472.web.app
+- Firestore rules: released
+- Firestore indexes: deployed
+- Firebase Functions: updated
+- Firebase Hosting: release complete
+
+## Worker deployment evidence
+
+| Worker | URL | Status |
+| --- | --- | --- |
+| narrator-worker | https://narrator-worker-wkyojbnbiq-uc.a.run.app | deployed |
+| asset-worker | https://asset-worker-wkyojbnbiq-uc.a.run.app | deployed |
+| spatial-worker | https://spatial-worker-wkyojbnbiq-uc.a.run.app | deployed |
+| studio-worker | https://studio-worker-wkyojbnbiq-uc.a.run.app | deployed |
 
 ## Smoke evidence
 
-- Smoke job ID: local/static smoke only
-- Job type: narrator/spatial/privacy owner-map smoke coverage
-- Initial job status: compatibility rules validated
-- Initial queue status: deploy precheck validated
-- Terminal job status: local smoke validates retry/cancel rules
-- Terminal queue status: deploy precheck validates status surface
-- Logs verified: pending production deploy
-- Result/artifact verified: pending production deploy
-- Worker verified: build/typecheck passed
+- Smoke job ID: pending
+- Job type: pending
+- Initial job status: pending
+- Initial queue status: pending
+- Terminal job status: pending
+- Terminal queue status: pending
+- Logs verified: pending
+- Result/artifact verified: pending
+- Worker verified: pending runtime smoke
 
 ## Runtime status verification
 
-Canonical job statuses verified by activation readiness:
+Canonical job statuses verified by local validation:
 
 - [x] `CREATED`
 - [x] `QUEUED`
@@ -85,15 +105,6 @@ Compatibility statuses verified:
 - [x] `DEAD`
 - [x] `CANCELLED`
 
-## Deployment evidence
-
-- Deploy command or workflow: pending operator deployment
-- Workflow run URL: no workflow run reported for merge commit
-- Deployed commit: pending operator deployment
-- Deployment timestamp: pending operator deployment
-- Operator who deployed: pending
-- Rollback command/path: revert PR #40 or deploy previous known-good commit
-
 ## Security and operations checks
 
 - [x] Storage rules are included in Firebase deploy surface.
@@ -101,26 +112,32 @@ Compatibility statuses verified:
 - [x] Broad authenticated Storage read/write is blocked.
 - [x] Storage rules include default deny.
 - [x] Runtime app excludes public candidate, employer, jobs, and pricing routes.
-- [ ] Admin/operator access verified in production.
-- [ ] Non-admin behavior verified in production.
-- [ ] Required runtime environment configuration verified outside git.
-- [ ] Monitoring or logs checked after deploy.
+- [x] Firestore rules released.
+- [x] Firebase Functions deployed.
+- [x] Firebase Hosting deployed.
+- [ ] Production authenticated smoke verified.
+- [ ] Smoke job reaches terminal state.
+- [ ] Logs and artifacts verified.
+- [ ] Admin/operator auth verified.
+- [ ] Custom domain verified.
 
 ## Known risks and follow-ups
 
 | Priority | Risk or follow-up | Owner | Target date |
 | --- | --- | --- | --- |
-| High | Run production precheck and production smoke after environment deployment | URAI operator | Next deploy |
-| High | Resolve repository dependency/security alerts reported by GitHub | URAI engineering | Next security pass |
-| Medium | Add emulator-backed Storage rules tests | URAI engineering | Next hardening pass |
-| Medium | Verify Cloud Run worker invocation auth/signature posture | URAI engineering | Next hardening pass |
+| High | Run production authenticated smoke with real Firebase Auth ID token | URAI operator | Immediate |
+| High | Verify Firestore job and queue terminal state after smoke | URAI operator | Immediate |
+| High | Verify logs and GCS artifact for artifact-producing job | URAI operator | Immediate |
+| Medium | Resolve worker `/healthz` 404 or update health check route expectations | URAI engineering | Next hardening pass |
+| Medium | Resolve GitHub dependency/security alerts | URAI engineering | Next security pass |
+| Medium | Configure custom domain if required | URAI operator | Launch polish |
 
 ## Release decision
 
 - [ ] Approved for production.
-- [ ] Blocked.
+- [x] Blocked from final done-done signoff pending production authenticated smoke.
 - [ ] Rolled back.
 
 Decision notes:
 
-Main branch is release-hardened and locally validated. Production approval remains pending live environment deployment, production smoke, and operator sign-off.
+URAI Jobs runtime infrastructure is deployed to production Firebase and Cloud Run. Final done-done production readiness remains pending authenticated production smoke, terminal job/queue verification, logs/artifact verification, and admin/operator auth verification.
