@@ -2,4 +2,5 @@ packages:
   - "functions"
   - "packages/shared-types"
   - "web"
+  - "workers"
   - "workers/*"
