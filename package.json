@@ -12,6 +12,8 @@
     "urai-jobs:verify": "node scripts/urai-jobs-verify.mjs && node scripts/activation-readiness-verify.mjs",
     "activation:verify": "node scripts/activation-readiness-verify.mjs",
     "urai-jobs:smoke": "node scripts/urai-jobs-smoke.mjs",
+    "test:smoke:local": "npm run urai-jobs:smoke",
+    "smoke:local": "npm run urai-jobs:smoke",
     "urai-jobs:e2e": "node scripts/urai-jobs-e2e.mjs",
     "postinstall": "npm run build --prefix packages/shared-types",
     "lint": "npm run lint --prefix packages/shared-types --if-present && npm run lint --prefix functions --if-present && npm run lint --prefix web --if-present && npm run lint --prefix workers --if-present",
