@@ -79,7 +79,7 @@ jobs:
         run: pnpm add -g firebase-tools
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Production env precheck
         env:
