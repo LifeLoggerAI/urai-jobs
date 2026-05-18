@@ -20,6 +20,10 @@ function pass(message) {
   console.log(`[PASS] ${message}`);
 }
 
+function warn(message) {
+  console.warn(`[WARN] ${message}`);
+}
+
 function initializeAdmin() {
   if (getApps().length === 0) initializeApp({ projectId: PROJECT_ID });
 }
@@ -136,7 +140,7 @@ async function main() {
   console.log(`[INFO] Running production smoke against project=${PROJECT_ID}, region=${REGION}`);
 
   if (hasPlaceholderSmokeToken(PROVIDED_ID_TOKEN)) {
-    fail('PROD_SMOKE_ID_TOKEN is set but is not a real Firebase Auth ID token. Paste a full token starting with eyJ, or unset PROD_SMOKE_ID_TOKEN to let the script mint one.');
+    warn('PROD_SMOKE_ID_TOKEN is set but is a placeholder or incomplete token. Ignoring it and minting a fresh smoke token.');
   }
 
   const hasProvidedToken = shouldUseProvidedToken(PROVIDED_ID_TOKEN);
