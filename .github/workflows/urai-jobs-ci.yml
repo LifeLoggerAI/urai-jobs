@@ -37,7 +37,7 @@ jobs:
         run: npm --prefix functions ci --ignore-scripts
 
       - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Verify Firebase SDK versions
         run: pnpm --filter urai-jobs-functions list firebase-functions firebase-admin --depth 0

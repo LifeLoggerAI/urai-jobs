@@ -1,0 +1,71 @@
+name: production-verification
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    env:
+      URAI_ENV: prod
+      FIREBASE_PROJECT_ID: urai-jobs
+      GCLOUD_PROJECT: urai-jobs
+      GOOGLE_CLOUD_PROJECT: urai-jobs
+      GCP_REGION: us-central1
+      GCS_BUCKET_NAME: urai-jobs-artifacts
+      API_ALLOWED_ORIGINS: https://urai.app,https://admin.urai.app,https://analytics.urai.app
+      WEBHOOK_SIGNING_SECRET: ${{ github.event_name == 'workflow_dispatch' && secrets.WEBHOOK_SIGNING_SECRET || 'ci-placeholder-webhook-signing-secret' }}
+      NARRATOR_WORKER_URL: https://narrator-worker-wkyojbnbiq-uc.a.run.app
+      ASSET_WORKER_URL: https://asset-worker-wkyojbnbiq-uc.a.run.app
+      SPATIAL_WORKER_URL: https://spatial-worker-wkyojbnbiq-uc.a.run.app
+      STUDIO_WORKER_URL: https://studio-worker-wkyojbnbiq-uc.a.run.app
+      FIREBASE_HOSTING_SITE: urai-jobs-563121397472
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Workspace verification
+        run: pnpm check:workspace
+
+      - name: Build
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Runtime verification
+        run: pnpm urai-jobs:verify
+
+      - name: Smoke verification
+        run: pnpm urai-jobs:smoke
+
+      - name: Deploy precheck
+        run: pnpm urai-jobs:deploy-precheck
+
+      - name: Production env precheck
+        if: github.event_name == 'workflow_dispatch'
+        run: pnpm prod:precheck
+
+      - name: PR production secret gate note
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "Production env precheck is intentionally skipped on pull_request because production secrets are unavailable to PRs."
+          echo "Run this workflow manually after merge to validate real production secrets."

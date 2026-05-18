@@ -40,26 +40,124 @@ const dotenv = __importStar(require("dotenv"));
 dotenv.config();
 const express_1 = __importDefault(require("express"));
 const index_js_1 = require("./handlers/index.js");
+const concurrency_governor_js_1 = require("./concurrency-governor.js");
+const structured_logger_js_1 = require("./structured-logger.js");
+const runtime_js_1 = require("./runtime.js");
+(0, runtime_js_1.validateRequiredEnv)([]);
 const app = (0, express_1.default)();
+const governor = new concurrency_governor_js_1.ConcurrencyGovernor({
+    maxConcurrentJobs: Number(process.env.WORKER_MAX_CONCURRENT_JOBS || 8),
+    saturationThreshold: Number(process.env.WORKER_SATURATION_THRESHOLD || 0.9),
+});
 app.use(express_1.default.json({ limit: '1mb' }));
+app.use(runtime_js_1.requestIdMiddleware);
 app.get('/', (_req, res) => {
     res.status(200).send({ service: 'narrator-worker', ok: true });
 });
 app.get('/healthz', (_req, res) => {
-    res.status(200).send({ ok: true });
+    res.status(200).send({ ok: true, governor: governor.getStats() });
 });
-app.post('/execute-job', async (req, res) => {
+app.post('/execute-job', (0, runtime_js_1.asyncHandler)(async (req, res) => {
+    const jobId = req.body?.jobId || req.body?.id;
+    const jobType = req.body?.type || req.body?.jobType;
+    const requestId = req.requestId;
+    if (!governor.canAcceptJob()) {
+        const stats = governor.getStats();
+        (0, runtime_js_1.emitMetric)('worker_saturation_rejections_total', 1, {
+            jobId,
+            jobType,
+            requestId,
+            ...stats,
+        });
+        (0, structured_logger_js_1.logStructured)({
+            severity: 'WARN',
+            event: 'worker.saturated',
+            requestId,
+            jobId,
+            jobType,
+            workerName: 'narrator-worker',
+            metadata: stats,
+        });
+        res.status(429).send({
+            error: 'Worker saturated.',
+            requestId,
+            retryAfterSeconds: 30,
+        });
+        return;
+    }
+    governor.acquire();
+    const startedAt = Date.now();
+    (0, structured_logger_js_1.logStructured)({
+        severity: 'INFO',
+        event: 'job.execution.started',
+        requestId,
+        jobId,
+        jobType,
+        workerName: 'narrator-worker',
+        metadata: governor.getStats(),
+    });
     try {
         const result = await (0, index_js_1.handleJob)(req.body);
+        (0, runtime_js_1.emitMetric)('job_execution_duration_ms', Date.now() - startedAt, {
+            jobId,
+            jobType,
+            requestId,
+        });
+        (0, structured_logger_js_1.logStructured)({
+            severity: 'INFO',
+            event: 'job.execution.completed',
+            requestId,
+            jobId,
+            jobType,
+            workerName: 'narrator-worker',
+            metadata: {
+                durationMs: Date.now() - startedAt,
+                governor: governor.getStats(),
+            },
+        });
         res.status(200).send(result);
     }
     catch (error) {
-        console.error('Error handling job:', error);
-        res.status(500).send({ error: 'Failed to handle job.' });
+        (0, runtime_js_1.emitMetric)('job_execution_failures_total', 1, {
+            jobId,
+            jobType,
+            requestId,
+        });
+        (0, structured_logger_js_1.logStructured)({
+            severity: 'ERROR',
+            event: 'job.execution.failed',
+            requestId,
+            jobId,
+            jobType,
+            workerName: 'narrator-worker',
+            metadata: {
+                error: error instanceof Error ? error.message : String(error),
+                durationMs: Date.now() - startedAt,
+                governor: governor.getStats(),
+            },
+        });
+        throw error;
     }
-});
-const port = Number(process.env.PORT || 8080);
-const host = process.env.HOST || '0.0.0.0';
+    finally {
+        governor.release();
+        (0, runtime_js_1.emitMetric)('worker_saturation', governor.getSaturation(), {
+            workerName: 'narrator-worker',
+            requestId,
+        });
+    }
+}));
+app.use(runtime_js_1.errorMiddleware);
+const port = (0, runtime_js_1.getPort)();
+const host = (0, runtime_js_1.getHost)();
 app.listen(port, host, () => {
-    console.log(`narrator-worker listening on ${host}:${port}`);
+    (0, structured_logger_js_1.logStructured)({
+        severity: 'INFO',
+        event: 'worker.started',
+        workerName: 'narrator-worker',
+        metadata: {
+            host,
+            port,
+            governor: governor.getStats(),
+        },
+    });
 });
