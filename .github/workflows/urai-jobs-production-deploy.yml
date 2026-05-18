@@ -99,6 +99,7 @@ jobs:
           SPATIAL_WORKER_URL: ${{ secrets.SPATIAL_WORKER_URL }}
           STUDIO_WORKER_URL: ${{ secrets.STUDIO_WORKER_URL }}
           WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
+          FIREBASE_HOSTING_SITE: ${{ secrets.FIREBASE_HOSTING_SITE }}
         run: pnpm prod:precheck
 
       - name: Activation readiness guard
@@ -138,6 +139,9 @@ jobs:
           SPATIAL_WORKER_URL: ${{ secrets.SPATIAL_WORKER_URL }}
           STUDIO_WORKER_URL: ${{ secrets.STUDIO_WORKER_URL }}
           WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
+          FIREBASE_HOSTING_SITE: ${{ secrets.FIREBASE_HOSTING_SITE }}
+          FIREBASE_FALLBACK_HOSTING_SITE: ${{ secrets.FIREBASE_FALLBACK_HOSTING_SITE }}
+          ALLOW_CREATE_HOSTING_SITE: ${{ secrets.ALLOW_CREATE_HOSTING_SITE }}
         run: pnpm deploy:firebase:prod -- ${{ inputs.target }}
 
       - name: Production callable smoke
