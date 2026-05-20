@@ -47,9 +47,12 @@ const storageRules = read("storage.rules");
 const prodEnvExample = read("ops/production.env.example");
 const readme = read("README.md");
 const deployReadiness = read("docs/URAI_JOBS_DEPLOYMENT_READINESS.md");
+const executeJob = read("functions/src/jobs/executeJob.ts");
+const smoke = read("scripts/urai-jobs-smoke.mjs");
 
 for (const path of [
   "functions/src/index.ts",
+  "functions/src/jobs/executeJob.ts",
   "packages/shared-types/package.json",
   "web/package.json",
   "workers/package.json",
@@ -130,6 +133,29 @@ for (const marker of ["internal production job-execution fabric", "Do not use th
 
 for (const marker of ["URAI_JOBS_DEPLOY_PRECHECK", "Production", "Firebase", "Cloud Run"]) {
   warnIncludes("docs/URAI_JOBS_DEPLOYMENT_READINESS.md", deployReadiness, marker);
+}
+
+for (const marker of [
+  "ASSET_WORKER_URL",
+  "SPATIAL_WORKER_URL",
+  "STUDIO_WORKER_URL",
+  "NARRATOR_WORKER_URL",
+  "asset-render",
+  "spatial-index",
+  "studio-render",
+  "route: '/'",
+  "route: '/execute-job'"
+]) {
+  requireIncludes("functions/src/jobs/executeJob.ts", executeJob, marker, `worker routing marker ${marker}`);
+}
+
+for (const marker of [
+  "asset-render routes to asset worker root",
+  "spatial-index routes to spatial worker root",
+  "studio-render routes to studio worker root",
+  "narrator.tts routes to narrator execute endpoint"
+]) {
+  requireIncludes("scripts/urai-jobs-smoke.mjs", smoke, marker, `smoke route check ${marker}`);
 }
 
 run("runtime invariant verification", "npm", ["run", "urai-jobs:verify"]);
