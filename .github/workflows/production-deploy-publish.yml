@@ -17,6 +17,11 @@ on:
         required: true
         default: false
         type: boolean
+      require_custom_domains:
+        description: Fail deployment if uraijobs.com and www are not serving the app shell
+        required: true
+        default: false
+        type: boolean
 
 env:
   DEPLOY_PROJECT_ID: ${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID || secrets.GCLOUD_PROJECT || secrets.GOOGLE_CLOUD_PROJECT || 'urai-jobs' }}
@@ -164,8 +169,19 @@ jobs:
           FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
         run: pnpm deploy:firebase:prod -- prod
 
+      - name: Verify canonical Firebase Hosting URLs
+        run: pnpm domains:verify -- https://urai-jobs-563121397472.web.app https://urai-jobs.web.app
+
       - name: Verify custom domains
-        run: pnpm domains:verify
+        if: ${{ inputs.require_custom_domains }}
+        run: pnpm domains:verify -- https://uraijobs.com https://www.uraijobs.com
+
+      - name: Custom domains pending notice
+        if: ${{ !inputs.require_custom_domains }}
+        run: |
+          echo "Custom domain verification is non-blocking for this publish run."
+          echo "Run again with require_custom_domains=true after Firebase Hosting custom domains and DNS are configured."
+          pnpm domains:verify -- https://uraijobs.com https://www.uraijobs.com || true
 
       - name: Verify workers
         run: pnpm prod:verify-workers
