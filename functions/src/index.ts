@@ -3,6 +3,7 @@
 export { getJobStatus } from "./jobs/getJobStatus.js";
 export { executeJob } from "./jobs/executeJob.js";
 export { processQueueTick } from "./jobs/processQueueTick.js";
+export { processQueueNow } from "./jobs/processQueueNow.js";
 export { retryExpiredLeases } from "./jobs/retryExpiredLeases.js";
 export { cleanupTerminalJobs } from "./jobs/cleanupTerminalJobs.js";
 export { systemReconcile } from "./jobs/systemReconcile.js";
