@@ -22,6 +22,7 @@ const ownerByPrefix = {
   marketing: "urai-marketing",
   studio: "urai-studio",
   assetFactory: "asset-factory",
+  asset: "asset-factory",
   analytics: "analytics",
   communications: "communications",
   privacy: "privacy-consent",
@@ -31,8 +32,15 @@ const ownerByPrefix = {
 };
 
 function inferOwner(jobType) {
-  const [prefix] = jobType.split(".");
+  const [prefix] = jobType.split(/[._-]/);
   return ownerByPrefix[prefix] ?? "unknown";
+}
+
+function inferWorkerRoute(jobType) {
+  if (jobType === "asset-render" || jobType.startsWith("asset")) return "ASSET_WORKER_URL:/";
+  if (jobType === "spatial-index" || jobType.startsWith("spatial")) return "SPATIAL_WORKER_URL:/";
+  if (jobType === "studio-render" || jobType.startsWith("studio")) return "STUDIO_WORKER_URL:/";
+  return "NARRATOR_WORKER_URL:/execute-job";
 }
 
 assert("PENDING is cancellable", canCancel("PENDING"));
@@ -47,6 +55,10 @@ assert("known statuses do not include retry_needed", !statuses.includes("retry_n
 assert("spatial owner maps", inferOwner("spatial.memory.snapshot") === "urai-spatial");
 assert("privacy owner maps", inferOwner("privacy.delete.run") === "privacy-consent");
 assert("narrator owner maps", inferOwner("narrator.tts") === "narrator");
+assert("asset-render routes to asset worker root", inferWorkerRoute("asset-render") === "ASSET_WORKER_URL:/");
+assert("spatial-index routes to spatial worker root", inferWorkerRoute("spatial-index") === "SPATIAL_WORKER_URL:/");
+assert("studio-render routes to studio worker root", inferWorkerRoute("studio-render") === "STUDIO_WORKER_URL:/");
+assert("narrator.tts routes to narrator execute endpoint", inferWorkerRoute("narrator.tts") === "NARRATOR_WORKER_URL:/execute-job");
 
 if (process.exitCode) {
   console.error("[FAIL] URAI_JOBS_SMOKE");
