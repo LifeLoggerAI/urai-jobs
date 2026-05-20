@@ -1,0 +1,178 @@
+name: URAI Jobs Deploy Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_launch_unlock:
+        description: Type LAUNCH-UNLOCK to confirm production signoffs are complete
+        required: true
+        type: string
+      deploy_workers:
+        description: Deploy Cloud Run workers before Firebase deploy
+        required: true
+        default: true
+        type: boolean
+      run_smoke:
+        description: Run callable production smoke after deploy
+        required: true
+        default: false
+        type: boolean
+
+env:
+  DEPLOY_PROJECT_ID: ${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID || secrets.GCLOUD_PROJECT || secrets.GOOGLE_CLOUD_PROJECT || 'urai-jobs' }}
+  GCP_REGION: ${{ secrets.GCP_REGION || 'us-central1' }}
+  API_ALLOWED_ORIGINS: ${{ secrets.API_ALLOWED_ORIGINS || 'https://uraijobs.com,https://www.uraijobs.com,https://urai-jobs-563121397472.web.app,https://urai-jobs.web.app' }}
+  FIREBASE_HOSTING_SITE: ${{ secrets.FIREBASE_HOSTING_SITE || 'urai-jobs-563121397472' }}
+  GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME || 'urai-jobs-artifacts' }}
+
+jobs:
+  deploy-publish:
+    name: Deploy and publish URAI Jobs Runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: prod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require explicit launch unlock
+        run: |
+          if [ "${{ inputs.confirm_launch_unlock }}" != "LAUNCH-UNLOCK" ]; then
+            echo "confirm_launch_unlock must exactly equal LAUNCH-UNLOCK."
+            exit 1
+          fi
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Java 21 for Firebase tooling
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_URAI_JOBS || secrets.GCP_SERVICE_ACCOUNT_JSON }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.DEPLOY_PROJECT_ID }}
+
+      - name: Install Firebase CLI
+        run: pnpm add -g firebase-tools
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Local verification gates
+        run: |
+          pnpm activation:verify
+          pnpm urai-jobs:verify
+          pnpm urai-jobs:smoke
+          pnpm typecheck
+          pnpm build
+          pnpm urai-jobs:deploy-precheck
+          pnpm audit:systems
+
+      - name: Deploy Cloud Run workers
+        if: ${{ inputs.deploy_workers }}
+        env:
+          URAI_ENV: prod
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GCP_REGION: ${{ env.GCP_REGION }}
+          GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
+        run: pnpm deploy:workers
+
+      - name: Export Cloud Run worker URLs
+        env:
+          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GCP_REGION: ${{ env.GCP_REGION }}
+        run: node scripts/export-worker-urls.mjs
+
+      - name: Production env precheck
+        env:
+          URAI_ENV: prod
+          NODE_ENV: production
+          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GCP_REGION: ${{ env.GCP_REGION }}
+          API_ALLOWED_ORIGINS: ${{ env.API_ALLOWED_ORIGINS }}
+          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
+          GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
+          NARRATOR_WORKER_URL: ${{ env.NARRATOR_WORKER_URL }}
+          ASSET_WORKER_URL: ${{ env.ASSET_WORKER_URL }}
+          SPATIAL_WORKER_URL: ${{ env.SPATIAL_WORKER_URL }}
+          STUDIO_WORKER_URL: ${{ env.STUDIO_WORKER_URL }}
+          WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
+          FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
+        run: pnpm prod:precheck
+
+      - name: Deploy Firebase runtime
+        env:
+          URAI_ENV: prod
+          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GCP_REGION: ${{ env.GCP_REGION }}
+          API_ALLOWED_ORIGINS: ${{ env.API_ALLOWED_ORIGINS }}
+          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
+          GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
+          NARRATOR_WORKER_URL: ${{ env.NARRATOR_WORKER_URL }}
+          ASSET_WORKER_URL: ${{ env.ASSET_WORKER_URL }}
+          SPATIAL_WORKER_URL: ${{ env.SPATIAL_WORKER_URL }}
+          STUDIO_WORKER_URL: ${{ env.STUDIO_WORKER_URL }}
+          WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
+          FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
+        run: pnpm deploy:firebase:prod -- prod
+
+      - name: Verify custom domains
+        run: pnpm domains:verify
+
+      - name: Verify workers
+        env:
+          NARRATOR_WORKER_URL: ${{ env.NARRATOR_WORKER_URL }}
+          ASSET_WORKER_URL: ${{ env.ASSET_WORKER_URL }}
+          SPATIAL_WORKER_URL: ${{ env.SPATIAL_WORKER_URL }}
+          STUDIO_WORKER_URL: ${{ env.STUDIO_WORKER_URL }}
+        run: pnpm prod:verify-workers
+
+      - name: Production callable smoke
+        if: ${{ inputs.run_smoke }}
+        env:
+          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GCP_REGION: ${{ env.GCP_REGION }}
+          PROD_SMOKE_ID_TOKEN: ${{ secrets.PROD_SMOKE_ID_TOKEN }}
+          PROD_SMOKE_JOB_TYPE: narrator.tts
+          PROD_SMOKE_TEXT: URAI Jobs Runtime production smoke test
+        run: pnpm prod:smoke
+
+      - name: Stamp deployment artifact
+        env:
+          URAI_ENV: prod
+          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GCP_REGION: ${{ env.GCP_REGION }}
+          GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
+          NARRATOR_WORKER_URL: ${{ env.NARRATOR_WORKER_URL }}
+          ASSET_WORKER_URL: ${{ env.ASSET_WORKER_URL }}
+          SPATIAL_WORKER_URL: ${{ env.SPATIAL_WORKER_URL }}
+          STUDIO_WORKER_URL: ${{ env.STUDIO_WORKER_URL }}
+          FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
+        run: pnpm prod:stamp
