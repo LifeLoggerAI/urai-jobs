@@ -13,7 +13,10 @@ const firebaseJson = readJson("firebase.json");
 const firebaserc = readJson(".firebaserc");
 const hostingSite = typeof firebaseJson?.hosting?.site === "string" ? firebaseJson.hosting.site : "";
 const projectId = firebaserc?.projects?.default || firebaserc?.projects?.prod || "";
-const domains = process.argv.slice(2);
+const domains = process.argv
+  .slice(2)
+  .filter((arg) => arg && arg !== "--")
+  .filter((arg) => /^https?:\/\//i.test(arg));
 const defaultDomains = [
   "https://uraijobs.com",
   "https://www.uraijobs.com",
