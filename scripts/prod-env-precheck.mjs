@@ -47,6 +47,21 @@ function loadDotEnvFile(file) {
   }
 }
 
+function readJson(file) {
+  try {
+    if (!fs.existsSync(file)) return null;
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (error) {
+    console.warn(`[WARN] Could not parse ${file}: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+
+function setDefault(key, value) {
+  if (!value) return;
+  if (!process.env[key] || process.env[key]?.trim() === "") process.env[key] = value;
+}
+
 function hasPlaceholder(value) {
   return /replace-with|placeholder|your-|example\.com|example-|dummy|fake|todo|changeme/i.test(String(value || ""));
 }
@@ -63,6 +78,26 @@ function validUrl(value) {
 loadDotEnvFile(".env");
 loadDotEnvFile(".env.production");
 loadDotEnvFile("ops/production.env");
+
+const firebaserc = readJson(".firebaserc");
+const firebaseJson = readJson("firebase.json");
+const repoProjectId = firebaserc?.projects?.default || firebaserc?.projects?.prod || "";
+const hostingSite = typeof firebaseJson?.hosting?.site === "string" ? firebaseJson.hosting.site : "";
+
+setDefault("URAI_ENV", "prod");
+setDefault("FIREBASE_PROJECT_ID", repoProjectId);
+setDefault("GCLOUD_PROJECT", process.env.FIREBASE_PROJECT_ID || repoProjectId);
+setDefault("GOOGLE_CLOUD_PROJECT", process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || repoProjectId);
+setDefault("GCP_REGION", "us-central1");
+setDefault("FIREBASE_HOSTING_SITE", hostingSite);
+
+const hostingOrigins = [
+  "https://uraijobs.com",
+  "https://www.uraijobs.com",
+  hostingSite ? `https://${hostingSite}.web.app` : "",
+  repoProjectId ? `https://${repoProjectId}.web.app` : ""
+].filter(Boolean);
+setDefault("API_ALLOWED_ORIGINS", [...new Set(hostingOrigins)].join(","));
 
 const failures = [];
 const missing = required.filter((key) => !process.env[key] || process.env[key]?.trim() === "");
@@ -108,6 +143,8 @@ if (missing.length) {
 if (failures.length) {
   console.error("\n[FAIL] Production env precheck failed:");
   for (const failure of failures) console.error(`- ${failure}`);
+  console.error("\nRepo-derived defaults were applied for Firebase/GCP IDs, region, hosting site, and allowed origins where possible.");
+  console.error("Remaining failures require real secrets, buckets, or deployed worker URLs and cannot be safely invented.");
   process.exit(1);
 }
 
