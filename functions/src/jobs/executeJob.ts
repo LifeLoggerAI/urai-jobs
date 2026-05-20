@@ -6,12 +6,35 @@ import { Job } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 const JOB_EXECUTION_TOPIC = 'job-execution';
-const NARRATOR_WORKER_URL = process.env.NARRATOR_WORKER_URL;
 
 const JobExecutionMessageSchema = z.object({
   jobId: z.string(),
   leaseToken: z.string(),
 });
+
+function getJobType(job: Job): string {
+  return String(job.type || job.jobType || 'narrator.tts');
+}
+
+function getWorkerUrl(jobType: string): string {
+  if (jobType === 'asset-render' || jobType.startsWith('asset')) {
+    if (!process.env.ASSET_WORKER_URL) throw new Error('ASSET_WORKER_URL environment variable not set.');
+    return process.env.ASSET_WORKER_URL;
+  }
+
+  if (jobType === 'spatial-index' || jobType.startsWith('spatial')) {
+    if (!process.env.SPATIAL_WORKER_URL) throw new Error('SPATIAL_WORKER_URL environment variable not set.');
+    return process.env.SPATIAL_WORKER_URL;
+  }
+
+  if (jobType === 'studio-render' || jobType.startsWith('studio')) {
+    if (!process.env.STUDIO_WORKER_URL) throw new Error('STUDIO_WORKER_URL environment variable not set.');
+    return process.env.STUDIO_WORKER_URL;
+  }
+
+  if (!process.env.NARRATOR_WORKER_URL) throw new Error('NARRATOR_WORKER_URL environment variable not set.');
+  return process.env.NARRATOR_WORKER_URL;
+}
 
 async function appendJobLog(jobId: string, input: { level: string; message: string; source: string; metadata?: Record<string, unknown> }) {
   try {
@@ -34,9 +57,7 @@ async function handleJobFailure(jobId: string, error: unknown) {
   await db.runTransaction(async (transaction) => {
     transaction.update(jobRef, {
       status: 'FAILED',
-      error: {
-        message: errorMessage,
-      },
+      error: { message: errorMessage },
       updatedAt: now,
     });
     transaction.update(queueRef, {
@@ -78,30 +99,42 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
       throw new Error(`Invalid lease token for job: ${jobId}`);
     }
 
-    await jobRef.update({
-      status: 'RUNNING',
-      'execution.startedAt': FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    const jobType = getJobType(job);
+    const workerUrl = getWorkerUrl(jobType).replace(/\/$/, '');
+
+    await db.runTransaction(async (transaction) => {
+      transaction.update(jobRef, {
+        status: 'RUNNING',
+        'execution.startedAt': FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      transaction.update(jobQueueEntryDoc(jobId), {
+        status: 'RUNNING',
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     });
 
     await appendJobLog(jobId, {
       level: 'info',
       source: 'executeJob',
       message: 'Job execution started.',
+      metadata: { jobType },
     });
-
-    if (!NARRATOR_WORKER_URL) {
-      throw new Error('NARRATOR_WORKER_URL environment variable not set.');
-    }
 
     await appendJobLog(jobId, {
       level: 'info',
       source: 'executeJob',
-      message: 'Sending job to narrator worker.',
-      metadata: { route: '/execute-job' },
+      message: 'Sending job to worker.',
+      metadata: { jobType, workerUrl, route: '/execute-job' },
     });
 
-    const response = await axios.post(`${NARRATOR_WORKER_URL}/execute-job`, job);
+    const response = await axios.post(`${workerUrl}/execute-job`, {
+      ...job,
+      jobId,
+      leaseToken,
+      type: jobType,
+      jobType,
+    });
     const result = response.data;
 
     const now = FieldValue.serverTimestamp();
@@ -119,7 +152,7 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
       level: 'info',
       source: 'executeJob',
       message: 'Job execution succeeded.',
-      metadata: { result },
+      metadata: { jobType, result },
     });
   } catch (error) {
     await handleJobFailure(jobId, error);
