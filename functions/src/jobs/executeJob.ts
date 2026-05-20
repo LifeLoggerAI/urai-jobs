@@ -107,6 +107,7 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
     await db.runTransaction(async (transaction) => {
       transaction.update(jobRef, {
         status: 'RUNNING',
+        'execution.leaseToken': leaseToken,
         'execution.startedAt': FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
