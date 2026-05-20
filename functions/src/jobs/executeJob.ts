@@ -16,24 +16,24 @@ function getJobType(job: Job): string {
   return String(job.type || job.jobType || 'narrator.tts');
 }
 
-function getWorkerUrl(jobType: string): string {
+function getWorkerTarget(jobType: string): { url: string; route: string } {
   if (jobType === 'asset-render' || jobType.startsWith('asset')) {
     if (!process.env.ASSET_WORKER_URL) throw new Error('ASSET_WORKER_URL environment variable not set.');
-    return process.env.ASSET_WORKER_URL;
+    return { url: process.env.ASSET_WORKER_URL, route: '/' };
   }
 
   if (jobType === 'spatial-index' || jobType.startsWith('spatial')) {
     if (!process.env.SPATIAL_WORKER_URL) throw new Error('SPATIAL_WORKER_URL environment variable not set.');
-    return process.env.SPATIAL_WORKER_URL;
+    return { url: process.env.SPATIAL_WORKER_URL, route: '/' };
   }
 
   if (jobType === 'studio-render' || jobType.startsWith('studio')) {
     if (!process.env.STUDIO_WORKER_URL) throw new Error('STUDIO_WORKER_URL environment variable not set.');
-    return process.env.STUDIO_WORKER_URL;
+    return { url: process.env.STUDIO_WORKER_URL, route: '/' };
   }
 
   if (!process.env.NARRATOR_WORKER_URL) throw new Error('NARRATOR_WORKER_URL environment variable not set.');
-  return process.env.NARRATOR_WORKER_URL;
+  return { url: process.env.NARRATOR_WORKER_URL, route: '/execute-job' };
 }
 
 async function appendJobLog(jobId: string, input: { level: string; message: string; source: string; metadata?: Record<string, unknown> }) {
@@ -100,7 +100,9 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
     }
 
     const jobType = getJobType(job);
-    const workerUrl = getWorkerUrl(jobType).replace(/\/$/, '');
+    const target = getWorkerTarget(jobType);
+    const workerUrl = target.url.replace(/\/$/, '');
+    const route = target.route;
 
     await db.runTransaction(async (transaction) => {
       transaction.update(jobRef, {
@@ -125,10 +127,10 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
       level: 'info',
       source: 'executeJob',
       message: 'Sending job to worker.',
-      metadata: { jobType, workerUrl, route: '/execute-job' },
+      metadata: { jobType, workerUrl, route },
     });
 
-    const response = await axios.post(`${workerUrl}/execute-job`, {
+    const response = await axios.post(`${workerUrl}${route}`, {
       ...job,
       jobId,
       leaseToken,
