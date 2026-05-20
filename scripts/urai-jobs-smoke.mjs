@@ -43,6 +43,10 @@ function inferWorkerRoute(jobType) {
   return "NARRATOR_WORKER_URL:/execute-job";
 }
 
+function runningUpdateIncludesLegacyLeaseToken(update) {
+  return update["execution.leaseToken"] === "lease-token";
+}
+
 assert("PENDING is cancellable", canCancel("PENDING"));
 assert("LEASED is cancellable", canCancel("LEASED"));
 assert("RUNNING is cancellable", canCancel("RUNNING"));
@@ -59,6 +63,7 @@ assert("asset-render routes to asset worker root", inferWorkerRoute("asset-rende
 assert("spatial-index routes to spatial worker root", inferWorkerRoute("spatial-index") === "SPATIAL_WORKER_URL:/");
 assert("studio-render routes to studio worker root", inferWorkerRoute("studio-render") === "STUDIO_WORKER_URL:/");
 assert("narrator.tts routes to narrator execute endpoint", inferWorkerRoute("narrator.tts") === "NARRATOR_WORKER_URL:/execute-job");
+assert("running update mirrors lease token for deployed subsystem workers", runningUpdateIncludesLegacyLeaseToken({ "execution.leaseToken": "lease-token" }));
 
 if (process.exitCode) {
   console.error("[FAIL] URAI_JOBS_SMOKE");
