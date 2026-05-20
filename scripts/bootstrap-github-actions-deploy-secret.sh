@@ -13,10 +13,23 @@ command -v gcloud >/dev/null 2>&1 || {
   exit 1
 }
 
-command -v gh >/dev/null 2>&1 || {
-  echo "[FAIL] GitHub CLI gh is required and must be authenticated." >&2
+GH=(gh)
+if ! command -v gh >/dev/null 2>&1; then
+  if command -v nix >/dev/null 2>&1; then
+    GH=(nix shell nixpkgs#gh -c gh)
+    echo "[WARN] gh is not installed permanently. Using nix shell nixpkgs#gh -c gh."
+  else
+    echo "[FAIL] GitHub CLI gh is required and must be authenticated." >&2
+    echo "[INFO] Install gh or add pkgs.gh to dev.nix, then run: gh auth login" >&2
+    exit 1
+  fi
+fi
+
+if ! "${GH[@]}" auth status >/dev/null 2>&1; then
+  echo "[FAIL] GitHub CLI is available but not authenticated." >&2
+  echo "[INFO] Run: ${GH[*]} auth login" >&2
   exit 1
-}
+fi
 
 echo "[INFO] Configuring deploy service account for project: ${PROJECT_ID}"
 gcloud config set project "${PROJECT_ID}" >/dev/null
@@ -56,7 +69,7 @@ gcloud iam service-accounts keys create "${KEY_FILE}" \
   --project "${PROJECT_ID}" >/dev/null
 
 echo "[INFO] Uploading ${SECRET_NAME} to ${REPO_FULL_NAME}"
-gh secret set "${SECRET_NAME}" \
+"${GH[@]}" secret set "${SECRET_NAME}" \
   --repo "${REPO_FULL_NAME}" \
   --body "$(cat "${KEY_FILE}")"
 
