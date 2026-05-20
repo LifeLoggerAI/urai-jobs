@@ -20,6 +20,7 @@
     "build": "npm run build --prefix packages/shared-types && npm run build --prefix functions && npm run build --prefix web --if-present && pnpm --dir workers install --frozen-lockfile=false && npm run build --prefix workers --if-present",
     "typecheck": "npm run typecheck --prefix packages/shared-types --if-present && npm run typecheck --prefix functions && npm run typecheck --prefix web --if-present && pnpm --dir workers install --frozen-lockfile=false && npm run typecheck --prefix workers --if-present",
     "test": "npm run urai-jobs:verify && npm run urai-jobs:smoke && npm run build && npm run urai-jobs:deploy-precheck && npm run typecheck --prefix functions",
+    "audit:systems": "node scripts/system-of-systems-audit.mjs",
     "deploy:dev": "firebase use dev && firebase deploy",
     "deploy:staging": "firebase use staging && firebase deploy",
     "deploy:prod": "firebase use prod && firebase deploy",
