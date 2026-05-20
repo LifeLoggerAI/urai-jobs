@@ -7,7 +7,9 @@ const workers = [
 
 let failed = false;
 
-async function fetchEndpoint(name, url) {
+async function fetchEndpoint(name, url, options = {}) {
+  const { optional = false } = options;
+
   try {
     const response = await fetch(url, {
       headers: {
@@ -22,6 +24,11 @@ async function fetchEndpoint(name, url) {
       return { reachable: true, healthy: true };
     }
 
+    if (optional && response.status === 404) {
+      console.log(`[WARN] ${name} optional endpoint ${url} is not exposed (${response.status})`);
+      return { reachable: true, healthy: false };
+    }
+
     if (response.status === 404 && /Cannot GET/.test(text)) {
       console.log(`[WARN] ${name} ${url} reachable but route is not exposed (${response.status})`);
       return { reachable: true, healthy: false };
@@ -30,7 +37,13 @@ async function fetchEndpoint(name, url) {
     console.error(`[FAIL] ${name} ${url} returned ${response.status}: ${text.slice(0, 120)}`);
     return { reachable: false, healthy: false };
   } catch (error) {
-    console.error(`[FAIL] ${name} ${url} ${error instanceof Error ? error.message : String(error)}`);
+    const message = error instanceof Error ? error.message : String(error);
+    if (optional) {
+      console.log(`[WARN] ${name} optional endpoint ${url} was not reachable: ${message}`);
+      return { reachable: false, healthy: false };
+    }
+
+    console.error(`[FAIL] ${name} ${url} ${message}`);
     return { reachable: false, healthy: false };
   }
 }
@@ -46,7 +59,7 @@ async function checkWorker(name, baseUrl) {
   const healthUrl = `${rootUrl}/healthz`;
 
   const root = await fetchEndpoint(name, rootUrl);
-  const health = await fetchEndpoint(name, healthUrl);
+  const health = await fetchEndpoint(name, healthUrl, { optional: true });
 
   if (!root.reachable && !health.reachable) {
     console.error(`[FAIL] ${name} is not reachable on root or /healthz`);
@@ -55,7 +68,7 @@ async function checkWorker(name, baseUrl) {
   }
 
   if (!root.healthy && !health.healthy) {
-    console.log(`[WARN] ${name} is reachable but does not expose a health route yet`);
+    console.log(`[WARN] ${name} is reachable but does not expose a healthy root or health route yet`);
   }
 }
 
