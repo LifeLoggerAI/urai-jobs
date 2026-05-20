@@ -43,6 +43,20 @@ jobs:
             exit 1
           fi
 
+      - name: Resolve webhook signing secret
+        env:
+          CONFIGURED_WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
+        run: |
+          if [ -n "$CONFIGURED_WEBHOOK_SIGNING_SECRET" ]; then
+            echo "WEBHOOK_SIGNING_SECRET=$CONFIGURED_WEBHOOK_SIGNING_SECRET" >> "$GITHUB_ENV"
+            echo "[PASS] Using configured WEBHOOK_SIGNING_SECRET."
+          else
+            GENERATED_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+            echo "WEBHOOK_SIGNING_SECRET=$GENERATED_SECRET" >> "$GITHUB_ENV"
+            echo "[WARN] WEBHOOK_SIGNING_SECRET was not configured. Generated a per-deploy fallback secret."
+            echo "[WARN] Add WEBHOOK_SIGNING_SECRET as a GitHub secret before relying on stable external webhook verification."
+          fi
+
       - name: Enable pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -118,7 +132,6 @@ jobs:
           GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           GCP_REGION: ${{ env.GCP_REGION }}
           API_ALLOWED_ORIGINS: ${{ env.API_ALLOWED_ORIGINS }}
-          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
           GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
           WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
           FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
@@ -133,7 +146,6 @@ jobs:
           GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           GCP_REGION: ${{ env.GCP_REGION }}
           API_ALLOWED_ORIGINS: ${{ env.API_ALLOWED_ORIGINS }}
-          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
           GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
           WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
           FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
@@ -147,7 +159,6 @@ jobs:
           GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           GCP_REGION: ${{ env.GCP_REGION }}
           API_ALLOWED_ORIGINS: ${{ env.API_ALLOWED_ORIGINS }}
-          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
           GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
           WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
           FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
