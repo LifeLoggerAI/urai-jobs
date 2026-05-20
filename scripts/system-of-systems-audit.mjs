@@ -81,7 +81,8 @@ for (const script of [
   "prod:verify-workers",
   "worker:precheck",
   "domains:verify",
-  "urai-jobs:deploy-precheck"
+  "urai-jobs:deploy-precheck",
+  "audit:systems"
 ]) {
   requireIncludes("package.json", packageJson, `\"${script}\"`, `script ${script}`);
 }
@@ -108,7 +109,11 @@ for (const envKey of [
   "GCLOUD_PROJECT=",
   "GOOGLE_CLOUD_PROJECT=",
   "GCP_REGION=us-central1",
-  "API_ALLOWED_ORIGINS=https://uraijobs.com,https://www.uraijobs.com,https://urai-jobs.web.app",
+  "API_ALLOWED_ORIGINS=",
+  "https://uraijobs.com",
+  "https://www.uraijobs.com",
+  "https://urai-jobs-563121397472.web.app",
+  "https://urai-jobs.web.app",
   "WEBHOOK_SIGNING_SECRET=",
   "GCS_BUCKET_NAME=",
   "NARRATOR_WORKER_URL=",
@@ -116,7 +121,7 @@ for (const envKey of [
   "SPATIAL_WORKER_URL=",
   "STUDIO_WORKER_URL="
 ]) {
-  requireIncludes("ops/production.env.example", prodEnvExample, envKey, `env key ${envKey.split("=")[0]}`);
+  requireIncludes("ops/production.env.example", prodEnvExample, envKey, `env key/origin ${envKey.split("=")[0]}`);
 }
 
 for (const marker of ["internal production job-execution fabric", "Do not use this repo as the public candidate/employer marketplace", "Runtime boundaries"]) {
