@@ -28,7 +28,7 @@ env:
   GCP_REGION: ${{ secrets.GCP_REGION || 'us-central1' }}
   API_ALLOWED_ORIGINS: ${{ secrets.API_ALLOWED_ORIGINS || 'https://uraijobs.com,https://www.uraijobs.com,https://urai-jobs-563121397472.web.app,https://urai-jobs.web.app' }}
   FIREBASE_HOSTING_SITE: ${{ secrets.FIREBASE_HOSTING_SITE || 'urai-jobs-563121397472' }}
-  GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME || 'urai-jobs-artifacts' }}
+  GCS_BUCKET_NAME: urai-jobs-urai-jobs-artifacts
 
 jobs:
   deploy-publish:
@@ -108,7 +108,7 @@ jobs:
         env:
           GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           GCP_REGION: ${{ env.GCP_REGION }}
-          GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
+          GCS_BUCKET_NAME: urai-jobs-urai-jobs-artifacts
         run: bash scripts/ensure-gcs-bucket.sh
 
       - name: Deploy Cloud Run workers
