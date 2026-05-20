@@ -1,5 +1,26 @@
+import fs from "fs";
+
+function readJson(file) {
+  try {
+    if (!fs.existsSync(file)) return null;
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+const firebaseJson = readJson("firebase.json");
+const firebaserc = readJson(".firebaserc");
+const hostingSite = typeof firebaseJson?.hosting?.site === "string" ? firebaseJson.hosting.site : "";
+const projectId = firebaserc?.projects?.default || firebaserc?.projects?.prod || "";
 const domains = process.argv.slice(2);
-const expected = domains.length ? domains : ["https://uraijobs.com", "https://www.uraijobs.com", "https://urai-jobs.web.app"];
+const defaultDomains = [
+  "https://uraijobs.com",
+  "https://www.uraijobs.com",
+  hostingSite ? `https://${hostingSite}.web.app` : "",
+  projectId ? `https://${projectId}.web.app` : ""
+].filter(Boolean);
+const expected = domains.length ? domains : [...new Set(defaultDomains)];
 
 async function check(url) {
   const started = Date.now();
@@ -38,5 +59,11 @@ for (const result of results) {
   if (!result.ok || !result.hasAppShell) failed = true;
 }
 
-if (failed) process.exit(1);
+const passingCanonical = results.filter((result) => result.ok && result.hasAppShell).map((result) => result.url);
+if (passingCanonical.length) console.log(`[INFO] Passing app-shell domain(s): ${passingCanonical.join(", ")}`);
+if (failed) {
+  console.error("[FAIL] One or more domains did not serve the expected URAI Jobs app shell.");
+  console.error("Check Firebase Hosting custom domain attachment, DNS records, SSL provisioning, and whether apex/www point to the hosting site in firebase.json.");
+  process.exit(1);
+}
 console.log("[PASS] Domain verification complete.");
