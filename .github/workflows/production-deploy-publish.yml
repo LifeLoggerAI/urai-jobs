@@ -84,7 +84,13 @@ jobs:
           pnpm typecheck
           pnpm build
           pnpm urai-jobs:deploy-precheck
-          pnpm audit:systems
+
+      - name: Ensure artifact bucket
+        env:
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GCP_REGION: ${{ env.GCP_REGION }}
+          GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
+        run: bash scripts/ensure-gcs-bucket.sh
 
       - name: Deploy Cloud Run workers
         if: ${{ inputs.deploy_workers }}
@@ -114,13 +120,24 @@ jobs:
           API_ALLOWED_ORIGINS: ${{ env.API_ALLOWED_ORIGINS }}
           WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
           GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
-          NARRATOR_WORKER_URL: ${{ env.NARRATOR_WORKER_URL }}
-          ASSET_WORKER_URL: ${{ env.ASSET_WORKER_URL }}
-          SPATIAL_WORKER_URL: ${{ env.SPATIAL_WORKER_URL }}
-          STUDIO_WORKER_URL: ${{ env.STUDIO_WORKER_URL }}
           WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
           FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
         run: pnpm prod:precheck
+
+      - name: System audit before publish
+        env:
+          URAI_ENV: prod
+          NODE_ENV: production
+          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GCP_REGION: ${{ env.GCP_REGION }}
+          API_ALLOWED_ORIGINS: ${{ env.API_ALLOWED_ORIGINS }}
+          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
+          GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
+          WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
+          FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
+        run: pnpm audit:systems
 
       - name: Deploy Firebase runtime
         env:
@@ -132,10 +149,6 @@ jobs:
           API_ALLOWED_ORIGINS: ${{ env.API_ALLOWED_ORIGINS }}
           WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
           GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
-          NARRATOR_WORKER_URL: ${{ env.NARRATOR_WORKER_URL }}
-          ASSET_WORKER_URL: ${{ env.ASSET_WORKER_URL }}
-          SPATIAL_WORKER_URL: ${{ env.SPATIAL_WORKER_URL }}
-          STUDIO_WORKER_URL: ${{ env.STUDIO_WORKER_URL }}
           WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
           FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
         run: pnpm deploy:firebase:prod -- prod
@@ -144,11 +157,6 @@ jobs:
         run: pnpm domains:verify
 
       - name: Verify workers
-        env:
-          NARRATOR_WORKER_URL: ${{ env.NARRATOR_WORKER_URL }}
-          ASSET_WORKER_URL: ${{ env.ASSET_WORKER_URL }}
-          SPATIAL_WORKER_URL: ${{ env.SPATIAL_WORKER_URL }}
-          STUDIO_WORKER_URL: ${{ env.STUDIO_WORKER_URL }}
         run: pnpm prod:verify-workers
 
       - name: Production callable smoke
@@ -170,9 +178,5 @@ jobs:
           GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           GCP_REGION: ${{ env.GCP_REGION }}
           GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
-          NARRATOR_WORKER_URL: ${{ env.NARRATOR_WORKER_URL }}
-          ASSET_WORKER_URL: ${{ env.ASSET_WORKER_URL }}
-          SPATIAL_WORKER_URL: ${{ env.SPATIAL_WORKER_URL }}
-          STUDIO_WORKER_URL: ${{ env.STUDIO_WORKER_URL }}
           FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
         run: pnpm prod:stamp
