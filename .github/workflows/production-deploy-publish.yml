@@ -207,3 +207,12 @@ jobs:
           GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
           FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
         run: pnpm prod:stamp
+
+      - name: Upload deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-jobs-deployment-evidence
+          path: docs/release-evidence/*.md
+          if-no-files-found: warn
+          retention-days: 90
