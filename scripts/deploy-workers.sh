@@ -5,6 +5,9 @@ set -euo pipefail
 : "${GCP_REGION:=us-central1}"
 : "${GCS_BUCKET_NAME:?GCS_BUCKET_NAME is required}"
 
+WORKER_BUILD_TIMEOUT_SECONDS="${WORKER_BUILD_TIMEOUT_SECONDS:-900}"
+WORKER_BUILD_POLL_SECONDS="${WORKER_BUILD_POLL_SECONDS:-10}"
+
 WORKERS=(
   "narrator-worker"
   "asset-worker"
@@ -19,11 +22,22 @@ command -v gcloud >/dev/null 2>&1 || {
 
 gcloud config set project "$GCLOUD_PROJECT" >/dev/null
 
+print_build_diagnostics() {
+  local build_id="$1"
+  echo "[INFO] Cloud Build diagnostics for $build_id"
+  gcloud builds describe "$build_id" \
+    --project "$GCLOUD_PROJECT" \
+    --format='value(id,status,createTime,startTime,finishTime,logUrl)' || true
+}
+
 wait_for_build() {
   local build_id="$1"
   local status=""
+  local started
+  started="$(date +%s)"
 
   echo "[INFO] Waiting for Cloud Build $build_id without streaming logs"
+  echo "[INFO] Timeout: ${WORKER_BUILD_TIMEOUT_SECONDS}s; poll interval: ${WORKER_BUILD_POLL_SECONDS}s"
 
   while true; do
     status="$(gcloud builds describe "$build_id" \
@@ -37,18 +51,27 @@ wait_for_build() {
         ;;
       FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
         echo "[FAIL] Cloud Build $build_id ended with status: $status" >&2
-        echo "[INFO] Inspect build logs in Google Cloud Console for build id: $build_id" >&2
+        print_build_diagnostics "$build_id" >&2
         return 1
         ;;
       QUEUED|WORKING|PENDING|"")
         echo "[INFO] Cloud Build $build_id status: ${status:-PENDING}"
-        sleep 10
         ;;
       *)
         echo "[INFO] Cloud Build $build_id status: $status"
-        sleep 10
         ;;
     esac
+
+    local now elapsed
+    now="$(date +%s)"
+    elapsed=$((now - started))
+    if [ "$elapsed" -ge "$WORKER_BUILD_TIMEOUT_SECONDS" ]; then
+      echo "[FAIL] Cloud Build $build_id exceeded ${WORKER_BUILD_TIMEOUT_SECONDS}s timeout" >&2
+      print_build_diagnostics "$build_id" >&2
+      return 1
+    fi
+
+    sleep "$WORKER_BUILD_POLL_SECONDS"
   done
 }
 
