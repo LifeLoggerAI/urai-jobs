@@ -15,6 +15,7 @@ on:
         type: boolean
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   DEPLOY_PROJECT_ID: ${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID || secrets.GCLOUD_PROJECT || secrets.GOOGLE_CLOUD_PROJECT || 'urai-jobs' }}
   GCP_REGION: ${{ secrets.GCP_REGION || 'us-central1' }}
   API_ALLOWED_ORIGINS: ${{ secrets.API_ALLOWED_ORIGINS || 'https://uraijobs.com,https://www.uraijobs.com,https://urai-jobs-563121397472.web.app,https://urai-jobs.web.app' }}
