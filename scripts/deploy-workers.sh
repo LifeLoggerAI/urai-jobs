@@ -7,6 +7,7 @@ set -euo pipefail
 
 WORKER_BUILD_TIMEOUT_SECONDS="${WORKER_BUILD_TIMEOUT_SECONDS:-900}"
 WORKER_BUILD_POLL_SECONDS="${WORKER_BUILD_POLL_SECONDS:-10}"
+WORKER_DEPLOY_PARALLEL="${WORKER_DEPLOY_PARALLEL:-true}"
 
 WORKERS=(
   "narrator-worker"
@@ -32,12 +33,13 @@ print_build_diagnostics() {
 
 wait_for_build() {
   local build_id="$1"
+  local worker="$2"
   local status=""
   local started
   started="$(date +%s)"
 
-  echo "[INFO] Waiting for Cloud Build $build_id without streaming logs"
-  echo "[INFO] Timeout: ${WORKER_BUILD_TIMEOUT_SECONDS}s; poll interval: ${WORKER_BUILD_POLL_SECONDS}s"
+  echo "[INFO] [$worker] Waiting for Cloud Build $build_id without streaming logs"
+  echo "[INFO] [$worker] Timeout: ${WORKER_BUILD_TIMEOUT_SECONDS}s; poll interval: ${WORKER_BUILD_POLL_SECONDS}s"
 
   while true; do
     status="$(gcloud builds describe "$build_id" \
@@ -46,19 +48,19 @@ wait_for_build() {
 
     case "$status" in
       SUCCESS)
-        echo "[PASS] Cloud Build $build_id succeeded"
+        echo "[PASS] [$worker] Cloud Build $build_id succeeded"
         return 0
         ;;
       FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
-        echo "[FAIL] Cloud Build $build_id ended with status: $status" >&2
+        echo "[FAIL] [$worker] Cloud Build $build_id ended with status: $status" >&2
         print_build_diagnostics "$build_id" >&2
         return 1
         ;;
       QUEUED|WORKING|PENDING|"")
-        echo "[INFO] Cloud Build $build_id status: ${status:-PENDING}"
+        echo "[INFO] [$worker] Cloud Build $build_id status: ${status:-PENDING}"
         ;;
       *)
-        echo "[INFO] Cloud Build $build_id status: $status"
+        echo "[INFO] [$worker] Cloud Build $build_id status: $status"
         ;;
     esac
 
@@ -66,7 +68,7 @@ wait_for_build() {
     now="$(date +%s)"
     elapsed=$((now - started))
     if [ "$elapsed" -ge "$WORKER_BUILD_TIMEOUT_SECONDS" ]; then
-      echo "[FAIL] Cloud Build $build_id exceeded ${WORKER_BUILD_TIMEOUT_SECONDS}s timeout" >&2
+      echo "[FAIL] [$worker] Cloud Build $build_id exceeded ${WORKER_BUILD_TIMEOUT_SECONDS}s timeout" >&2
       print_build_diagnostics "$build_id" >&2
       return 1
     fi
@@ -86,7 +88,7 @@ deploy_worker() {
     exit 1
   fi
 
-  echo "[INFO] Building $worker -> $image"
+  echo "[INFO] [$worker] Building -> $image"
   build_id="$(gcloud builds submit "$dir" \
     --tag "$image" \
     --async \
@@ -97,9 +99,9 @@ deploy_worker() {
     exit 1
   fi
 
-  wait_for_build "$build_id"
+  wait_for_build "$build_id" "$worker"
 
-  echo "[INFO] Deploying $worker to Cloud Run in $GCP_REGION"
+  echo "[INFO] [$worker] Deploying to Cloud Run in $GCP_REGION"
   gcloud run deploy "$worker" \
     --image "$image" \
     --platform managed \
@@ -109,11 +111,33 @@ deploy_worker() {
 
   local url
   url="$(gcloud run services describe "$worker" --platform managed --region "$GCP_REGION" --format='value(status.url)')"
-  echo "[PASS] $worker deployed: $url"
+  echo "[PASS] [$worker] deployed: $url"
 }
 
-for worker in "${WORKERS[@]}"; do
-  deploy_worker "$worker"
-done
+if [ "$WORKER_DEPLOY_PARALLEL" = "true" ]; then
+  echo "[INFO] Deploying workers in parallel"
+  pids=()
+  for worker in "${WORKERS[@]}"; do
+    deploy_worker "$worker" &
+    pids+=("$!")
+  done
+
+  failed=0
+  for pid in "${pids[@]}"; do
+    if ! wait "$pid"; then
+      failed=1
+    fi
+  done
+
+  if [ "$failed" -ne 0 ]; then
+    echo "[FAIL] One or more workers failed to deploy" >&2
+    exit 1
+  fi
+else
+  echo "[INFO] Deploying workers sequentially"
+  for worker in "${WORKERS[@]}"; do
+    deploy_worker "$worker"
+  done
+fi
 
 echo "[PASS] All URAI Jobs Runtime workers deployed."
