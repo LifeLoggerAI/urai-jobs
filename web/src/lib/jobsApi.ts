@@ -39,6 +39,15 @@ export type JobLogRecord = {
   createdAt?: unknown;
 };
 
+export type ProcessQueueNowResult = {
+  workerId?: string;
+  requested?: number;
+  found?: number;
+  leased?: string[];
+  published?: string[];
+  skipped?: string[];
+};
+
 async function callFunction<TInput extends Record<string, unknown>, TOutput>(
   name: string,
   input: TInput
@@ -77,11 +86,16 @@ export async function listJobLogs(jobId: string, limit = 100): Promise<{ logs: J
   return callFunction<{ jobId: string; limit: number }, { logs: JobLogRecord[] }>("listJobLogsV2", { jobId, limit });
 }
 
+export async function processQueueNow(limit = 10): Promise<ProcessQueueNowResult> {
+  return callFunction<{ limit: number }, ProcessQueueNowResult>("processQueueNow", { limit });
+}
+
 export const jobsApi = {
   createJob,
   listJobs,
   getJob,
   retryJob,
   cancelJob,
-  listJobLogs
+  listJobLogs,
+  processQueueNow
 };
