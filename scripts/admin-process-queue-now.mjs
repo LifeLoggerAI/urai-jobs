@@ -10,20 +10,16 @@ const leaseMs = Math.max(30000, Number(process.env.QUEUE_LEASE_MS || '60000'));
 const workerId = `admin-${ulid()}`;
 
 function publishExecutionMessage(message) {
-  const result = spawnSync(
-    'gcloud',
-    [
-      'pubsub',
-      'topics',
-      'publish',
-      topicName,
-      '--project',
-      projectId,
-      '--message',
-      JSON.stringify(message),
-    ],
-    { encoding: 'utf8' }
-  );
+  const result = spawnSync('gcloud', [
+    'pubsub',
+    'topics',
+    'publish',
+    topicName,
+    '--project',
+    projectId,
+    '--message',
+    JSON.stringify(message),
+  ], { encoding: 'utf8' });
 
   if (result.status !== 0) {
     const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
@@ -31,25 +27,35 @@ function publishExecutionMessage(message) {
   }
 }
 
+function dateValue(value) {
+  if (!value) return new Date(0);
+  if (value instanceof Date) return value;
+  if (typeof value.toDate === 'function') return value.toDate();
+  return new Date(value);
+}
+
 if (getApps().length === 0) initializeApp({ projectId });
 
 const db = getFirestore();
-
 const nowDate = new Date();
+
 const snapshot = await db
   .collection('jobQueue')
   .where('status', '==', 'PENDING')
-  .where('availableAt', '<=', nowDate)
-  .orderBy('availableAt')
-  .limit(limit)
+  .limit(Math.max(limit * 5, 25))
   .get();
+
+const eligibleDocs = snapshot.docs
+  .filter((doc) => dateValue(doc.data().availableAt) <= nowDate)
+  .sort((a, b) => dateValue(a.data().availableAt).getTime() - dateValue(b.data().availableAt).getTime())
+  .slice(0, limit);
 
 const leased = [];
 const skipped = [];
 const published = [];
 const publishErrors = [];
 
-for (const doc of snapshot.docs) {
+for (const doc of eligibleDocs) {
   const data = doc.data();
   const jobId = data.jobId || doc.id;
 
@@ -98,7 +104,8 @@ const result = {
   topicName,
   workerId,
   requested: limit,
-  found: snapshot.size,
+  scanned: snapshot.size,
+  found: eligibleDocs.length,
   leased,
   published,
   skipped,
