@@ -39,6 +39,7 @@
     "prod:apply-alerts": "bash scripts/apply-monitoring-alerts.sh",
     "prod:dashboard": "node scripts/generate-slo-dashboard.mjs",
     "prod:heartbeat": "node scripts/worker-heartbeat.mjs",
+    "prod:drain-queue": "node scripts/admin-process-queue-now.mjs",
     "dlq:replay": "node scripts/replay-dlq-job.mjs",
     "dlq:cleanup": "node scripts/dlq-retention-cleanup.mjs",
     "worker:precheck": "node scripts/managed-worker-precheck.mjs",
