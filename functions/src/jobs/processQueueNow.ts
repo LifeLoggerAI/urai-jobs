@@ -2,7 +2,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { PubSub } from '@google-cloud/pubsub';
 import { ulid } from 'ulid';
-import { JobQueueEntry, JobLease } from '@urai-jobs/shared-types';
+import type { JobQueueEntry, JobLease } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 const JOB_EXECUTION_TOPIC = 'job-execution';
@@ -18,6 +18,10 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
+function rolesToStrings(values: unknown[]): string[] {
+  return values.map((value) => String(value));
+}
+
 function hasOperatorAccess(auth: unknown): boolean {
   const authRecord = asRecord(auth);
   const token = asRecord(authRecord.token);
@@ -31,10 +35,6 @@ function hasOperatorAccess(auth: unknown): boolean {
     roles.includes('admin') ||
     roles.includes('operator')
   );
-}
-
-function rolesToStrings(values: unknown[]): string[] {
-  return values.map((value) => String(value));
 }
 
 function requireOperator(auth: unknown): void {
