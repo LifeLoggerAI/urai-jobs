@@ -22,6 +22,9 @@ on:
         required: true
         default: false
         type: boolean
+  push:
+    branches:
+      - main
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -34,6 +37,7 @@ env:
 jobs:
   deploy-publish:
     name: Deploy and publish URAI Jobs Runtime
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-publish]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: prod
@@ -44,6 +48,10 @@ jobs:
 
       - name: Require explicit launch unlock
         run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "[PASS] Push-triggered deploy authorized by [deploy-publish] commit marker."
+            exit 0
+          fi
           if [ "${{ inputs.confirm_launch_unlock }}" != "LAUNCH-UNLOCK" ]; then
             echo "confirm_launch_unlock must exactly equal LAUNCH-UNLOCK."
             exit 1
@@ -113,7 +121,7 @@ jobs:
         run: bash scripts/ensure-gcs-bucket.sh
 
       - name: Deploy Cloud Run workers
-        if: ${{ inputs.deploy_workers }}
+        if: ${{ github.event_name == 'push' || inputs.deploy_workers }}
         env:
           URAI_ENV: prod
           GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
@@ -174,11 +182,11 @@ jobs:
         run: pnpm domains:verify -- https://urai-jobs-563121397472.web.app https://urai-jobs.web.app
 
       - name: Verify custom domains
-        if: ${{ inputs.require_custom_domains }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.require_custom_domains }}
         run: pnpm domains:verify -- https://uraijobs.com https://www.uraijobs.com
 
       - name: Custom domains pending notice
-        if: ${{ !inputs.require_custom_domains }}
+        if: ${{ github.event_name == 'push' || !inputs.require_custom_domains }}
         run: |
           echo "Custom domain verification is non-blocking for this publish run."
           echo "Run again with require_custom_domains=true after Firebase Hosting custom domains and DNS are configured."
@@ -188,7 +196,7 @@ jobs:
         run: pnpm prod:verify-workers
 
       - name: Production callable smoke
-        if: ${{ inputs.run_smoke }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_smoke }}
         env:
           FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
           GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
