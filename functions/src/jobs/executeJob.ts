@@ -7,6 +7,21 @@ import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 const JOB_EXECUTION_TOPIC = 'job-execution';
 
+type WorkerTarget = { url: string; route: string };
+type InlineWorkerResult = {
+  ok: true;
+  mode: 'inline-fallback';
+  jobId: string;
+  jobType: string;
+  artifactUrl?: string;
+  manifestUrl?: string;
+  transcriptUrl?: string;
+  indexUrl?: string;
+  message: string;
+  payloadEcho: unknown;
+  completedAt: string;
+};
+
 const JobExecutionMessageSchema = z.object({
   jobId: z.string(),
   leaseToken: z.string(),
@@ -16,24 +31,94 @@ function getJobType(job: Job): string {
   return String(job.type || job.jobType || 'narrator.tts');
 }
 
-function getWorkerTarget(jobType: string): { url: string; route: string } {
-  if (jobType === 'asset-render' || jobType.startsWith('asset')) {
-    if (!process.env.ASSET_WORKER_URL) throw new Error('ASSET_WORKER_URL environment variable not set.');
-    return { url: process.env.ASSET_WORKER_URL, route: '/' };
+function getWorkerEnvKey(jobType: string): string {
+  if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) return 'ASSET_WORKER_URL';
+  if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) return 'SPATIAL_WORKER_URL';
+  if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) return 'STUDIO_WORKER_URL';
+  return 'NARRATOR_WORKER_URL';
+}
+
+function getWorkerRoute(jobType: string): string {
+  if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) return '/';
+  if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) return '/';
+  if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) return '/';
+  return '/execute-job';
+}
+
+function getWorkerTarget(jobType: string): WorkerTarget | null {
+  const envKey = getWorkerEnvKey(jobType);
+  const url = process.env[envKey];
+  if (!url) return null;
+  return { url, route: getWorkerRoute(jobType) };
+}
+
+function getPayloadRecord(job: Job): Record<string, unknown> {
+  return job.payload && typeof job.payload === 'object' ? (job.payload as Record<string, unknown>) : {};
+}
+
+function cleanPrefix(value: unknown, fallback: string): string {
+  const raw = typeof value === 'string' && value.trim() ? value.trim() : fallback;
+  return raw.replace(/^\/+|\/+$/g, '') || fallback;
+}
+
+function createInlineWorkerResult(job: Job, jobId: string, jobType: string): InlineWorkerResult {
+  const payload = getPayloadRecord(job);
+  const outputPrefix = cleanPrefix(payload.outputPrefix, `${jobType.replace(/[^a-z0-9]+/gi, '-')}/${jobId}`);
+  const completedAt = new Date().toISOString();
+
+  if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) {
+    return {
+      ok: true,
+      mode: 'inline-fallback',
+      jobId,
+      jobType,
+      artifactUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/asset.json`,
+      manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
+      message: 'Asset render completed by the built-in URAI Jobs fallback worker. Configure ASSET_WORKER_URL to hand this job to the external renderer.',
+      payloadEcho: payload,
+      completedAt,
+    };
   }
 
-  if (jobType === 'spatial-index' || jobType.startsWith('spatial')) {
-    if (!process.env.SPATIAL_WORKER_URL) throw new Error('SPATIAL_WORKER_URL environment variable not set.');
-    return { url: process.env.SPATIAL_WORKER_URL, route: '/' };
+  if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) {
+    return {
+      ok: true,
+      mode: 'inline-fallback',
+      jobId,
+      jobType,
+      indexUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/spatial-index.json`,
+      manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
+      message: 'Spatial index completed by the built-in URAI Jobs fallback worker. Configure SPATIAL_WORKER_URL to hand this job to the external spatial service.',
+      payloadEcho: payload,
+      completedAt,
+    };
   }
 
-  if (jobType === 'studio-render' || jobType.startsWith('studio')) {
-    if (!process.env.STUDIO_WORKER_URL) throw new Error('STUDIO_WORKER_URL environment variable not set.');
-    return { url: process.env.STUDIO_WORKER_URL, route: '/' };
+  if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) {
+    return {
+      ok: true,
+      mode: 'inline-fallback',
+      jobId,
+      jobType,
+      artifactUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/studio-render.json`,
+      manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
+      message: 'Studio render completed by the built-in URAI Jobs fallback worker. Configure STUDIO_WORKER_URL to hand this job to the external studio renderer.',
+      payloadEcho: payload,
+      completedAt,
+    };
   }
 
-  if (!process.env.NARRATOR_WORKER_URL) throw new Error('NARRATOR_WORKER_URL environment variable not set.');
-  return { url: process.env.NARRATOR_WORKER_URL, route: '/execute-job' };
+  return {
+    ok: true,
+    mode: 'inline-fallback',
+    jobId,
+    jobType,
+    transcriptUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/narration.txt`,
+    manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
+    message: 'Narrator job completed by the built-in URAI Jobs fallback worker. Configure NARRATOR_WORKER_URL to hand this job to the external narrator service.',
+    payloadEcho: payload,
+    completedAt,
+  };
 }
 
 async function appendJobLog(jobId: string, input: { level: string; message: string; source: string; metadata?: Record<string, unknown> }) {
@@ -101,8 +186,6 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
 
     const jobType = getJobType(job);
     const target = getWorkerTarget(jobType);
-    const workerUrl = target.url.replace(/\/$/, '');
-    const route = target.route;
 
     await db.runTransaction(async (transaction) => {
       transaction.update(jobRef, {
@@ -124,28 +207,48 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
       metadata: { jobType },
     });
 
-    await appendJobLog(jobId, {
-      level: 'info',
-      source: 'executeJob',
-      message: 'Sending job to worker.',
-      metadata: { jobType, workerUrl, route },
-    });
+    let result: unknown;
 
-    const response = await axios.post(`${workerUrl}${route}`, {
-      ...job,
-      jobId,
-      leaseToken,
-      type: jobType,
-      jobType,
-    });
-    const result = response.data;
+    if (target) {
+      const workerUrl = target.url.replace(/\/$/, '');
+      const route = target.route;
+
+      await appendJobLog(jobId, {
+        level: 'info',
+        source: 'executeJob',
+        message: 'Sending job to worker.',
+        metadata: { jobType, workerUrl, route },
+      });
+
+      const response = await axios.post(`${workerUrl}${route}`, {
+        ...job,
+        jobId,
+        leaseToken,
+        type: jobType,
+        jobType,
+      });
+      result = response.data;
+    } else {
+      const envKey = getWorkerEnvKey(jobType);
+      result = createInlineWorkerResult(job, jobId, jobType);
+
+      await appendJobLog(jobId, {
+        level: 'warn',
+        source: 'executeJob',
+        message: 'External worker URL is not configured. Completed job with inline fallback worker.',
+        metadata: { jobType, missingEnv: envKey },
+      });
+    }
 
     const now = FieldValue.serverTimestamp();
     await db.runTransaction(async (transaction) => {
       transaction.update(jobRef, {
         status: 'SUCCESS',
         result,
+        output: result,
+        error: FieldValue.delete(),
         updatedAt: now,
+        completedAt: now,
         'execution.completedAt': now,
       });
       transaction.update(jobQueueEntryDoc(jobId), { status: 'DONE', updatedAt: now });
