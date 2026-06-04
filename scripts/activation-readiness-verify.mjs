@@ -42,6 +42,12 @@ ok("job registry includes career worker", jobRegistry.includes("career-worker"))
 ok("job registry routes career jobs to JOBS target", jobRegistry.includes("targetSystem: 'JOBS'") || jobRegistry.includes('targetSystem: "JOBS"'));
 careerJobTypes.forEach((type) => ok(`job registry includes ${type}`, has(jobRegistry, type)));
 
+const executeJob = read("functions/src/jobs/executeJob.ts");
+ok("dispatcher routes career jobs by prefix", executeJob.includes("jobType.startsWith('career.')") || executeJob.includes('jobType.startsWith("career.")'));
+ok("dispatcher uses CAREER_WORKER_URL", executeJob.includes("CAREER_WORKER_URL"));
+ok("dispatcher exposes career fallback artifact", executeJob.includes("careerUrl"));
+ok("dispatcher keeps career worker route", executeJob.includes("/execute-job"));
+
 const sharedTypes = read("packages/shared-types/src/index.ts");
 compatibilityStatuses.forEach((status) => ok(`shared compatibility types include ${status}`, has(sharedTypes, status)));
 
