@@ -17,6 +17,7 @@ type InlineWorkerResult = {
   manifestUrl?: string;
   transcriptUrl?: string;
   indexUrl?: string;
+  careerUrl?: string;
   message: string;
   payloadEcho: unknown;
   completedAt: string;
@@ -35,6 +36,7 @@ function getWorkerEnvKey(jobType: string): string {
   if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) return 'ASSET_WORKER_URL';
   if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) return 'SPATIAL_WORKER_URL';
   if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) return 'STUDIO_WORKER_URL';
+  if (jobType.startsWith('career.')) return 'CAREER_WORKER_URL';
   return 'NARRATOR_WORKER_URL';
 }
 
@@ -103,6 +105,20 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
       artifactUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/studio-render.json`,
       manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
       message: 'Studio render completed by the built-in URAI Jobs fallback worker. Configure STUDIO_WORKER_URL to hand this job to the external studio renderer.',
+      payloadEcho: payload,
+      completedAt,
+    };
+  }
+
+  if (jobType.startsWith('career.')) {
+    return {
+      ok: true,
+      mode: 'inline-fallback',
+      jobId,
+      jobType,
+      careerUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/career.json`,
+      manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
+      message: 'Career job completed by the built-in URAI Jobs fallback worker. Configure CAREER_WORKER_URL to hand this job to the external career worker.',
       payloadEcho: payload,
       completedAt,
     };
