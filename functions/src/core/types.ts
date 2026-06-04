@@ -18,7 +18,8 @@ export type JobOrigin =
   | 'SPATIAL' 
   | 'STUDIO' 
   | 'NARRATOR' 
-  | 'ASSET_FACTORY' 
+  | 'ASSET_FACTORY'
+  | 'JOBS'
   | 'API' 
   | 'SCHEDULER' 
   | 'ADMIN';
@@ -39,13 +40,23 @@ export type JobType =
   | 'asset.validate'
   | 'asset.package'
   | 'asset.publish'
+  | 'career.profile.summarize'
+  | 'career.fit.score'
+  | 'career.document.parse'
+  | 'career.document.tailor'
+  | 'career.packet.generate'
+  | 'career.followup.plan'
+  | 'career.interview.prep'
+  | 'career.offer.compare'
+  | 'career.spatial.portal.generate'
+  | 'career.passport.export'
   | 'system.cleanup'
   | 'system.reconcile'
   | 'system.replay.deadletter';
 
 export type ActorType = 'USER' | 'SYSTEM' | 'SERVICE';
 export type IsolationMode = 'FUNCTION' | 'CLOUD_RUN' | 'IN_PROCESS';
-export type TargetSystem = 'SPATIAL' | 'STUDIO' | 'NARRATOR' | 'ASSET_FACTORY' | 'SYSTEM';
+export type TargetSystem = 'SPATIAL' | 'STUDIO' | 'NARRATOR' | 'ASSET_FACTORY' | 'JOBS' | 'SYSTEM';
 export type ErrorCategory = 'VALIDATION' | 'AUTH' | 'TRANSIENT' | 'PERMANENT' | 'DEPENDENCY' | 'TIMEOUT' | 'INTERNAL';
 export type QueueStatus = 'READY' | 'LEASED' | 'DONE' | 'DEAD';
 export type SizeClass = 'XS' | 'S' | 'M' | 'L' | 'XL';
