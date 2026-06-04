@@ -16,10 +16,31 @@ const has = (source, value) => source.includes(`'${value}'`) || source.includes(
 const jobStatuses = ["CREATED", "QUEUED", "RUNNING", "SUCCESS", "FAILED", "RETRY", "DEAD", "CANCELLED"];
 const queueStatuses = ["READY", "LEASED", "DONE", "DEAD"];
 const compatibilityStatuses = ["PENDING", "LEASED", "RUNNING", "SUCCESS", "FAILED", "DEAD", "CANCELLED"];
+const careerJobTypes = [
+  "career.profile.summarize",
+  "career.fit.score",
+  "career.document.parse",
+  "career.document.tailor",
+  "career.packet.generate",
+  "career.followup.plan",
+  "career.interview.prep",
+  "career.offer.compare",
+  "career.spatial.portal.generate",
+  "career.passport.export"
+];
 
 const coreTypes = read("functions/src/core/types.ts");
 jobStatuses.forEach((status) => ok(`core JobStatus includes ${status}`, has(coreTypes, status)));
 queueStatuses.forEach((status) => ok(`core QueueStatus includes ${status}`, has(coreTypes, status)));
+ok("core JobOrigin includes JOBS", has(coreTypes, "JOBS"));
+ok("core TargetSystem includes JOBS", has(coreTypes, "JOBS"));
+careerJobTypes.forEach((type) => ok(`core JobType includes ${type}`, has(coreTypes, type)));
+
+const jobRegistry = read("functions/src/core/jobRegistry.ts");
+ok("job registry includes career queue", jobRegistry.includes("careerQueue"));
+ok("job registry includes career worker", jobRegistry.includes("career-worker"));
+ok("job registry routes career jobs to JOBS target", jobRegistry.includes("targetSystem: 'JOBS'") || jobRegistry.includes('targetSystem: "JOBS"'));
+careerJobTypes.forEach((type) => ok(`job registry includes ${type}`, has(jobRegistry, type)));
 
 const sharedTypes = read("packages/shared-types/src/index.ts");
 compatibilityStatuses.forEach((status) => ok(`shared compatibility types include ${status}`, has(sharedTypes, status)));
@@ -54,6 +75,36 @@ const boundary = read("docs/MARKETPLACE_BOUNDARY.md");
 ok("marketplace boundary doc exists", boundary.length > 0);
 ok("marketplace boundary identifies runtime repo", boundary.includes("URAI Jobs Runtime"));
 ok("marketplace boundary requires future API contracts", boundary.includes("API contracts"));
+
+const publicBoundary = read("docs/URAI_JOBS_PUBLIC_PRODUCT_BOUNDARY.md");
+ok("public product boundary doc exists", publicBoundary.length > 0);
+ok("public product boundary references Career Mirror", publicBoundary.includes("Career Mirror"));
+ok("public product boundary names JOBS target", publicBoundary.includes("JOBS"));
+
+const pdr = read("docs/product-decisions/PDR-001-autonomous-urai-jobs-v1-v5.md");
+ok("autonomous product decision exists", pdr.length > 0);
+ok("autonomous product decision keeps separated implementation track", pdr.includes("separated implementation track"));
+ok("autonomous product decision defines V1 through V5", pdr.includes("V1") && pdr.includes("V5"));
+
+const careerWorkerPkg = read("workers/career-worker/package.json");
+const careerWorkerTsconfig = read("workers/career-worker/tsconfig.json");
+const careerWorkerIndex = read("workers/career-worker/src/index.ts");
+const careerWorkerHandlers = read("workers/career-worker/src/handlers/index.ts");
+const careerWorkerDockerfile = read("workers/career-worker/Dockerfile");
+const careerWorkerDeploy = read("scripts/deploy-career-worker.sh");
+const careerWorkerReadiness = read("docs/CAREER_WORKER_READINESS.md");
+
+ok("career worker package exists", careerWorkerPkg.length > 0);
+ok("career worker tsconfig exists", careerWorkerTsconfig.length > 0);
+ok("career worker server exists", careerWorkerIndex.includes("career-worker"));
+ok("career worker exposes health route", careerWorkerIndex.includes("/healthz"));
+ok("career worker exposes execute route", careerWorkerIndex.includes("/execute-job"));
+ok("career worker handlers exist", careerWorkerHandlers.length > 0);
+careerJobTypes.forEach((type) => ok(`career worker handles ${type}`, careerWorkerHandlers.includes(type)));
+ok("career worker Dockerfile exists", careerWorkerDockerfile.includes("dist/index.js"));
+ok("career worker deploy script exists", careerWorkerDeploy.includes("career-worker"));
+ok("career worker readiness doc exists", careerWorkerReadiness.includes("Career Worker Readiness"));
+ok("career worker readiness tracks CAREER_WORKER_URL", careerWorkerReadiness.includes("CAREER_WORKER_URL"));
 
 const app = read("web/src/App.tsx");
 ok("runtime app does not route public candidate pages", !app.includes("/candidate"));
