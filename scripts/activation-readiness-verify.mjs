@@ -113,9 +113,21 @@ ok("career worker readiness doc exists", careerWorkerReadiness.includes("Career 
 ok("career worker readiness tracks CAREER_WORKER_URL", careerWorkerReadiness.includes("CAREER_WORKER_URL"));
 
 const app = read("web/src/App.tsx");
+ok("runtime app routes Career Mirror V1", app.includes("/career-mirror") && app.includes("CareerMirrorPage"));
 ok("runtime app does not route public candidate pages", !app.includes("/candidate"));
 ok("runtime app does not route employer pages", !app.includes("/employers"));
 ok("runtime app does not route pricing pages", !app.includes("/pricing"));
+
+const careerMirrorModel = read("web/src/lib/careerMirror.ts");
+const careerMirrorPage = read("web/src/pages/CareerMirrorPage.tsx");
+ok("Career Mirror model exists", careerMirrorModel.includes("WorkPreferenceProfile") && careerMirrorModel.includes("CareerOpportunity"));
+ok("Career Mirror page exists", careerMirrorPage.includes("CareerMirrorPage"));
+ok("Career Mirror page calls createJob", careerMirrorPage.includes("createJob"));
+ok("Career Mirror can create profile summary job", careerMirrorPage.includes("career.profile.summarize"));
+ok("Career Mirror can create fit score job", careerMirrorPage.includes("career.fit.score"));
+ok("Career Mirror keeps save control", careerMirrorPage.includes("Save"));
+ok("Career Mirror keeps hide control", careerMirrorPage.includes("Hide"));
+ok("Career Mirror has no auto apply wording", !careerMirrorPage.toLowerCase().includes("auto-apply"));
 
 const deployWorkflow = read(".github/workflows/urai-jobs-production-deploy.yml");
 ok("production deploy workflow exists", deployWorkflow.length > 0);
