@@ -129,6 +129,11 @@ ok("Career Mirror keeps save control", careerMirrorPage.includes("Save"));
 ok("Career Mirror keeps hide control", careerMirrorPage.includes("Hide"));
 ok("Career Mirror has no auto apply wording", !careerMirrorPage.toLowerCase().includes("auto-apply"));
 
+const createJobPage = read("web/src/pages/CreateJobPage.tsx");
+careerJobTypes.forEach((type) => ok(`CreateJobPage includes preset for ${type}`, createJobPage.includes(type)));
+ok("CreateJobPage includes career profile smoke payload", createJobPage.includes("careerProfile"));
+ok("CreateJobPage includes career opportunity smoke payload", createJobPage.includes("careerOpportunity"));
+
 const deployWorkflow = read(".github/workflows/urai-jobs-production-deploy.yml");
 ok("production deploy workflow exists", deployWorkflow.length > 0);
 ok("production deploy requires launch unlock input", deployWorkflow.includes("confirm_launch_unlock"));
