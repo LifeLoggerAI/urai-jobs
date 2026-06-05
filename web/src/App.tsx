@@ -3,6 +3,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { LandingPage } from "./pages/LandingPage";
 import { CreateJobPage } from "./pages/CreateJobPage";
 import { AdminPage } from "./pages/AdminPage";
+import { CareerMirrorPage } from "./pages/CareerMirrorPage";
 import { PrivacyPage, TermsPage, TrustSafetyPage } from "./pages/LegalPages";
 import { trackJobsEvent } from "./lib/analytics";
 
@@ -36,6 +37,7 @@ function routeForPath(pathname: string) {
   if (pathname.startsWith("/login")) return <LoginPage />;
   if (pathname.startsWith("/admin")) return <AdminPage />;
   if (pathname.startsWith("/create")) return <CreateJobPage />;
+  if (pathname.startsWith("/career-mirror")) return <CareerMirrorPage />;
   if (pathname.startsWith("/privacy")) return <PrivacyPage />;
   if (pathname.startsWith("/terms")) return <TermsPage />;
   if (pathname.startsWith("/trust")) return <TrustSafetyPage />;
@@ -49,6 +51,7 @@ export default function App() {
         <nav className="top-nav">
           <a className="brand" href="/">URAI Jobs</a>
           <div>
+            <a href="/career-mirror">Career Mirror</a>
             <a href="/login">Login</a>
             <a href="/create">Create</a>
             <a href="/admin">Admin</a>
