@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createJob } from "../lib/jobsApi";
 import {
   careerMirrorOpportunities,
   defaultWorkPreferenceProfile,
@@ -6,9 +7,19 @@ import {
   type CareerOpportunity
 } from "../lib/careerMirror";
 
+type RuntimeJobState = {
+  status: "idle" | "loading" | "success" | "error";
+  message: string;
+  jobId?: string;
+};
+
+const idleRuntimeJob: RuntimeJobState = { status: "idle", message: "" };
+
 export function CareerMirrorPage() {
   const [opportunities, setOpportunities] = useState<CareerOpportunity[]>(careerMirrorOpportunities);
   const [selectedId, setSelectedId] = useState(careerMirrorOpportunities[0]?.id ?? "");
+  const [profileJob, setProfileJob] = useState<RuntimeJobState>(idleRuntimeJob);
+  const [fitJob, setFitJob] = useState<RuntimeJobState>(idleRuntimeJob);
   const profile = defaultWorkPreferenceProfile;
 
   const visibleOpportunities = useMemo(() => opportunities.filter((item) => !item.hidden), [opportunities]);
@@ -24,6 +35,38 @@ export function CareerMirrorPage() {
     setSelectedId(next?.id ?? "");
   }
 
+  async function runProfileSummary() {
+    setProfileJob({ status: "loading", message: "Creating career.profile.summarize job..." });
+    try {
+      const result = await createJob("career.profile.summarize", {
+        profile,
+        source: "career-mirror-v1",
+        outputPrefix: "career-mirror/profile-summary"
+      });
+      const jobId = String(result.jobId || result.id || "created");
+      setProfileJob({ status: "success", jobId, message: `Profile summary job created: ${jobId}` });
+    } catch (error) {
+      setProfileJob({ status: "error", message: error instanceof Error ? error.message : "Profile summary job failed." });
+    }
+  }
+
+  async function runFitScore() {
+    if (!selected) return;
+    setFitJob({ status: "loading", message: "Creating career.fit.score job..." });
+    try {
+      const result = await createJob("career.fit.score", {
+        profile,
+        opportunity: selected,
+        source: "career-mirror-v1",
+        outputPrefix: `career-mirror/fit-score/${selected.id}`
+      });
+      const jobId = String(result.jobId || result.id || "created");
+      setFitJob({ status: "success", jobId, message: `Fit score job created: ${jobId}` });
+    } catch (error) {
+      setFitJob({ status: "error", message: error instanceof Error ? error.message : "Fit score job failed." });
+    }
+  }
+
   return (
     <main className="page-shell career-mirror-shell">
       <section className="hero hero-grid career-mirror-hero">
@@ -37,8 +80,17 @@ export function CareerMirrorPage() {
           </p>
           <div className="hero-actions">
             <a className="cta-button" href="#opportunities">Review opportunities</a>
-            <a className="secondary-button" href="/create">Create career runtime job</a>
+            <button type="button" className="secondary-button" onClick={() => void runProfileSummary()} disabled={profileJob.status === "loading"}>
+              {profileJob.status === "loading" ? "Creating profile job..." : "Summarize profile"}
+            </button>
           </div>
+          {profileJob.status !== "idle" && (
+            <div className={`notice ${profileJob.status}`}>
+              <strong>{profileJob.status.toUpperCase()}</strong>
+              <p>{profileJob.message}</p>
+              {profileJob.jobId && <a className="secondary-button" href="/admin">View in admin</a>}
+            </div>
+          )}
         </div>
 
         <aside className="hero-card">
@@ -129,7 +181,18 @@ export function CareerMirrorPage() {
                 <button type="button" className="secondary-button" onClick={() => hideOpportunity(selected.id)}>
                   Hide
                 </button>
+                <button type="button" className="secondary-button" onClick={() => void runFitScore()} disabled={fitJob.status === "loading"}>
+                  {fitJob.status === "loading" ? "Creating score job..." : "Run runtime score"}
+                </button>
               </div>
+
+              {fitJob.status !== "idle" && (
+                <div className={`notice ${fitJob.status}`}>
+                  <strong>{fitJob.status.toUpperCase()}</strong>
+                  <p>{fitJob.message}</p>
+                  {fitJob.jobId && <a className="secondary-button" href="/admin">View in admin</a>}
+                </div>
+              )}
             </article>
           ) : (
             <article className="panel">
