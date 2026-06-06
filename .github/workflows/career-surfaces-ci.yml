@@ -10,6 +10,7 @@ on:
       - "web/src/pages/LandingPage.tsx"
       - "workers/career-worker/**"
       - "scripts/career-surfaces-verify.mjs"
+      - "scripts/career-runtime-smoke.mjs"
       - "scripts/activation-readiness-verify.mjs"
       - "package.json"
       - "pnpm-lock.yaml"
@@ -24,6 +25,7 @@ on:
       - "web/src/pages/LandingPage.tsx"
       - "workers/career-worker/**"
       - "scripts/career-surfaces-verify.mjs"
+      - "scripts/career-runtime-smoke.mjs"
       - "scripts/activation-readiness-verify.mjs"
       - "package.json"
       - "pnpm-lock.yaml"
@@ -55,6 +57,9 @@ jobs:
 
       - name: Verify career surfaces
         run: pnpm career:verify
+
+      - name: Verify career runtime smoke
+        run: pnpm career:smoke
 
       - name: Verify activation readiness
         run: pnpm activation:verify
