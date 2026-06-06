@@ -1,6 +1,7 @@
 export type CareerLaunchStage = {
   version: "V1" | "V2" | "V3" | "V4" | "V5";
   title: string;
+  href: string;
   status: "scaffolded" | "in-progress" | "blocked" | "ready";
   summary: string;
   gates: string[];
@@ -11,6 +12,7 @@ export const careerLaunchPlan: CareerLaunchStage[] = [
   {
     version: "V1",
     title: "Runtime plus Career Mirror foundation",
+    href: "/career-mirror",
     status: "in-progress",
     summary: "Launch the verified runtime backbone and first advisory Career Mirror surface.",
     gates: [
@@ -27,6 +29,7 @@ export const careerLaunchPlan: CareerLaunchStage[] = [
   {
     version: "V2",
     title: "Marketplace and packet preparation foundation",
+    href: "/career-marketplace",
     status: "scaffolded",
     summary: "Add separated candidate/employer surfaces, document intake, and reviewable packet generation.",
     gates: [
@@ -44,6 +47,7 @@ export const careerLaunchPlan: CareerLaunchStage[] = [
   {
     version: "V3",
     title: "Bounded automation controls",
+    href: "/career-automation",
     status: "scaffolded",
     summary: "Add explicit user rules, execution ledger, snapshots, pause controls, and revocation paths.",
     gates: [
@@ -61,6 +65,7 @@ export const careerLaunchPlan: CareerLaunchStage[] = [
   {
     version: "V4",
     title: "Interview, offer, and spatial career layer",
+    href: "/career-decision",
     status: "scaffolded",
     summary: "Connect career decisions to interview prep, offer comparison, and URAI Spatial opportunity portals.",
     gates: [
@@ -76,6 +81,7 @@ export const careerLaunchPlan: CareerLaunchStage[] = [
   {
     version: "V5",
     title: "Economic life-path system",
+    href: "/career-passport",
     status: "scaffolded",
     summary: "Expand from jobs into Passport-backed economic path mapping and revocable compatibility packets.",
     gates: [
