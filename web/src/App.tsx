@@ -7,6 +7,7 @@ import { CareerMirrorPage } from "./pages/CareerMirrorPage";
 import { CareerVersionConsolePage } from "./pages/CareerVersionConsolePage";
 import { CareerMarketplacePage } from "./pages/CareerMarketplacePage";
 import { CareerAutomationPage } from "./pages/CareerAutomationPage";
+import { CareerDecisionPage } from "./pages/CareerDecisionPage";
 import { PrivacyPage, TermsPage, TrustSafetyPage } from "./pages/LegalPages";
 import { trackJobsEvent } from "./lib/analytics";
 
@@ -40,6 +41,7 @@ function routeForPath(pathname: string) {
   if (pathname.startsWith("/login")) return <LoginPage />;
   if (pathname.startsWith("/admin")) return <AdminPage />;
   if (pathname.startsWith("/create")) return <CreateJobPage />;
+  if (pathname.startsWith("/career-decision")) return <CareerDecisionPage />;
   if (pathname.startsWith("/career-automation")) return <CareerAutomationPage />;
   if (pathname.startsWith("/career-marketplace")) return <CareerMarketplacePage />;
   if (pathname.startsWith("/career-versions")) return <CareerVersionConsolePage />;
@@ -60,6 +62,7 @@ export default function App() {
             <a href="/career-mirror">Career Mirror</a>
             <a href="/career-marketplace">Marketplace V2</a>
             <a href="/career-automation">Automation V3</a>
+            <a href="/career-decision">Decision V4</a>
             <a href="/career-versions">Version Console</a>
             <a href="/login">Login</a>
             <a href="/create">Create</a>
