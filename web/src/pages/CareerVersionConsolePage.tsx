@@ -38,6 +38,10 @@ export function CareerVersionConsolePage() {
               </div>
               <p>{stage.summary}</p>
 
+              <div className="hero-actions compact">
+                <a className="secondary-button" href={stage.href}>Open {stage.version}</a>
+              </div>
+
               <h4>Product gates</h4>
               <ul className="check-list">
                 {stage.gates.map((gate) => (
