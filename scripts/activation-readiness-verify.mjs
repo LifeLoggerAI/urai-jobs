@@ -115,6 +115,7 @@ ok("career worker readiness tracks CAREER_WORKER_URL", careerWorkerReadiness.inc
 const app = read("web/src/App.tsx");
 ok("runtime app routes Career Mirror V1", app.includes("/career-mirror") && app.includes("CareerMirrorPage"));
 ok("runtime app routes Career Marketplace V2", app.includes("/career-marketplace") && app.includes("CareerMarketplacePage"));
+ok("runtime app routes Career Automation V3", app.includes("/career-automation") && app.includes("CareerAutomationPage"));
 ok("runtime app routes Career Version Console", app.includes("/career-versions") && app.includes("CareerVersionConsolePage"));
 ok("runtime app does not route public candidate pages", !app.includes("/candidate"));
 ok("runtime app does not route employer pages", !app.includes("/employers"));
@@ -154,6 +155,20 @@ ok("Career Marketplace V2 can tailor documents", careerMarketplacePage.includes(
 ok("Career Marketplace V2 can generate packets", careerMarketplacePage.includes("career.packet.generate"));
 ok("Career Marketplace V2 links Career Mirror", careerMarketplacePage.includes("/career-mirror"));
 ok("Career Marketplace V2 links Version Console", careerMarketplacePage.includes("/career-versions"));
+
+const careerAutomationModel = read("web/src/lib/careerAutomation.ts");
+const careerAutomationPage = read("web/src/pages/CareerAutomationPage.tsx");
+ok("Career Automation V3 model exists", careerAutomationModel.includes("CareerAutomationRule") && careerAutomationModel.includes("CareerExecutionLedgerEntry"));
+ok("Career Automation V3 model includes global pause", careerAutomationModel.includes("globalPause"));
+ok("Career Automation V3 model includes review required", careerAutomationModel.includes("reviewRequired"));
+ok("Career Automation V3 page exists", careerAutomationPage.includes("CareerAutomationPage"));
+ok("Career Automation V3 calls createJob", careerAutomationPage.includes("createJob"));
+ok("Career Automation V3 can create follow-up plan", careerAutomationPage.includes("career.followup.plan"));
+ok("Career Automation V3 has global pause control", careerAutomationPage.includes("toggleGlobalPause"));
+ok("Career Automation V3 has per-rule pause control", careerAutomationPage.includes("toggleRule"));
+ok("Career Automation V3 appends ledger", careerAutomationPage.includes("appendLedger"));
+ok("Career Automation V3 links Marketplace", careerAutomationPage.includes("/career-marketplace"));
+ok("Career Automation V3 links Version Console", careerAutomationPage.includes("/career-versions"));
 
 const createJobPage = read("web/src/pages/CreateJobPage.tsx");
 careerJobTypes.forEach((type) => ok(`CreateJobPage includes preset for ${type}`, createJobPage.includes(type)));
