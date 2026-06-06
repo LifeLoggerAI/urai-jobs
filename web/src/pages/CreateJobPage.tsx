@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { createJob } from "../lib/jobsApi";
 
 const careerProfile = {
@@ -171,7 +171,7 @@ export function CreateJobPage() {
     setCreatedJobId("");
   }
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("loading");
     setMessage("");
