@@ -116,6 +116,8 @@ const app = read("web/src/App.tsx");
 ok("runtime app routes Career Mirror V1", app.includes("/career-mirror") && app.includes("CareerMirrorPage"));
 ok("runtime app routes Career Marketplace V2", app.includes("/career-marketplace") && app.includes("CareerMarketplacePage"));
 ok("runtime app routes Career Automation V3", app.includes("/career-automation") && app.includes("CareerAutomationPage"));
+ok("runtime app routes Career Decision V4", app.includes("/career-decision") && app.includes("CareerDecisionPage"));
+ok("runtime app routes Career Passport V5", app.includes("/career-passport") && app.includes("CareerPassportPage"));
 ok("runtime app routes Career Version Console", app.includes("/career-versions") && app.includes("CareerVersionConsolePage"));
 ok("runtime app does not route public candidate pages", !app.includes("/candidate"));
 ok("runtime app does not route employer pages", !app.includes("/employers"));
@@ -169,6 +171,18 @@ ok("Career Automation V3 has per-rule pause control", careerAutomationPage.inclu
 ok("Career Automation V3 appends ledger", careerAutomationPage.includes("appendLedger"));
 ok("Career Automation V3 links Marketplace", careerAutomationPage.includes("/career-marketplace"));
 ok("Career Automation V3 links Version Console", careerAutomationPage.includes("/career-versions"));
+
+const careerPassportModel = read("web/src/lib/careerPassport.ts");
+const careerPassportPage = read("web/src/pages/CareerPassportPage.tsx");
+ok("Career Passport V5 model exists", careerPassportModel.includes("CareerPassportState") && careerPassportModel.includes("PassportProfilePacket"));
+ok("Career Passport V5 model includes path graph", careerPassportModel.includes("EconomicPathNode"));
+ok("Career Passport V5 model includes skill gaps", careerPassportModel.includes("SkillGap"));
+ok("Career Passport V5 model builds export payload", careerPassportModel.includes("buildPassportExportPayload"));
+ok("Career Passport V5 page exists", careerPassportPage.includes("CareerPassportPage"));
+ok("Career Passport V5 calls createJob", careerPassportPage.includes("createJob"));
+ok("Career Passport V5 can export passport", careerPassportPage.includes("career.passport.export"));
+ok("Career Passport V5 links Decision", careerPassportPage.includes("/career-decision"));
+ok("Career Passport V5 links Version Console", careerPassportPage.includes("/career-versions"));
 
 const createJobPage = read("web/src/pages/CreateJobPage.tsx");
 careerJobTypes.forEach((type) => ok(`CreateJobPage includes preset for ${type}`, createJobPage.includes(type)));
