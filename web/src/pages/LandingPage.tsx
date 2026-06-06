@@ -1,5 +1,3 @@
-import { Link } from "react-router-dom";
-
 const features = [
   {
     title: "Queue every production workflow",
@@ -75,10 +73,10 @@ export function LandingPage() {
             </p>
 
             <div className="hero-actions">
-              <Link to="/career-mirror" className="cta-button">Open Career Mirror</Link>
-              <Link to="/career-versions" className="secondary-button">View versions</Link>
-              <Link to="/create" className="secondary-button">Create a job</Link>
-              <Link to="/admin" className="secondary-button">Open admin</Link>
+              <a href="/career-mirror" className="cta-button">Open Career Mirror</a>
+              <a href="/career-versions" className="secondary-button">View versions</a>
+              <a href="/create" className="secondary-button">Create a job</a>
+              <a href="/admin" className="secondary-button">Open admin</a>
             </div>
           </div>
 
@@ -112,7 +110,7 @@ export function LandingPage() {
                 <h3>{surface.title}</h3>
                 <p>{surface.body}</p>
                 <div className="hero-actions compact">
-                  <Link to={surface.href} className="secondary-button">Open {surface.version}</Link>
+                  <a href={surface.href} className="secondary-button">Open {surface.version}</a>
                 </div>
               </article>
             ))}
@@ -146,8 +144,8 @@ export function LandingPage() {
             <p>Use the create page for controlled job submission and the admin page for queue visibility.</p>
           </div>
           <div className="hero-actions">
-            <Link to="/create" className="cta-button">Create job</Link>
-            <Link to="/admin" className="secondary-button">View admin</Link>
+            <a href="/create" className="cta-button">Create job</a>
+            <a href="/admin" className="secondary-button">View admin</a>
           </div>
         </section>
       </main>
