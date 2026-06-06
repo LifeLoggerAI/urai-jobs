@@ -329,6 +329,60 @@ pre {
   line-height: 1.7;
 }
 
+.launch-stage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.launch-stage-card {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.launch-stage-card h3,
+.launch-stage-card h4 {
+  margin: 0.25rem 0;
+}
+
+.launch-stage-card p {
+  color: #b6c4d8;
+  line-height: 1.7;
+  margin: 0;
+}
+
+.launch-stage-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.launch-status {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  color: #dbeafe;
+  display: inline-flex;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.7rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.runtime-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.runtime-chip-row code {
+  border: 1px solid rgba(103, 232, 249, 0.24);
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.58);
+  color: #bae6fd;
+  padding: 0.35rem 0.55rem;
+}
+
 .admin-shell {
   padding-top: 2.5rem;
 }
@@ -343,7 +397,7 @@ pre {
 }
 
 .admin-header h1,
-.detail-header h2 {
+detail-header h2 {
   margin: 0.35rem 0;
 }
 
