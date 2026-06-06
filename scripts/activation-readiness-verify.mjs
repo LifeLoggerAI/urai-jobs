@@ -114,6 +114,7 @@ ok("career worker readiness tracks CAREER_WORKER_URL", careerWorkerReadiness.inc
 
 const app = read("web/src/App.tsx");
 ok("runtime app routes Career Mirror V1", app.includes("/career-mirror") && app.includes("CareerMirrorPage"));
+ok("runtime app routes Career Marketplace V2", app.includes("/career-marketplace") && app.includes("CareerMarketplacePage"));
 ok("runtime app routes Career Version Console", app.includes("/career-versions") && app.includes("CareerVersionConsolePage"));
 ok("runtime app does not route public candidate pages", !app.includes("/candidate"));
 ok("runtime app does not route employer pages", !app.includes("/employers"));
@@ -139,6 +140,20 @@ ok("Career Mirror can create fit score job", careerMirrorPage.includes("career.f
 ok("Career Mirror keeps save control", careerMirrorPage.includes("Save"));
 ok("Career Mirror keeps hide control", careerMirrorPage.includes("Hide"));
 ok("Career Mirror has no auto apply wording", !careerMirrorPage.toLowerCase().includes("auto-apply"));
+
+const careerMarketplaceModel = read("web/src/lib/careerMarketplace.ts");
+const careerMarketplacePage = read("web/src/pages/CareerMarketplacePage.tsx");
+ok("Career Marketplace V2 model exists", careerMarketplaceModel.includes("CandidateProfile") && careerMarketplaceModel.includes("EmployerProfile"));
+ok("Career Marketplace V2 model includes opportunities", careerMarketplaceModel.includes("MarketplaceOpportunity"));
+ok("Career Marketplace V2 model includes documents", careerMarketplaceModel.includes("CareerDocument"));
+ok("Career Marketplace V2 model includes review packet", careerMarketplaceModel.includes("ReviewPacket"));
+ok("Career Marketplace V2 page exists", careerMarketplacePage.includes("CareerMarketplacePage"));
+ok("Career Marketplace V2 calls createJob", careerMarketplacePage.includes("createJob"));
+ok("Career Marketplace V2 can parse documents", careerMarketplacePage.includes("career.document.parse"));
+ok("Career Marketplace V2 can tailor documents", careerMarketplacePage.includes("career.document.tailor"));
+ok("Career Marketplace V2 can generate packets", careerMarketplacePage.includes("career.packet.generate"));
+ok("Career Marketplace V2 links Career Mirror", careerMarketplacePage.includes("/career-mirror"));
+ok("Career Marketplace V2 links Version Console", careerMarketplacePage.includes("/career-versions"));
 
 const createJobPage = read("web/src/pages/CreateJobPage.tsx");
 careerJobTypes.forEach((type) => ok(`CreateJobPage includes preset for ${type}`, createJobPage.includes(type)));
