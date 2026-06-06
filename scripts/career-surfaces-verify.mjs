@@ -13,6 +13,8 @@ const ok = (name, condition) => {
 
 const app = read("web/src/App.tsx");
 const landing = read("web/src/pages/LandingPage.tsx");
+const versionPlan = read("web/src/lib/careerLaunchPlan.ts");
+const versionConsole = read("web/src/pages/CareerVersionConsolePage.tsx");
 const decisionModel = read("web/src/lib/careerDecision.ts");
 const decisionPage = read("web/src/pages/CareerDecisionPage.tsx");
 const passportModel = read("web/src/lib/careerPassport.ts");
@@ -31,6 +33,13 @@ ok("landing links V3", landing.includes("/career-automation"));
 ok("landing links V4", landing.includes("/career-decision"));
 ok("landing links V5", landing.includes("/career-passport"));
 ok("landing links versions", landing.includes("/career-versions"));
+
+ok("version model links V1", versionPlan.includes("/career-mirror"));
+ok("version model links V2", versionPlan.includes("/career-marketplace"));
+ok("version model links V3", versionPlan.includes("/career-automation"));
+ok("version model links V4", versionPlan.includes("/career-decision"));
+ok("version model links V5", versionPlan.includes("/career-passport"));
+ok("version console renders surface links", versionConsole.includes("stage.href"));
 
 ok("V4 model defines interview prep", decisionModel.includes("InterviewPrepRoom"));
 ok("V4 model defines offers", decisionModel.includes("CareerOffer"));
