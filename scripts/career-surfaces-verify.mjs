@@ -13,6 +13,7 @@ const ok = (name, condition) => {
 
 const app = read("web/src/App.tsx");
 const landing = read("web/src/pages/LandingPage.tsx");
+const routeManifest = read("web/src/lib/careerRoutes.ts");
 const versionPlan = read("web/src/lib/careerLaunchPlan.ts");
 const versionConsole = read("web/src/pages/CareerVersionConsolePage.tsx");
 const completionMatrix = read("docs/URAI_JOBS_V1_V5_COMPLETION_MATRIX.md");
@@ -20,6 +21,20 @@ const decisionModel = read("web/src/lib/careerDecision.ts");
 const decisionPage = read("web/src/pages/CareerDecisionPage.tsx");
 const passportModel = read("web/src/lib/careerPassport.ts");
 const passportPage = read("web/src/pages/CareerPassportPage.tsx");
+
+const requiredRoutes = [
+  ["HOME", "/"],
+  ["V1", "/career-mirror"],
+  ["V2", "/career-marketplace"],
+  ["V3", "/career-automation"],
+  ["V4", "/career-decision"],
+  ["V5", "/career-passport"],
+  ["CONSOLE", "/career-versions"]
+];
+
+requiredRoutes.forEach(([version, path]) => {
+  ok(`route manifest includes ${version} ${path}`, routeManifest.includes(`version: "${version}"`) && routeManifest.includes(`path: "${path}"`));
+});
 
 ok("app routes V1 Career Mirror", app.includes("/career-mirror"));
 ok("app routes V2 Marketplace", app.includes("/career-marketplace"));
