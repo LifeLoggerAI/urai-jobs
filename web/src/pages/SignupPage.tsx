@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase';
 import { useNavigate } from 'react-router-dom';
@@ -10,20 +10,16 @@ export function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSignup = async (event: React.FormEvent) => {
+  const handleSignup = async (event: FormEvent) => {
     event.preventDefault();
     setIsLoading(true);
     setError(null);
 
     try {
-      // This simply creates the user in Firebase Auth
       await createUserWithEmailAndPassword(auth, email, password);
-
-      // After sign-up, we could also make a call to our backend to create a user profile in Firestore
-      // For now, we'll just redirect to the home page.
       navigate('/');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Sign up failed.');
     } finally {
       setIsLoading(false);
     }
