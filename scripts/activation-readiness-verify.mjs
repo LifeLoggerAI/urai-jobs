@@ -114,6 +114,7 @@ ok("career worker readiness tracks CAREER_WORKER_URL", careerWorkerReadiness.inc
 
 const app = read("web/src/App.tsx");
 ok("runtime app routes Career Mirror V1", app.includes("/career-mirror") && app.includes("CareerMirrorPage"));
+ok("runtime app routes Career Version Console", app.includes("/career-versions") && app.includes("CareerVersionConsolePage"));
 ok("runtime app does not route public candidate pages", !app.includes("/candidate"));
 ok("runtime app does not route employer pages", !app.includes("/employers"));
 ok("runtime app does not route pricing pages", !app.includes("/pricing"));
@@ -133,6 +134,15 @@ const createJobPage = read("web/src/pages/CreateJobPage.tsx");
 careerJobTypes.forEach((type) => ok(`CreateJobPage includes preset for ${type}`, createJobPage.includes(type)));
 ok("CreateJobPage includes career profile smoke payload", createJobPage.includes("careerProfile"));
 ok("CreateJobPage includes career opportunity smoke payload", createJobPage.includes("careerOpportunity"));
+
+const careerPlan = read("web/src/lib/careerLaunchPlan.ts");
+const careerVersionConsole = read("web/src/pages/CareerVersionConsolePage.tsx");
+ok("Career version plan model exists", careerPlan.includes("careerLaunchPlan"));
+["V1", "V2", "V3", "V4", "V5"].forEach((version) => ok(`Career version plan includes ${version}`, careerPlan.includes(version)));
+ok("Career Version Console page exists", careerVersionConsole.includes("CareerVersionConsolePage"));
+ok("Career Version Console renders runtime jobs", careerVersionConsole.includes("runtimeJobs"));
+ok("Career Version Console links Career Mirror", careerVersionConsole.includes("/career-mirror"));
+ok("Career Version Console links Create page", careerVersionConsole.includes("/create"));
 
 const deployWorkflow = read(".github/workflows/urai-jobs-production-deploy.yml");
 ok("production deploy workflow exists", deployWorkflow.length > 0);
