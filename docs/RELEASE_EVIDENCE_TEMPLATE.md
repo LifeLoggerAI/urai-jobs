@@ -19,9 +19,9 @@ Describe what changed in this release.
 
 ## Runtime boundary confirmation
 
-- [ ] This release activates or updates the URAI Jobs Runtime only.
-- [ ] This release does not activate public marketplace flows.
-- [ ] Any marketplace-related changes are documented as scaffolded, deferred, or separately chartered.
+- [ ] This release activates or updates the URAI Jobs Runtime.
+- [ ] Any public career product changes are limited to the approved V1-V5 URAI-Jobs surfaces.
+- [ ] Any marketplace or external-action behavior beyond the approved V1-V5 surfaces is documented as scaffolded, deferred, or separately chartered.
 
 ## Required checks
 
@@ -30,6 +30,8 @@ Record command results and links to logs where available.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | `pnpm run activation:verify` |  |  |
+| `pnpm run career:verify` |  |  |
+| `pnpm run career:smoke` |  |  |
 | `pnpm run urai-jobs:verify` |  |  |
 | `pnpm run urai-jobs:smoke` |  |  |
 | `pnpm run typecheck` |  |  |
@@ -39,8 +41,9 @@ Record command results and links to logs where available.
 | `pnpm run urai-jobs:deploy-precheck` |  |  |
 | `pnpm run prod:precheck` |  |  |
 | `pnpm run prod:smoke` |  |  |
+| `pnpm run prod:career-smoke` |  |  |
 
-## Smoke evidence
+## Generic runtime smoke evidence
 
 - Smoke job ID:
 - Job type:
@@ -51,6 +54,25 @@ Record command results and links to logs where available.
 - Logs verified:
 - Result/artifact verified:
 - Worker verified:
+
+## V1-V5 career smoke evidence
+
+- Career smoke evidence JSON path: `release-evidence/career-prod-smoke-<timestamp>.json`
+- `CAREER_WORKER_URL` configured:
+- Career worker health verified:
+
+| Version | Career job type | Job ID | Initial status | Terminal status | Artifact verified |
+| --- | --- | --- | --- | --- | --- |
+| V1 | `career.profile.summarize` |  |  |  |  |
+| V1 | `career.fit.score` |  |  |  |  |
+| V2 | `career.document.parse` |  |  |  |  |
+| V2 | `career.document.tailor` |  |  |  |  |
+| V2 | `career.packet.generate` |  |  |  |  |
+| V3 | `career.followup.plan` |  |  |  |  |
+| V4 | `career.interview.prep` |  |  |  |  |
+| V4 | `career.offer.compare` |  |  |  |  |
+| V4 | `career.spatial.portal.generate` |  |  |  |  |
+| V5 | `career.passport.export` |  |  |  |  |
 
 ## Runtime status verification
 
