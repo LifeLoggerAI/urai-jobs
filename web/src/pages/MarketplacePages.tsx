@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { jobsApi, type JobRecord } from "../lib/jobsApi";
 import { trackJobsEvent } from "../lib/analytics";
@@ -137,7 +137,7 @@ export function ApplyPage({ jobId }: { jobId: string }) {
     trackJobsEvent("apply_viewed", { job_id_present: Boolean(jobId) });
   }, [jobId]);
 
-  function submitApplication(event: React.FormEvent<HTMLFormElement>) {
+  function submitApplication(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitted(true);
     trackJobsEvent("application_submitted", { job_id_present: Boolean(jobId), consent_checked: true });
@@ -174,7 +174,7 @@ export function CandidateProfilePage() {
     trackJobsEvent("candidate_profile_viewed", { surface: "marketplace" });
   }, []);
 
-  function saveProfile(event: React.FormEvent<HTMLFormElement>) {
+  function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaved(true);
     trackJobsEvent("candidate_profile_saved", { has_resume_link: true });
@@ -206,7 +206,7 @@ export function EmployersPage() {
     trackJobsEvent("employers_viewed", { surface: "marketplace" });
   }, []);
 
-  function submitJobPost(event: React.FormEvent<HTMLFormElement>) {
+  function submitJobPost(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitted(true);
     trackJobsEvent("job_post_submitted", { consent_checked: true });
