@@ -16,16 +16,24 @@ on:
         description: "Deployed CAREER_WORKER_URL used by production career jobs"
         required: true
         type: string
+      deploy_before_smoke:
+        description: "Deploy Firebase and workers before smoke"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
       confirm_release:
-        description: "Type CAREER-RELEASE to run production smoke and evidence generation"
+        description: "Type CAREER-RELEASE to run production deployment, smoke, and evidence generation"
         required: true
         type: string
 
 jobs:
   release-evidence:
-    name: Verify, smoke, and produce career release evidence
+    name: Deploy, smoke, and produce career release evidence
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: production
 
     steps:
@@ -57,6 +65,9 @@ jobs:
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools@latest
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
@@ -92,6 +103,31 @@ jobs:
           CAREER_WORKER_URL: ${{ inputs.career_worker_url }}
           GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
         run: pnpm prod:career-preflight
+
+      - name: Deploy Firebase production runtime
+        if: ${{ inputs.deploy_before_smoke == 'true' }}
+        env:
+          FIREBASE_PROJECT_ID: ${{ inputs.firebase_project_id }}
+          GCLOUD_PROJECT: ${{ inputs.firebase_project_id }}
+          GCP_REGION: ${{ inputs.gcp_region }}
+        run: pnpm deploy:firebase:prod
+
+      - name: Deploy worker fleet
+        if: ${{ inputs.deploy_before_smoke == 'true' }}
+        env:
+          FIREBASE_PROJECT_ID: ${{ inputs.firebase_project_id }}
+          GCLOUD_PROJECT: ${{ inputs.firebase_project_id }}
+          GCP_REGION: ${{ inputs.gcp_region }}
+          CAREER_WORKER_URL: ${{ inputs.career_worker_url }}
+        run: pnpm deploy:workers
+
+      - name: Verify workers after deploy
+        env:
+          FIREBASE_PROJECT_ID: ${{ inputs.firebase_project_id }}
+          GCLOUD_PROJECT: ${{ inputs.firebase_project_id }}
+          GCP_REGION: ${{ inputs.gcp_region }}
+          CAREER_WORKER_URL: ${{ inputs.career_worker_url }}
+        run: pnpm prod:verify-workers
 
       - name: Run generic production smoke
         env:
