@@ -1,0 +1,108 @@
+name: Career Production Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      firebase_project_id:
+        description: "Firebase project ID to target"
+        required: true
+        type: string
+      gcp_region:
+        description: "GCP region for callables and worker"
+        required: true
+        default: "us-central1"
+        type: string
+      confirm_release:
+        description: "Type CAREER-RELEASE to run production smoke and evidence generation"
+        required: true
+        type: string
+
+jobs:
+  release-evidence:
+    name: Verify, smoke, and produce career release evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Check release confirmation
+        run: |
+          if [ "${{ inputs.confirm_release }}" != "CAREER-RELEASE" ]; then
+            echo "confirm_release must equal CAREER-RELEASE"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Verify activation readiness
+        run: pnpm activation:verify
+
+      - name: Verify career surfaces and smoke coverage
+        run: pnpm career:verify
+
+      - name: Typecheck web and career worker
+        run: |
+          pnpm --dir web typecheck
+          pnpm career-worker:typecheck
+
+      - name: Build web and career worker
+        run: |
+          pnpm --dir web build
+          pnpm career-worker:build
+
+      - name: Run generic production precheck
+        env:
+          FIREBASE_PROJECT_ID: ${{ inputs.firebase_project_id }}
+          GCLOUD_PROJECT: ${{ inputs.firebase_project_id }}
+          GCP_REGION: ${{ inputs.gcp_region }}
+        run: pnpm prod:precheck
+
+      - name: Run generic production smoke
+        env:
+          FIREBASE_PROJECT_ID: ${{ inputs.firebase_project_id }}
+          GCLOUD_PROJECT: ${{ inputs.firebase_project_id }}
+          GCP_REGION: ${{ inputs.gcp_region }}
+        run: pnpm prod:smoke
+
+      - name: Run V1-V5 career production smoke
+        env:
+          FIREBASE_PROJECT_ID: ${{ inputs.firebase_project_id }}
+          GCLOUD_PROJECT: ${{ inputs.firebase_project_id }}
+          GCP_REGION: ${{ inputs.gcp_region }}
+          CAREER_SMOKE_EVIDENCE_DIR: release-evidence
+        run: pnpm prod:career-smoke
+
+      - name: Validate and render career release evidence
+        env:
+          CAREER_SMOKE_EVIDENCE_DIR: release-evidence
+        run: pnpm prod:career-release-evidence
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: career-production-release-evidence
+          path: release-evidence/
+          if-no-files-found: error
