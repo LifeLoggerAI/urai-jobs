@@ -15,6 +15,7 @@ const app = read("web/src/App.tsx");
 const landing = read("web/src/pages/LandingPage.tsx");
 const versionPlan = read("web/src/lib/careerLaunchPlan.ts");
 const versionConsole = read("web/src/pages/CareerVersionConsolePage.tsx");
+const completionMatrix = read("docs/URAI_JOBS_V1_V5_COMPLETION_MATRIX.md");
 const decisionModel = read("web/src/lib/careerDecision.ts");
 const decisionPage = read("web/src/pages/CareerDecisionPage.tsx");
 const passportModel = read("web/src/lib/careerPassport.ts");
@@ -40,6 +41,15 @@ ok("version model links V3", versionPlan.includes("/career-automation"));
 ok("version model links V4", versionPlan.includes("/career-decision"));
 ok("version model links V5", versionPlan.includes("/career-passport"));
 ok("version console renders surface links", versionConsole.includes("stage.href"));
+
+ok("completion matrix exists", completionMatrix.includes("URAI Jobs V1-V5 Completion Matrix"));
+ok("completion matrix documents runtime foundation", completionMatrix.includes("Shared runtime foundation"));
+ok("completion matrix documents V1", completionMatrix.includes("V1 - Career Mirror"));
+ok("completion matrix documents V2", completionMatrix.includes("V2 - Marketplace"));
+ok("completion matrix documents V3", completionMatrix.includes("V3 - Bounded automation"));
+ok("completion matrix documents V4", completionMatrix.includes("V4 - Decision layer"));
+ok("completion matrix documents V5", completionMatrix.includes("V5 - Passport"));
+ok("completion matrix lists production evidence gap", completionMatrix.includes("Production evidence still required"));
 
 ok("V4 model defines interview prep", decisionModel.includes("InterviewPrepRoom"));
 ok("V4 model defines offers", decisionModel.includes("CareerOffer"));
