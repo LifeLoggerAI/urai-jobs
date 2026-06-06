@@ -42,6 +42,7 @@ Record command results and links to logs where available.
 | `pnpm run prod:precheck` |  |  |
 | `pnpm run prod:smoke` |  |  |
 | `pnpm run prod:career-smoke` |  |  |
+| `pnpm run prod:career-release-evidence` |  |  |
 
 ## Generic runtime smoke evidence
 
@@ -58,6 +59,7 @@ Record command results and links to logs where available.
 ## V1-V5 career smoke evidence
 
 - Career smoke evidence JSON path: `release-evidence/career-prod-smoke-<timestamp>.json`
+- Career smoke report path: `release-evidence/career-prod-smoke-<timestamp>.md`
 - `CAREER_WORKER_URL` configured:
 - Career worker health verified:
 
