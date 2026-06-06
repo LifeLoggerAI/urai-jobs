@@ -27,6 +27,39 @@ const features = [
   }
 ];
 
+const careerSurfaces = [
+  {
+    version: "V1",
+    title: "Career Mirror",
+    href: "/career-mirror",
+    body: "Editable work preferences, saved opportunities, hidden opportunities, explainable fit, and profile/fit runtime jobs."
+  },
+  {
+    version: "V2",
+    title: "Marketplace",
+    href: "/career-marketplace",
+    body: "Candidate profile, employer profile, opportunity detail, document intake, and review packet runtime jobs."
+  },
+  {
+    version: "V3",
+    title: "Automation Controls",
+    href: "/career-automation",
+    body: "Rule controls, global pause, per-rule pause, review ledger, and follow-up planning runtime jobs."
+  },
+  {
+    version: "V4",
+    title: "Decision Layer",
+    href: "/career-decision",
+    body: "Interview prep, offer comparison, burnout-risk framing, and spatial career portal runtime jobs."
+  },
+  {
+    version: "V5",
+    title: "Passport",
+    href: "/career-passport",
+    body: "User-controlled profile packets, economic path graph, skill gaps, modes, and Passport export runtime job."
+  }
+];
+
 export function LandingPage() {
   return (
     <div className="landing-page">
@@ -34,14 +67,17 @@ export function LandingPage() {
         <section className="hero hero-grid">
           <div>
             <div className="eyebrow">URAI Jobs</div>
-            <h1>The production job layer for the URAI ecosystem.</h1>
+            <h1>The production job layer and career runtime for the URAI ecosystem.</h1>
             <p>
               URAI Jobs gives operators and internal systems one reliable place to create,
-              monitor, retry, cancel, and audit complex background work.
+              monitor, retry, cancel, and audit complex background work while powering the
+              V1 through V5 autonomous career product surfaces.
             </p>
 
             <div className="hero-actions">
-              <Link to="/create" className="cta-button">Create a job</Link>
+              <Link to="/career-mirror" className="cta-button">Open Career Mirror</Link>
+              <Link to="/career-versions" className="secondary-button">View versions</Link>
+              <Link to="/create" className="secondary-button">Create a job</Link>
               <Link to="/admin" className="secondary-button">Open admin</Link>
             </div>
           </div>
@@ -51,11 +87,36 @@ export function LandingPage() {
             <ul className="check-list">
               <li>Firebase-backed job creation</li>
               <li>Operator admin dashboard</li>
-              <li>Retry and cancel controls</li>
+              <li>Career worker job contracts</li>
+              <li>Career Mirror through Passport surfaces</li>
               <li>Payload, output, and log inspection</li>
               <li>Node.js 22 functions runtime</li>
             </ul>
           </aside>
+        </section>
+
+        <section className="section-block">
+          <div className="section-heading">
+            <div className="eyebrow">Career product surfaces</div>
+            <h2>V1 through V5 are now visible from the product shell.</h2>
+            <p>
+              Each surface is connected to approved career runtime jobs while keeping review controls,
+              user-owned state, and the runtime/product boundary clear.
+            </p>
+          </div>
+
+          <div className="features-grid">
+            {careerSurfaces.map((surface) => (
+              <article className="feature-item" key={surface.version}>
+                <div className="eyebrow">{surface.version}</div>
+                <h3>{surface.title}</h3>
+                <p>{surface.body}</p>
+                <div className="hero-actions compact">
+                  <Link to={surface.href} className="secondary-button">Open {surface.version}</Link>
+                </div>
+              </article>
+            ))}
+          </div>
         </section>
 
         <section className="section-block">
