@@ -9,9 +9,10 @@
     "workers/*"
   ],
   "scripts": {
-    "urai-jobs:verify": "node scripts/urai-jobs-verify.mjs && node scripts/activation-readiness-verify.mjs && node scripts/career-surfaces-verify.mjs",
+    "urai-jobs:verify": "node scripts/urai-jobs-verify.mjs && node scripts/activation-readiness-verify.mjs && node scripts/career-surfaces-verify.mjs && node scripts/career-runtime-smoke.mjs",
     "activation:verify": "node scripts/activation-readiness-verify.mjs && node scripts/career-surfaces-verify.mjs",
-    "career:verify": "node scripts/career-surfaces-verify.mjs",
+    "career:verify": "node scripts/career-surfaces-verify.mjs && node scripts/career-runtime-smoke.mjs",
+    "career:smoke": "node scripts/career-runtime-smoke.mjs",
     "career-worker:build": "npm run build --prefix workers/career-worker",
     "career-worker:typecheck": "npm run typecheck --prefix workers/career-worker",
     "urai-jobs:smoke": "node scripts/urai-jobs-smoke.mjs",
