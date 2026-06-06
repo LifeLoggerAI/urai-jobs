@@ -1,11 +1,16 @@
 import { useMemo, useState } from "react";
 import { createJob } from "../lib/jobsApi";
 import {
-  careerMirrorOpportunities,
-  defaultWorkPreferenceProfile,
   explainFit,
-  type CareerOpportunity
+  type CareerOpportunity,
+  type WorkPreferenceProfile
 } from "../lib/careerMirror";
+import {
+  loadCareerMirrorState,
+  resetCareerMirrorState,
+  saveCareerMirrorState,
+  type CareerMirrorState
+} from "../lib/careerMirrorStore";
 
 type RuntimeJobState = {
   status: "idle" | "loading" | "success" | "error";
@@ -16,23 +21,43 @@ type RuntimeJobState = {
 const idleRuntimeJob: RuntimeJobState = { status: "idle", message: "" };
 
 export function CareerMirrorPage() {
-  const [opportunities, setOpportunities] = useState<CareerOpportunity[]>(careerMirrorOpportunities);
-  const [selectedId, setSelectedId] = useState(careerMirrorOpportunities[0]?.id ?? "");
+  const [mirrorState, setMirrorState] = useState<CareerMirrorState>(() => loadCareerMirrorState());
   const [profileJob, setProfileJob] = useState<RuntimeJobState>(idleRuntimeJob);
   const [fitJob, setFitJob] = useState<RuntimeJobState>(idleRuntimeJob);
-  const profile = defaultWorkPreferenceProfile;
+
+  const profile = mirrorState.profile;
+  const opportunities = mirrorState.opportunities;
+  const selectedId = mirrorState.selectedId;
 
   const visibleOpportunities = useMemo(() => opportunities.filter((item) => !item.hidden), [opportunities]);
   const selected = visibleOpportunities.find((item) => item.id === selectedId) ?? visibleOpportunities[0];
 
+  function persist(update: Partial<CareerMirrorState>) {
+    setMirrorState((current) => saveCareerMirrorState({ ...current, ...update }));
+  }
+
+  function updateProfile(update: Partial<WorkPreferenceProfile>) {
+    persist({ profile: { ...profile, ...update } });
+  }
+
   function updateOpportunity(id: string, update: Partial<CareerOpportunity>) {
-    setOpportunities((current) => current.map((item) => (item.id === id ? { ...item, ...update } : item)));
+    persist({ opportunities: opportunities.map((item) => (item.id === id ? { ...item, ...update } : item)) });
+  }
+
+  function selectOpportunity(id: string) {
+    persist({ selectedId: id });
   }
 
   function hideOpportunity(id: string) {
-    updateOpportunity(id, { hidden: true });
-    const next = visibleOpportunities.find((item) => item.id !== id);
-    setSelectedId(next?.id ?? "");
+    const nextOpportunities = opportunities.map((item) => (item.id === id ? { ...item, hidden: true } : item));
+    const nextVisible = nextOpportunities.filter((item) => !item.hidden);
+    persist({ opportunities: nextOpportunities, selectedId: nextVisible[0]?.id ?? "" });
+  }
+
+  function resetMirror() {
+    setMirrorState(resetCareerMirrorState());
+    setProfileJob(idleRuntimeJob);
+    setFitJob(idleRuntimeJob);
   }
 
   async function runProfileSummary() {
@@ -83,6 +108,7 @@ export function CareerMirrorPage() {
             <button type="button" className="secondary-button" onClick={() => void runProfileSummary()} disabled={profileJob.status === "loading"}>
               {profileJob.status === "loading" ? "Creating profile job..." : "Summarize profile"}
             </button>
+            <button type="button" className="secondary-button" onClick={resetMirror}>Reset V1 state</button>
           </div>
           {profileJob.status !== "idle" && (
             <div className={`notice ${profileJob.status}`}>
@@ -100,8 +126,60 @@ export function CareerMirrorPage() {
             <li>Autonomy: {profile.autonomy}</li>
             <li>Meeting load: {profile.meetingLoad}</li>
             <li>Rhythm: {profile.workRhythm}</li>
+            <li>Saved locally: {new Date(mirrorState.updatedAt).toLocaleString()}</li>
           </ul>
         </aside>
+      </section>
+
+      <section className="section-block">
+        <div className="section-heading">
+          <div className="eyebrow">V1 profile controls</div>
+          <h2>Editable work rhythm, persisted locally.</h2>
+          <p>
+            These controls establish the V1 data model before replacing local persistence with authenticated,
+            user-scoped storage.
+          </p>
+        </div>
+
+        <div className="features-grid career-profile-grid">
+          <label className="feature-item">
+            Preferred mode
+            <select value={profile.preferredMode} onChange={(event) => updateProfile({ preferredMode: event.target.value as WorkPreferenceProfile["preferredMode"] })}>
+              <option value="remote">remote</option>
+              <option value="hybrid">hybrid</option>
+              <option value="onsite">onsite</option>
+              <option value="flexible">flexible</option>
+            </select>
+          </label>
+          <label className="feature-item">
+            Autonomy
+            <select value={profile.autonomy} onChange={(event) => updateProfile({ autonomy: event.target.value as WorkPreferenceProfile["autonomy"] })}>
+              <option value="low">low</option>
+              <option value="balanced">balanced</option>
+              <option value="high">high</option>
+            </select>
+          </label>
+          <label className="feature-item">
+            Meeting load
+            <select value={profile.meetingLoad} onChange={(event) => updateProfile({ meetingLoad: event.target.value as WorkPreferenceProfile["meetingLoad"] })}>
+              <option value="low">low</option>
+              <option value="balanced">balanced</option>
+              <option value="high">high</option>
+            </select>
+          </label>
+          <label className="feature-item">
+            Work rhythm
+            <select value={profile.workRhythm} onChange={(event) => updateProfile({ workRhythm: event.target.value as WorkPreferenceProfile["workRhythm"] })}>
+              <option value="deep-work">deep-work</option>
+              <option value="collaborative">collaborative</option>
+              <option value="mixed">mixed</option>
+            </select>
+          </label>
+          <label className="feature-item career-wide-field">
+            Growth goal
+            <textarea rows={4} value={profile.growthGoal} onChange={(event) => updateProfile({ growthGoal: event.target.value })} />
+          </label>
+        </div>
       </section>
 
       <section className="section-block">
@@ -144,11 +222,12 @@ export function CareerMirrorPage() {
                 key={item.id}
                 type="button"
                 className={item.id === selected?.id ? "preset-card active" : "preset-card"}
-                onClick={() => setSelectedId(item.id)}
+                onClick={() => selectOpportunity(item.id)}
               >
                 <strong>{item.title}</strong>
                 <span>{item.organization}</span>
                 <span>{item.fitScore}% fit · {item.mode}</span>
+                {item.saved && <span>saved</span>}
               </button>
             ))}
           </div>
@@ -198,7 +277,7 @@ export function CareerMirrorPage() {
             <article className="panel">
               <div className="eyebrow">No visible opportunities</div>
               <h1>All opportunities hidden.</h1>
-              <p>Refresh the page to reset the V1 scaffold data.</p>
+              <p>Use Reset V1 state to restore the seeded opportunity queue.</p>
             </article>
           )}
         </div>
