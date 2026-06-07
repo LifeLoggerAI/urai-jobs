@@ -11,6 +11,7 @@ It assumes repo-side implementation is already present for:
 - V5 Passport and economic path graph
 - Career worker runtime
 - Career production smoke and evidence scripts
+- Career release manifest and live route checklist artifacts
 
 ## 1. Confirm local/repo checks
 
@@ -35,12 +36,34 @@ Use GitHub Actions:
 
 - `Career Surfaces CI`
 - `URAI Jobs Runtime CI`
+- `Career Production Release`
 
-Both workflows support `workflow_dispatch` and can be run manually from the Actions tab.
+All release workflows support `workflow_dispatch` and can be run manually from the Actions tab.
 
 Record workflow URLs in `docs/PRODUCTION_VALIDATION_<YYYY-MM-DD>.md`.
 
-## 3. Deploy runtime
+## 3. Run the one-button production workflow
+
+Preferred path:
+
+```text
+GitHub Actions -> Career Production Release
+```
+
+Inputs:
+
+```text
+firebase_project_id=<production Firebase project>
+gcp_region=us-central1
+career_worker_url=<deployed career worker URL>
+live_base_url=<Firebase Hosting or custom base URL>
+deploy_before_smoke=true
+confirm_release=CAREER-RELEASE
+```
+
+The workflow verifies, builds, deploys, smokes, validates evidence, stamps release manifests, stamps route checklist artifacts, and uploads release evidence.
+
+## 4. Manual deploy path if workflow dispatch is unavailable
 
 Deploy Firebase and workers using the approved environment/project:
 
@@ -56,9 +79,9 @@ If the career worker is deployed separately, use:
 bash scripts/deploy-career-worker.sh
 ```
 
-Record deployed commit, deployment timestamp, Firebase project, and worker URL.
+Record deployed commit, deployment timestamp, Firebase project, Hosting URL, and worker URL.
 
-## 4. Configure required runtime environment
+## 5. Configure required runtime environment
 
 Ensure production Functions/worker configuration includes:
 
@@ -74,7 +97,7 @@ pnpm prod:verify-workers
 
 Record the health output in release evidence.
 
-## 5. Run generic production smoke
+## 6. Run generic production smoke
 
 ```bash
 pnpm prod:smoke
@@ -82,10 +105,10 @@ pnpm prod:smoke
 
 Record the smoke job ID, status transitions, logs, and artifact/result output.
 
-## 6. Run V1-V5 career production smoke
+## 7. Run V1-V5 career production smoke
 
 ```bash
-FIREBASE_PROJECT_ID=<project> GCP_REGION=us-central1 pnpm prod:career-smoke
+FIREBASE_PROJECT_ID=<project> GCP_REGION=us-central1 CAREER_WORKER_URL=<worker-url> pnpm prod:career-smoke
 ```
 
 This submits all ten career job types:
@@ -108,25 +131,51 @@ Expected output:
 - one job ID per job type
 - `release-evidence/career-prod-smoke-<timestamp>.json`
 
-## 7. Validate and render career release evidence
+## 8. Validate and render career release evidence
 
 ```bash
 pnpm prod:career-release-evidence
 ```
 
-This runs:
+This validates the JSON evidence and renders:
+
+```text
+release-evidence/career-prod-smoke-<timestamp>.md
+```
+
+## 9. Stamp release manifest and live route checklist
 
 ```bash
-node scripts/validate-career-smoke-evidence.mjs
-node scripts/render-career-smoke-report.mjs
+FIREBASE_PROJECT_ID=<project> GCP_REGION=us-central1 CAREER_WORKER_URL=<worker-url> FIREBASE_HOSTING_URL=<hosting-url> node scripts/stamp-career-release-manifest.mjs
+FIREBASE_HOSTING_URL=<hosting-url> node scripts/stamp-career-route-checklist.mjs
 ```
 
 Expected output:
 
-- validated JSON evidence
-- `release-evidence/career-prod-smoke-<timestamp>.md`
+```text
+release-evidence/career-release-manifest.json
+release-evidence/career-release-manifest.md
+release-evidence/career-live-route-checklist.json
+release-evidence/career-live-route-checklist.md
+```
 
-## 8. Verify terminal states and artifacts
+## 10. Verify live routes
+
+Open every URL from `career-live-route-checklist.md`:
+
+| Version | Route |
+| --- | --- |
+| HOME | `/` |
+| V1 | `/career-mirror` |
+| V2 | `/career-marketplace` |
+| V3 | `/career-automation` |
+| V4 | `/career-decision` |
+| V5 | `/career-passport` |
+| Console | `/career-versions` |
+
+Confirm each route loads the URAI Jobs app shell and the correct surface.
+
+## 11. Verify terminal states and artifacts
 
 For each of the ten career job IDs:
 
@@ -147,7 +196,7 @@ Canonical queue terminal success state:
 DONE
 ```
 
-## 9. Fill release evidence document
+## 12. Fill release evidence document
 
 Copy:
 
@@ -168,10 +217,13 @@ Attach or reference:
 - generic smoke job ID
 - career smoke JSON path
 - career smoke Markdown report path
+- career release manifest path
+- career live route checklist path
 - worker health output
+- route verification notes
 - rollback path
 
-## 10. Release decision
+## 13. Release decision
 
 Approve only when all are true:
 
@@ -182,6 +234,8 @@ Approve only when all are true:
 - all ten career smoke jobs created
 - career smoke JSON validated
 - career smoke Markdown report generated
+- career release manifest generated
+- live route checklist generated and manually verified
 - terminal statuses and artifacts checked
 - rollback path documented
 
