@@ -16,6 +16,10 @@ on:
         description: "Deployed CAREER_WORKER_URL used by production career jobs"
         required: true
         type: string
+      live_base_url:
+        description: "Firebase Hosting or custom base URL for deployed URAI Jobs"
+        required: false
+        type: string
       deploy_before_smoke:
         description: "Deploy Firebase and workers before smoke"
         required: true
@@ -156,8 +160,15 @@ jobs:
           GCLOUD_PROJECT: ${{ inputs.firebase_project_id }}
           GCP_REGION: ${{ inputs.gcp_region }}
           CAREER_WORKER_URL: ${{ inputs.career_worker_url }}
+          FIREBASE_HOSTING_URL: ${{ inputs.live_base_url }}
           CAREER_SMOKE_EVIDENCE_DIR: release-evidence
         run: node scripts/stamp-career-release-manifest.mjs
+
+      - name: Stamp live route checklist
+        env:
+          FIREBASE_HOSTING_URL: ${{ inputs.live_base_url }}
+          CAREER_SMOKE_EVIDENCE_DIR: release-evidence
+        run: node scripts/stamp-career-route-checklist.mjs
 
       - name: Upload release evidence
         uses: actions/upload-artifact@v4
