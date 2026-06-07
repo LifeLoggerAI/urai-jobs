@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const EVIDENCE_DIR = process.env.CAREER_SMOKE_EVIDENCE_DIR || 'release-evidence';
-const BASE_URL = process.env.CAREER_LIVE_BASE_URL || process.env.FIREBASE_HOSTING_URL || process.env.PUBLIC_BASE_URL || '';
+const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || '';
+const BASE_URL = process.env.CAREER_LIVE_BASE_URL || process.env.FIREBASE_HOSTING_URL || process.env.PUBLIC_BASE_URL || (PROJECT_ID ? `https://${PROJECT_ID}.web.app` : '');
 
 const routes = [
   { version: 'HOME', label: 'URAI Jobs Home', path: '/' },
@@ -29,6 +30,7 @@ function main() {
   const checklist = {
     generatedAt,
     baseUrl: BASE_URL,
+    baseUrlSource: BASE_URL && !process.env.CAREER_LIVE_BASE_URL && !process.env.FIREBASE_HOSTING_URL && !process.env.PUBLIC_BASE_URL ? 'derived-from-project-id' : 'provided-or-empty',
     routes: routes.map((route) => ({
       ...route,
       url: routeUrl(route.path),
@@ -45,7 +47,7 @@ function main() {
     .join('\n');
 
   const mdPath = path.join(EVIDENCE_DIR, 'career-live-route-checklist.md');
-  fs.writeFileSync(mdPath, `# URAI Jobs Live Route Checklist\n\nGenerated at: ${generatedAt}\n\nBase URL: ${BASE_URL || 'not provided'}\n\n| Version | Surface | Path | URL | Verified |\n| --- | --- | --- | --- | --- |\n${rows}\n\n## Verification instructions\n\n- Open each URL after Firebase Hosting deploy.\n- Confirm the URAI Jobs shell loads.\n- Confirm the visible page matches the expected surface.\n- Mark each row verified in the production validation document.\n`);
+  fs.writeFileSync(mdPath, `# URAI Jobs Live Route Checklist\n\nGenerated at: ${generatedAt}\n\nBase URL: ${BASE_URL || 'not provided'}\n\nBase URL source: ${checklist.baseUrlSource}\n\n| Version | Surface | Path | URL | Verified |\n| --- | --- | --- | --- | --- |\n${rows}\n\n## Verification instructions\n\n- Open each URL after Firebase Hosting deploy.\n- Confirm the URAI Jobs shell loads.\n- Confirm the visible page matches the expected surface.\n- Mark each row verified in the production validation document.\n`);
 
   console.log(`[PASS] Wrote ${jsonPath}`);
   console.log(`[PASS] Wrote ${mdPath}`);
