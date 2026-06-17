@@ -28,9 +28,34 @@ jobs:
       - name: Build web app
         run: pnpm --prefix web build
 
+      - name: Firebase deploy auth gate
+
+        id: firebase_auth_gate
+
+        shell: bash
+
+        run: |
+
+          if [ -n "${{ env.FIREBASE_TOKEN }}" ] || [ -n "${{ env.GCP_SA_KEY }}" ] || [ -n "${{ env.GOOGLE_APPLICATION_CREDENTIALS }}" ]; then
+
+            echo "has_auth=true" >> "$GITHUB_OUTPUT"
+
+            echo "Firebase deploy auth present."
+
+          else
+
+            echo "has_auth=false" >> "$GITHUB_OUTPUT"
+
+            echo "::notice::Firebase deploy skipped because FIREBASE_TOKEN/GCP_SA_KEY/GOOGLE_APPLICATION_CREDENTIALS is not configured."
+
+          fi
+
+
       - name: Deploy to Firebase
+        if: steps.firebase_auth_gate.outputs.has_auth == 'true'
         uses: w9jds/firebase-action@master
         with:
           args: deploy --only hosting,functions
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
