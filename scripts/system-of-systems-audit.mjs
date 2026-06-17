@@ -1,3 +1,9 @@
+
+// Production-only readiness checks are warnings in repository CI.
+// They require real Firebase auth, production secrets, deployed worker URLs, DNS, and SSL.
+// Local/repo CI must verify code, contracts, runtime invariants, smoke, and deploy precheck shape;
+// live production proof is recorded separately after credentials and domains are attached.
+
 import fs from "fs";
 import { spawnSync } from "child_process";
 
