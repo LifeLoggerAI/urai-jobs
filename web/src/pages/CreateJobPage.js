@@ -1,6 +1,23 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useMemo, useState } from "react";
 import { createJob } from "../lib/jobsApi";
+const careerProfile = {
+    preferredMode: "flexible",
+    autonomy: "high",
+    meetingLoad: "low",
+    workRhythm: "deep-work",
+    growthGoal: "Find work that supports focused building, creative systems thinking, and long-term ownership.",
+    avoidPatterns: ["unclear ownership", "heavy meeting load", "commission-only structure"]
+};
+const careerOpportunity = {
+    id: "urai-career-ai-product-builder",
+    title: "AI Product Builder",
+    organization: "Mission-driven product team",
+    mode: "flexible",
+    fitScore: 94,
+    stressRisk: "low",
+    growthFit: "high"
+};
 const PRESETS = {
     "narrator.tts": {
         label: "Narrator TTS",
@@ -26,6 +43,98 @@ const PRESETS = {
             source: "smoke-test",
             mode: "incremental",
             outputPrefix: "spatial-smoke-test"
+        }
+    },
+    "career.profile.summarize": {
+        label: "Career profile summary",
+        payload: {
+            source: "operator-preset",
+            profile: careerProfile,
+            outputPrefix: "career-smoke/profile-summary"
+        }
+    },
+    "career.fit.score": {
+        label: "Career fit score",
+        payload: {
+            source: "operator-preset",
+            profile: careerProfile,
+            opportunity: careerOpportunity,
+            outputPrefix: "career-smoke/fit-score"
+        }
+    },
+    "career.document.parse": {
+        label: "Career document parse",
+        payload: {
+            source: "operator-preset",
+            documentRef: "gs://urai-jobs-sample-inputs/career/profile.md",
+            outputPrefix: "career-smoke/document-parse"
+        }
+    },
+    "career.document.tailor": {
+        label: "Career document tailor",
+        payload: {
+            source: "operator-preset",
+            profile: careerProfile,
+            opportunity: careerOpportunity,
+            documentRef: "gs://urai-jobs-sample-inputs/career/profile.md",
+            outputPrefix: "career-smoke/document-tailor"
+        }
+    },
+    "career.packet.generate": {
+        label: "Career packet generate",
+        payload: {
+            source: "operator-preset",
+            profile: careerProfile,
+            opportunity: careerOpportunity,
+            outputPrefix: "career-smoke/packet"
+        }
+    },
+    "career.followup.plan": {
+        label: "Career follow-up plan",
+        payload: {
+            source: "operator-preset",
+            opportunity: careerOpportunity,
+            cadence: "review-only",
+            outputPrefix: "career-smoke/followup-plan"
+        }
+    },
+    "career.interview.prep": {
+        label: "Career interview prep",
+        payload: {
+            source: "operator-preset",
+            profile: careerProfile,
+            opportunity: careerOpportunity,
+            outputPrefix: "career-smoke/interview-prep"
+        }
+    },
+    "career.offer.compare": {
+        label: "Career offer compare",
+        payload: {
+            source: "operator-preset",
+            profile: careerProfile,
+            offers: [
+                { id: "offer-a", title: "AI Product Builder", compensation: "TBD", mode: "flexible" },
+                { id: "offer-b", title: "Spatial Experience Lead", compensation: "TBD", mode: "hybrid" }
+            ],
+            outputPrefix: "career-smoke/offer-compare"
+        }
+    },
+    "career.spatial.portal.generate": {
+        label: "Career spatial portal",
+        payload: {
+            source: "operator-preset",
+            profile: careerProfile,
+            opportunity: careerOpportunity,
+            outputPrefix: "career-smoke/spatial-portal"
+        }
+    },
+    "career.passport.export": {
+        label: "Career Passport export",
+        payload: {
+            source: "operator-preset",
+            profile: careerProfile,
+            consentScope: "private-preview",
+            outputPrefix: "career-smoke/passport-export"
         }
     }
 };

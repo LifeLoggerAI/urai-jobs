@@ -185,7 +185,7 @@ export function CareerMirrorPage() {
       <section className="section-block">
         <div className="section-heading">
           <div className="eyebrow">V1 boundary</div>
-          <h2>Career intelligence, not auto-apply.</h2>
+          <h2>Career intelligence, not manual review.</h2>
           <p>
             V1 is intentionally advisory: it can summarize, score, save, hide, and explain opportunities.
             External actions stay out of scope until later consent-gated versions.

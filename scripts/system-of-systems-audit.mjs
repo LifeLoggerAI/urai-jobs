@@ -161,7 +161,7 @@ for (const marker of [
 run("runtime invariant verification", "npm", ["run", "urai-jobs:verify"]);
 run("runtime smoke verification", "npm", ["run", "urai-jobs:smoke"]);
 run("managed worker artifact precheck", "npm", ["run", "worker:precheck"]);
-run("firebase/runtime deploy precheck", "npm", ["run", "urai-jobs:deploy-precheck"]);
+run("firebase/runtime deploy precheck (production-env gated)", "npm", ["run", "urai-jobs:deploy-precheck"]);
 run("production env precheck", "npm", ["run", "prod:precheck"], false);
 run("custom domain verification", "npm", ["run", "domains:verify"], false);
 

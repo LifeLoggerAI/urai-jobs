@@ -5,6 +5,10 @@ import { z } from 'zod';
 import { Job } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
+// URAI Jobs worker routing audit markers.
+// asset/spatial/studio subsystem workers route: '/'
+// narrator and career execution workers route: '/execute-job'
+
 const JOB_EXECUTION_TOPIC = 'job-execution';
 
 type WorkerTarget = { url: string; route: string };

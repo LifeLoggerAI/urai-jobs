@@ -14,14 +14,11 @@ export function SignupPage() {
         setIsLoading(true);
         setError(null);
         try {
-            // This simply creates the user in Firebase Auth
             await createUserWithEmailAndPassword(auth, email, password);
-            // After sign-up, we could also make a call to our backend to create a user profile in Firestore
-            // For now, we'll just redirect to the home page.
             navigate('/');
         }
         catch (err) {
-            setError(err.message);
+            setError(err instanceof Error ? err.message : 'Sign up failed.');
         }
         finally {
             setIsLoading(false);

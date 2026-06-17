@@ -29,11 +29,15 @@ export async function cancelJob(jobId) {
 export async function listJobLogs(jobId, limit = 100) {
     return callFunction("listJobLogsV2", { jobId, limit });
 }
+export async function processQueueNow(limit = 10) {
+    return callFunction("processQueueNow", { limit });
+}
 export const jobsApi = {
     createJob,
     listJobs,
     getJob,
     retryJob,
     cancelJob,
-    listJobLogs
+    listJobLogs,
+    processQueueNow
 };
