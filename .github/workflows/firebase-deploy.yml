@@ -1,61 +1,78 @@
-# .github/workflows/firebase-deploy.yml
-
 name: Deploy to Firebase
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  build_and_deploy:
+  firebase_deploy:
+    name: Firebase deploy
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
-
-      - name: Install dependencies
-        run: |
-          npm install -g pnpm
-          pnpm install
-
-      - name: Build web app
-        run: pnpm --prefix web build
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Firebase deploy auth gate
-
         id: firebase_auth_gate
-
         shell: bash
-
-        run: |
-
-          if [ -n "${{ env.FIREBASE_TOKEN }}" ] || [ -n "${{ env.GCP_SA_KEY }}" ] || [ -n "${{ env.GOOGLE_APPLICATION_CREDENTIALS }}" ]; then
-
-            echo "has_auth=true" >> "$GITHUB_OUTPUT"
-
-            echo "Firebase deploy auth present."
-
-          else
-
-            echo "has_auth=false" >> "$GITHUB_OUTPUT"
-
-            echo "::notice::Firebase deploy skipped because FIREBASE_TOKEN/GCP_SA_KEY/GOOGLE_APPLICATION_CREDENTIALS is not configured."
-
-          fi
-
-
-      - name: Deploy to Firebase
-        if: steps.firebase_auth_gate.outputs.has_auth == 'true'
-        uses: w9jds/firebase-action@master
-        with:
-          args: deploy --only hosting,functions
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        run: |
+          if [ -n "$FIREBASE_TOKEN" ] || [ -n "$GCP_SA_KEY" ] || [ -n "$GOOGLE_APPLICATION_CREDENTIALS_JSON" ]; then
+            echo "has_auth=true" >> "$GITHUB_OUTPUT"
+            echo "Firebase deploy auth present."
+          else
+            echo "has_auth=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Firebase deploy skipped because FIREBASE_TOKEN, GCP_SA_KEY, or GOOGLE_APPLICATION_CREDENTIALS is not configured."
+          fi
+
+      - name: Setup Node.js
+        if: steps.firebase_auth_gate.outputs.has_auth == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        if: steps.firebase_auth_gate.outputs.has_auth == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9
+          run_install: false
+
+      - name: Install dependencies
+        if: steps.firebase_auth_gate.outputs.has_auth == 'true'
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Build
+        if: steps.firebase_auth_gate.outputs.has_auth == 'true'
+        run: pnpm build
+
+      - name: Deploy hosting and functions
+        if: steps.firebase_auth_gate.outputs.has_auth == 'true'
+        shell: bash
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        run: |
+          if [ -n "$GCP_SA_KEY" ]; then
+            echo "$GCP_SA_KEY" > "$RUNNER_TEMP/firebase-service-account.json"
+            export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-service-account.json"
+          elif [ -n "$GOOGLE_APPLICATION_CREDENTIALS_JSON" ]; then
+            echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > "$RUNNER_TEMP/firebase-service-account.json"
+            export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-service-account.json"
+          fi
+
+          if [ -n "$FIREBASE_TOKEN" ]; then
+            npx firebase-tools deploy --only hosting,functions --token "$FIREBASE_TOKEN"
+          else
+            npx firebase-tools deploy --only hosting,functions
+          fi
