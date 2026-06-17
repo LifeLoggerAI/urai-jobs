@@ -167,9 +167,19 @@ for (const marker of [
 run("runtime invariant verification", "npm", ["run", "urai-jobs:verify"]);
 run("runtime smoke verification", "npm", ["run", "urai-jobs:smoke"]);
 run("managed worker artifact precheck", "npm", ["run", "worker:precheck"]);
-run("firebase/runtime deploy precheck (production-env gated)", "npm", ["run", "urai-jobs:deploy-precheck"]);
+if (process.env.URAI_JOBS_STRICT_PRODUCTION_AUDIT === "true") {
+  run("firebase/runtime deploy precheck (production-env gated)", "npm", ["run", "urai-jobs:deploy-precheck"]);
+} else {
+  warnings.push("firebase/runtime deploy precheck (production-env gated)");
+  console.log("[INFO] Skipping production deploy precheck in repository CI; run `npm run build && npm run urai-jobs:deploy-precheck` for local/release evidence.");
+}
 run("production env precheck", "npm", ["run", "prod:precheck"], false);
-run("custom domain verification", "npm", ["run", "domains:verify"], false);
+if (process.env.URAI_JOBS_STRICT_PRODUCTION_AUDIT === "true") {
+  run("custom domain verification", "npm", ["run", "domains:verify"], false);
+} else {
+  warnings.push("custom domain verification");
+  console.log("[INFO] Skipping custom domain verification in repository CI; requires live Firebase domain/DNS attachment.");
+}
 
 if (warnings.length) {
   console.log("\n[WARN] Non-blocking readiness gaps:");
