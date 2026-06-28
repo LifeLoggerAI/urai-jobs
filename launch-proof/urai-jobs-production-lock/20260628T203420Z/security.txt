@@ -1,0 +1,7 @@
+Security and rules audit
+
+Firestore and storage rules were not changed in this pass.
+Backend hardening was added for allowlisted job types, payload validation, idempotency, lease-state checks, duplicate terminal no-op behavior, and production fallback fail-closed behavior.
+Narrator worker now refuses execution when required worker auth config is missing.
+Admin and create routes are now gated in the route shell.
+No secrets were printed or committed.
