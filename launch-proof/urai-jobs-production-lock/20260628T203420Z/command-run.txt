@@ -1,0 +1,8 @@
+Continuation result
+
+Checkout failed because github.com did not resolve from the runtime.
+Install, build, test, lifecycle, route, claims, and lock commands were not executed.
+No deploy was run.
+No production data was changed.
+Connector-only fixes were added for worker rejection handling and package script aliases.
+Production-ready status remains blocked.
