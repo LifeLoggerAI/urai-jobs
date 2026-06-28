@@ -11,6 +11,7 @@ import { CareerDecisionPage } from "./pages/CareerDecisionPage";
 import { CareerPassportPage } from "./pages/CareerPassportPage";
 import { PrivacyPage, TermsPage, TrustSafetyPage } from "./pages/LegalPages";
 import { trackJobsEvent } from "./lib/analytics";
+import { AuthGate } from "./components/AuthGate";
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
@@ -40,8 +41,20 @@ function routeForPath(pathname: string) {
   trackJobsEvent("page_viewed", { path: pathname || "/", surface: "web" });
 
   if (pathname.startsWith("/login")) return <LoginPage />;
-  if (pathname.startsWith("/admin")) return <AdminPage />;
-  if (pathname.startsWith("/create")) return <CreateJobPage />;
+  if (pathname.startsWith("/admin")) {
+    return (
+      <AuthGate requireOperator>
+        <AdminPage />
+      </AuthGate>
+    );
+  }
+  if (pathname.startsWith("/create")) {
+    return (
+      <AuthGate>
+        <CreateJobPage />
+      </AuthGate>
+    );
+  }
   if (pathname.startsWith("/career-passport")) return <CareerPassportPage />;
   if (pathname.startsWith("/career-decision")) return <CareerDecisionPage />;
   if (pathname.startsWith("/career-automation")) return <CareerAutomationPage />;
