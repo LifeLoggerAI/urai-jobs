@@ -1,0 +1,68 @@
+{
+  "generatedAt": "2026-06-28T20:34:20Z",
+  "environment": "repo-audit",
+  "branch": "urai-jobs-worker-lifecycle-lock-20260628",
+  "baseCommit": "9ad2137c2689e6aa936e72b0552a0a1913981714",
+  "firebase": {
+    "hostingSite": "urai-jobs-563121397472",
+    "projectAlias": "urai-jobs",
+    "functionsRuntime": "nodejs22",
+    "firestoreRules": "firestore.rules",
+    "firestoreIndexes": "firestore.indexes.json",
+    "storageRules": "storage.rules"
+  },
+  "collections": [
+    "users",
+    "jobs",
+    "jobs/{jobId}/logs",
+    "jobQueue",
+    "jobIdempotency"
+  ],
+  "functions": [
+    "createJob",
+    "getJob",
+    "cancelJob",
+    "listJobsV2",
+    "listJobLogsV2",
+    "retryJobV2",
+    "processQueueTick",
+    "processQueueNow",
+    "executeJob",
+    "retryExpiredLeases",
+    "cleanupTerminalJobs",
+    "systemReconcile"
+  ],
+  "routes": [
+    "/",
+    "/login",
+    "/create",
+    "/admin",
+    "/career-mirror",
+    "/career-marketplace",
+    "/career-automation",
+    "/career-decision",
+    "/career-passport",
+    "/career-versions",
+    "/privacy",
+    "/terms",
+    "/trust"
+  ],
+  "workerFamilies": {
+    "narrator-worker": "implemented code path for narrator.tts; execution now fail-closed if worker auth token is missing; production lifecycle proof still required",
+    "career-worker": "intentionally NOT_IMPLEMENTED until real execution is written",
+    "asset-worker": "placeholder/gated; not counted as live worker execution",
+    "spatial-worker": "placeholder/gated; not counted as live worker execution",
+    "studio-worker": "placeholder/gated; not counted as live worker execution"
+  },
+  "scriptsAddedOrUpdated": [
+    "jobs:lifecycle",
+    "jobs:smoke",
+    "jobs:verify",
+    "verify:jobs",
+    "test:jobs",
+    "check:production-claims",
+    "check:public-copy",
+    "check:production-lock",
+    "verify:routes"
+  ]
+}
