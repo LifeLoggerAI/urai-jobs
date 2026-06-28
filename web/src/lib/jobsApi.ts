@@ -48,6 +48,12 @@ export type ProcessQueueNowResult = {
   skipped?: string[];
 };
 
+export type CreateJobResult = {
+  jobId?: string;
+  id?: string;
+  idempotent?: boolean;
+};
+
 async function callFunction<TInput extends Record<string, unknown>, TOutput>(
   name: string,
   input: TInput
@@ -57,11 +63,10 @@ async function callFunction<TInput extends Record<string, unknown>, TOutput>(
   return result.data;
 }
 
-export async function createJob(jobType: string, payload: unknown): Promise<{ jobId?: string; id?: string }> {
-  return callFunction<{ jobType: string; payload: unknown }, { jobId?: string; id?: string }>("createJob", {
-    jobType,
-    payload
-  });
+export async function createJob(jobType: string, payload: unknown, idempotencyKey?: string): Promise<CreateJobResult> {
+  const input: { jobType: string; payload: unknown; idempotencyKey?: string } = { jobType, payload };
+  if (idempotencyKey) input.idempotencyKey = idempotencyKey;
+  return callFunction<typeof input, CreateJobResult>("createJob", input);
 }
 
 export async function listJobs(status?: JobStatus, limit = 50): Promise<{ jobs: JobRecord[] }> {
