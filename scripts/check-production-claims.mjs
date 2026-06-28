@@ -12,7 +12,10 @@ const blocked = [
   /URAI Jobs is production worker ready/i,
   /fully live autonomous/i,
   /Queue every production workflow/i,
-  /V1 through V5 autonomous/i
+  /V1 through V5 autonomous/i,
+  /internal production job-execution fabric/i,
+  /queueing controlled production work/i,
+  /Execute subsystem-specific work such as narrator TTS, asset rendering, spatial indexing, or studio processing/i
 ];
 
 function read(file) { return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''; }
@@ -35,6 +38,12 @@ check('LandingPage does not claim all workers are live', landing.includes('worke
 
 const status = read('docs/PRODUCTION_STATUS.md');
 if (status) check('Production status doc is honest when present', status.includes('not production worker ready'));
+
+const readme = read('README.md');
+if (readme) {
+  check('README says not production worker ready until lifecycle proof exists', readme.includes('must not be described as production worker ready until lifecycle proof exists'));
+  check('README labels unsupported workers as gated or placeholder', readme.includes('asset, spatial, and studio workers: gated or placeholder'));
+}
 
 if (process.exitCode) process.exit(process.exitCode);
 console.log('[PASS] URAI_JOBS_PRODUCTION_CLAIMS_CHECK');
