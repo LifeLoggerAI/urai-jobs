@@ -1,0 +1,18 @@
+{
+  "environment": "local-in-memory-script",
+  "script": "scripts/jobs-lifecycle.mjs",
+  "productionDataTouched": false,
+  "deploymentPerformed": false,
+  "jobType": "narrator.tts",
+  "statusTransitions": ["created", "queued", "leased", "running", "success"],
+  "queueDocumentProof": true,
+  "leaseTokenProof": "present-redacted",
+  "workerEndpointUsed": "local proof harness only",
+  "workerAuthMode": "local-only; production worker token values not printed",
+  "logsCountMinimum": 5,
+  "resultOrErrorPresence": "result present for success path; error present for failure path",
+  "duplicateExecutionResult": "terminal duplicate no-op expected and asserted by jobs-lifecycle.mjs",
+  "failureRetryResult": "intentional local failure is retried back to PENDING by harness",
+  "unsupportedJobTypeResult": "asset.render rejected by allowlist proof",
+  "finalVerdict": "LOCAL_WORKER_LIFECYCLE_READY__DEPLOYMENT_AND_PRODUCTION_SMOKE_NEEDED"
+}
