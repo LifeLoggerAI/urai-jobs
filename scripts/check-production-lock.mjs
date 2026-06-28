@@ -9,6 +9,7 @@ function check(name, condition) {
 const executeJob = read('functions/src/jobs/executeJob.ts');
 const createJob = read('functions/src/jobs/createJob.ts');
 const contracts = read('functions/src/jobs/job-contracts.ts');
+const jobsApi = read('web/src/lib/jobsApi.ts');
 const narrator = read('workers/narrator-worker/src/index.ts');
 const career = read('workers/career-worker/src/index.ts') + read('workers/career-worker/src/handlers/index.ts');
 const asset = read('workers/asset-worker/index.js');
@@ -25,7 +26,8 @@ check('inline fallback disabled by default in production', executeJob.includes('
 check('production worker dispatch requires worker auth configuration', executeJob.includes('URAI_JOBS_WORKER_TOKEN') && executeJob.includes('required in production'));
 check('createJob imports job contract validation', createJob.includes('parseJobPayload') && createJob.includes('SUPPORTED_JOB_TYPES'));
 check('createJob enforces idempotency', createJob.includes('jobIdempotency') && createJob.includes('idempotencyKeyHash'));
-check('job types are allowlisted', contracts.includes('SUPPORTED_JOB_TYPES') && contracts.includes('narrator.tts') && !contracts.includes('asset.render'));
+check('backend job types are allowlisted', contracts.includes('SUPPORTED_JOB_TYPES') && contracts.includes('narrator.tts') && !contracts.includes('asset.render'));
+check('client createJob blocks unsupported types before callable', jobsApi.includes('SUPPORTED_CREATE_JOB_TYPES') && jobsApi.includes('isSupportedCreateJobType') && jobsApi.includes('gated or not implemented'));
 check('narrator worker fails closed when auth config missing', narrator.includes('worker auth token is not configured') && narrator.includes('URAI_JOBS_WORKER_TOKEN'));
 check('career worker fails closed and returns not implemented', career.includes('worker auth token is not configured') && career.includes('NOT_IMPLEMENTED') && !career.includes("status: 'stubbed'"));
 check('asset worker cannot fake success', asset.includes('NOT_IMPLEMENTED') && !asset.includes("status: 'SUCCESS'"));
