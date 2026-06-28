@@ -1,27 +1,27 @@
 const features = [
   {
-    title: "Queue every production workflow",
-    body: "Submit rendering, narration, spatial, asset, analytics, and orchestration jobs into one traceable execution layer."
+    title: "Queue supported work honestly",
+    body: "Submit allowlisted job types into one traceable execution layer. Worker families without proof remain gated."
   },
   {
-    title: "Operate with confidence",
-    body: "Monitor status, attempts, failures, retries, cancellations, logs, payloads, and outputs from the admin console."
+    title: "Operate with guardrails",
+    body: "Monitor status, failures, retries, cancellations, logs, payloads, and outputs from the backend-protected admin console."
   },
   {
     title: "Built for URAI systems",
-    body: "Designed around subsystem ownership, RBAC, Firebase Functions, Firestore queues, workers, and production auditability."
+    body: "Designed around subsystem ownership, RBAC, Firebase Functions, Firestore queues, workers, and auditability."
   },
   {
     title: "Recover from failures",
-    body: "Retry failed work, cancel active work, inspect errors, and preserve a complete log trail for each job."
+    body: "Retry failed work, cancel active work, inspect errors, and preserve a log trail for each job."
   },
   {
-    title: "Cloud-native runtime",
-    body: "Runs on Firebase, Cloud Functions, Pub/Sub, Scheduler, and Node.js 22 with deployment gates protecting production."
+    title: "Cloud-native preview runtime",
+    body: "Uses Firebase, Cloud Functions, Pub/Sub, Scheduler, and Node.js 22. Production lifecycle proof still requires an operator-gated smoke run."
   },
   {
-    title: "Ready to extend",
-    body: "Add new job types and workers without rebuilding every product surface that depends on background execution."
+    title: "Ready to extend safely",
+    body: "New job types must be allowlisted, schema-validated, worker-authenticated, and lifecycle-smoked before being described as live."
   }
 ];
 
@@ -30,31 +30,31 @@ const careerSurfaces = [
     version: "V1",
     title: "Career Mirror",
     href: "/career-mirror",
-    body: "Editable work preferences, saved opportunities, hidden opportunities, explainable fit, and profile/fit runtime jobs."
+    body: "Visible product shell for editable work preferences and fit workflows. Runtime worker execution is gated until proof exists."
   },
   {
     version: "V2",
     title: "Marketplace",
     href: "/career-marketplace",
-    body: "Candidate profile, employer profile, opportunity detail, document intake, and review packet runtime jobs."
+    body: "Candidate, employer, opportunity, document intake, and packet surfaces. Marketplace labor claims are preview-only until backed by real jobs."
   },
   {
     version: "V3",
     title: "Automation Controls",
     href: "/career-automation",
-    body: "Rule controls, global pause, per-rule pause, review ledger, and follow-up planning runtime jobs."
+    body: "Rule controls, global pause, per-rule pause, and review ledger UI. Autonomous execution is not fully production verified."
   },
   {
     version: "V4",
     title: "Decision Layer",
     href: "/career-decision",
-    body: "Interview prep, offer comparison, burnout-risk framing, and spatial career portal runtime jobs."
+    body: "Interview prep, offer comparison, burnout-risk framing, and spatial portal surfaces with worker execution gated."
   },
   {
     version: "V5",
     title: "Passport",
     href: "/career-passport",
-    body: "User-controlled profile packets, economic path graph, skill gaps, modes, and Passport export runtime job."
+    body: "User-controlled profile packet and Passport export surface. Export worker execution requires proof before production claims."
   }
 ];
 
@@ -65,11 +65,11 @@ export function LandingPage() {
         <section className="hero hero-grid">
           <div>
             <div className="eyebrow">URAI Jobs</div>
-            <h1>The production job layer and career runtime for the URAI ecosystem.</h1>
+            <h1>Worker infrastructure preview for the URAI ecosystem.</h1>
             <p>
-              URAI Jobs gives operators and internal systems one reliable place to create,
-              monitor, retry, cancel, and audit complex background work while powering the
-              V1 through V5 autonomous career product surfaces.
+              URAI Jobs implements Firebase job creation, queue storage, leasing, dispatcher functions,
+              and operator visibility. Production lifecycle proof still requires an operator-gated smoke run,
+              and some worker families remain gated until real execution replaces scaffolded handlers.
             </p>
 
             <div className="hero-actions">
@@ -81,14 +81,14 @@ export function LandingPage() {
           </div>
 
           <aside className="hero-card">
-            <div className="eyebrow">Live capabilities</div>
+            <div className="eyebrow">Implemented capabilities</div>
             <ul className="check-list">
-              <li>Firebase-backed job creation</li>
-              <li>Operator admin dashboard</li>
-              <li>Career worker job contracts</li>
-              <li>Career Mirror through Passport surfaces</li>
-              <li>Payload, output, and log inspection</li>
-              <li>Node.js 22 functions runtime</li>
+              <li>Firebase-backed job creation for allowlisted job types</li>
+              <li>Backend-protected operator admin dashboard</li>
+              <li>Firestore queue, lease, status, result, and log documents</li>
+              <li>Pub/Sub dispatcher with duplicate terminal no-op guard</li>
+              <li>Inline fallback disabled by default in production</li>
+              <li>Unimplemented worker families blocked from false success</li>
             </ul>
           </aside>
         </section>
@@ -96,10 +96,10 @@ export function LandingPage() {
         <section className="section-block">
           <div className="section-heading">
             <div className="eyebrow">Career product surfaces</div>
-            <h2>V1 through V5 are now visible from the product shell.</h2>
+            <h2>V1 through V5 are visible as gated product previews.</h2>
             <p>
-              Each surface is connected to approved career runtime jobs while keeping review controls,
-              user-owned state, and the runtime/product boundary clear.
+              The route surfaces are present, but autonomous execution claims are intentionally withheld
+              until each worker path has real implementation, auth, logs, results, and production lifecycle proof.
             </p>
           </div>
 
@@ -120,7 +120,7 @@ export function LandingPage() {
         <section className="section-block">
           <div className="section-heading">
             <div className="eyebrow">Why it exists</div>
-            <h2>One backbone for work that cannot disappear.</h2>
+            <h2>One observable backbone for background work.</h2>
             <p>
               URAI products need background work that is observable, permissioned,
               resilient, and easy to reason about under production pressure.
@@ -139,9 +139,9 @@ export function LandingPage() {
 
         <section className="call-to-action">
           <div>
-            <div className="eyebrow">Operator ready</div>
-            <h2>Submit a smoke job or inspect live queue state.</h2>
-            <p>Use the create page for controlled job submission and the admin page for queue visibility.</p>
+            <div className="eyebrow">Operator guarded</div>
+            <h2>Submit a controlled job or inspect queue state.</h2>
+            <p>Use the create page for allowlisted job submission and the admin page for backend-protected queue visibility.</p>
           </div>
           <div className="hero-actions">
             <a href="/create" className="cta-button">Create job</a>
