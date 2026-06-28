@@ -9,10 +9,10 @@
     "workers/*"
   ],
   "scripts": {
-    "urai-jobs:verify": "node scripts/urai-jobs-verify.mjs && node scripts/activation-readiness-verify.mjs && node scripts/career-surfaces-verify.mjs && node scripts/career-runtime-smoke.mjs",
-    "activation:verify": "node scripts/activation-readiness-verify.mjs && node scripts/career-surfaces-verify.mjs",
-    "career:verify": "node scripts/career-surfaces-verify.mjs && node scripts/career-runtime-smoke.mjs",
-    "career:smoke": "node scripts/career-runtime-smoke.mjs",
+    "urai-jobs:verify": "npm run jobs:verify",
+    "activation:verify": "npm run jobs:verify",
+    "career:verify": "node scripts/check-production-claims.mjs && node scripts/verify-routes.mjs",
+    "career:smoke": "node scripts/jobs-lifecycle.mjs",
     "career:prod-preflight": "node scripts/career-prod-preflight.mjs",
     "career:prod-smoke": "node scripts/prod-career-smoke.mjs",
     "career:evidence:validate": "node scripts/validate-career-smoke-evidence.mjs",
@@ -39,7 +39,7 @@
     "lint": "npm run lint --prefix packages/shared-types --if-present && npm run lint --prefix functions --if-present && npm run lint --prefix web --if-present && npm run lint --prefix workers --if-present",
     "build": "npm run build --prefix packages/shared-types && npm run build --prefix functions && npm run build --prefix web --if-present && pnpm --dir workers install --frozen-lockfile=false && npm run build --prefix workers --if-present && npm run career-worker:build",
     "typecheck": "npm run typecheck --prefix packages/shared-types --if-present && npm run typecheck --prefix functions && npm run typecheck --prefix web --if-present && pnpm --dir workers install --frozen-lockfile=false && npm run typecheck --prefix workers --if-present && npm run career-worker:typecheck",
-    "test": "npm run urai-jobs:verify && npm run urai-jobs:smoke && npm run jobs:lifecycle && npm run check:production-lock && npm run check:production-claims && npm run verify:routes && npm run build && npm run urai-jobs:deploy-precheck && npm run typecheck --prefix functions",
+    "test": "npm run jobs:verify && npm run urai-jobs:smoke && npm run jobs:lifecycle && npm run check:production-lock && npm run check:production-claims && npm run verify:routes && npm run build && npm run urai-jobs:deploy-precheck && npm run typecheck --prefix functions",
     "audit:systems": "node scripts/system-of-systems-audit.mjs",
     "deploy:dev": "firebase use dev && firebase deploy",
     "deploy:staging": "firebase use staging && firebase deploy",
