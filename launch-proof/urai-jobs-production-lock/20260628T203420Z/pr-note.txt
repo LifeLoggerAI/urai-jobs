@@ -1,0 +1,7 @@
+PR note
+
+Open PR search found no open PR for this lifecycle branch.
+
+Draft PR creation was attempted but was blocked by the connector.
+
+Branch verification workflow is present. Local checkout remains unavailable in this environment.
