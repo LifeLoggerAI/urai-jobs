@@ -1,32 +1,48 @@
 # URAI Jobs Runtime
 
-URAI Jobs Runtime is the internal production job-execution fabric for the URAI system-of-systems. It is not the public jobs marketplace or careers application surface.
+URAI Jobs Runtime is the internal worker-infrastructure preview for the URAI system-of-systems. It is not the public jobs marketplace or careers application surface, and it must not be described as production worker ready until lifecycle proof exists.
 
-This repository owns asynchronous, long-running work across URAI subsystems using Firebase Functions, Firestore, Firebase Auth, Firebase Hosting, Google Cloud Run workers, Pub/Sub-compatible orchestration, and Google Cloud Storage artifacts.
+This repository owns the code paths for asynchronous URAI work using Firebase Functions, Firestore, Firebase Auth, Firebase Hosting, Google Cloud Run worker services, Pub/Sub-compatible orchestration, and Google Cloud Storage artifacts. Some worker families are still gated, scaffolded, or unverified.
 
 ## Product decision
 
-Canonical positioning: **internal execution infrastructure**.
+Canonical positioning: **internal execution infrastructure preview**.
 
 Use this repo for:
 
-- queueing controlled production work
-- executing subsystem jobs through Cloud Run workers
+- queueing allowlisted work through guarded callables
+- proving worker lifecycle behavior before production claims
 - monitoring, retrying, cancelling, and reconciling jobs
 - operator/admin visibility into job state and logs
-- system-of-systems integration across URAI Admin, Studio, Spatial, Analytics, Communications, Privacy, and related services
+- system-of-systems integration across URAI Admin, Studio, Spatial, Analytics, Communications, Privacy, and related services after each integration is proven
 
 Do not use this repo as the public candidate/employer marketplace unless a future product decision explicitly expands it. Marketplace flows such as public job search, job detail pages, candidate applications, employer dashboards, resumes, and applicant tracking should live in a separate public app or a clearly separated future module.
+
+## Current readiness boundary
+
+Current status on this branch:
+
+- local lifecycle proof harness: implemented
+- job type allowlist: implemented for `narrator.tts`
+- createJob idempotency: implemented
+- dispatcher lease and duplicate-delivery guards: implemented
+- production inline fallback: disabled by default
+- narrator worker: implemented code path, requires worker auth configuration before execution
+- career worker: intentionally returns NOT_IMPLEMENTED until real execution exists
+- asset, spatial, and studio workers: gated or placeholder; not counted as production execution
+- production lifecycle smoke: not run in this branch pass
+
+Do not claim URAI Jobs is production worker ready until a real deployed job is created, queued, leased, executed by a real worker, status-updated, logged, and inspected end-to-end with proof artifacts.
 
 ## Architecture
 
 The runtime follows a distributed architecture centered on Firestore as the state source of truth and Firebase Functions as the orchestration/control layer.
 
-1. **Client / Operator UI**: Authenticated users or operators initiate jobs through Firebase callable functions.
+1. **Client / Operator UI**: Authenticated users or operators initiate allowlisted jobs through Firebase callable functions.
 2. **Firebase Functions**: Validate requests, create job documents, enqueue work, lease jobs, call workers, retry expired leases, clean terminal queue entries, and reconcile stale system state.
-3. **Cloud Run Workers**: Execute subsystem-specific work such as narrator TTS, asset rendering, spatial indexing, or studio processing.
+3. **Cloud Run Workers**: Intended execution layer for subsystem-specific work. Only implemented and lifecycle-proven workers should be treated as production execution.
 4. **Firestore**: Stores job state, queue entries, results, logs, leases, ownership, and permissions.
-5. **Google Cloud Storage**: Stores job artifacts such as rendered media or generated audio.
+5. **Google Cloud Storage**: Stores job artifacts such as rendered media or generated audio when a real worker path writes them.
 6. **Firebase Hosting**: Hosts the internal runtime/operator UI.
 
 ## Job lifecycle
@@ -39,11 +55,13 @@ PENDING -> LEASED -> RUNNING -> FAILED -> PENDING/SUCCESS/DEAD
 PENDING/LEASED/RUNNING -> CANCELLED
 ```
 
-Canonical statuses are:
+Canonical job statuses are:
 
 ```text
 PENDING, LEASED, RUNNING, SUCCESS, FAILED, DEAD, CANCELLED
 ```
+
+Queue entries may be cleaned up or marked terminal by backend maintenance paths, but public/admin job state should use the canonical job statuses above.
 
 ## Core Firebase Functions
 
@@ -62,7 +80,7 @@ The exported runtime function surface includes:
 - `listJobs`, `listJobLogs`, `retryJob`
 - `listJobsV2`, `listJobLogsV2`, `retryJobV2`
 
-## First real job type: `narrator.tts`
+## First supported job type: `narrator.tts`
 
 Example payload contract:
 
@@ -99,7 +117,7 @@ console.log(result.data.jobId);
 
 ## Environment variables
 
-See `.env.example` for the canonical runtime environment surface. Required production values include Firebase/GCP project IDs, worker URLs, allowed API origins, webhook secrets, and GCS bucket configuration.
+See `.env.example` for the canonical runtime environment surface. Required production values include Firebase/GCP project IDs, worker URLs, allowed API origins, webhook secrets, worker auth tokens, and GCS bucket configuration. Do not print secret values in logs or proof artifacts.
 
 ## Local validation
 
@@ -110,11 +128,14 @@ corepack enable
 corepack prepare pnpm@8.15.9 --activate
 pnpm install --frozen-lockfile
 
-pnpm urai-jobs:verify
-pnpm typecheck
+pnpm jobs:lifecycle
+pnpm check:production-lock
+pnpm check:production-claims
+pnpm verify:routes
+pnpm jobs:verify
+pnpm check:types
 pnpm build
 pnpm test
-pnpm urai-jobs:smoke
 ```
 
 Callable E2E requires Firebase emulators:
@@ -136,19 +157,17 @@ pnpm urai-jobs:e2e
 
 ## CI
 
-The GitHub Actions workflow `.github/workflows/urai-jobs-runtime-ci.yml` runs install, repository invariant checks, typecheck, build, tests, smoke checks, and callable emulator E2E.
+The GitHub Actions workflow `.github/workflows/urai-jobs-runtime-ci.yml` should run install, repository invariant checks, typecheck, build, tests, smoke checks, and callable emulator E2E where configured.
 
 ## Deployment sequence
+
+Deployment requires explicit operator approval. Do not deploy as part of an audit/fix pass unless the operator explicitly says to deploy.
 
 1. Build and deploy Cloud Run workers.
 2. Configure worker URLs and runtime secrets.
 3. Deploy Firebase Functions, Firestore rules/indexes, and Hosting.
-
-```bash
-pnpm build
-firebase use prod
-firebase deploy
-```
+4. Run operator-approved production lifecycle smoke.
+5. Store proof artifact showing job creation, queue document, lease, worker execution, terminal state, logs, and result/error.
 
 ## Runtime boundaries
 
