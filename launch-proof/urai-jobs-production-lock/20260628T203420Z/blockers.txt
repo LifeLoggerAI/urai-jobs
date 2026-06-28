@@ -1,0 +1,7 @@
+Remaining blockers
+
+- Changes are on a branch and not deployed.
+- No production lifecycle smoke was run.
+- Real production worker terminal result and logs are not proven.
+- Asset, spatial, and studio worker families are still not real production execution paths.
+- Production ready status requires deploy plus operator-approved smoke proof with result and logs.
