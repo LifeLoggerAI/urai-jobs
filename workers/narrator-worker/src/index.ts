@@ -19,23 +19,45 @@ import {
 validateRequiredEnv([]);
 
 const app = express();
+const TOKEN = process.env.URAI_JOBS_WORKER_TOKEN || '';
 const governor = new ConcurrencyGovernor({
   maxConcurrentJobs: Number(process.env.WORKER_MAX_CONCURRENT_JOBS || 8),
   saturationThreshold: Number(process.env.WORKER_SATURATION_THRESHOLD || 0.9),
 });
 
+function requireWorkerAuth(req: RuntimeRequest, res: any): boolean {
+  if (!TOKEN) {
+    res.status(503).send({
+      ok: false,
+      error: 'worker auth token is not configured; execution disabled',
+      code: 'WORKER_AUTH_NOT_CONFIGURED',
+    });
+    return false;
+  }
+
+  const header = req.headers.authorization || '';
+  if (header !== `Bearer ${TOKEN}`) {
+    res.status(401).send({ ok: false, error: 'unauthorized', code: 'UNAUTHORIZED_WORKER_REQUEST' });
+    return false;
+  }
+
+  return true;
+}
+
 app.use(express.json({ limit: '1mb' }));
 app.use(requestIdMiddleware);
 
 app.get('/', (_req: any, res: any) => {
-  res.status(200).send({ service: 'narrator-worker', ok: true });
+  res.status(200).send({ service: 'narrator-worker', ok: true, executionReady: Boolean(TOKEN) });
 });
 
 app.get('/healthz', (_req: any, res: any) => {
-  res.status(200).send({ ok: true, governor: governor.getStats() });
+  res.status(200).send({ ok: true, executionReady: Boolean(TOKEN), governor: governor.getStats() });
 });
 
 app.post('/execute-job', asyncHandler(async (req: RuntimeRequest, res: any) => {
+  if (!requireWorkerAuth(req, res)) return;
+
   const jobId = req.body?.jobId || req.body?.id;
   const jobType = req.body?.type || req.body?.jobType;
   const requestId = req.requestId;
@@ -148,6 +170,7 @@ app.listen(port, host, () => {
     metadata: {
       host,
       port,
+      executionReady: Boolean(TOKEN),
       governor: governor.getStats(),
     },
   });
