@@ -1,0 +1,8 @@
+Route matrix
+
+Root public preview.
+Login public auth.
+Create auth gated.
+Admin operator gated.
+Career routes preview.
+Legal routes public.
