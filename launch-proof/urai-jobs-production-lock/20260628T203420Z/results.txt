@@ -1,0 +1,6 @@
+Test results
+
+Commands were not executed in a repo checkout because this environment had GitHub connector access but no writable local checkout.
+Added local lifecycle and static lock check scripts.
+Production smoke was not run.
+No deployment was performed.
