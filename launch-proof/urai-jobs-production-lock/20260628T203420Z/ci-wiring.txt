@@ -1,0 +1,24 @@
+CI wiring update
+
+Local checkout remains blocked by sandbox DNS failure resolving github.com.
+
+Existing workflow patched:
+.github/workflows/production-verification.yml
+
+The workflow now runs on push to branch urai-jobs-worker-lifecycle-lock-20260628 and runs:
+- npm run jobs:lifecycle
+- npm run check:production-lock
+- npm run check:production-claims
+- npm run verify:routes
+- npm run jobs:verify
+- npm run check:types
+- npm run build
+- npm test
+- npm run urai-jobs:deploy-precheck
+
+No deploy step is included.
+No production smoke is included.
+Production-ready status still requires passing workflow evidence plus explicit operator-approved production lifecycle smoke after deploy.
+
+Connector limitation:
+The available workflow run lookup returned no runs for the checked commit and appears limited to pull-request-triggered runs, so CI pass/fail could not be verified from this environment.
