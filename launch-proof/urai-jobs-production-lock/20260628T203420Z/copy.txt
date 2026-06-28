@@ -1,0 +1,6 @@
+Copy audit
+
+Ready status is not claimed.
+Preview status is claimed.
+Unproven worker families are labeled as gated.
+Live lifecycle proof is still pending.
