@@ -17,6 +17,7 @@ const authGate = read('web/src/components/AuthGate.tsx');
 check('executeJob reads job and queue inside a transaction', executeJob.includes('startJobIfLeased') && executeJob.includes('db.runTransaction'));
 check('executeJob refuses non-LEASED execution', executeJob.includes("job.status !== 'LEASED'") && executeJob.includes("queue.status !== 'LEASED'"));
 check('executeJob ignores duplicate terminal deliveries', executeJob.includes('TERMINAL_JOB_STATUSES') && executeJob.includes('Duplicate execution ignored'));
+check('executeJob rejects explicit worker failure bodies', executeJob.includes('assertWorkerResultAccepted') && executeJob.includes("record.ok === false") && executeJob.includes("NOT_IMPLEMENTED"));
 check('inline fallback disabled by default in production', executeJob.includes('URAI_JOBS_ALLOW_INLINE_FALLBACK') && executeJob.includes('Inline fallback is disabled'));
 check('production worker dispatch requires worker auth configuration', executeJob.includes('URAI_JOBS_WORKER_TOKEN') && executeJob.includes('required in production'));
 check('createJob imports job contract validation', createJob.includes('parseJobPayload') && createJob.includes('SUPPORTED_JOB_TYPES'));
