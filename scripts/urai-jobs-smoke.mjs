@@ -1,4 +1,6 @@
 const statuses = ["PENDING", "LEASED", "RUNNING", "SUCCESS", "FAILED", "DEAD", "CANCELLED"];
+const supportedJobTypes = ["narrator.tts"];
+const gatedWorkerFamilies = ["asset", "spatial", "studio", "career"];
 
 function assert(name, condition) {
   if (!condition) {
@@ -17,30 +19,18 @@ function canCancel(status) {
   return status === "PENDING" || status === "LEASED" || status === "RUNNING";
 }
 
-const ownerByPrefix = {
-  spatial: "urai-spatial",
-  marketing: "urai-marketing",
-  studio: "urai-studio",
-  assetFactory: "asset-factory",
-  asset: "asset-factory",
-  analytics: "analytics",
-  communications: "communications",
-  privacy: "privacy-consent",
-  storytime: "storytime",
-  admin: "admin",
-  narrator: "narrator"
-};
+function isSupportedJobType(jobType) {
+  return supportedJobTypes.includes(jobType);
+}
 
-function inferOwner(jobType) {
+function isGatedWorkerFamily(jobType) {
   const [prefix] = jobType.split(/[._-]/);
-  return ownerByPrefix[prefix] ?? "unknown";
+  return gatedWorkerFamilies.includes(prefix);
 }
 
 function inferWorkerRoute(jobType) {
-  if (jobType === "asset-render" || jobType.startsWith("asset")) return "ASSET_WORKER_URL:/";
-  if (jobType === "spatial-index" || jobType.startsWith("spatial")) return "SPATIAL_WORKER_URL:/";
-  if (jobType === "studio-render" || jobType.startsWith("studio")) return "STUDIO_WORKER_URL:/";
-  return "NARRATOR_WORKER_URL:/execute-job";
+  if (jobType === "narrator.tts") return "NARRATOR_WORKER_URL:/execute-job";
+  return "GATED_OR_NOT_IMPLEMENTED";
 }
 
 function runningUpdateIncludesLegacyLeaseToken(update) {
@@ -56,13 +46,13 @@ assert("DEAD is not retryable", !canRetry("DEAD"));
 assert("CANCELLED is not cancellable", !canCancel("CANCELLED"));
 assert("known statuses include DEAD", statuses.includes("DEAD"));
 assert("known statuses do not include retry_needed", !statuses.includes("retry_needed"));
-assert("spatial owner maps", inferOwner("spatial.memory.snapshot") === "urai-spatial");
-assert("privacy owner maps", inferOwner("privacy.delete.run") === "privacy-consent");
-assert("narrator owner maps", inferOwner("narrator.tts") === "narrator");
-assert("asset-render routes to asset worker root", inferWorkerRoute("asset-render") === "ASSET_WORKER_URL:/");
-assert("spatial-index routes to spatial worker root", inferWorkerRoute("spatial-index") === "SPATIAL_WORKER_URL:/");
-assert("studio-render routes to studio worker root", inferWorkerRoute("studio-render") === "STUDIO_WORKER_URL:/");
+assert("narrator.tts is supported", isSupportedJobType("narrator.tts"));
+assert("asset job types are gated", isGatedWorkerFamily("asset.render"));
+assert("spatial job types are gated", isGatedWorkerFamily("spatial.index"));
+assert("studio job types are gated", isGatedWorkerFamily("studio.render"));
+assert("career job types are gated", isGatedWorkerFamily("career.profile.summarize"));
 assert("narrator.tts routes to narrator execute endpoint", inferWorkerRoute("narrator.tts") === "NARRATOR_WORKER_URL:/execute-job");
+assert("gated job families do not claim active route", inferWorkerRoute("asset.render") === "GATED_OR_NOT_IMPLEMENTED");
 assert("running update mirrors lease token for deployed subsystem workers", runningUpdateIncludesLegacyLeaseToken({ "execution.leaseToken": "lease-token" }));
 
 if (process.exitCode) {
