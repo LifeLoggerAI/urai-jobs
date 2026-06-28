@@ -7,6 +7,16 @@ export type JobStatus =
   | 'DEAD'
   | 'CANCELLED';
 
+export type JobQueueStatus =
+  | 'PENDING'
+  | 'READY'
+  | 'LEASED'
+  | 'RUNNING'
+  | 'DONE'
+  | 'FAILED'
+  | 'DEAD'
+  | 'CANCELLED';
+
 export interface NarratorTtsPayload {
   text: string;
   locale?: string;
@@ -23,7 +33,8 @@ export interface JobExecutionMeta {
   attemptCount: number;
   maxAttempts: number;
   leaseToken?: string;
-  startedAt?: string;
+  startedAt?: unknown;
+  completedAt?: unknown;
 }
 
 export interface JobLease {
@@ -31,10 +42,6 @@ export interface JobLease {
   leaseToken?: string;
   ownerId?: string;
   workerId?: string;
-  /**
-   * Canonical lease expiry field. Firestore stores Date values as Timestamp
-   * values, but shared types keep this provider-neutral for web/functions use.
-   */
   expiresAt?: unknown;
   heartbeatAt?: unknown;
 }
@@ -54,6 +61,7 @@ export interface Job {
   ownerSubsystem?: string;
   createdBy?: string;
   output?: unknown;
+  result?: unknown;
   attempts?: number;
   maxAttempts?: number;
   error?: unknown;
@@ -67,7 +75,7 @@ export interface Job {
 export interface JobQueueEntry {
   jobId: string;
   jobType?: string;
-  status: JobStatus;
+  status: JobQueueStatus;
   lease?: JobLease;
   availableAt?: unknown;
   attemptCount?: number;
