@@ -1,7 +1,7 @@
 import { Component, type ReactNode } from "react";
 import { LoginPage } from "./pages/LoginPage";
 import { LandingPage } from "./pages/LandingPage";
-import { CreateJobPage } from "./pages/CreateJobPage";
+import { CreateJobPageLocked } from "./pages/CreateJobPageLocked";
 import { AdminPage } from "./pages/AdminPage";
 import { CareerMirrorPage } from "./pages/CareerMirrorPage";
 import { CareerVersionConsolePage } from "./pages/CareerVersionConsolePage";
@@ -51,7 +51,7 @@ function routeForPath(pathname: string) {
   if (pathname.startsWith("/create")) {
     return (
       <AuthGate>
-        <CreateJobPage />
+        <CreateJobPageLocked />
       </AuthGate>
     );
   }
