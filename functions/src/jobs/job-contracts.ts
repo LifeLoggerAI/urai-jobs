@@ -17,7 +17,7 @@ const narratorTtsPayloadSchema = z
   })
   .strict();
 
-const payloadSchemas: Record<SupportedJobType, z.ZodType<Record<string, unknown>>> = {
+const payloadSchemas = {
   'narrator.tts': narratorTtsPayloadSchema,
 };
 
@@ -27,12 +27,12 @@ export function isSupportedJobType(jobType: string): jobType is SupportedJobType
 
 export function parseJobPayload(jobType: string, payload: unknown): Record<string, unknown> {
   if (!isSupportedJobType(jobType)) {
-    throw new Error(`Unsupported job type: ${jobType}. Supported job types: ${SUPPORTED_JOB_TYPES.join(', ')}`);
+    throw new Error('Unsupported job type. Supported job type: narrator.tts');
   }
 
   const result = payloadSchemas[jobType].safeParse(payload);
   if (!result.success) {
-    throw new Error(`Invalid ${jobType} payload: ${JSON.stringify(result.error.flatten())}`);
+    throw new Error('Invalid narrator.tts payload.');
   }
 
   return result.data;
