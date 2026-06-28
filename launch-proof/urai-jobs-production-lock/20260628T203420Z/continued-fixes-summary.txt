@@ -1,0 +1,19 @@
+Continued production-readiness fixes
+
+No deployment was performed.
+No production data was touched.
+Secrets were not printed.
+
+Additional fixes after command-run.txt:
+- README rewritten to worker-infrastructure preview and lifecycle-proof-pending language.
+- Production claims checker now blocks old production-fabric wording.
+- urai-jobs verify script updated for locked CreateJobPageLocked.
+- Root package scripts realigned so urai-jobs verify and activation verify run the production-lock checks instead of stale career-autonomy checks.
+- urai-jobs smoke now validates narrator support and gated worker families instead of implying asset/spatial/studio execution is live.
+- Career worker endpoint now requires worker token and returns 501 NOT_IMPLEMENTED.
+- Asset, spatial, and studio worker endpoints now require worker token and return 501 NOT_IMPLEMENTED instead of writing fake SUCCESS results.
+- Client jobsApi now blocks unsupported create-job types before calling Firebase.
+- Production lock checker now enforces client allowlist, worker fail-closed behavior, and placeholder-worker no-fake-success behavior.
+
+Commands still not executed because the runtime cannot resolve github.com for checkout.
+Final classification remains blocked until install/build/test/lifecycle checks run in a real checkout or CI, followed by explicit production smoke if deployment is approved.
