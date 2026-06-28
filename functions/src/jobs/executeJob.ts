@@ -67,6 +67,22 @@ function cleanErrorMessage(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 1000);
 }
 
+function asResultRecord(result: unknown): Record<string, unknown> | null {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return null;
+  return result as Record<string, unknown>;
+}
+
+function assertWorkerResultAccepted(result: unknown, jobType: string) {
+  const record = asResultRecord(result);
+  if (!record) return;
+
+  const status = String(record.status || '');
+  const code = String(record.code || '');
+  if (record.ok === false || status === 'NOT_IMPLEMENTED' || code === 'NOT_IMPLEMENTED') {
+    throw new Error(`Worker rejected ${jobType}: ${code || status || 'ok=false'}`);
+  }
+}
+
 async function appendJobLog(jobId: string, input: { level: string; message: string; source: string; metadata?: Record<string, unknown> }) {
   try {
     await jobDoc(jobId).collection('logs').add({
@@ -261,6 +277,7 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
         timeout: Number(process.env.URAI_JOBS_WORKER_TIMEOUT_MS || 120000),
       });
       result = response.data;
+      assertWorkerResultAccepted(result, jobType);
 
       await appendJobLog(jobId, {
         level: 'info',
