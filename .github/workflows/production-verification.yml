@@ -1,6 +1,9 @@
 name: production-verification
 
 on:
+  push:
+    branches:
+      - urai-jobs-worker-lifecycle-lock-20260628
   pull_request:
     branches:
       - main
@@ -11,18 +14,14 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      URAI_ENV: prod
-      FIREBASE_PROJECT_ID: urai-jobs
-      GCLOUD_PROJECT: urai-jobs
-      GOOGLE_CLOUD_PROJECT: urai-jobs
+      CI: true
+      URAI_ENV: ci
+      URAI_JOBS_PROOF_DIR: launch-proof/urai-jobs-production-lock/20260628T203420Z/ci-run
+      FIREBASE_PROJECT_ID: demo-urai-jobs
+      GCLOUD_PROJECT: demo-urai-jobs
+      GOOGLE_CLOUD_PROJECT: demo-urai-jobs
       GCP_REGION: us-central1
-      GCS_BUCKET_NAME: urai-jobs-artifacts
-      API_ALLOWED_ORIGINS: https://urai.app,https://admin.urai.app,https://analytics.urai.app
-      WEBHOOK_SIGNING_SECRET: ${{ github.event_name == 'workflow_dispatch' && secrets.WEBHOOK_SIGNING_SECRET || 'ci-placeholder-webhook-signing-secret' }}
-      NARRATOR_WORKER_URL: https://narrator-worker-wkyojbnbiq-uc.a.run.app
-      ASSET_WORKER_URL: https://asset-worker-wkyojbnbiq-uc.a.run.app
-      SPATIAL_WORKER_URL: https://spatial-worker-wkyojbnbiq-uc.a.run.app
-      STUDIO_WORKER_URL: https://studio-worker-wkyojbnbiq-uc.a.run.app
+      GCS_BUCKET_NAME: demo-urai-jobs-artifacts
       FIREBASE_HOSTING_SITE: urai-jobs-563121397472
 
     steps:
@@ -42,30 +41,34 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Workspace verification
-        run: pnpm check:workspace
+      - name: Local lifecycle proof
+        run: npm run jobs:lifecycle
 
-      - name: Build
-        run: pnpm build
+      - name: Production lock static check
+        run: npm run check:production-lock
+
+      - name: Production claims check
+        run: npm run check:production-claims
+
+      - name: Route verification
+        run: npm run verify:routes
+
+      - name: Jobs verification
+        run: npm run jobs:verify
 
       - name: Typecheck
-        run: pnpm typecheck
+        run: npm run check:types
 
-      - name: Runtime verification
-        run: pnpm urai-jobs:verify
+      - name: Build
+        run: npm run build
 
-      - name: Smoke verification
-        run: pnpm urai-jobs:smoke
+      - name: Full test gate
+        run: npm test
 
-      - name: Deploy precheck
-        run: pnpm urai-jobs:deploy-precheck
+      - name: Deploy precheck only
+        run: npm run urai-jobs:deploy-precheck
 
-      - name: Production env precheck
-        if: github.event_name == 'workflow_dispatch'
-        run: pnpm prod:precheck
-
-      - name: PR production secret gate note
-        if: github.event_name == 'pull_request'
+      - name: Production smoke reminder
         run: |
-          echo "Production env precheck is intentionally skipped on pull_request because production secrets are unavailable to PRs."
-          echo "Run this workflow manually after merge to validate real production secrets."
+          echo "No deploy is performed by this verification workflow."
+          echo "Production-ready status still requires explicit operator-approved production lifecycle smoke after deploy."
