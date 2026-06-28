@@ -1,6 +1,9 @@
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { firebaseApp } from "./firebase";
 
+export const SUPPORTED_CREATE_JOB_TYPES = ["narrator.tts"] as const;
+export type SupportedCreateJobType = (typeof SUPPORTED_CREATE_JOB_TYPES)[number];
+
 export type JobStatus =
   | "PENDING"
   | "LEASED"
@@ -54,6 +57,10 @@ export type CreateJobResult = {
   idempotent?: boolean;
 };
 
+export function isSupportedCreateJobType(jobType: string): jobType is SupportedCreateJobType {
+  return (SUPPORTED_CREATE_JOB_TYPES as readonly string[]).includes(jobType);
+}
+
 async function callFunction<TInput extends Record<string, unknown>, TOutput>(
   name: string,
   input: TInput
@@ -64,7 +71,11 @@ async function callFunction<TInput extends Record<string, unknown>, TOutput>(
 }
 
 export async function createJob(jobType: string, payload: unknown, idempotencyKey?: string): Promise<CreateJobResult> {
-  const input: { jobType: string; payload: unknown; idempotencyKey?: string } = { jobType, payload };
+  if (!isSupportedCreateJobType(jobType)) {
+    throw new Error(`Job type ${jobType} is gated or not implemented. Supported create-job type: ${SUPPORTED_CREATE_JOB_TYPES.join(", ")}.`);
+  }
+
+  const input: { jobType: SupportedCreateJobType; payload: unknown; idempotencyKey?: string } = { jobType, payload };
   if (idempotencyKey) input.idempotencyKey = idempotencyKey;
   return callFunction<typeof input, CreateJobResult>("createJob", input);
 }
