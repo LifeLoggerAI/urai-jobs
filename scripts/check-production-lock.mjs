@@ -11,6 +11,8 @@ const createJob = read('functions/src/jobs/createJob.ts');
 const contracts = read('functions/src/jobs/job-contracts.ts');
 const jobsApi = read('web/src/lib/jobsApi.ts');
 const narrator = read('workers/narrator-worker/src/index.ts');
+const rootWorker = read('workers/src/index.ts');
+const workerTsconfig = read('workers/tsconfig.json');
 const career = read('workers/career-worker/src/index.ts') + read('workers/career-worker/src/handlers/index.ts');
 const asset = read('workers/asset-worker/index.js');
 const spatial = read('workers/spatial-worker/index.js');
@@ -29,6 +31,9 @@ check('createJob enforces idempotency', createJob.includes('jobIdempotency') && 
 check('backend job types are allowlisted', contracts.includes('SUPPORTED_JOB_TYPES') && contracts.includes('narrator.tts') && !contracts.includes('asset.render'));
 check('client createJob blocks unsupported types before callable', jobsApi.includes('SUPPORTED_CREATE_JOB_TYPES') && jobsApi.includes('isSupportedCreateJobType') && jobsApi.includes('gated or not implemented'));
 check('narrator worker fails closed when auth config missing', narrator.includes('worker auth token is not configured') && narrator.includes('URAI_JOBS_WORKER_TOKEN'));
+check('root worker cannot fake success', rootWorker.includes('NOT_IMPLEMENTED') && !rootWorker.includes("status: 'SUCCESS'"));
+check('root worker requires worker auth', rootWorker.includes('URAI_JOBS_WORKER_TOKEN') && rootWorker.includes('UNAUTHORIZED_WORKER_REQUEST'));
+check('root workers tsconfig only includes root worker src', workerTsconfig.includes('"include": ["src/**/*.ts"]') && workerTsconfig.includes('"rootDir": "src"'));
 check('career worker fails closed and returns not implemented', career.includes('worker auth token is not configured') && career.includes('NOT_IMPLEMENTED') && !career.includes("status: 'stubbed'"));
 check('asset worker cannot fake success', asset.includes('NOT_IMPLEMENTED') && !asset.includes("status: 'SUCCESS'"));
 check('spatial worker cannot fake success', spatial.includes('NOT_IMPLEMENTED') && !spatial.includes("status: 'SUCCESS'"));
