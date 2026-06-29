@@ -17,14 +17,20 @@ on:
         required: true
         default: false
         type: boolean
+      confirm_prod_smoke_data_touch:
+        description: Type I_UNDERSTAND_THIS_TOUCHES_PRODUCTION_DATA to allow smoke user/job writes when run_smoke=true
+        required: false
+        default: ""
+        type: string
       require_custom_domains:
         description: Fail deployment if uraijobs.com and www are not serving the app shell
         required: true
         default: false
         type: boolean
-  push:
-    branches:
-      - main
+
+concurrency:
+  group: urai-jobs-production-deploy
+  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -37,7 +43,6 @@ env:
 jobs:
   deploy-publish:
     name: Deploy and publish URAI Jobs Runtime
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-publish]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: prod
@@ -48,28 +53,29 @@ jobs:
 
       - name: Require explicit launch unlock
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "[PASS] Push-triggered deploy authorized by [deploy-publish] commit marker."
-            exit 0
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            echo "Production deploy is workflow_dispatch-only."
+            exit 1
           fi
           if [ "${{ inputs.confirm_launch_unlock }}" != "LAUNCH-UNLOCK" ]; then
             echo "confirm_launch_unlock must exactly equal LAUNCH-UNLOCK."
             exit 1
           fi
+          if [ "${{ inputs.run_smoke }}" = "true" ] && [ "${{ inputs.confirm_prod_smoke_data_touch }}" != "I_UNDERSTAND_THIS_TOUCHES_PRODUCTION_DATA" ]; then
+            echo "run_smoke=true requires confirm_prod_smoke_data_touch=I_UNDERSTAND_THIS_TOUCHES_PRODUCTION_DATA."
+            exit 1
+          fi
 
-      - name: Resolve webhook signing secret
+      - name: Require configured webhook signing secret
         env:
           CONFIGURED_WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
         run: |
-          if [ -n "$CONFIGURED_WEBHOOK_SIGNING_SECRET" ]; then
-            echo "WEBHOOK_SIGNING_SECRET=$CONFIGURED_WEBHOOK_SIGNING_SECRET" >> "$GITHUB_ENV"
-            echo "[PASS] Using configured WEBHOOK_SIGNING_SECRET."
-          else
-            GENERATED_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
-            echo "WEBHOOK_SIGNING_SECRET=$GENERATED_SECRET" >> "$GITHUB_ENV"
-            echo "[WARN] WEBHOOK_SIGNING_SECRET was not configured. Generated a per-deploy fallback secret."
-            echo "[WARN] Add WEBHOOK_SIGNING_SECRET as a GitHub secret before relying on stable external webhook verification."
+          if [ -z "$CONFIGURED_WEBHOOK_SIGNING_SECRET" ]; then
+            echo "WEBHOOK_SIGNING_SECRET must be configured as a stable production secret."
+            exit 1
           fi
+          echo "WEBHOOK_SIGNING_SECRET=$CONFIGURED_WEBHOOK_SIGNING_SECRET" >> "$GITHUB_ENV"
+          echo "[PASS] Using configured WEBHOOK_SIGNING_SECRET."
 
       - name: Enable pnpm
         uses: pnpm/action-setup@v4
@@ -117,16 +123,17 @@ jobs:
         env:
           GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           GCP_REGION: ${{ env.GCP_REGION }}
-          GCS_BUCKET_NAME: urai-jobs-urai-jobs-artifacts
+          GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
         run: bash scripts/ensure-gcs-bucket.sh
 
       - name: Deploy Cloud Run workers
-        if: ${{ github.event_name == 'push' || inputs.deploy_workers }}
+        if: ${{ inputs.deploy_workers }}
         env:
           URAI_ENV: prod
           GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           GCP_REGION: ${{ env.GCP_REGION }}
           GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
+          URAI_JOBS_WORKER_TOKEN: ${{ secrets.URAI_JOBS_WORKER_TOKEN }}
         run: pnpm deploy:workers
 
       - name: Export Cloud Run worker URLs
@@ -147,6 +154,8 @@ jobs:
           GCP_REGION: ${{ env.GCP_REGION }}
           API_ALLOWED_ORIGINS: ${{ env.API_ALLOWED_ORIGINS }}
           GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
+          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
+          URAI_JOBS_WORKER_TOKEN: ${{ secrets.URAI_JOBS_WORKER_TOKEN }}
           WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
           FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
         run: pnpm prod:precheck
@@ -161,6 +170,8 @@ jobs:
           GCP_REGION: ${{ env.GCP_REGION }}
           API_ALLOWED_ORIGINS: ${{ env.API_ALLOWED_ORIGINS }}
           GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
+          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
+          URAI_JOBS_WORKER_TOKEN: ${{ secrets.URAI_JOBS_WORKER_TOKEN }}
           WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
           FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
         run: pnpm audit:systems
@@ -174,6 +185,8 @@ jobs:
           GCP_REGION: ${{ env.GCP_REGION }}
           API_ALLOWED_ORIGINS: ${{ env.API_ALLOWED_ORIGINS }}
           GCS_BUCKET_NAME: ${{ env.GCS_BUCKET_NAME }}
+          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
+          URAI_JOBS_WORKER_TOKEN: ${{ secrets.URAI_JOBS_WORKER_TOKEN }}
           WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
           FIREBASE_HOSTING_SITE: ${{ env.FIREBASE_HOSTING_SITE }}
         run: pnpm deploy:firebase:prod -- prod
@@ -182,11 +195,11 @@ jobs:
         run: pnpm domains:verify -- https://urai-jobs-563121397472.web.app https://urai-jobs.web.app
 
       - name: Verify custom domains
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.require_custom_domains }}
+        if: ${{ inputs.require_custom_domains }}
         run: pnpm domains:verify -- https://uraijobs.com https://www.uraijobs.com
 
       - name: Custom domains pending notice
-        if: ${{ github.event_name == 'push' || !inputs.require_custom_domains }}
+        if: ${{ !inputs.require_custom_domains }}
         run: |
           echo "Custom domain verification is non-blocking for this publish run."
           echo "Run again with require_custom_domains=true after Firebase Hosting custom domains and DNS are configured."
@@ -196,7 +209,7 @@ jobs:
         run: pnpm prod:verify-workers
 
       - name: Production callable smoke
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_smoke }}
+        if: ${{ inputs.run_smoke }}
         env:
           FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
           GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
@@ -204,6 +217,7 @@ jobs:
           PROD_SMOKE_ID_TOKEN: ${{ secrets.PROD_SMOKE_ID_TOKEN }}
           PROD_SMOKE_JOB_TYPE: narrator.tts
           PROD_SMOKE_TEXT: URAI Jobs Runtime production smoke test
+          URAI_JOBS_PROD_SMOKE_UNLOCK: ${{ inputs.confirm_prod_smoke_data_touch }}
         run: pnpm prod:smoke
 
       - name: Stamp deployment artifact
