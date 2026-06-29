@@ -2,8 +2,11 @@ import fs from 'node:fs';
 
 const files = [
   'web/src/pages/LandingPage.tsx',
+  'web/src/pages/LandingPage.js',
   'web/src/pages/CreateJobPageLocked.tsx',
+  'web/src/pages/CreateJobPageLocked.js',
   'web/src/pages/AdminPage.tsx',
+  'web/src/pages/AdminPage.js',
   'docs/PRODUCTION_STATUS.md',
   'README.md'
 ];
@@ -17,7 +20,10 @@ const blocked = [
   /queueing controlled production work/i,
   /Execute subsystem-specific work such as narrator TTS, asset rendering, spatial indexing, or studio processing/i,
   /urai-jobs-runtime-ci\.yml/i,
-  /all workers are live/i
+  /all workers are live/i,
+  /live capabilities/i,
+  /production job layer and career runtime/i,
+  /approved career runtime jobs/i
 ];
 
 function read(file) { return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''; }
@@ -34,7 +40,7 @@ for (const file of files) {
   }
 }
 
-const landing = read('web/src/pages/LandingPage.tsx');
+const landing = read('web/src/pages/LandingPage.tsx') + read('web/src/pages/LandingPage.js');
 check('LandingPage says production lifecycle proof is pending', landing.includes('Production lifecycle proof still requires'));
 check('LandingPage does not claim all workers are live', landing.includes('worker families remain gated'));
 
