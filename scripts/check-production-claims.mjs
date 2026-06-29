@@ -15,7 +15,9 @@ const blocked = [
   /V1 through V5 autonomous/i,
   /internal production job-execution fabric/i,
   /queueing controlled production work/i,
-  /Execute subsystem-specific work such as narrator TTS, asset rendering, spatial indexing, or studio processing/i
+  /Execute subsystem-specific work such as narrator TTS, asset rendering, spatial indexing, or studio processing/i,
+  /urai-jobs-runtime-ci\.yml/i,
+  /all workers are live/i
 ];
 
 function read(file) { return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''; }
@@ -43,6 +45,9 @@ const readme = read('README.md');
 if (readme) {
   check('README says not production worker ready until lifecycle proof exists', readme.includes('must not be described as production worker ready until lifecycle proof exists'));
   check('README labels unsupported workers as gated or placeholder', readme.includes('asset, spatial, and studio workers: gated or placeholder'));
+  check('README labels root and legacy workers fail-closed', readme.includes('root and legacy generic workers: gated fail-closed'));
+  check('README points at actual production verification workflow', readme.includes('.github/workflows/production-verification.yml'));
+  check('README says CI does not prove production smoke', readme.includes('does not prove production smoke'));
 }
 
 if (process.exitCode) process.exit(process.exitCode);
