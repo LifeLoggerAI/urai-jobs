@@ -1,16 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  cancelJob,
-  getJob,
-  listJobLogs,
-  listJobs,
-  retryJob,
-  type JobLogRecord,
-  type JobRecord,
-  type JobStatus
-} from "../lib/jobsApi";
+import { cancelJob, getJob, listJobLogs, listJobs, retryJob } from "../lib/jobsApi";
 
-const STATUS_COLUMNS: Array<{ value: JobStatus; label: string; className: string }> = [
+const STATUS_COLUMNS = [
   { value: "PENDING", label: "Queued", className: "queued" },
   { value: "LEASED", label: "Leased", className: "leased" },
   { value: "RUNNING", label: "Running", className: "running" },
@@ -18,11 +9,28 @@ const STATUS_COLUMNS: Array<{ value: JobStatus; label: string; className: string
   { value: "FAILED", label: "Failed", className: "failed" },
   { value: "DEAD", label: "Dead", className: "dead" },
   { value: "CANCELLED", label: "Cancelled", className: "cancelled" }
-];
+] as const;
 
+type JobStatus = typeof STATUS_COLUMNS[number]["value"];
 const STATUSES = STATUS_COLUMNS.map((column) => column.value);
 
-type JobsByStatus = Record<JobStatus, JobRecord[]>;
+type JobLike = {
+  id?: string;
+  jobId?: string;
+  jobType?: string;
+  type?: string;
+  status?: string;
+  ownerSubsystem?: string;
+  ownerUid?: string;
+  createdBy?: string;
+  attempts?: number;
+  maxAttempts?: number;
+  payload?: unknown;
+  output?: unknown;
+  error?: unknown;
+};
+
+type JobsByStatus = Record<JobStatus, JobLike[]>;
 
 const emptyJobsByStatus = (): JobsByStatus => ({
   PENDING: [],
@@ -34,19 +42,19 @@ const emptyJobsByStatus = (): JobsByStatus => ({
   CANCELLED: []
 });
 
-function jobKey(job: JobRecord): string {
+function jobKey(job: JobLike) {
   return String(job.id || job.jobId || "unknown-job");
 }
 
-function jobLabel(job: JobRecord): string {
+function jobLabel(job: JobLike) {
   return String(job.jobType || job.type || "unknown");
 }
 
-function ownerLabel(job: JobRecord): string {
+function ownerLabel(job: JobLike) {
   return String(job.ownerSubsystem || job.ownerUid || job.createdBy || "—");
 }
 
-function statusDisplay(status?: string) {
+function statusDisplay(status: string) {
   return STATUS_COLUMNS.find((column) => column.value === status) ?? {
     value: status || "UNKNOWN",
     label: status || "Unknown",
@@ -65,8 +73,8 @@ function renderJson(value: unknown) {
 
 export function AdminPage() {
   const [jobsByStatus, setJobsByStatus] = useState<JobsByStatus>(emptyJobsByStatus);
-  const [selectedJob, setSelectedJob] = useState<JobRecord | null>(null);
-  const [selectedLogs, setSelectedLogs] = useState<JobLogRecord[]>([]);
+  const [selectedJob, setSelectedJob] = useState<JobLike | null>(null);
+  const [selectedLogs, setSelectedLogs] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -88,7 +96,6 @@ export function AdminPage() {
           return [status, result.jobs || []] as const;
         })
       );
-
       const next = emptyJobsByStatus();
       for (const [status, jobs] of entries) next[status] = jobs;
       setJobsByStatus(next);
@@ -99,7 +106,7 @@ export function AdminPage() {
     }
   }
 
-  async function openJob(job: JobRecord) {
+  async function openJob(job: JobLike) {
     const id = jobKey(job);
     setActionPending(`view:${id}`);
     setError("");
@@ -160,8 +167,8 @@ export function AdminPage() {
           <div className="eyebrow">Operator Console</div>
           <h1>URAI Jobs Admin</h1>
           <p>
-            Monitor live queue state, inspect payloads and logs, retry failed work,
-            and cancel active jobs from one production dashboard.
+            Monitor available queue state, inspect payloads and logs, retry failed work,
+            and cancel active jobs from one backend-protected operator surface.
           </p>
         </div>
 
@@ -190,12 +197,13 @@ export function AdminPage() {
         </section>
       )}
 
-      {loading && <p className="muted">Loading live job data...</p>}
+      {loading && <p className="muted">Loading job data...</p>}
+
       {!loading && totalJobs === 0 && (
         <section className="empty-state">
           <div className="eyebrow">No jobs yet</div>
           <h2>The queue is clear.</h2>
-          <p>Create a smoke job to verify production job creation and admin visibility.</p>
+          <p>Create an allowlisted job to verify job creation and admin visibility.</p>
           <a className="secondary-button" href="/create">Create job</a>
         </section>
       )}
@@ -204,9 +212,7 @@ export function AdminPage() {
         {STATUS_COLUMNS.map((column) => (
           <article className="status-column" key={column.value}>
             <header className="status-column-header">
-              <span className={`status-badge status-${column.className}`}>
-                {column.label}
-              </span>
+              <span className={`status-badge status-${column.className}`}>{column.label}</span>
               <strong>{jobsByStatus[column.value].length}</strong>
             </header>
 
@@ -226,36 +232,15 @@ export function AdminPage() {
                         <strong>{jobLabel(job)}</strong>
                         <span>{job.attempts ?? 0}{job.maxAttempts !== undefined ? `/${job.maxAttempts}` : ""} attempts</span>
                       </div>
-
                       <dl className="job-meta">
-                        <div>
-                          <dt>ID</dt>
-                          <dd>{id}</dd>
-                        </div>
-                        <div>
-                          <dt>Owner</dt>
-                          <dd>{ownerLabel(job)}</dd>
-                        </div>
+                        <div><dt>ID</dt><dd>{id}</dd></div>
+                        <div><dt>Owner</dt><dd>{ownerLabel(job)}</dd></div>
                       </dl>
-
-                      {job.error !== undefined && (
-                        <pre className="compact-pre">{renderJson(job.error)}</pre>
-                      )}
-
+                      {job.error !== undefined && <pre className="compact-pre">{renderJson(job.error)}</pre>}
                       <div className="job-actions">
-                        <button type="button" onClick={() => void openJob(job)} disabled={Boolean(actionPending)}>
-                          Details
-                        </button>
-                        {canRetry && (
-                          <button type="button" onClick={() => void retry(id)} disabled={Boolean(actionPending)}>
-                            Retry
-                          </button>
-                        )}
-                        {canCancel && (
-                          <button type="button" onClick={() => void cancel(id)} disabled={Boolean(actionPending)}>
-                            Cancel
-                          </button>
-                        )}
+                        <button type="button" onClick={() => void openJob(job)} disabled={Boolean(actionPending)}>Details</button>
+                        {canRetry && <button type="button" onClick={() => void retry(id)} disabled={Boolean(actionPending)}>Retry</button>}
+                        {canCancel && <button type="button" onClick={() => void cancel(id)} disabled={Boolean(actionPending)}>Cancel</button>}
                       </div>
                     </article>
                   );
@@ -276,33 +261,16 @@ export function AdminPage() {
                 <h2>{jobLabel(selectedJob)}</h2>
                 <p>{jobKey(selectedJob)}</p>
               </div>
-              <span className={`status-badge status-${selectedStatus.className}`}>
-                {selectedStatus.label}
-              </span>
+              <span className={`status-badge status-${selectedStatus.className}`}>{selectedStatus.label}</span>
             </header>
 
             <div className="detail-grid">
-              <article>
-                <h3>Payload</h3>
-                <pre>{renderJson(selectedJob.payload)}</pre>
-              </article>
-              <article>
-                <h3>Output</h3>
-                <pre>{renderJson(selectedJob.output)}</pre>
-              </article>
-              <article>
-                <h3>Error</h3>
-                <pre>{renderJson(selectedJob.error)}</pre>
-              </article>
+              <article><h3>Payload</h3><pre>{renderJson(selectedJob.payload)}</pre></article>
+              <article><h3>Output</h3><pre>{renderJson(selectedJob.output)}</pre></article>
+              <article><h3>Error</h3><pre>{renderJson(selectedJob.error)}</pre></article>
               <article>
                 <h3>Logs</h3>
-                {selectedLogs.length === 0 ? (
-                  <p className="muted">No logs returned.</p>
-                ) : (
-                  selectedLogs.map((log, index) => (
-                    <pre key={`${log.jobId || "log"}-${index}`}>{renderJson(log)}</pre>
-                  ))
-                )}
+                {selectedLogs.length === 0 ? <p className="muted">No logs returned.</p> : selectedLogs.map((log, index) => <pre key={`${(log as { jobId?: string }).jobId || "log"}-${index}`}>{renderJson(log)}</pre>)}
               </article>
             </div>
           </section>
