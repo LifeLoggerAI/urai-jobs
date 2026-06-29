@@ -23,7 +23,10 @@ const blocked = [
   /all workers are live/i,
   /live capabilities/i,
   /production job layer and career runtime/i,
-  /approved career runtime jobs/i
+  /approved career runtime jobs/i,
+  /production dashboard/i,
+  /Monitor live queue state/i,
+  /Create a smoke job to verify production job creation/i
 ];
 
 function read(file) { return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''; }
