@@ -1,89 +1,81 @@
 import express, { Request, Response } from 'express';
-import * as admin from 'firebase-admin';
-
-admin.initializeApp();
-const db = admin.firestore();
 
 const app = express();
 app.use(express.json());
 
-app.post('/', async (req: Request, res: Response) => {
-    const { jobId, leaseToken } = req.body;
+const TOKEN = process.env.URAI_JOBS_WORKER_TOKEN || '';
+const port = process.env.PORT || 8080;
 
-    if (!jobId || !leaseToken) {
-        console.error("Invalid request body:", req.body);
-        return res.status(400).send("jobId and leaseToken are required.");
-    }
+function requireWorkerAuth(req: Request, res: Response): boolean {
+  if (!TOKEN) {
+    res.status(503).json({
+      ok: false,
+      service: 'urai-jobs-legacy-worker',
+      code: 'WORKER_AUTH_NOT_CONFIGURED',
+      error: 'worker auth token is not configured; execution disabled'
+    });
+    return false;
+  }
 
-    const jobRef = db.collection('jobs').doc(jobId);
-    const queueRef = db.collection('jobQueue').doc(jobId);
+  const header = req.headers.authorization || '';
+  if (header !== `Bearer ${TOKEN}`) {
+    res.status(401).json({
+      ok: false,
+      service: 'urai-jobs-legacy-worker',
+      code: 'UNAUTHORIZED_WORKER_REQUEST',
+      error: 'unauthorized'
+    });
+    return false;
+  }
 
-    try {
-        const jobDoc = await jobRef.get();
-        const queueDoc = await queueRef.get();
+  return true;
+}
 
-        if (!jobDoc.exists || !queueDoc.exists) {
-            throw new Error(`Job or JobQueue doc not found for jobId: ${jobId}`);
-        }
+function blockedResponse(req: Request, res: Response) {
+  if (!requireWorkerAuth(req, res)) return;
 
-        const queueData = queueDoc.data();
+  const jobId = String(req.body?.jobId || req.body?.id || 'unknown-job');
+  const jobType = String(req.body?.type || req.body?.jobType || 'unknown-job-type');
 
-        if (!queueData || queueData.leaseToken !== leaseToken) {
-            throw new Error(`Invalid lease token for job ${jobId}.`);
-        }
+  res.status(501).json({
+    ok: false,
+    service: 'urai-jobs-legacy-worker',
+    jobId,
+    jobType,
+    status: 'NOT_IMPLEMENTED',
+    code: 'NOT_IMPLEMENTED',
+    error: 'legacy worker execution is disabled until a real implementation and lifecycle proof exist'
+  });
+}
 
-        // Mark as running
-        const now = admin.firestore.Timestamp.now();
-        await jobRef.update({ 
-            status: 'RUNNING', 
-            'execution.startedAt': now,
-            'execution.heartbeatAt': now,
-            'timestamps.updatedAt': now,
-        });
-
-        // Simulate long-running work
-        console.log(`Starting work for job ${jobId}...`);
-        await new Promise(resolve => setTimeout(resolve, 5000)); // 5 second delay
-        console.log(`Finished work for job ${jobId}.`);
-
-        const durationMs = Date.now() - now.toMillis();
-
-        // Commit terminal state
-        const resultRef = db.collection('jobResults').doc(jobId);
-        const batch = db.batch();
-
-        batch.update(jobRef, {
-            status: 'SUCCESS',
-            'progress.percent': 100,
-            'execution.completedAt': admin.firestore.Timestamp.now(),
-        });
-
-        batch.update(queueRef, {
-            status: 'DONE',
-        });
-
-        batch.set(resultRef, {
-            jobId,
-            status: 'SUCCESS',
-            producedAt: admin.firestore.Timestamp.now(),
-            durationMs,
-            summary: 'Job completed successfully in worker.',
-        });
-
-        await batch.commit();
-
-        res.status(200).send('Job execution completed');
-
-    } catch (error) {
-        console.error(`Error executing job ${jobId}:`, error);
-        // Basic error handling: mark job as failed
-        await jobRef.update({ status: 'FAILED', 'error.message': (error as Error).message });
-        await queueRef.update({ status: 'DEAD' });
-        res.status(500).send('Job execution failed');
-    }
+app.get('/', (_req: Request, res: Response) => {
+  res.status(200).json({
+    ok: true,
+    service: 'urai-jobs-legacy-worker',
+    executionReady: Boolean(TOKEN),
+    implemented: false
+  });
 });
 
-const port = process.env.PORT || 8080;
+app.get('/healthz', (_req: Request, res: Response) => {
+  res.status(200).json({
+    ok: true,
+    service: 'urai-jobs-legacy-worker',
+    executionReady: Boolean(TOKEN),
+    implemented: false
+  });
+});
+
+app.post('/', blockedResponse);
+app.post('/execute', blockedResponse);
+app.post('/execute-job', blockedResponse);
+
 app.listen(port, () => {
-  console.log(`Worker listening on port ${port}`);
+  console.log(JSON.stringify({
+    event: 'worker.started',
+    service: 'urai-jobs-legacy-worker',
+    port,
+    executionReady: Boolean(TOKEN),
+    implemented: false
+  }));
 });
