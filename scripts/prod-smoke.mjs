@@ -10,6 +10,8 @@ const SMOKE_UID = process.env.PROD_SMOKE_UID || 'urai-jobs-prod-smoke';
 const SMOKE_EMAIL = process.env.PROD_SMOKE_EMAIL || 'urai-jobs-prod-smoke@urai.local';
 const JOB_TYPE = process.env.PROD_SMOKE_JOB_TYPE || 'narrator.tts';
 const TEXT = process.env.PROD_SMOKE_TEXT || 'URAI Jobs Runtime production smoke test';
+const UNLOCK = process.env.URAI_JOBS_PROD_SMOKE_UNLOCK || '';
+const REQUIRED_UNLOCK = 'I_UNDERSTAND_THIS_TOUCHES_PRODUCTION_DATA';
 
 function fail(message) {
   console.error(`[FAIL] ${message}`);
@@ -22,6 +24,16 @@ function pass(message) {
 
 function warn(message) {
   console.warn(`[WARN] ${message}`);
+}
+
+function requireProductionSmokeUnlock() {
+  if (UNLOCK !== REQUIRED_UNLOCK) {
+    fail(`Production smoke is blocked before any auth or Firestore writes. Set URAI_JOBS_PROD_SMOKE_UNLOCK=${REQUIRED_UNLOCK} only after explicit operator approval.`);
+  }
+
+  if (JOB_TYPE !== 'narrator.tts') {
+    fail(`Production smoke is restricted to narrator.tts on this branch. Requested PROD_SMOKE_JOB_TYPE=${JOB_TYPE}`);
+  }
 }
 
 function initializeAdmin() {
@@ -137,6 +149,7 @@ async function callCallable(idToken, name, data) {
 }
 
 async function main() {
+  requireProductionSmokeUnlock();
   console.log(`[INFO] Running production smoke against project=${PROJECT_ID}, region=${REGION}`);
 
   if (hasPlaceholderSmokeToken(PROVIDED_ID_TOKEN)) {
