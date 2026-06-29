@@ -4,17 +4,21 @@ set -euo pipefail
 : "${GCLOUD_PROJECT:?GCLOUD_PROJECT is required}"
 : "${GCP_REGION:=us-central1}"
 : "${GCS_BUCKET_NAME:?GCS_BUCKET_NAME is required}"
+: "${URAI_JOBS_WORKER_TOKEN:?URAI_JOBS_WORKER_TOKEN is required so worker endpoints do not deploy open or disabled}"
 
 WORKER_BUILD_TIMEOUT_SECONDS="${WORKER_BUILD_TIMEOUT_SECONDS:-900}"
 WORKER_BUILD_POLL_SECONDS="${WORKER_BUILD_POLL_SECONDS:-10}"
-WORKER_DEPLOY_PARALLEL="${WORKER_DEPLOY_PARALLEL:-true}"
+WORKER_DEPLOY_PARALLEL="${WORKER_DEPLOY_PARALLEL:-false}"
+DEPLOY_GATED_WORKERS="${DEPLOY_GATED_WORKERS:-false}"
 
 WORKERS=(
   "narrator-worker"
-  "asset-worker"
-  "spatial-worker"
-  "studio-worker"
 )
+
+if [ "$DEPLOY_GATED_WORKERS" = "true" ]; then
+  echo "[WARN] DEPLOY_GATED_WORKERS=true: deploying workers that are fail-closed/NOT_IMPLEMENTED placeholders. They are not production execution proof."
+  WORKERS+=("asset-worker" "spatial-worker" "studio-worker")
+fi
 
 command -v gcloud >/dev/null 2>&1 || {
   echo "[FAIL] gcloud CLI is required" >&2
@@ -107,15 +111,20 @@ deploy_worker() {
     --platform managed \
     --region "$GCP_REGION" \
     --allow-unauthenticated \
-    --set-env-vars "URAI_ENV=${URAI_ENV:-prod},GCS_BUCKET_NAME=$GCS_BUCKET_NAME"
+    --set-env-vars "URAI_ENV=${URAI_ENV:-prod},GCS_BUCKET_NAME=$GCS_BUCKET_NAME,URAI_JOBS_WORKER_TOKEN=$URAI_JOBS_WORKER_TOKEN"
 
   local url
   url="$(gcloud run services describe "$worker" --platform managed --region "$GCP_REGION" --format='value(status.url)')"
   echo "[PASS] [$worker] deployed: $url"
 }
 
+if [ "${#WORKERS[@]}" -eq 0 ]; then
+  echo "[FAIL] No workers selected for deployment" >&2
+  exit 1
+fi
+
 if [ "$WORKER_DEPLOY_PARALLEL" = "true" ]; then
-  echo "[INFO] Deploying workers in parallel"
+  echo "[INFO] Deploying selected workers in parallel: ${WORKERS[*]}"
   pids=()
   for worker in "${WORKERS[@]}"; do
     deploy_worker "$worker" &
@@ -134,10 +143,10 @@ if [ "$WORKER_DEPLOY_PARALLEL" = "true" ]; then
     exit 1
   fi
 else
-  echo "[INFO] Deploying workers sequentially"
+  echo "[INFO] Deploying selected workers sequentially: ${WORKERS[*]}"
   for worker in "${WORKERS[@]}"; do
     deploy_worker "$worker"
   done
 fi
 
-echo "[PASS] All URAI Jobs Runtime workers deployed."
+echo "[PASS] Selected URAI Jobs Runtime workers deployed: ${WORKERS[*]}"
