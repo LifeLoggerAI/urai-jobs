@@ -1,0 +1,17 @@
+Static hardening pass: compiled artifacts and legacy worker entrypoints
+
+Actions completed:
+- Removed stale web/src/pages/AdminPage.js compiled copy that still claimed live queue state and production dashboard.
+- Added stale admin production phrases to scripts/check-production-claims.mjs.
+- Confirmed LandingPage.js copy was aligned with the gated worker reality.
+- Locked workers/index.ts legacy entrypoint to require worker auth and return NOT_IMPLEMENTED without Firestore writes.
+- Locked workers/index.js compiled legacy entrypoint to require worker auth and return NOT_IMPLEMENTED without Firestore writes.
+- Added legacy and compiled legacy worker checks to scripts/check-production-lock.mjs.
+- Scoped workers/tsconfig.json to the root workers/src tree only.
+- Updated workers/package.json start script to node lib/index.js so it matches the locked build output.
+
+No deploy was performed.
+No production data was touched.
+
+Remaining proof gap:
+A real runner still needs to execute install, lifecycle, production-lock, claims, routes, jobs verification, typecheck, build, test, and deploy-precheck gates.
