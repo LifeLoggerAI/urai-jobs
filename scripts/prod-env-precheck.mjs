@@ -10,12 +10,13 @@ const required = [
   "WEBHOOK_SIGNING_SECRET",
   "GCS_BUCKET_NAME",
   "NARRATOR_WORKER_URL",
-  "ASSET_WORKER_URL",
-  "SPATIAL_WORKER_URL",
-  "STUDIO_WORKER_URL"
+  "URAI_JOBS_WORKER_TOKEN"
 ];
 
 const optional = [
+  "ASSET_WORKER_URL",
+  "SPATIAL_WORKER_URL",
+  "STUDIO_WORKER_URL",
   "MAILGUN_KEY",
   "MAILGUN_DOMAIN",
   "WORKER_SERVICE_ACCOUNT_EMAIL",
@@ -30,7 +31,8 @@ const urlKeys = new Set([
 ]);
 
 const secretKeys = new Set([
-  "WEBHOOK_SIGNING_SECRET"
+  "WEBHOOK_SIGNING_SECRET",
+  "URAI_JOBS_WORKER_TOKEN"
 ]);
 
 function loadDotEnvFile(file) {
@@ -42,7 +44,7 @@ function loadDotEnvFile(file) {
     const index = line.indexOf("=");
     if (index === -1) continue;
     const key = line.slice(0, index).trim();
-    const value = line.slice(index + 1).trim().replace(/^['\"]|['\"]$/g, "");
+    const value = line.slice(index + 1).trim().replace(/^[']|[']$/g, "").replace(/^[\"]|[\"]$/g, "");
     if (!process.env[key]) process.env[key] = value;
   }
 }
@@ -127,7 +129,13 @@ for (const key of required) {
 
 for (const key of optional) {
   const value = process.env[key] || "";
-  const ok = Boolean(value.trim()) && !hasPlaceholder(value);
+  let ok = Boolean(value.trim()) && !hasPlaceholder(value);
+
+  if (value && urlKeys.has(key) && !validUrl(value)) {
+    ok = false;
+    failures.push(`${key} must be a real https URL when provided.`);
+  }
+
   console.log(`${ok ? "[PASS]" : "[WARN]"} optional ${key}`);
   if (value && hasPlaceholder(value)) failures.push(`${key} contains a placeholder value.`);
 }
@@ -140,11 +148,13 @@ if (missing.length) {
   failures.push(`Missing required production env vars: ${missing.join(", ")}`);
 }
 
+console.log("[INFO] Asset, spatial, and studio worker URLs are optional on this branch because those workers are gated/fail-closed and are not counted as production execution.");
+
 if (failures.length) {
   console.error("\n[FAIL] Production env precheck failed:");
   for (const failure of failures) console.error(`- ${failure}`);
   console.error("\nRepo-derived defaults were applied for Firebase/GCP IDs, region, hosting site, and allowed origins where possible.");
-  console.error("Remaining failures require real secrets, buckets, or deployed worker URLs and cannot be safely invented.");
+  console.error("Remaining failures require real secrets, buckets, or deployed narrator worker URL and cannot be safely invented.");
   process.exit(1);
 }
 
