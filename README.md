@@ -30,6 +30,7 @@ Current status on this branch:
 - narrator worker: implemented code path, requires worker auth configuration before execution
 - career worker: intentionally returns NOT_IMPLEMENTED until real execution exists
 - asset, spatial, and studio workers: gated or placeholder; not counted as production execution
+- root and legacy generic workers: gated fail-closed; not counted as production execution
 - production lifecycle smoke: not run in this branch pass
 
 Do not claim URAI Jobs is production worker ready until a real deployed job is created, queued, leased, executed by a real worker, status-updated, logged, and inspected end-to-end with proof artifacts.
@@ -157,18 +158,6 @@ pnpm urai-jobs:e2e
 
 ## CI
 
-The GitHub Actions workflow `.github/workflows/urai-jobs-runtime-ci.yml` should run install, repository invariant checks, typecheck, build, tests, smoke checks, and callable emulator E2E where configured.
+The GitHub Actions workflow `.github/workflows/production-verification.yml` runs the non-deploy lifecycle-lock gates for this branch and pull requests to `main`: install, lifecycle proof, production-lock checks, claims checks, route checks, jobs verification, typecheck, build, full test gate, and deploy precheck only.
 
-## Deployment sequence
-
-Deployment requires explicit operator approval. Do not deploy as part of an audit/fix pass unless the operator explicitly says to deploy.
-
-1. Build and deploy Cloud Run workers.
-2. Configure worker URLs and runtime secrets.
-3. Deploy Firebase Functions, Firestore rules/indexes, and Hosting.
-4. Run operator-approved production lifecycle smoke.
-5. Store proof artifact showing job creation, queue document, lease, worker execution, terminal state, logs, and result/error.
-
-## Runtime boundaries
-
-This repo should remain admin/operator-only unless public marketplace features are intentionally added. Public hiring-marketplace flows should not be mixed into the runtime without a separate product decision and security review.
+This CI path does not deploy and does not prove production smoke. Production-ready status still requires explicit operator-approved deployment plus a real production lifecycle smoke with proof artifacts.
