@@ -19,6 +19,9 @@ const career = read('workers/career-worker/src/index.ts') + read('workers/career
 const asset = read('workers/asset-worker/index.js');
 const spatial = read('workers/spatial-worker/index.js');
 const studio = read('workers/studio-worker/index.js');
+const prodSmoke = read('scripts/prod-smoke.mjs');
+const careerProdPreflight = read('scripts/career-prod-preflight.mjs');
+const careerProdSmoke = read('scripts/prod-career-smoke.mjs');
 const app = read('web/src/App.tsx');
 const authGate = read('web/src/components/AuthGate.tsx');
 
@@ -45,6 +48,10 @@ check('asset worker cannot fake success', asset.includes('NOT_IMPLEMENTED') && !
 check('spatial worker cannot fake success', spatial.includes('NOT_IMPLEMENTED') && !spatial.includes("status: 'SUCCESS'"));
 check('studio worker cannot fake success', studio.includes('NOT_IMPLEMENTED') && !studio.includes("status: 'SUCCESS'"));
 check('placeholder workers require worker auth', [asset, spatial, studio].every((worker) => worker.includes('URAI_JOBS_WORKER_TOKEN') && worker.includes('UNAUTHORIZED_WORKER_REQUEST')));
+check('prod smoke requires explicit production data unlock', prodSmoke.includes('URAI_JOBS_PROD_SMOKE_UNLOCK') && prodSmoke.includes('I_UNDERSTAND_THIS_TOUCHES_PRODUCTION_DATA'));
+check('prod smoke restricted to narrator.tts on this branch', prodSmoke.includes("JOB_TYPE !== 'narrator.tts'") && prodSmoke.includes('Production smoke is restricted to narrator.tts'));
+check('career prod preflight is fail-closed', careerProdPreflight.includes('CAREER_PROD_PREFLIGHT_BLOCKED_UNTIL_IMPLEMENTED'));
+check('career prod smoke is fail-closed before production writes', careerProdSmoke.includes('CAREER_PROD_SMOKE_BLOCKED_UNTIL_IMPLEMENTED') && careerProdSmoke.includes('before any production auth/user/firestore work'));
 check('admin route is route-gated', app.includes('requireOperator') && app.includes('AuthGate'));
 check('create route is route-gated', app.includes('AuthGate') && app.includes('CreateJobPageLocked'));
 check('AuthGate renders sign-in state', authGate.includes('Sign in required'));
