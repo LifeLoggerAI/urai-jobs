@@ -13,6 +13,7 @@ const jobsApi = read('web/src/lib/jobsApi.ts');
 const narrator = read('workers/narrator-worker/src/index.ts');
 const rootWorker = read('workers/src/index.ts');
 const legacyWorker = read('workers/index.ts');
+const compiledLegacyWorker = read('workers/index.js');
 const workerTsconfig = read('workers/tsconfig.json');
 const career = read('workers/career-worker/src/index.ts') + read('workers/career-worker/src/handlers/index.ts');
 const asset = read('workers/asset-worker/index.js');
@@ -36,6 +37,8 @@ check('root worker cannot fake success', rootWorker.includes('NOT_IMPLEMENTED') 
 check('root worker requires worker auth', rootWorker.includes('URAI_JOBS_WORKER_TOKEN') && rootWorker.includes('UNAUTHORIZED_WORKER_REQUEST'));
 check('legacy worker cannot fake success', legacyWorker.includes('NOT_IMPLEMENTED') && !legacyWorker.includes("status: 'SUCCESS'"));
 check('legacy worker requires worker auth', legacyWorker.includes('URAI_JOBS_WORKER_TOKEN') && legacyWorker.includes('UNAUTHORIZED_WORKER_REQUEST'));
+check('compiled legacy worker cannot fake success', compiledLegacyWorker.includes('NOT_IMPLEMENTED') && !compiledLegacyWorker.includes("status: 'SUCCESS'"));
+check('compiled legacy worker requires worker auth', compiledLegacyWorker.includes('URAI_JOBS_WORKER_TOKEN') && compiledLegacyWorker.includes('UNAUTHORIZED_WORKER_REQUEST'));
 check('root workers tsconfig only includes root worker src', workerTsconfig.includes('"include": ["src/**/*.ts"]') && workerTsconfig.includes('"rootDir": "src"'));
 check('career worker fails closed and returns not implemented', career.includes('worker auth token is not configured') && career.includes('NOT_IMPLEMENTED') && !career.includes("status: 'stubbed'"));
 check('asset worker cannot fake success', asset.includes('NOT_IMPLEMENTED') && !asset.includes("status: 'SUCCESS'"));
