@@ -5,7 +5,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "start": "node lib/workers/src/index.js",
+    "start": "node lib/index.js",
     "run": "node ../scripts/run-worker.mjs"
   },
   "dependencies": {
