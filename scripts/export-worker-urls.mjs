@@ -4,13 +4,20 @@ import fs from "fs";
 const project = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID;
 const region = process.env.GCP_REGION || "us-central1";
 const outputFile = process.env.GITHUB_ENV || process.env.URAI_JOBS_WORKER_ENV_FILE || "";
+const includeGatedWorkers = process.env.DEPLOY_GATED_WORKERS === "true" || process.env.EXPORT_GATED_WORKER_URLS === "true";
 
 const workers = [
-  ["NARRATOR_WORKER_URL", "narrator-worker"],
-  ["ASSET_WORKER_URL", "asset-worker"],
-  ["SPATIAL_WORKER_URL", "spatial-worker"],
-  ["STUDIO_WORKER_URL", "studio-worker"]
+  ["NARRATOR_WORKER_URL", "narrator-worker"]
 ];
+
+if (includeGatedWorkers) {
+  console.warn("[WARN] Exporting gated worker URLs. These workers are fail-closed/NOT_IMPLEMENTED and are not production execution proof.");
+  workers.push(
+    ["ASSET_WORKER_URL", "asset-worker"],
+    ["SPATIAL_WORKER_URL", "spatial-worker"],
+    ["STUDIO_WORKER_URL", "studio-worker"]
+  );
+}
 
 if (!project) {
   console.error("[FAIL] GCLOUD_PROJECT, GOOGLE_CLOUD_PROJECT, or FIREBASE_PROJECT_ID is required.");
