@@ -1,8 +1,8 @@
 # URAI Jobs Runtime
 
-URAI Jobs Runtime is the internal production job-execution fabric for the URAI system-of-systems. It is not the public jobs marketplace or careers application surface.
+URAI Jobs Runtime is the internal job-execution fabric for the URAI system-of-systems. It is not the public jobs marketplace or careers application surface.
 
-This repository owns asynchronous, long-running work across URAI subsystems using Firebase Functions, Firestore, Firebase Auth, Firebase Hosting, Google Cloud Run workers, Pub/Sub-compatible orchestration, and Google Cloud Storage artifacts.
+This repository owns asynchronous work across URAI subsystems using Firebase Functions, Firestore, Firebase Auth, Firebase Hosting, Google Cloud Run workers, Pub/Sub-compatible orchestration, and Google Cloud Storage artifacts.
 
 ## Product decision
 
@@ -10,13 +10,19 @@ Canonical positioning: **internal execution infrastructure**.
 
 Use this repo for:
 
-- queueing controlled production work
+- queueing controlled runtime work
 - executing subsystem jobs through Cloud Run workers
 - monitoring, retrying, cancelling, and reconciling jobs
 - operator/admin visibility into job state and logs
 - system-of-systems integration across URAI Admin, Studio, Spatial, Analytics, Communications, Privacy, and related services
 
-Do not use this repo as the public candidate/employer marketplace unless a future product decision explicitly expands it. Marketplace flows such as public job search, job detail pages, candidate applications, employer dashboards, resumes, and applicant tracking should live in a separate public app or a clearly separated future module.
+Do not use this repo as the public candidate/employer marketplace unless a future product decision explicitly expands it.
+
+## Worker proof boundary
+
+A job is worker-proven only when it is created through an authorized callable, queued in Firestore, leased, published to Pub/Sub, received by `executeJob`, sent to a configured worker URL, processed by an authenticated worker, persisted with a real result/artifact, visible in logs, and observable in the operator dashboard.
+
+Inline fallback is local/emulator-only. It is disabled for `URAI_ENV=staging`, `URAI_ENV=prod`, and `URAI_ENV=production`. Inline fallback output must not be used as live worker proof.
 
 ## Architecture
 
@@ -55,6 +61,7 @@ The exported runtime function surface includes:
 - `cancelJob`
 - `executeJob`
 - `processQueueTick`
+- `processQueueNow`
 - `retryExpiredLeases`
 - `cleanupTerminalJobs`
 - `systemReconcile`
@@ -78,28 +85,9 @@ interface NarratorTtsPayload {
 }
 ```
 
-Example request:
-
-```js
-const createJob = firebase.functions().httpsCallable("createJob");
-
-const result = await createJob({
-  jobType: "narrator.tts",
-  payload: {
-    text: "Hello from URAI Jobs Runtime.",
-    voice: "en-US-Wavenet-D",
-    locale: "en-US",
-    format: "MP3",
-    outputPrefix: "tts-outputs/smoke-test"
-  }
-});
-
-console.log(result.data.jobId);
-```
-
 ## Environment variables
 
-See `.env.example` for the canonical runtime environment surface. Required production values include Firebase/GCP project IDs, worker URLs, allowed API origins, webhook secrets, and GCS bucket configuration.
+See `.env.example` for the canonical runtime environment surface. Required deployed values include Firebase/GCP project IDs, worker URLs, allowed API origins, worker auth token or Cloud Run IAM, Pub/Sub topic, webhook secrets, and GCS bucket configuration.
 
 ## Local validation
 
@@ -109,7 +97,6 @@ Run these checks before merging runtime changes:
 corepack enable
 corepack prepare pnpm@8.15.9 --activate
 pnpm install --frozen-lockfile
-
 pnpm urai-jobs:verify
 pnpm typecheck
 pnpm build
@@ -131,6 +118,8 @@ FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
 FUNCTIONS_EMULATOR_ORIGIN=http://127.0.0.1:5001 \
 FIREBASE_PROJECT_ID=demo-urai-jobs \
 GCLOUD_PROJECT=demo-urai-jobs \
+URAI_ENV=local \
+URAI_JOBS_ALLOW_INLINE_FALLBACK=true \
 pnpm urai-jobs:e2e
 ```
 
@@ -143,6 +132,7 @@ The GitHub Actions workflow `.github/workflows/urai-jobs-runtime-ci.yml` runs in
 1. Build and deploy Cloud Run workers.
 2. Configure worker URLs and runtime secrets.
 3. Deploy Firebase Functions, Firestore rules/indexes, and Hosting.
+4. Run staging worker health and staging lifecycle smoke before any production smoke.
 
 ```bash
 pnpm build
