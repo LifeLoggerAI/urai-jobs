@@ -93,8 +93,8 @@ async function main() {
     await auth.createUser({ uid: ADMIN_UID, email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
     await auth.createUser({ uid: USER_UID, email: USER_EMAIL, password: USER_PASSWORD });
     await auth.setCustomUserClaims(ADMIN_UID, { role: 'admin', roles: ['admin'], uraiJobsAdmin: true });
-    await db.collection('users').doc(ADMIN_UID).set({ role: 'admin', email: ADMIN_EMAIL });
-    await db.collection('users').doc(USER_UID).set({ role: 'user', email: USER_EMAIL });
+    await db.collection('users').doc(ADMIN_UID).set({ role: 'admin', email: ADMIN_EMAIL, permissions: ['jobs:create'] });
+    await db.collection('users').doc(USER_UID).set({ role: 'user', email: USER_EMAIL, permissions: ['jobs:create'] });
     pass('Test users and roles seeded.');
 
     log('Signing in through the Auth emulator to get callable ID tokens...');
@@ -102,7 +102,7 @@ async function main() {
     const userToken = await signInWithPassword(USER_EMAIL, USER_PASSWORD);
     pass('Emulator ID tokens acquired.');
 
-    log('Calling createJob callable as normal user...');
+    log('Calling createJob callable as permitted job creator...');
     const createResult = await callCallable('createJob', userToken, {
       jobType: 'narrator.tts',
       payload: {
