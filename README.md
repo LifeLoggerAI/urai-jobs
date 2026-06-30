@@ -1,8 +1,8 @@
 # URAI Jobs Runtime
 
-URAI Jobs Runtime is the internal job-execution fabric for the URAI system-of-systems. It is not the public jobs marketplace or careers application surface.
+URAI Jobs Runtime is the internal production job-execution fabric for the URAI system-of-systems. It is not the public jobs marketplace or careers application surface.
 
-This repository owns asynchronous work across URAI subsystems using Firebase Functions, Firestore, Firebase Auth, Firebase Hosting, Google Cloud Run workers, Pub/Sub-compatible orchestration, and Google Cloud Storage artifacts.
+This repository owns asynchronous, long-running work across URAI subsystems using Firebase Functions, Firestore, Firebase Auth, Firebase Hosting, Google Cloud Run workers, Pub/Sub-compatible orchestration, and Google Cloud Storage artifacts.
 
 ## Product decision
 
