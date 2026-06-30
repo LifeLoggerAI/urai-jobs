@@ -3,7 +3,7 @@ import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
 import { Job, JobQueueEntry } from '@urai-jobs/shared-types';
-import { withAuthenticatedRole, type AuthenticatedUser } from '../core/auth.js';
+import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
@@ -39,19 +39,20 @@ function isAllowedJobType(jobType: string): boolean {
   return ALLOWED_JOB_TYPE_PATTERNS.some((pattern) => pattern.test(jobType));
 }
 
-function userRecord(user: AuthenticatedUser): Record<string, unknown> {
-  return user as unknown as Record<string, unknown>;
+function userRecord(user: unknown): Record<string, unknown> {
+  return user && typeof user === 'object' ? (user as Record<string, unknown>) : {};
 }
 
-function userOrgId(user: AuthenticatedUser): string | null {
+function userOrgId(user: unknown): string | null {
   const raw = userRecord(user).orgId;
   return typeof raw === 'string' && raw.trim() ? raw : null;
 }
 
-function hasJobCreatePermission(user: AuthenticatedUser): boolean {
-  const rawPermissions = userRecord(user).permissions;
+function hasJobCreatePermission(user: unknown): boolean {
+  const record = userRecord(user);
+  const rawPermissions = record.permissions;
   const permissions = Array.isArray(rawPermissions) ? rawPermissions.map((value) => String(value)) : [];
-  return user.role === 'admin' || user.role === 'operator' || permissions.includes('jobs:create');
+  return record.role === 'admin' || record.role === 'operator' || permissions.includes('jobs:create');
 }
 
 async function assertCreateRateLimit(uid: string) {
@@ -69,7 +70,7 @@ async function assertCreateRateLimit(uid: string) {
   }
 }
 
-const handler = async (data: any, context: CallableContext, user: AuthenticatedUser) => {
+const handler = async (data: any, context: CallableContext, user: unknown) => {
   const uid = context.auth?.uid;
   if (!uid) {
     throw httpsError('unauthenticated', 'User must be authenticated.');
