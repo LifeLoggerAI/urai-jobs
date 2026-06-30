@@ -4,8 +4,10 @@ export type AuthClaims = Record<string, unknown> | null;
 
 export function claimRoles(claims: AuthClaims): string[] {
   if (!claims) return [];
-  const roles = Array.isArray(claims.roles) ? claims.roles.map((role) => String(role)) : [];
-  const role = typeof claims.role === "string" ? [claims.role] : [];
+  const rawRoles = claims.roles;
+  const roles = Array.isArray(rawRoles) ? rawRoles.map((role) => String(role)) : [];
+  const rawRole = claims.role;
+  const role = typeof rawRole === "string" ? [rawRole] : [];
   return [...new Set([...role, ...roles])];
 }
 
@@ -16,7 +18,7 @@ export function hasOperatorAccess(claims: AuthClaims): boolean {
 }
 
 export function hasJobCreateAccess(user: User | null, claims: AuthClaims): boolean {
-  if (!user) return false;
+  if (!user || !claims) return false;
   if (hasOperatorAccess(claims)) return true;
   const roles = claimRoles(claims);
   return roles.includes("job_creator") || claims.uraiJobsCreate === true;
