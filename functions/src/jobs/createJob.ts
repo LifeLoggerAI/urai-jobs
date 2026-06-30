@@ -131,7 +131,6 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
 
       transaction.create(jobRef, {
         ...newJob,
-        idempotencyKey: idempotencyKey || null,
         createdAt: now,
         updatedAt: now,
       });
@@ -152,6 +151,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
         ownerUid: uid,
         orgId,
         payloadBytes,
+        idempotencyKey: idempotencyKey || null,
       },
       createdAt: now,
     });
