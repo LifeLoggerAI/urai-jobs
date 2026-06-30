@@ -39,8 +39,18 @@ function isAllowedJobType(jobType: string): boolean {
   return ALLOWED_JOB_TYPE_PATTERNS.some((pattern) => pattern.test(jobType));
 }
 
+function userRecord(user: AuthenticatedUser): Record<string, unknown> {
+  return user as unknown as Record<string, unknown>;
+}
+
+function userOrgId(user: AuthenticatedUser): string | null {
+  const raw = userRecord(user).orgId;
+  return typeof raw === 'string' && raw.trim() ? raw : null;
+}
+
 function hasJobCreatePermission(user: AuthenticatedUser): boolean {
-  const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+  const rawPermissions = userRecord(user).permissions;
+  const permissions = Array.isArray(rawPermissions) ? rawPermissions.map((value) => String(value)) : [];
   return user.role === 'admin' || user.role === 'operator' || permissions.includes('jobs:create');
 }
 
@@ -89,6 +99,7 @@ const handler = async (data: any, context: CallableContext, user: AuthenticatedU
   const db = getFirestore();
   const jobId = ulid();
   const now = FieldValue.serverTimestamp();
+  const orgId = userOrgId(user);
 
   const newJob: Job = {
     jobId,
@@ -97,7 +108,7 @@ const handler = async (data: any, context: CallableContext, user: AuthenticatedU
     status: 'PENDING',
     payload,
     ownerUid: uid,
-    orgId: user.orgId,
+    orgId: orgId || undefined,
     retryCount: 0,
     execution: {
       attemptCount: 0,
@@ -139,7 +150,7 @@ const handler = async (data: any, context: CallableContext, user: AuthenticatedU
       metadata: {
         jobType,
         ownerUid: uid,
-        orgId: user.orgId || null,
+        orgId,
         payloadBytes,
       },
       createdAt: now,
