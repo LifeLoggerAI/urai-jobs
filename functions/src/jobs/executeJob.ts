@@ -11,7 +11,9 @@ import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 const JOB_EXECUTION_TOPIC = 'job-execution';
 
-type WorkerTarget = { url: string; route: string };
+const PRODUCTION_ENVS = new Set(['prod', 'production', 'staging']);
+
+type WorkerTarget = { url: string; route: string; envKey: string };
 type InlineWorkerResult = {
   ok: true;
   mode: 'inline-fallback';
@@ -55,7 +57,21 @@ function getWorkerTarget(jobType: string): WorkerTarget | null {
   const envKey = getWorkerEnvKey(jobType);
   const url = process.env[envKey];
   if (!url) return null;
-  return { url, route: getWorkerRoute(jobType) };
+  return { url, route: getWorkerRoute(jobType), envKey };
+}
+
+function normalizedEnv(): string {
+  return String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
+}
+
+function inlineFallbackAllowed(): boolean {
+  if (PRODUCTION_ENVS.has(normalizedEnv())) return false;
+  return process.env.URAI_JOBS_ALLOW_INLINE_FALLBACK === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
+}
+
+function getWorkerAuthHeaders(): Record<string, string> {
+  const token = process.env.URAI_JOBS_WORKER_TOKEN;
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 function getPayloadRecord(job: Job): Record<string, unknown> {
@@ -80,7 +96,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
       jobType,
       artifactUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/asset.json`,
       manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
-      message: 'Asset render completed by the built-in URAI Jobs fallback worker. Configure ASSET_WORKER_URL to hand this job to the external renderer.',
+      message: 'Local inline fallback completed. This is not live worker proof.',
       payloadEcho: payload,
       completedAt,
     };
@@ -94,7 +110,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
       jobType,
       indexUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/spatial-index.json`,
       manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
-      message: 'Spatial index completed by the built-in URAI Jobs fallback worker. Configure SPATIAL_WORKER_URL to hand this job to the external spatial service.',
+      message: 'Local inline fallback completed. This is not live worker proof.',
       payloadEcho: payload,
       completedAt,
     };
@@ -108,7 +124,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
       jobType,
       artifactUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/studio-render.json`,
       manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
-      message: 'Studio render completed by the built-in URAI Jobs fallback worker. Configure STUDIO_WORKER_URL to hand this job to the external studio renderer.',
+      message: 'Local inline fallback completed. This is not live worker proof.',
       payloadEcho: payload,
       completedAt,
     };
@@ -122,7 +138,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
       jobType,
       careerUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/career.json`,
       manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
-      message: 'Career job completed by the built-in URAI Jobs fallback worker. Configure CAREER_WORKER_URL to hand this job to the external career worker.',
+      message: 'Local inline fallback completed. This is not live worker proof.',
       payloadEcho: payload,
       completedAt,
     };
@@ -135,7 +151,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
     jobType,
     transcriptUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/narration.txt`,
     manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
-    message: 'Narrator job completed by the built-in URAI Jobs fallback worker. Configure NARRATOR_WORKER_URL to hand this job to the external narrator service.',
+    message: 'Local inline fallback completed. This is not live worker proof.',
     payloadEcho: payload,
     completedAt,
   };
@@ -236,8 +252,8 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
       await appendJobLog(jobId, {
         level: 'info',
         source: 'executeJob',
-        message: 'Sending job to worker.',
-        metadata: { jobType, workerUrl, route },
+        message: 'Sending job to configured worker.',
+        metadata: { jobType, workerEnvKey: target.envKey, route },
       });
 
       const response = await axios.post(`${workerUrl}${route}`, {
@@ -246,17 +262,24 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
         leaseToken,
         type: jobType,
         jobType,
+      }, {
+        headers: getWorkerAuthHeaders(),
+        timeout: Number(process.env.URAI_JOBS_WORKER_TIMEOUT_MS || 120000),
       });
       result = response.data;
     } else {
       const envKey = getWorkerEnvKey(jobType);
+      if (!inlineFallbackAllowed()) {
+        throw new Error(`Worker URL ${envKey} is required for ${normalizedEnv()} runtime; inline fallback is disabled.`);
+      }
+
       result = createInlineWorkerResult(job, jobId, jobType);
 
       await appendJobLog(jobId, {
         level: 'warn',
         source: 'executeJob',
-        message: 'External worker URL is not configured. Completed job with inline fallback worker.',
-        metadata: { jobType, missingEnv: envKey },
+        message: 'External worker URL is not configured. Local inline fallback was used; do not treat this as live worker proof.',
+        metadata: { jobType, missingEnv: envKey, env: normalizedEnv() },
       });
     }
 

@@ -12,6 +12,7 @@ import {
   getHost,
   getPort,
   requestIdMiddleware,
+  requireWorkerAuth,
   RuntimeRequest,
   validateRequiredEnv,
 } from './runtime.js';
@@ -35,7 +36,7 @@ app.get('/healthz', (_req: any, res: any) => {
   res.status(200).send({ ok: true, governor: governor.getStats() });
 });
 
-app.post('/execute-job', asyncHandler(async (req: RuntimeRequest, res: any) => {
+app.post('/execute-job', requireWorkerAuth, asyncHandler(async (req: RuntimeRequest, res: any) => {
   const jobId = req.body?.jobId || req.body?.id;
   const jobType = req.body?.type || req.body?.jobType;
   const requestId = req.requestId;
