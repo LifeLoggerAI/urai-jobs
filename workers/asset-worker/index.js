@@ -5,13 +5,14 @@ const admin = require('firebase-admin');
 admin.initializeApp();
 
 const app = express();
+app.set('trust proxy', true);
 app.use(express.json({ limit: '1mb' }));
 
 const db = admin.firestore();
 const githubToken = process.env.URAI_WHEEL_GITHUB_TOKEN || '';
 const callbackSecret = process.env.URAI_JOBS_CALLBACK_SECRET || '';
 const assetFactoryRepo = process.env.ASSET_FACTORY_REPO || 'LifeLoggerAI/asset-factory';
-const publicBaseUrl = (process.env.ASSET_WORKER_PUBLIC_URL || '').replace(/\/$/, '');
+const configuredPublicBaseUrl = (process.env.ASSET_WORKER_PUBLIC_URL || '').replace(/\/$/, '');
 const allowedTypes = new Set([
   'asset.generate',
   'asset.validate',
@@ -34,6 +35,15 @@ function timingSafeEqual(left, right) {
   const a = Buffer.from(left);
   const b = Buffer.from(right);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function publicBaseUrl(req) {
+  if (configuredPublicBaseUrl) return configuredPublicBaseUrl;
+  const forwardedProto = (req.get('x-forwarded-proto') || '').split(',')[0].trim();
+  const protocol = forwardedProto || req.protocol || 'https';
+  const host = req.get('x-forwarded-host') || req.get('host');
+  if (!host) throw new Error('Could not determine public worker host for callback');
+  return `${protocol}://${host}`.replace(/\/$/, '');
 }
 
 async function githubRequest(path, init = {}) {
@@ -68,12 +78,13 @@ app.get('/healthz', (_req, res) => {
   const configured = {
     githubToken: Boolean(githubToken),
     callbackSecret: Boolean(callbackSecret),
-    publicBaseUrl: Boolean(publicBaseUrl),
   };
-  res.status(Object.values(configured).every(Boolean) ? 200 : 503).send({
-    ok: Object.values(configured).every(Boolean),
+  const ok = Object.values(configured).every(Boolean);
+  res.status(ok ? 200 : 503).send({
+    ok,
     configured,
     assetFactoryRepo,
+    callbackUrlMode: configuredPublicBaseUrl ? 'configured' : 'request-derived',
   });
 });
 
@@ -93,12 +104,9 @@ app.post('/', async (req, res) => {
     if (!allowedTypes.has(job.type)) {
       return res.status(422).send({ error: `Unsupported asset job type: ${job.type}` });
     }
-    if (!publicBaseUrl) {
-      throw new Error('ASSET_WORKER_PUBLIC_URL is not configured');
-    }
 
     const rounds = Math.max(1, Math.min(5, Number(job.payloadInline?.rounds || 3)));
-    const callbackUrl = `${publicBaseUrl}/callback`;
+    const callbackUrl = `${publicBaseUrl(req)}/callback`;
     const correlationId = job.correlationId || jobId;
 
     await jobRef.update({
