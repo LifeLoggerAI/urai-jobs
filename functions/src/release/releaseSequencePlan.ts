@@ -73,7 +73,7 @@ export function buildReleaseSequencePlan(input: ReleasePlanRequest) {
       const complete = requiredEvidence.every((key) => request.evidence[key] === true);
       let status: StageStatus = 'NOT_REQUESTED';
 
-      if (requested && complete) status = 'COMPLETE';
+      if (requested && priorComplete && complete) status = 'COMPLETE';
       else if (requested && priorComplete) status = 'READY';
       else if (requested) status = 'BLOCKED';
 
