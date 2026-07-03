@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
-const file = 'functions/src/release/releaseSequencePlan.ts';
-const source = fs.readFileSync(file, 'utf8');
+const plan = fs.readFileSync('functions/src/release/releaseSequencePlan.ts', 'utf8');
+const api = fs.readFileSync('functions/src/release/releaseSequenceApi.ts', 'utf8');
 const required = [
   "'v1'", "'v2'", "'v3'", "'v4'", "'v5'",
   "'audit'", "'world-spec'", "'asset-inventory'", "'forge-models'",
@@ -10,8 +10,15 @@ const required = [
 ];
 
 for (const token of required) {
-  if (!source.includes(token)) {
+  if (!plan.includes(token)) {
     console.error(`Release sequence verifier missing token: ${token}`);
+    process.exit(1);
+  }
+}
+
+for (const token of ['z.input<typeof ReleasePlanRequestSchema>', 'input: ReleasePlanInput = {}', 'ReleasePlanRequestSchema.parse(input)']) {
+  if (!api.includes(token)) {
+    console.error(`Release sequence API verifier missing token: ${token}`);
     process.exit(1);
   }
 }
