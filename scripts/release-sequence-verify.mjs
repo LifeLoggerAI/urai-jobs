@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 
 const plan = fs.readFileSync('functions/src/release/releaseSequencePlan.ts', 'utf8');
 const api = fs.readFileSync('functions/src/release/releaseSequenceApi.ts', 'utf8');
@@ -22,5 +23,11 @@ for (const token of ['z.input<typeof ReleasePlanRequestSchema>', 'input: Release
     process.exit(1);
   }
 }
+
+const runtime = spawnSync(process.execPath, ['scripts/release-plan-smoke.mjs'], {
+  stdio: 'inherit',
+  shell: process.platform === 'win32',
+});
+if (runtime.status !== 0) process.exit(runtime.status ?? 1);
 
 console.log('PASS release sequence verifier');
