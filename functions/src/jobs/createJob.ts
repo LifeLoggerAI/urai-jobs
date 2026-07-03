@@ -109,7 +109,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     status: 'PENDING',
     payload,
     ownerUid: uid,
-    orgId: orgId || undefined,
+    ...(orgId ? { orgId } : {}),
     retryCount: 0,
     execution: {
       attemptCount: 0,
