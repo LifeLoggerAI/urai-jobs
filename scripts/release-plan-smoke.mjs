@@ -1,3 +1,4 @@
+import './release-plan-ordering-smoke.mjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 
