@@ -264,7 +264,7 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
         jobType,
       }, {
         headers: getWorkerAuthHeaders(),
-        timeout: Number(process.env.URAI_JOBS_WORKER_TIMEOUT_MS || 120000),
+        timeout: parseInt(process.env.URAI_JOBS_WORKER_TIMEOUT_MS || '', 10) || 120000,
       });
       result = response.data;
     } else {
