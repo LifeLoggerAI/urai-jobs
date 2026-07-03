@@ -24,90 +24,48 @@ const PRESETS = {
   "narrator.tts": {
     label: "Narrator TTS",
     payload: {
-      text: "URAI Jobs production smoke test",
+      text: "URAI Jobs runtime smoke test",
       voice: "en-US-Wavenet-D",
       locale: "en-US",
       format: "MP3",
-      outputPrefix: "prod-smoke-test"
+      outputPrefix: "runtime-smoke-test"
     }
   },
   "asset.render": {
     label: "Asset render",
-    payload: {
-      assetType: "preview-card",
-      template: "urai-default",
-      outputPrefix: "asset-smoke-test"
-    }
+    payload: { assetType: "preview-card", template: "urai-default", outputPrefix: "asset-smoke-test" }
   },
   "spatial.index": {
     label: "Spatial index",
-    payload: {
-      source: "smoke-test",
-      mode: "incremental",
-      outputPrefix: "spatial-smoke-test"
-    }
+    payload: { source: "smoke-test", mode: "incremental", outputPrefix: "spatial-smoke-test" }
   },
   "career.profile.summarize": {
     label: "Career profile summary",
-    payload: {
-      source: "operator-preset",
-      profile: careerProfile,
-      outputPrefix: "career-smoke/profile-summary"
-    }
+    payload: { source: "operator-preset", profile: careerProfile, outputPrefix: "career-smoke/profile-summary" }
   },
   "career.fit.score": {
     label: "Career fit score",
-    payload: {
-      source: "operator-preset",
-      profile: careerProfile,
-      opportunity: careerOpportunity,
-      outputPrefix: "career-smoke/fit-score"
-    }
+    payload: { source: "operator-preset", profile: careerProfile, opportunity: careerOpportunity, outputPrefix: "career-smoke/fit-score" }
   },
   "career.document.parse": {
     label: "Career document parse",
-    payload: {
-      source: "operator-preset",
-      documentRef: "gs://urai-jobs-sample-inputs/career/profile.md",
-      outputPrefix: "career-smoke/document-parse"
-    }
+    payload: { source: "operator-preset", documentRef: "gs://urai-jobs-sample-inputs/career/profile.md", outputPrefix: "career-smoke/document-parse" }
   },
   "career.document.tailor": {
     label: "Career document tailor",
-    payload: {
-      source: "operator-preset",
-      profile: careerProfile,
-      opportunity: careerOpportunity,
-      documentRef: "gs://urai-jobs-sample-inputs/career/profile.md",
-      outputPrefix: "career-smoke/document-tailor"
-    }
+    payload: { source: "operator-preset", profile: careerProfile, opportunity: careerOpportunity, documentRef: "gs://urai-jobs-sample-inputs/career/profile.md", outputPrefix: "career-smoke/document-tailor" }
   },
   "career.packet.generate": {
     label: "Career packet generate",
-    payload: {
-      source: "operator-preset",
-      profile: careerProfile,
-      opportunity: careerOpportunity,
-      outputPrefix: "career-smoke/packet"
-    }
+    payload: { source: "operator-preset", profile: careerProfile, opportunity: careerOpportunity, outputPrefix: "career-smoke/packet" }
   },
   "career.followup.plan": {
     label: "Career follow-up plan",
-    payload: {
-      source: "operator-preset",
-      opportunity: careerOpportunity,
-      cadence: "review-only",
-      outputPrefix: "career-smoke/followup-plan"
-    }
+    payload: { source: "operator-preset", opportunity: careerOpportunity, cadence: "review-only", outputPrefix: "career-smoke/followup-plan" }
   },
   "career.interview.prep": {
     label: "Career interview prep",
-    payload: {
-      source: "operator-preset",
-      profile: careerProfile,
-      opportunity: careerOpportunity,
-      outputPrefix: "career-smoke/interview-prep"
-    }
+    payload: { source: "operator-preset", profile: careerProfile, opportunity: careerOpportunity, outputPrefix: "career-smoke/interview-prep" }
   },
   "career.offer.compare": {
     label: "Career offer compare",
@@ -123,21 +81,11 @@ const PRESETS = {
   },
   "career.spatial.portal.generate": {
     label: "Career spatial portal",
-    payload: {
-      source: "operator-preset",
-      profile: careerProfile,
-      opportunity: careerOpportunity,
-      outputPrefix: "career-smoke/spatial-portal"
-    }
+    payload: { source: "operator-preset", profile: careerProfile, opportunity: careerOpportunity, outputPrefix: "career-smoke/spatial-portal" }
   },
   "career.passport.export": {
     label: "Career Passport export",
-    payload: {
-      source: "operator-preset",
-      profile: careerProfile,
-      consentScope: "private-preview",
-      outputPrefix: "career-smoke/passport-export"
-    }
+    payload: { source: "operator-preset", profile: careerProfile, consentScope: "private-preview", outputPrefix: "career-smoke/passport-export" }
   }
 };
 
@@ -198,21 +146,21 @@ export function CreateJobPage() {
   return (
     <main className="page-shell">
       <section className="panel">
-        <div className="eyebrow">Create Job</div>
-        <h1>Submit controlled production work.</h1>
+        <div className="eyebrow">Protected Operator Workflow</div>
+        <h1>Submit controlled runtime work.</h1>
         <p>
-          Choose a preset, inspect the payload, then submit it to the live Firebase callable function.
-          Use this for smoke tests, operator workflows, and subsystem integration checks.
+          This route is gated in the web app and by Firebase callable authorization. Use it only for
+          operator smoke tests and approved subsystem integration checks.
         </p>
+
+        <div className="notice">
+          <strong>Authorization required</strong>
+          <p>Only admin, operator, or explicit job-create claims may use this screen.</p>
+        </div>
 
         <div className="preset-grid">
           {(Object.keys(PRESETS) as PresetKey[]).map((key) => (
-            <button
-              className={key === jobType ? "preset-card active" : "preset-card"}
-              key={key}
-              type="button"
-              onClick={() => selectPreset(key)}
-            >
+            <button className={key === jobType ? "preset-card active" : "preset-card"} key={key} type="button" onClick={() => selectPreset(key)}>
               <strong>{PRESETS[key].label}</strong>
               <span>{key}</span>
             </button>
@@ -224,16 +172,12 @@ export function CreateJobPage() {
             Job Type
             <input value={jobType} onChange={(event) => setJobType(event.target.value as PresetKey)} />
           </label>
-
           <label>
             Payload JSON
             <textarea rows={14} value={payload} onChange={(event) => setPayload(event.target.value)} />
           </label>
-
           <div className="form-actions">
-            <button type="submit" disabled={status === "loading" || !payloadIsValid}>
-              {status === "loading" ? "Creating..." : "Create Job"}
-            </button>
+            <button type="submit" disabled={status === "loading" || !payloadIsValid}>{status === "loading" ? "Creating..." : "Create Job"}</button>
             {!payloadIsValid && <span className="form-hint danger-text">Payload JSON is invalid.</span>}
           </div>
         </form>

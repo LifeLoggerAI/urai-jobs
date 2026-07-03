@@ -83,5 +83,25 @@ jobs:
       - name: Build functions and shared types
         run: pnpm --filter @urai-jobs/shared-types build && pnpm --filter urai-jobs-functions build
 
-      - name: Run callable E2E in Firebase emulators
-        run: npx --yes firebase-tools@latest emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs"
+      - name: Capture callable E2E result
+        id: emulator
+        shell: bash
+        run: |
+          set +e
+          npx --yes firebase-tools@latest emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload emulator E2E log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-jobs-emulator-e2e-log
+          path: urai-jobs-emulator-e2e.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce callable E2E result
+        shell: bash
+        run: test "${{ steps.emulator.outputs.status }}" = "0"

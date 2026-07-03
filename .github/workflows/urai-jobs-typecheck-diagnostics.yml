@@ -1,0 +1,56 @@
+name: URAI Jobs Typecheck Diagnostics
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'functions/**'
+      - 'web/**'
+      - 'workers/**'
+      - 'packages/**'
+      - 'types/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/urai-jobs-typecheck-diagnostics.yml'
+
+jobs:
+  diagnostics:
+    name: Capture typecheck output
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Capture typecheck log
+        shell: bash
+        run: |
+          set +e
+          pnpm typecheck > typecheck-diagnostics.log 2>&1
+          status=$?
+          tail -n 120 typecheck-diagnostics.log
+          echo "$status" > typecheck-diagnostics.exit
+          exit "$status"
+
+      - name: Upload typecheck diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-jobs-typecheck-diagnostics
+          path: |
+            typecheck-diagnostics.log
+            typecheck-diagnostics.exit

@@ -63,6 +63,33 @@ export function requestIdMiddleware(req: RuntimeRequest, res: Response, next: Ne
   next();
 }
 
+export function requireWorkerAuth(req: RuntimeRequest, res: Response, next: NextFunction) {
+  const expectedToken = process.env.URAI_JOBS_WORKER_TOKEN;
+  const env = String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
+  const localBypass = env === 'local' || env === 'test' || process.env.FUNCTIONS_EMULATOR === 'true';
+
+  if (!expectedToken && localBypass) {
+    log('WARN', 'worker_auth_local_bypass', { requestId: req.requestId, env });
+    next();
+    return;
+  }
+
+  if (!expectedToken) {
+    log('ERROR', 'worker_auth_missing_token', { requestId: req.requestId, env });
+    res.status(503).send({ ok: false, error: 'worker auth is not configured', requestId: req.requestId });
+    return;
+  }
+
+  const header = req.header('authorization') || '';
+  if (header !== `Bearer ${expectedToken}`) {
+    log('WARN', 'worker_auth_denied', { requestId: req.requestId, env });
+    res.status(401).send({ ok: false, error: 'unauthorized', requestId: req.requestId });
+    return;
+  }
+
+  next();
+}
+
 export function asyncHandler(
   handler: (req: RuntimeRequest, res: Response, next: NextFunction) => Promise<unknown>
 ) {

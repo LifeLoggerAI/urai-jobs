@@ -4,6 +4,8 @@ import { User } from '@urai-jobs/shared-types';
 import { httpsError } from './errors.js';
 import { userDoc } from './firestore-paths.js';
 
+export type AuthenticatedUser = User;
+
 /**
  * Fetches the user document from Firestore and returns it.
  * Throws an error if the user is not found.
