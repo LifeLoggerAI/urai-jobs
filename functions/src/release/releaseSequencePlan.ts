@@ -27,6 +27,7 @@ export const ReleasePlanRequestSchema = z.object({
 });
 
 export type ReleasePlanRequest = z.infer<typeof ReleasePlanRequestSchema>;
+export type ReleasePlanInput = z.input<typeof ReleasePlanRequestSchema>;
 type StageStatus = 'COMPLETE' | 'READY' | 'BLOCKED' | 'NOT_REQUESTED';
 
 type StageDefinition = {
@@ -61,7 +62,7 @@ const objectives: Record<UraiReleaseVersion, string> = {
   v5: 'Relationships, legacy, governance, and whole-life convergence.',
 };
 
-export function buildReleaseSequencePlan(input: ReleasePlanRequest) {
+export function buildReleaseSequencePlan(input: ReleasePlanInput) {
   const request = ReleasePlanRequestSchema.parse(input);
   const through = URAI_RELEASE_STAGES.indexOf(request.requestedThrough);
 
