@@ -7,8 +7,8 @@ import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
-const MAX_PAYLOAD_BYTES = Number(process.env.URAI_JOBS_MAX_PAYLOAD_BYTES || 32768);
-const MAX_CREATE_PER_MINUTE = Number(process.env.URAI_JOBS_CREATE_RATE_LIMIT_PER_MINUTE || 10);
+const MAX_PAYLOAD_BYTES = parseInt(process.env.URAI_JOBS_MAX_PAYLOAD_BYTES || '', 10) || 32768;
+const MAX_CREATE_PER_MINUTE = parseInt(process.env.URAI_JOBS_CREATE_RATE_LIMIT_PER_MINUTE || '', 10) || 10;
 
 const ALLOWED_JOB_TYPE_PATTERNS = [
   /^narrator\.tts$/,
