@@ -117,6 +117,7 @@ const handler = async (data: unknown, context: CallableContext, user: unknown) =
   await assertCreateRateLimit(uid);
 
   const proposedJobId = ulid();
+  const idempotencyExpiresAt = Timestamp.fromMillis(Date.now() + IDEMPOTENCY_RETENTION_MS);
   const orgId = userOrgId(user);
   const newJob: Job = {
     jobId: proposedJobId,
@@ -170,7 +171,7 @@ const handler = async (data: unknown, context: CallableContext, user: unknown) =
           ownerUid: uid,
           jobType,
           createdAt: now,
-          expiresAt: Timestamp.fromMillis(Date.now() + IDEMPOTENCY_RETENTION_MS),
+          expiresAt: idempotencyExpiresAt,
         });
       }
 
