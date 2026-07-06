@@ -1,4 +1,5 @@
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { defineSecret } from 'firebase-functions/params';
 import { onMessagePublished } from 'firebase-functions/v2/pubsub';
 import axios from 'axios';
 import { z } from 'zod';
@@ -12,6 +13,7 @@ import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from 
 
 const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
 const PRODUCTION_ENVS = new Set(['prod', 'production', 'staging']);
+const workerTokenSecret = defineSecret('URAI_JOBS_WORKER_TOKEN');
 
 type WorkerTarget = { url: string; route: string; envKey: string };
 type InlineWorkerResult = {
@@ -75,8 +77,19 @@ function inlineFallbackAllowed(): boolean {
   return process.env.URAI_JOBS_ALLOW_INLINE_FALLBACK === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
 }
 
+function getWorkerToken(): string {
+  try {
+    return workerTokenSecret.value() || process.env.URAI_JOBS_WORKER_TOKEN || '';
+  } catch {
+    return process.env.URAI_JOBS_WORKER_TOKEN || '';
+  }
+}
+
 function getWorkerAuthHeaders(): Record<string, string> {
-  const token = process.env.URAI_JOBS_WORKER_TOKEN;
+  const token = getWorkerToken();
+  if (!token && PRODUCTION_ENVS.has(normalizedEnv())) {
+    throw new Error('URAI_JOBS_WORKER_TOKEN Secret Manager binding is required in production.');
+  }
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -220,7 +233,10 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
   console.error(`Job ${jobId} failed:`, error);
 }
 
-export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) => {
+export const executeJob = onMessagePublished({
+  topic: JOB_EXECUTION_TOPIC,
+  secrets: [workerTokenSecret],
+}, async (event) => {
   const validationResult = JobExecutionMessageSchema.safeParse(event.data.message.json);
   if (!validationResult.success) {
     console.error('Invalid job execution message:', validationResult.error.flatten());
