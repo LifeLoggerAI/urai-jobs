@@ -3,6 +3,10 @@ name: Deploy Asset Worker
 on:
   workflow_dispatch:
     inputs:
+      confirm:
+        description: Type DEPLOY to authorize this production-affecting workflow
+        required: true
+        type: string
       region:
         description: Cloud Run region
         required: true
@@ -13,11 +17,6 @@ on:
         required: true
         default: urai-asset-worker
         type: string
-  push:
-    branches: [main]
-    paths:
-      - workers/asset-worker/**
-      - .github/workflows/deploy-asset-worker.yml
 
 concurrency:
   group: deploy-urai-asset-worker
@@ -29,22 +28,27 @@ permissions:
 
 jobs:
   verify-and-deploy:
+    if: inputs.confirm == 'DEPLOY'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment: production
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
       RUNTIME_SERVICE_ACCOUNT: ${{ secrets.ASSET_WORKER_RUNTIME_SERVICE_ACCOUNT }}
-      REGION: ${{ inputs.region || 'us-central1' }}
-      SERVICE_NAME: ${{ inputs.service_name || 'urai-asset-worker' }}
+      REGION: ${{ inputs.region }}
+      SERVICE_NAME: ${{ inputs.service_name }}
     steps:
-      - name: Checkout
+      - name: Checkout exact commit
         uses: actions/checkout@v4
 
-      - name: Validate worker source
+      - name: Validate worker source and authorization boundary
         working-directory: workers/asset-worker
         run: |
-          npm install
+          npm ci
           npm run typecheck
+          grep -q "URAI_JOBS_WORKER_TOKEN" index.js
+          grep -q "Invalid worker authorization" index.js
+          grep -q "URAI_JOBS_CALLBACK_SECRET" index.js
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -55,12 +59,13 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Production secret preflight
+      - name: Production secret and authority preflight
         shell: bash
         run: |
           test -n "$GCP_PROJECT_ID"
           test -n "$RUNTIME_SERVICE_ACCOUNT"
           gcloud secrets describe urai-wheel-github-token --project "$GCP_PROJECT_ID" >/dev/null
+          gcloud secrets describe urai-jobs-worker-token --project "$GCP_PROJECT_ID" >/dev/null
           gcloud secrets describe urai-jobs-callback-secret --project "$GCP_PROJECT_ID" >/dev/null
 
       - name: Deploy Asset Worker
@@ -79,8 +84,8 @@ jobs:
             --max-instances 3 \
             --concurrency 20 \
             --timeout 300 \
-            --set-env-vars ASSET_FACTORY_REPO=LifeLoggerAI/asset-factory \
-            --set-secrets URAI_WHEEL_GITHUB_TOKEN=urai-wheel-github-token:latest,URAI_JOBS_CALLBACK_SECRET=urai-jobs-callback-secret:latest
+            --set-env-vars ASSET_FACTORY_REPO=LifeLoggerAI/asset-factory,URAI_ENV=production \
+            --set-secrets URAI_WHEEL_GITHUB_TOKEN=urai-wheel-github-token:latest,URAI_JOBS_WORKER_TOKEN=urai-jobs-worker-token:latest,URAI_JOBS_CALLBACK_SECRET=urai-jobs-callback-secret:latest
 
       - name: Verify deployed worker
         shell: bash
@@ -93,6 +98,8 @@ jobs:
       - name: Deployment summary
         run: |
           echo "### URAI Asset Worker" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo "- Service: $SERVICE_NAME" >> "$GITHUB_STEP_SUMMARY"
           echo "- Region: $REGION" >> "$GITHUB_STEP_SUMMARY"
           echo "- URL: $ASSET_WORKER_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Public ingress is required for the external callback; dispatch and callback routes must remain separately bearer-protected." >> "$GITHUB_STEP_SUMMARY"
