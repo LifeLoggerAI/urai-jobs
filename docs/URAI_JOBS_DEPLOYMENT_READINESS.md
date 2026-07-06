@@ -1,35 +1,73 @@
 # URAI Jobs Deployment Readiness
 
-## Current Verified Status
+## Current verified repository status
 
-The following local proof set has passed:
+The exact PR #63 head before the deployment-authority repair passed:
 
 - `npm run typecheck`
 - `npm run build`
 - `npm run urai-jobs:verify`
 - `npm run urai-jobs:smoke`
 - `npm run urai-jobs:e2e` using Firebase emulators
+- all associated GitHub Actions workflows for that exact commit
 
-Emulator E2E validated:
+A new exact head must pass again after any deployment-authority change. Repository validation is not production deployment evidence.
 
-- Auth/Firestore emulator startup using IPv4 host binding
-- Test users seeded
-- Test job created
-- Job document verified
-- jobQueue entry verified
-- Cancel job path verified
+Emulator E2E validates Auth/Firestore startup, seeded users, job creation, queue creation, and cancellation. It does not validate Cloud Run IAM, Secret Manager, external providers, asynchronous callbacks, live retries, monitoring, or rollback.
 
-## Firebase Resources
+## Canonical deployment authority
 
-- Project: `urai-jobs-dev`
-- Hosting: configured through `firebase.json`
+### Firebase runtime
+
+- Repository: `LifeLoggerAI/urai-jobs`
+- Branch: `main`
+- Firebase alias: `urai-jobs`
 - Functions source: `functions`
 - Firestore rules: `firestore.rules`
 - Firestore indexes: `firestore.indexes.json`
-- Auth: used for admin/user role validation
-- Emulator config: Firestore/Auth pinned to `127.0.0.1` for this workspace
+- Storage rules: `storage.rules`
+- Production Firebase deployment remains a separate authorized action with exact tested, deployed, and rollback SHAs.
 
-## Required Environment Variables
+### Cloud Run workers
+
+`scripts/deploy-workers.sh` is the canonical general worker deployment path.
+
+It currently permits only:
+
+- `narrator-worker`
+
+It deliberately refuses to deploy:
+
+- `asset-worker`, which has a separate callback-facing workflow and is blocked until dispatch authentication, callback replay protection, and the shared Asset Factory contract are certified;
+- `spatial-worker`, which remains a placeholder;
+- `studio-worker`, which remains a placeholder;
+- `career-worker`, which remains scaffold-only outside local/test use.
+
+The narrator deployment requires:
+
+- a dedicated runtime service account;
+- a Secret Manager-backed `URAI_JOBS_WORKER_TOKEN`;
+- application-level bearer authorization enforced by the worker;
+- a production environment value;
+- an explicit bucket;
+- successful Cloud Build completion before Cloud Run deployment.
+
+Cloud Run ingress is technically public for the current token-authenticated compatibility mode. This must not be described as unauthenticated application access: `/execute-job` rejects requests without the Secret Manager-backed token. IAM/OIDC migration remains a future hardening item.
+
+### Asset worker
+
+`.github/workflows/deploy-asset-worker.yml` is manual-only and protected by:
+
+- typed `DEPLOY` confirmation;
+- the GitHub `production` environment;
+- workload-identity deployment credentials;
+- a dedicated runtime service account;
+- separate GitHub dispatch, worker-dispatch, and callback secrets;
+- source checks that require dispatch and callback authorization markers before deployment.
+
+The workflow currently remains blocked because the Asset worker source does not yet contain the required dispatch-authentication marker. This is intentional. Do not remove the check to make deployment pass.
+
+## Required deployment configuration
 
 Local emulator only:
 
@@ -39,48 +77,62 @@ Local emulator only:
 - `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080`
 - `FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099`
 
-Production deploy should not set emulator host variables.
+Canonical narrator worker deployment:
 
-## Predeploy Commands
+- `GCLOUD_PROJECT`
+- `GCP_REGION`
+- `GCS_BUCKET_NAME`
+- `WORKER_RUNTIME_SERVICE_ACCOUNT`
+- `URAI_JOBS_WORKER_TOKEN_SECRET`
+
+Production must not set emulator host variables.
+
+## Predeployment commands
 
 ```bash
+npm ci
 npm run typecheck
 npm run build
-npm run urai-jobs:verify
-npm run urai-jobs:smoke
+npm run test
 npm run urai-jobs:deploy-precheck
 ```
 
-## Deploy Commands
+The precheck verifies that placeholder workers cannot enter the canonical deploy set and that the Asset workflow remains manual and fail-closed.
+
+## Deployment commands
+
+No production command is authorized merely because it appears below. First record current deployed SHA, target SHA, rollback SHA, project, service accounts, secret versions, affected services, and operator approval.
 
 ```bash
-firebase use urai-jobs-dev
-firebase deploy --only firestore:rules,firestore:indexes
-firebase deploy --only functions
-firebase deploy --only hosting
-firebase deploy --only functions,hosting,firestore:rules,firestore:indexes
+# Repository verification only
+npm run urai-jobs:deploy-precheck
+
+# Canonical approved-worker deployment after authorization
+GCLOUD_PROJECT=<project> \
+GCS_BUCKET_NAME=<bucket> \
+WORKER_RUNTIME_SERVICE_ACCOUNT=<service-account> \
+URAI_JOBS_WORKER_TOKEN_SECRET=<secret-name> \
+npm run deploy:workers
 ```
 
-## Rollback Notes
+Asset worker deployment must use the manual GitHub Actions workflow and cannot be invoked successfully until its source authorization gate passes.
 
-Hosting:
+## Rollback requirements
+
+Before any worker deployment, record the current Cloud Run revision and image digest. Rollback must target the exact previous revision, not an assumed branch name.
 
 ```bash
-firebase hosting:rollback
+gcloud run revisions list --service <service> --region <region> --project <project>
+gcloud run services update-traffic <service> --to-revisions <known-good-revision>=100 --region <region> --project <project>
 ```
 
-Functions rollback depends on Firebase release history and should be handled by redeploying the last known good build artifact or reverting the commit and redeploying functions.
+Firebase Hosting, Functions, and rules rollback remain separate operations. Revert to the exact known-good source commit and redeploy only after the affected component and data compatibility are reviewed.
 
-Firestore rules/index recovery should be handled by reverting `firestore.rules` and `firestore.indexes.json`, then redeploying:
+## Known production blockers
 
-```bash
-firebase deploy --only firestore:rules,firestore:indexes
-```
-
-## Known Production Risks
-
-- Real Firebase Auth admin/operator claims must be seeded before production admin use.
-- Live create/list/get/retry/cancel paths must be validated against real Firebase permissions after deploy.
-- Worker runtime credentials and provider credentials must exist for real execution jobs.
-- Emulator E2E validates persistence, queue entry, and cancel path; it does not validate every external provider.
-- Production logs, alerting, and monitoring policy still need final operator setup.
+- Exact current deployed SHA and rollback SHA are not established.
+- Asset dispatch authentication and callback replay protection are incomplete.
+- Live create, lease, execute, async callback, retry, cancellation, dead-letter, artifact access, and rollback evidence is absent for the current head.
+- Spatial, Studio, and Career workers are not production implementations.
+- Cross-repository privacy export/deletion and retention are incomplete.
+- Monitoring alerts, backup, restore, and disaster-recovery exercises are not certified.
