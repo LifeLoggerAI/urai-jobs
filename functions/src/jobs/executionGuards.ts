@@ -6,6 +6,11 @@ type ExecutionGuardJob = {
   execution?: { leaseToken?: unknown };
 };
 
+type QueueRecoveryRecord = {
+  status?: unknown;
+  lease?: { leaseToken?: unknown };
+};
+
 export type ExecutionStartDecision =
   | { action: 'start' }
   | { action: 'ignore'; reason: 'terminal' | 'stale-lease' | 'duplicate-running' | 'invalid-state' };
@@ -34,6 +39,18 @@ export function decideExecutionStart(job: ExecutionGuardJob, leaseToken: string)
 
 export function canFinalizeExecution(job: ExecutionGuardJob, leaseToken: string): boolean {
   return job.status === 'RUNNING' && job.execution?.leaseToken === leaseToken;
+}
+
+export function canRequeueUnstartedLease(
+  job: ExecutionGuardJob,
+  queueEntry: QueueRecoveryRecord,
+  leaseToken: string,
+): boolean {
+  return job.status === 'LEASED'
+    && queueEntry.status === 'LEASED'
+    && job.lease?.leaseToken === leaseToken
+    && queueEntry.lease?.leaseToken === leaseToken
+    && job.execution?.leaseToken !== leaseToken;
 }
 
 export function isTerminalJobStatus(status: unknown): boolean {
