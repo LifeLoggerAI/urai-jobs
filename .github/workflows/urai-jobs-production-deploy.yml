@@ -1,52 +1,94 @@
-name: URAI Jobs Production Deploy
+name: URAI Jobs Canonical Production Deploy
 
 on:
   workflow_dispatch:
     inputs:
-      confirm_launch_unlock:
-        description: Type LAUNCH-UNLOCK to confirm production signoffs are complete
-        required: true
-        type: string
       target:
-        description: Firebase target alias
+        description: Deployment environment
         required: true
-        default: prod
+        default: staging
         type: choice
         options:
-          - prod
           - staging
-          - dev
-      deploy_workers:
-        description: Deploy Cloud Run workers before Firebase deploy
+          - prod
+      confirm_launch_unlock:
+        description: Type LAUNCH-UNLOCK after reviewing the target and rollback SHA
         required: true
-        default: true
-        type: boolean
-      run_smoke:
-        description: Run callable production smoke after deploy
+        type: string
+      expected_sha:
+        description: Exact repository SHA to deploy; must equal the workflow checkout SHA
+        required: true
+        type: string
+      rollback_sha:
+        description: Approved rollback repository SHA
+        required: true
+        type: string
+      paid_provider_smoke_authorization:
+        description: Type PAID-PROVIDER-SMOKE to authorize the real narrator provider smoke; otherwise it remains skipped
+        required: false
+        default: ""
+        type: string
+      require_custom_domains:
+        description: Require custom-domain checks in addition to Firebase Hosting URLs
         required: true
         default: false
         type: boolean
 
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: urai-jobs-canonical-deploy-${{ inputs.target }}
+  cancel-in-progress: false
+
 env:
-  DEPLOY_PROJECT_ID: ${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID || secrets.GCLOUD_PROJECT || secrets.GOOGLE_CLOUD_PROJECT }}
+  DEPLOY_PROJECT_ID: ${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID }}
+  GCP_REGION: ${{ secrets.GCP_REGION || 'us-central1' }}
+  GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
+  API_ALLOWED_ORIGINS: ${{ secrets.API_ALLOWED_ORIGINS }}
+  FIREBASE_HOSTING_SITE: ${{ secrets.FIREBASE_HOSTING_SITE }}
+  WORKER_RUNTIME_SERVICE_ACCOUNT: ${{ secrets.WORKER_RUNTIME_SERVICE_ACCOUNT }}
+  URAI_JOBS_WORKER_TOKEN_SECRET: URAI_JOBS_WORKER_TOKEN
+  URAI_WHEEL_GITHUB_TOKEN_SECRET: urai-wheel-github-token
+  URAI_JOBS_CALLBACK_SECRET_NAME: urai-jobs-callback-secret
 
 jobs:
   deploy:
-    name: Deploy URAI Jobs Runtime
+    name: Verify, deploy, smoke, and receipt URAI Jobs
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     environment: ${{ inputs.target }}
 
     steps:
-      - name: Checkout
+      - name: Checkout exact target
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
 
-      - name: Require explicit launch unlock
+      - name: Enforce exact SHA and rollback gate
+        shell: bash
         run: |
+          set -euo pipefail
           if [ "${{ inputs.confirm_launch_unlock }}" != "LAUNCH-UNLOCK" ]; then
-            echo "confirm_launch_unlock must exactly equal LAUNCH-UNLOCK."
+            echo "confirm_launch_unlock must exactly equal LAUNCH-UNLOCK" >&2
             exit 1
           fi
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          if [ "$ACTUAL_SHA" != "${{ inputs.expected_sha }}" ]; then
+            echo "Expected SHA ${{ inputs.expected_sha }} but checked out $ACTUAL_SHA" >&2
+            exit 1
+          fi
+          git cat-file -e "${{ inputs.rollback_sha }}^{commit}" || {
+            echo "rollback_sha is not a commit reachable in this repository" >&2
+            exit 1
+          }
+          if [ "$ACTUAL_SHA" = "${{ inputs.rollback_sha }}" ]; then
+            echo "rollback_sha must differ from the target SHA" >&2
+            exit 1
+          fi
+          echo "TARGET_SHA=$ACTUAL_SHA" >> "$GITHUB_ENV"
+          echo "ROLLBACK_SHA=${{ inputs.rollback_sha }}" >> "$GITHUB_ENV"
 
       - name: Enable pnpm
         uses: pnpm/action-setup@v4
@@ -59,16 +101,17 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Setup Java 21 for Firebase tooling
+      - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
 
-      - name: Authenticate to Google Cloud
+      - name: Authenticate to Google Cloud with workload identity
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_URAI_JOBS || secrets.GCP_SERVICE_ACCOUNT_JSON }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
@@ -76,85 +119,120 @@ jobs:
           project_id: ${{ env.DEPLOY_PROJECT_ID }}
 
       - name: Install Firebase CLI
-        run: pnpm add -g firebase-tools
+        run: pnpm add --global firebase-tools
 
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+      - name: Frozen dependency installation
+        run: pnpm install --frozen-lockfile
 
-      - name: Production env precheck
-        env:
-          URAI_ENV: prod
-          NODE_ENV: production
-          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
-          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
-          GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
-          GCP_REGION: ${{ secrets.GCP_REGION }}
-          API_ALLOWED_ORIGINS: ${{ secrets.API_ALLOWED_ORIGINS }}
-          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
-          MAILGUN_KEY: ${{ secrets.MAILGUN_KEY }}
-          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
-          GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
-          NARRATOR_WORKER_URL: ${{ secrets.NARRATOR_WORKER_URL }}
-          ASSET_WORKER_URL: ${{ secrets.ASSET_WORKER_URL }}
-          SPATIAL_WORKER_URL: ${{ secrets.SPATIAL_WORKER_URL }}
-          STUDIO_WORKER_URL: ${{ secrets.STUDIO_WORKER_URL }}
-          WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
-          FIREBASE_HOSTING_SITE: ${{ secrets.FIREBASE_HOSTING_SITE }}
-        run: pnpm prod:precheck
-
-      - name: Activation readiness guard
-        run: pnpm activation:verify
-
-      - name: Build and verify
+      - name: Verify required deployment authority
+        shell: bash
         run: |
+          set -euo pipefail
+          test -n "$DEPLOY_PROJECT_ID"
+          test -n "$GCS_BUCKET_NAME"
+          test -n "$API_ALLOWED_ORIGINS"
+          test -n "$FIREBASE_HOSTING_SITE"
+          test -n "$WORKER_RUNTIME_SERVICE_ACCOUNT"
+          gcloud secrets describe URAI_JOBS_WORKER_TOKEN --project "$DEPLOY_PROJECT_ID" >/dev/null
+          gcloud secrets describe urai-wheel-github-token --project "$DEPLOY_PROJECT_ID" >/dev/null
+          gcloud secrets describe urai-jobs-callback-secret --project "$DEPLOY_PROJECT_ID" >/dev/null
+          gcloud iam service-accounts describe "$WORKER_RUNTIME_SERVICE_ACCOUNT" --project "$DEPLOY_PROJECT_ID" >/dev/null
+
+      - name: Repository verification gates
+        run: |
+          pnpm activation:verify
           pnpm urai-jobs:verify
+          pnpm urai-jobs:smoke
           pnpm typecheck
           pnpm build
           pnpm test
-          pnpm urai-jobs:smoke
+          pnpm urai-jobs:deploy-precheck
 
-      - name: Deploy Cloud Run workers
-        if: ${{ inputs.deploy_workers }}
+      - name: Ensure artifact bucket
         env:
-          URAI_ENV: prod
           GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
-          GCP_REGION: ${{ secrets.GCP_REGION }}
-          GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
+        run: bash scripts/ensure-gcs-bucket.sh
+
+      - name: Deploy canonical worker fleet
+        env:
+          URAI_ENV: ${{ inputs.target }}
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          DEPLOY_RECEIPT_PATH: docs/release-evidence/worker-deploy-receipt.json
         run: pnpm deploy:workers
 
-      - name: Deploy Firebase runtime
+      - name: Export deployed worker URLs
         env:
-          URAI_ENV: prod
           FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
           GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
-          GCP_REGION: ${{ secrets.GCP_REGION }}
-          API_ALLOWED_ORIGINS: ${{ secrets.API_ALLOWED_ORIGINS }}
-          WEBHOOK_SIGNING_SECRET: ${{ secrets.WEBHOOK_SIGNING_SECRET }}
-          MAILGUN_KEY: ${{ secrets.MAILGUN_KEY }}
-          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
-          GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
-          NARRATOR_WORKER_URL: ${{ secrets.NARRATOR_WORKER_URL }}
-          ASSET_WORKER_URL: ${{ secrets.ASSET_WORKER_URL }}
-          SPATIAL_WORKER_URL: ${{ secrets.SPATIAL_WORKER_URL }}
-          STUDIO_WORKER_URL: ${{ secrets.STUDIO_WORKER_URL }}
-          WORKER_SERVICE_ACCOUNT_EMAIL: ${{ secrets.WORKER_SERVICE_ACCOUNT_EMAIL }}
-          FIREBASE_HOSTING_SITE: ${{ secrets.FIREBASE_HOSTING_SITE }}
+        run: node scripts/export-worker-urls.mjs
+
+      - name: Deploy Firebase runtime
+        env:
+          URAI_ENV: ${{ inputs.target }}
+          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           FIREBASE_FALLBACK_HOSTING_SITE: ${{ secrets.FIREBASE_FALLBACK_HOSTING_SITE }}
-          ALLOW_CREATE_HOSTING_SITE: ${{ secrets.ALLOW_CREATE_HOSTING_SITE }}
+          ALLOW_CREATE_HOSTING_SITE: "false"
         run: pnpm deploy:firebase:prod -- ${{ inputs.target }}
 
-      - name: Production callable smoke
-        if: ${{ inputs.run_smoke }}
+      - name: Verify workers and Firebase Hosting
+        run: |
+          pnpm prod:verify-workers
+          pnpm domains:verify -- "https://${FIREBASE_HOSTING_SITE}.web.app"
+
+      - name: Verify custom domains
+        if: ${{ inputs.require_custom_domains }}
+        run: pnpm domains:verify -- https://uraijobs.com https://www.uraijobs.com
+
+      - name: Paid narrator provider smoke
+        if: ${{ inputs.paid_provider_smoke_authorization == 'PAID-PROVIDER-SMOKE' }}
         env:
           FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
           GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
-          GCP_REGION: ${{ secrets.GCP_REGION }}
           PROD_SMOKE_ID_TOKEN: ${{ secrets.PROD_SMOKE_ID_TOKEN }}
           PROD_SMOKE_JOB_TYPE: narrator.tts
-          PROD_SMOKE_TEXT: URAI Jobs Runtime production smoke test
+          PROD_SMOKE_TEXT: URAI Jobs canonical deployment provider smoke
         run: pnpm prod:smoke
 
-      - name: Smoke skipped notice
-        if: ${{ !inputs.run_smoke }}
-        run: echo "Production callable smoke was skipped. Run it after PROD_SMOKE_ID_TOKEN is configured."
+      - name: Paid smoke not authorized notice
+        if: ${{ inputs.paid_provider_smoke_authorization != 'PAID-PROVIDER-SMOKE' }}
+        run: echo "[BLOCKED] Real narrator provider smoke was not authorized; provider certification remains incomplete."
+
+      - name: Stamp release receipt
+        env:
+          URAI_ENV: ${{ inputs.target }}
+          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+        run: |
+          pnpm prod:stamp
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = 'docs/release-evidence/canonical-deploy-inputs.json';
+          fs.mkdirSync('docs/release-evidence', { recursive: true });
+          fs.writeFileSync(path, JSON.stringify({
+            schemaVersion: 'urai-jobs-canonical-deploy-inputs-1',
+            generatedAt: new Date().toISOString(),
+            repository: process.env.GITHUB_REPOSITORY,
+            workflowRunId: process.env.GITHUB_RUN_ID,
+            targetSha: process.env.TARGET_SHA,
+            rollbackSha: process.env.ROLLBACK_SHA,
+            environment: '${{ inputs.target }}',
+            project: process.env.DEPLOY_PROJECT_ID,
+            region: process.env.GCP_REGION,
+            paidProviderSmokeAuthorized: '${{ inputs.paid_provider_smoke_authorization }}' === 'PAID-PROVIDER-SMOKE',
+          }, null, 2) + '\n');
+          NODE
+
+      - name: Upload immutable deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-jobs-canonical-deploy-${{ inputs.target }}-${{ inputs.expected_sha }}
+          path: |
+            docs/release-evidence/*.json
+            docs/release-evidence/*.md
+          if-no-files-found: error
+          retention-days: 365
