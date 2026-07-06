@@ -9,10 +9,13 @@ app.set('trust proxy', true);
 app.use(express.json({ limit: '1mb' }));
 
 const db = admin.firestore();
+const workerToken = process.env.URAI_JOBS_WORKER_TOKEN || '';
 const githubToken = process.env.URAI_WHEEL_GITHUB_TOKEN || '';
 const callbackSecret = process.env.URAI_JOBS_CALLBACK_SECRET || '';
 const assetFactoryRepo = process.env.ASSET_FACTORY_REPO || 'LifeLoggerAI/asset-factory';
 const configuredPublicBaseUrl = (process.env.ASSET_WORKER_PUBLIC_URL || '').replace(/\/$/, '');
+const runtimeEnv = String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
+const productionRuntime = ['prod', 'production', 'staging'].includes(runtimeEnv);
 const allowedTypes = new Set([
   'asset.generate',
   'asset.validate',
@@ -35,6 +38,31 @@ function timingSafeEqual(left, right) {
   const a = Buffer.from(left);
   const b = Buffer.from(right);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function requireWorkerAuth(req, res, next) {
+  const localBypass = runtimeEnv === 'local' || runtimeEnv === 'test' || process.env.FUNCTIONS_EMULATOR === 'true';
+  if (!workerToken && localBypass) return next();
+  if (!workerToken) return res.status(503).send({ ok: false, error: 'worker auth is not configured' });
+  if (!timingSafeEqual(bearer(req), workerToken)) {
+    return res.status(401).send({ ok: false, error: 'unauthorized' });
+  }
+  return next();
+}
+
+function validateProductionConfiguration() {
+  if (!productionRuntime) return;
+  const required = {
+    URAI_JOBS_WORKER_TOKEN: workerToken,
+    URAI_WHEEL_GITHUB_TOKEN: githubToken,
+    URAI_JOBS_CALLBACK_SECRET: callbackSecret,
+  };
+  const missing = Object.entries(required)
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+  if (missing.length > 0) {
+    throw new Error(`Missing required production environment variables: ${missing.join(', ')}`);
+  }
 }
 
 function publicBaseUrl(req) {
@@ -66,6 +94,8 @@ async function githubRequest(path, init = {}) {
   return response;
 }
 
+validateProductionConfiguration();
+
 app.get('/', (_req, res) => {
   res.status(200).send({
     service: 'asset-worker',
@@ -76,19 +106,25 @@ app.get('/', (_req, res) => {
 
 app.get('/healthz', (_req, res) => {
   const configured = {
+    workerToken: Boolean(workerToken),
     githubToken: Boolean(githubToken),
     callbackSecret: Boolean(callbackSecret),
   };
-  const ok = Object.values(configured).every(Boolean);
+  const ok = productionRuntime ? Object.values(configured).every(Boolean) : true;
   res.status(ok ? 200 : 503).send({
     ok,
     configured,
+    runtimeEnv,
     assetFactoryRepo,
     callbackUrlMode: configuredPublicBaseUrl ? 'configured' : 'request-derived',
   });
 });
 
-app.post('/', async (req, res) => {
+app.get('/authz', requireWorkerAuth, (_req, res) => {
+  res.status(200).send({ ok: true, service: 'asset-worker', authorized: true });
+});
+
+app.post('/', requireWorkerAuth, async (req, res) => {
   const { jobId, leaseToken } = req.body || {};
   if (!jobId || !leaseToken) {
     return res.status(400).send({ error: 'jobId and leaseToken are required' });
@@ -105,7 +141,10 @@ app.post('/', async (req, res) => {
       return res.status(422).send({ error: `Unsupported asset job type: ${job.type}` });
     }
 
-    const rounds = Math.max(1, Math.min(5, Number(job.payloadInline?.rounds || 3)));
+    const payload = job.payload && typeof job.payload === 'object'
+      ? job.payload
+      : (job.payloadInline && typeof job.payloadInline === 'object' ? job.payloadInline : {});
+    const rounds = Math.max(1, Math.min(5, Number(payload.rounds || 3)));
     const callbackUrl = `${publicBaseUrl(req)}/callback`;
     const correlationId = job.correlationId || jobId;
 
