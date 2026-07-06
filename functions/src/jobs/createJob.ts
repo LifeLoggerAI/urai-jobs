@@ -1,14 +1,16 @@
+import { createHash } from 'node:crypto';
 import { ulid } from 'ulid';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
-import { Job, JobQueueEntry } from '@urai-jobs/shared-types';
+import type { Job, JobQueueEntry } from '@urai-jobs/shared-types';
 import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 const MAX_PAYLOAD_BYTES = parseInt(process.env.URAI_JOBS_MAX_PAYLOAD_BYTES || '', 10) || 32768;
 const MAX_CREATE_PER_MINUTE = parseInt(process.env.URAI_JOBS_CREATE_RATE_LIMIT_PER_MINUTE || '', 10) || 10;
+const IDEMPOTENCY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 const ALLOWED_JOB_TYPE_PATTERNS = [
   /^narrator\.tts$/,
@@ -28,7 +30,7 @@ const ALLOWED_JOB_TYPE_PATTERNS = [
 const CreateJobSchema = z.object({
   jobType: z.string().min(3, 'Job type must be at least 3 characters').max(80),
   payload: z.record(z.any()),
-  idempotencyKey: z.string().max(160).optional(),
+  idempotencyKey: z.string().min(1).max(160).optional(),
 });
 
 function payloadSizeBytes(payload: unknown): number {
@@ -55,6 +57,10 @@ function hasJobCreatePermission(user: unknown): boolean {
   return record.role === 'admin' || record.role === 'operator' || permissions.includes('jobs:create');
 }
 
+function idempotencyDocumentId(uid: string, jobType: string, idempotencyKey: string): string {
+  return createHash('sha256').update(`${uid}\n${jobType}\n${idempotencyKey}`).digest('hex');
+}
+
 async function assertCreateRateLimit(uid: string) {
   const db = getFirestore();
   const windowStart = Timestamp.fromMillis(Date.now() - 60_000);
@@ -70,7 +76,7 @@ async function assertCreateRateLimit(uid: string) {
   }
 }
 
-const handler = async (data: any, context: CallableContext, user: unknown) => {
+const handler = async (data: unknown, context: CallableContext, user: unknown) => {
   const uid = context.auth?.uid;
   if (!uid) {
     throw httpsError('unauthenticated', 'User must be authenticated.');
@@ -95,15 +101,25 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     throw httpsError('invalid-argument', `Payload is too large. Max bytes: ${MAX_PAYLOAD_BYTES}`);
   }
 
+  const db = getFirestore();
+  const idempotencyRef = idempotencyKey
+    ? db.collection('jobIdempotency').doc(idempotencyDocumentId(uid, jobType, idempotencyKey))
+    : null;
+
+  if (idempotencyRef) {
+    const existing = await idempotencyRef.get();
+    const existingJobId = existing.exists ? existing.data()?.jobId : null;
+    if (typeof existingJobId === 'string' && existingJobId) {
+      return { jobId: existingJobId, deduplicated: true };
+    }
+  }
+
   await assertCreateRateLimit(uid);
 
-  const db = getFirestore();
-  const jobId = ulid();
-  const now = FieldValue.serverTimestamp();
+  const proposedJobId = ulid();
   const orgId = userOrgId(user);
-
   const newJob: Job = {
-    jobId,
+    jobId: proposedJobId,
     type: jobType,
     jobType,
     status: 'PENDING',
@@ -116,33 +132,56 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
       maxAttempts: 3,
     },
   };
-
   const newQueueEntry: JobQueueEntry = {
-    jobId,
+    jobId: proposedJobId,
     jobType,
     status: 'PENDING',
     attemptCount: 0,
   };
 
   try {
-    await db.runTransaction(async (transaction) => {
-      const jobRef = jobDoc(jobId);
-      const queueRef = jobQueueEntryDoc(jobId);
+    const outcome = await db.runTransaction(async (transaction) => {
+      if (idempotencyRef) {
+        const existing = await transaction.get(idempotencyRef);
+        const existingJobId = existing.exists ? existing.data()?.jobId : null;
+        if (typeof existingJobId === 'string' && existingJobId) {
+          return { jobId: existingJobId, created: false };
+        }
+      }
+
+      const now = FieldValue.serverTimestamp();
+      const jobRef = jobDoc(proposedJobId);
+      const queueRef = jobQueueEntryDoc(proposedJobId);
 
       transaction.create(jobRef, {
         ...newJob,
         createdAt: now,
         updatedAt: now,
       });
-
       transaction.create(queueRef, {
         ...newQueueEntry,
         availableAt: now,
         createdAt: now,
       });
+
+      if (idempotencyRef) {
+        transaction.create(idempotencyRef, {
+          jobId: proposedJobId,
+          ownerUid: uid,
+          jobType,
+          createdAt: now,
+          expiresAt: Timestamp.fromMillis(Date.now() + IDEMPOTENCY_RETENTION_MS),
+        });
+      }
+
+      return { jobId: proposedJobId, created: true };
     });
 
-    await jobDoc(jobId).collection('logs').add({
+    if (!outcome.created) {
+      return { jobId: outcome.jobId, deduplicated: true };
+    }
+
+    await jobDoc(outcome.jobId).collection('logs').add({
       level: 'info',
       source: 'createJob',
       message: 'Job created and queued by authorized caller.',
@@ -151,16 +190,16 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
         ownerUid: uid,
         orgId,
         payloadBytes,
-        idempotencyKey: idempotencyKey || null,
+        idempotencyProtected: Boolean(idempotencyKey),
       },
-      createdAt: now,
+      createdAt: FieldValue.serverTimestamp(),
     });
-  } catch (error: any) {
-    console.error('Error creating job in transaction:', error);
-    throw httpsError('internal', 'Failed to create job.', error?.message);
-  }
 
-  return { jobId };
+    return { jobId: outcome.jobId, deduplicated: false };
+  } catch (error: unknown) {
+    console.error('Error creating job in transaction:', error);
+    throw httpsError('internal', 'Failed to create job.', error instanceof Error ? error.message : String(error));
+  }
 };
 
 export const createJob = withAuthenticatedRole(['admin', 'operator', 'user'], handler);
