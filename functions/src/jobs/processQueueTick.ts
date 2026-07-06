@@ -7,7 +7,6 @@ import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { canRequeueUnstartedLease, isTerminalJobStatus } from './executionGuards.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
-const MAX_EXPIRED_LEASES_TO_RECOVER_PER_TICK = 10;
 const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
 const LEASE_DURATION_MS = 60 * 1000;
 
@@ -35,91 +34,6 @@ function terminalQueueStatus(status: unknown): JobQueueStatus {
 
 function safeErrorMessage(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 500);
-}
-
-async function recoverExpiredUnstartedLeases(): Promise<number> {
-  const db = getFirestore();
-  const nowDate = new Date();
-  const snapshot = await db.collection('jobQueue')
-    .where('status', '==', 'LEASED')
-    .where('lease.expiresAt', '<=', nowDate)
-    .orderBy('lease.expiresAt')
-    .limit(MAX_EXPIRED_LEASES_TO_RECOVER_PER_TICK)
-    .get();
-
-  let recovered = 0;
-  for (const queueSnapshot of snapshot.docs) {
-    const queueData = queueSnapshot.data() as JobQueueEntry;
-    const jobId = String(queueData.jobId || queueSnapshot.id);
-
-    const outcome = await db.runTransaction(async (transaction) => {
-      const queueRef = jobQueueEntryDoc(jobId);
-      const masterJobRef = jobDoc(jobId);
-      const [currentQueueSnapshot, currentJobSnapshot] = await Promise.all([
-        transaction.get(queueRef),
-        transaction.get(masterJobRef),
-      ]);
-
-      if (!currentQueueSnapshot.exists) return 'missing-queue' as const;
-      const currentQueue = currentQueueSnapshot.data() as JobQueueEntry;
-      const leaseToken = String(currentQueue.lease?.leaseToken || '');
-      const leaseExpiresAt = currentQueue.lease?.expiresAt as { toMillis?: () => number } | Date | undefined;
-      const expiresAtMs = leaseExpiresAt instanceof Date
-        ? leaseExpiresAt.getTime()
-        : typeof leaseExpiresAt?.toMillis === 'function'
-          ? leaseExpiresAt.toMillis()
-          : Number.NaN;
-
-      if (currentQueue.status !== 'LEASED' || !leaseToken || !Number.isFinite(expiresAtMs) || expiresAtMs > Date.now()) {
-        return 'not-expired' as const;
-      }
-
-      const now = FieldValue.serverTimestamp();
-      if (!currentJobSnapshot.exists) {
-        transaction.set(queueRef, {
-          status: 'DEAD',
-          lease: FieldValue.delete(),
-          updatedAt: now,
-          'dispatch.lastError': 'Master job document is missing during lease recovery.',
-          'dispatch.recoveredAt': now,
-        }, { merge: true });
-        return 'dead-missing-job' as const;
-      }
-
-      const currentJob = currentJobSnapshot.data() as Job;
-      if (isTerminalJobStatus(currentJob.status)) {
-        transaction.set(queueRef, {
-          status: terminalQueueStatus(currentJob.status),
-          lease: FieldValue.delete(),
-          updatedAt: now,
-          'dispatch.recoveredAt': now,
-        }, { merge: true });
-        return 'reconciled-terminal' as const;
-      }
-
-      if (!canRequeueUnstartedLease(currentJob, currentQueue, leaseToken)) {
-        return 'unsafe-to-requeue' as const;
-      }
-
-      const requeueUpdate = {
-        status: 'PENDING' as const,
-        availableAt: nowDate,
-        lease: FieldValue.delete(),
-        updatedAt: now,
-        'dispatch.recoveryCount': FieldValue.increment(1),
-        'dispatch.recoveredAt': now,
-        'dispatch.lastError': 'Expired before execution dispatch started.',
-      };
-      transaction.set(queueRef, requeueUpdate, { merge: true });
-      transaction.set(masterJobRef, requeueUpdate, { merge: true });
-      return 'requeued' as const;
-    });
-
-    if (outcome === 'requeued') recovered += 1;
-    console.log(`[lease-recovery] ${jobId}: ${outcome}`);
-  }
-
-  return recovered;
 }
 
 async function compensatePublishFailure(jobId: string, leaseToken: string, error: unknown): Promise<boolean> {
@@ -185,10 +99,6 @@ export const processQueueTick = onSchedule('every 1 minutes', async () => {
   const tickWorkerId = `tick-${ulid()}`;
 
   console.log(`Starting queue processing tick with worker ID: ${tickWorkerId}`);
-  const recovered = await recoverExpiredUnstartedLeases();
-  if (recovered > 0) {
-    console.warn(`[${tickWorkerId}] Requeued ${recovered} expired lease(s) that never entered RUNNING.`);
-  }
 
   const pendingJobsQuery = db.collection('jobQueue')
     .where('status', '==', 'PENDING')
