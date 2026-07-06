@@ -1,47 +1,46 @@
 const express = require('express');
-const admin = require('firebase-admin');
-
-admin.initializeApp();
 
 const app = express();
-
 app.use(express.json({ limit: '1mb' }));
 
+function requireWorkerAuth(req, res, next) {
+  const expectedToken = process.env.URAI_JOBS_WORKER_TOKEN;
+  const env = String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
+  const localBypass = env === 'local' || env === 'test' || process.env.FUNCTIONS_EMULATOR === 'true';
+
+  if (!expectedToken && localBypass) return next();
+  if (!expectedToken) return res.status(503).send({ ok: false, error: 'worker auth is not configured' });
+  if ((req.get('authorization') || '') !== `Bearer ${expectedToken}`) {
+    return res.status(401).send({ ok: false, error: 'unauthorized' });
+  }
+  return next();
+}
+
 app.get('/', (_req, res) => {
-  res.status(200).send({ service: 'spatial-worker', ok: true });
+  res.status(200).send({ service: 'spatial-worker', ok: true, implementation: 'placeholder-disabled' });
 });
 
 app.get('/healthz', (_req, res) => {
-  res.status(200).send({ ok: true });
+  res.status(200).send({
+    ok: true,
+    service: 'spatial-worker',
+    implementationReady: false,
+    authConfigured: Boolean(process.env.URAI_JOBS_WORKER_TOKEN),
+  });
 });
 
-app.post('/', async (req, res) => {
-  const { jobId, leaseToken } = req.body;
-
-  // 1. Authenticate request (e.g., check for a valid GCP service account token)
-
-  // 2. Load job and verify lease
-  const db = admin.firestore();
-  const jobRef = db.collection('jobs').doc(jobId);
-  const jobDoc = (await jobRef.get()).data();
-
-  if (!jobDoc || jobDoc.execution.leaseToken !== leaseToken) {
-    return res.status(403).send('Invalid job ID or lease token.');
+app.post('/', requireWorkerAuth, async (req, res) => {
+  const { jobId, leaseToken } = req.body || {};
+  if (!jobId || !leaseToken) {
+    return res.status(400).send({ error: 'jobId and leaseToken are required' });
   }
 
-  // 3. Placeholder for actual work
-  console.log(`Executing spatial-worker for job ${jobId}`);
-  
-  // 4. Write back results (simplified)
-  const resultId = db.collection('jobResults').doc().id;
-  await db.collection('jobResults').doc(resultId).set({
+  return res.status(501).send({
+    ok: false,
+    code: 'SPATIAL_WORKER_NOT_IMPLEMENTED',
+    error: 'Spatial worker execution is not implemented. Refusing to emit synthetic success.',
     jobId,
-    status: 'SUCCESS',
   });
-
-  await jobRef.update({ status: 'SUCCESS', 'result.resultId': resultId });
-
-  res.status(200).send({ success: true });
 });
 
 const port = Number(process.env.PORT) || 8080;
