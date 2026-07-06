@@ -2,15 +2,15 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onMessagePublished } from 'firebase-functions/v2/pubsub';
 import axios from 'axios';
 import { z } from 'zod';
-import { Job } from '@urai-jobs/shared-types';
+import type { Job } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
+import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
 
 // URAI Jobs worker routing audit markers.
 // asset/spatial/studio subsystem workers route: '/'
-// narrator and career execution workers route: '/execute-job'
+// narrator, career, content, storytime, analytics, and communications workers route: '/execute-job'
 
-const JOB_EXECUTION_TOPIC = 'job-execution';
-
+const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
 const PRODUCTION_ENVS = new Set(['prod', 'production', 'staging']);
 
 type WorkerTarget = { url: string; route: string; envKey: string };
@@ -30,20 +30,25 @@ type InlineWorkerResult = {
 };
 
 const JobExecutionMessageSchema = z.object({
-  jobId: z.string(),
-  leaseToken: z.string(),
+  jobId: z.string().min(1),
+  leaseToken: z.string().min(1),
 });
 
 function getJobType(job: Job): string {
   return String(job.type || job.jobType || 'narrator.tts');
 }
 
-function getWorkerEnvKey(jobType: string): string {
+function getWorkerEnvKey(jobType: string): string | null {
+  if (jobType === 'narrator.tts') return 'NARRATOR_WORKER_URL';
   if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) return 'ASSET_WORKER_URL';
   if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) return 'SPATIAL_WORKER_URL';
   if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) return 'STUDIO_WORKER_URL';
   if (jobType.startsWith('career.')) return 'CAREER_WORKER_URL';
-  return 'NARRATOR_WORKER_URL';
+  if (jobType.startsWith('content.') || jobType.startsWith('content-')) return 'CONTENT_WORKER_URL';
+  if (jobType.startsWith('storytime.')) return 'STORYTIME_WORKER_URL';
+  if (jobType.startsWith('analytics.')) return 'ANALYTICS_WORKER_URL';
+  if (jobType.startsWith('communications.')) return 'COMMUNICATIONS_WORKER_URL';
+  return null;
 }
 
 function getWorkerRoute(jobType: string): string {
@@ -55,6 +60,7 @@ function getWorkerRoute(jobType: string): string {
 
 function getWorkerTarget(jobType: string): WorkerTarget | null {
   const envKey = getWorkerEnvKey(jobType);
+  if (!envKey) return null;
   const url = process.env[envKey];
   if (!url) return null;
   return { url, route: getWorkerRoute(jobType), envKey };
@@ -168,24 +174,41 @@ async function appendJobLog(jobId: string, input: { level: string; message: stri
   }
 }
 
-async function handleJobFailure(jobId: string, error: unknown) {
+async function handleJobFailure(jobId: string, leaseToken: string, error: unknown) {
   const db = getFirestore();
   const jobRef = jobDoc(jobId);
   const queueRef = jobQueueEntryDoc(jobId);
-  const now = FieldValue.serverTimestamp();
   const errorMessage = error instanceof Error ? error.message : String(error);
 
-  await db.runTransaction(async (transaction) => {
+  const failed = await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(jobRef);
+    if (!snapshot.exists) return false;
+
+    const current = snapshot.data() as Job;
+    if (isTerminalJobStatus(current.status) || current.execution?.leaseToken !== leaseToken) {
+      return false;
+    }
+
+    const now = FieldValue.serverTimestamp();
     transaction.update(jobRef, {
       status: 'FAILED',
       error: { message: errorMessage },
       updatedAt: now,
+      completedAt: now,
+      'execution.completedAt': now,
     });
-    transaction.update(queueRef, {
+    transaction.set(queueRef, {
+      jobId,
       status: 'DONE',
       updatedAt: now,
-    });
+    }, { merge: true });
+    return true;
   });
+
+  if (!failed) {
+    console.warn(`Ignored execution failure for stale or terminal job ${jobId}:`, errorMessage);
+    return;
+  }
 
   await appendJobLog(jobId, {
     level: 'error',
@@ -207,42 +230,63 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
   const { jobId, leaseToken } = validationResult.data;
   const db = getFirestore();
   const jobRef = jobDoc(jobId);
+  const queueRef = jobQueueEntryDoc(jobId);
 
-  try {
-    const jobSnapshot = await jobRef.get();
+  const prepared = await db.runTransaction(async (transaction) => {
+    const jobSnapshot = await transaction.get(jobRef);
     if (!jobSnapshot.exists) {
-      throw new Error(`Job not found: ${jobId}`);
+      return { action: 'ignore' as const, reason: 'missing-job' };
     }
 
     const job = jobSnapshot.data() as Job;
-
-    if (job.lease?.leaseToken !== leaseToken) {
-      throw new Error(`Invalid lease token for job: ${jobId}`);
+    const decision = decideExecutionStart(job, leaseToken);
+    if (decision.action === 'ignore') {
+      return decision;
     }
 
-    const jobType = getJobType(job);
-    const target = getWorkerTarget(jobType);
-
-    await db.runTransaction(async (transaction) => {
-      transaction.update(jobRef, {
-        status: 'RUNNING',
-        'execution.leaseToken': leaseToken,
-        'execution.startedAt': FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      transaction.update(jobQueueEntryDoc(jobId), {
-        status: 'RUNNING',
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+    const now = FieldValue.serverTimestamp();
+    transaction.update(jobRef, {
+      status: 'RUNNING',
+      'execution.leaseToken': leaseToken,
+      'execution.startedAt': now,
+      'execution.attemptCount': FieldValue.increment(1),
+      'lease.heartbeatAt': now,
+      updatedAt: now,
+    });
+    transaction.update(queueRef, {
+      status: 'RUNNING',
+      'lease.heartbeatAt': now,
+      updatedAt: now,
     });
 
-    await appendJobLog(jobId, {
-      level: 'info',
-      source: 'executeJob',
-      message: 'Job execution started.',
-      metadata: { jobType },
-    });
+    return { action: 'start' as const, job };
+  });
 
+  if (prepared.action !== 'start') {
+    console.warn(`Ignoring execution message for ${jobId}: ${prepared.reason}`);
+    if (prepared.reason !== 'missing-job') {
+      await appendJobLog(jobId, {
+        level: 'warn',
+        source: 'executeJob',
+        message: 'Execution message ignored.',
+        metadata: { reason: prepared.reason },
+      });
+    }
+    return;
+  }
+
+  const job = prepared.job;
+  const jobType = getJobType(job);
+  const target = getWorkerTarget(jobType);
+
+  await appendJobLog(jobId, {
+    level: 'info',
+    source: 'executeJob',
+    message: 'Job execution started.',
+    metadata: { jobType },
+  });
+
+  try {
     let result: unknown;
 
     if (target) {
@@ -265,10 +309,26 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
       }, {
         headers: getWorkerAuthHeaders(),
         timeout: parseInt(process.env.URAI_JOBS_WORKER_TIMEOUT_MS || '', 10) || 120000,
+        validateStatus: (status) => status >= 200 && status < 300,
       });
+
       result = response.data;
+
+      if (response.status === 202) {
+        await appendJobLog(jobId, {
+          level: 'info',
+          source: 'executeJob',
+          message: 'Worker accepted asynchronous execution; awaiting callback or terminal update.',
+          metadata: { jobType, workerEnvKey: target.envKey },
+        });
+        return;
+      }
     } else {
       const envKey = getWorkerEnvKey(jobType);
+      if (!envKey) {
+        throw new Error(`No worker mapping is registered for job type ${jobType}.`);
+      }
+
       if (!inlineFallbackAllowed()) {
         throw new Error(`Worker URL ${envKey} is required for ${normalizedEnv()} runtime; inline fallback is disabled.`);
       }
@@ -283,8 +343,16 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
       });
     }
 
-    const now = FieldValue.serverTimestamp();
-    await db.runTransaction(async (transaction) => {
+    const finalized = await db.runTransaction(async (transaction) => {
+      const currentSnapshot = await transaction.get(jobRef);
+      if (!currentSnapshot.exists) return false;
+
+      const current = currentSnapshot.data() as Job;
+      if (!canFinalizeExecution(current, leaseToken)) {
+        return false;
+      }
+
+      const now = FieldValue.serverTimestamp();
       transaction.update(jobRef, {
         status: 'SUCCESS',
         result,
@@ -293,17 +361,29 @@ export const executeJob = onMessagePublished(JOB_EXECUTION_TOPIC, async (event) 
         updatedAt: now,
         completedAt: now,
         'execution.completedAt': now,
+        'lease.heartbeatAt': now,
       });
-      transaction.update(jobQueueEntryDoc(jobId), { status: 'DONE', updatedAt: now });
+      transaction.set(queueRef, { jobId, status: 'DONE', updatedAt: now }, { merge: true });
+      return true;
     });
+
+    if (!finalized) {
+      await appendJobLog(jobId, {
+        level: 'warn',
+        source: 'executeJob',
+        message: 'Worker result was not applied because the job state or lease changed.',
+        metadata: { jobType },
+      });
+      return;
+    }
 
     await appendJobLog(jobId, {
       level: 'info',
       source: 'executeJob',
       message: 'Job execution succeeded.',
-      metadata: { jobType, result },
+      metadata: { jobType },
     });
   } catch (error) {
-    await handleJobFailure(jobId, error);
+    await handleJobFailure(jobId, leaseToken, error);
   }
 });
