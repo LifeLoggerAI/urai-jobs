@@ -6,7 +6,7 @@ HOSTING_SITE="${FIREBASE_HOSTING_SITE:-urai-jobs}"
 FALLBACK_HOSTING_SITE="${FIREBASE_FALLBACK_HOSTING_SITE:-}"
 ALLOW_CREATE_HOSTING_SITE="${ALLOW_CREATE_HOSTING_SITE:-false}"
 FUNCTIONS_ENV_FILE="functions/.env"
-URAI_JOBS_WORKER_TOKEN_SECRET="${URAI_JOBS_WORKER_TOKEN_SECRET:-URAI_JOBS_WORKER_TOKEN}"
+URAI_JOBS_WORKER_TOKEN_SECRET="URAI_JOBS_WORKER_TOKEN"
 
 : "${FIREBASE_PROJECT_ID:?FIREBASE_PROJECT_ID is required}"
 : "${GCLOUD_PROJECT:?GCLOUD_PROJECT is required}"
@@ -77,12 +77,7 @@ verify_worker_secret() {
     echo "[FAIL] Firebase executeJob requires Secret Manager secret: $URAI_JOBS_WORKER_TOKEN_SECRET" >&2
     exit 1
   }
-  if [ "$URAI_JOBS_WORKER_TOKEN_SECRET" != "URAI_JOBS_WORKER_TOKEN" ]; then
-    echo "[FAIL] executeJob binds the canonical Firebase secret name URAI_JOBS_WORKER_TOKEN." >&2
-    echo "[FAIL] Set URAI_JOBS_WORKER_TOKEN_SECRET=URAI_JOBS_WORKER_TOKEN and use that same secret for Cloud Run." >&2
-    exit 1
-  fi
-  echo "[PASS] Worker bearer token secret exists and matches the Firebase binding."
+  echo "[PASS] Worker bearer token secret exists and matches the canonical Firebase binding."
 }
 
 write_functions_env() {
