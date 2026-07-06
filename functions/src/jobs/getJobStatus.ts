@@ -1,39 +1,44 @@
 import { z } from 'zod';
 import type { CallableContext } from 'firebase-functions/v1/https';
-import { User } from '@urai-jobs/shared-types';
+import type { User } from '@urai-jobs/shared-types';
+import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { jobDoc } from '../core/firestore-paths.js';
 
 const GetJobStatusSchema = z.object({
-  jobId: z.string(),
+  jobId: z.string().min(1),
 });
 
-/**
- * A callable function that allows an authenticated user to get the status of a job they own,
- * or allows an admin to get the status of any job.
- */
-export const getJobStatus = async (data: any, context: CallableContext, user: User) => {
+async function handler(data: unknown, _context: CallableContext, user: User) {
   const validationResult = GetJobStatusSchema.safeParse(data);
   if (!validationResult.success) {
     throw httpsError('invalid-argument', 'Invalid data.', validationResult.error.flatten());
   }
 
   const { jobId } = validationResult.data;
-
-  const jobRef = jobDoc(jobId);
-  const jobSnapshot = await jobRef.get();
+  const jobSnapshot = await jobDoc(jobId).get();
 
   if (!jobSnapshot.exists) {
     throw httpsError('not-found', 'Job not found.');
   }
 
   const job = jobSnapshot.data();
+  if (!job) {
+    throw httpsError('not-found', 'Job not found.');
+  }
 
-  // RBAC: Check if the user has permission to view this job.
-  // An admin can view any job, a user can only view their own.
-  if (user.role !== 'admin' && job.ownerUid !== user.uid) {
+  const canReadAny = user.role === 'admin' || user.role === 'operator';
+  if (!canReadAny && job.ownerUid !== user.uid) {
     throw httpsError('permission-denied', 'You do not have permission to view this job.');
   }
 
   return { job };
-};
+}
+
+/**
+ * Authenticated callable that returns a job to its owner or an operator.
+ *
+ * Keep this on the v1 callable surface to preserve the deployed function name
+ * and avoid an implicit Gen 1 -> Gen 2 replacement.
+ */
+export const getJobStatus = withAuthenticatedRole(['admin', 'operator', 'user'], handler);
