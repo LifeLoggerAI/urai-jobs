@@ -5,7 +5,7 @@ import { ulid } from 'ulid';
 import type { JobQueueEntry, JobLease } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
-const JOB_EXECUTION_TOPIC = 'job-execution';
+const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
 const LEASE_DURATION_MS = 60 * 1000;
 const pubsub = new PubSub();
 
@@ -49,11 +49,13 @@ function normalizeLimit(value: unknown, fallback = 10): number {
 }
 
 function createLease(workerId: string): JobLease {
+  const now = new Date();
   return {
     leaseId: ulid(),
     leaseToken: ulid(),
     workerId,
-    expiresAt: new Date(Date.now() + LEASE_DURATION_MS),
+    expiresAt: new Date(now.getTime() + LEASE_DURATION_MS),
+    heartbeatAt: now,
   };
 }
 
