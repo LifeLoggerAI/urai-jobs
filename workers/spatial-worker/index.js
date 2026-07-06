@@ -1,7 +1,14 @@
+const crypto = require('node:crypto');
 const express = require('express');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
+
+function timingSafeTokenMatch(actualHeader, expectedToken) {
+  const actualHash = crypto.createHash('sha256').update(actualHeader).digest();
+  const expectedHash = crypto.createHash('sha256').update(`Bearer ${expectedToken}`).digest();
+  return crypto.timingSafeEqual(actualHash, expectedHash);
+}
 
 function requireWorkerAuth(req, res, next) {
   const expectedToken = process.env.URAI_JOBS_WORKER_TOKEN;
@@ -10,7 +17,7 @@ function requireWorkerAuth(req, res, next) {
 
   if (!expectedToken && localBypass) return next();
   if (!expectedToken) return res.status(503).send({ ok: false, error: 'worker auth is not configured' });
-  if ((req.get('authorization') || '') !== `Bearer ${expectedToken}`) {
+  if (!timingSafeTokenMatch(req.get('authorization') || '', expectedToken)) {
     return res.status(401).send({ ok: false, error: 'unauthorized' });
   }
   return next();
