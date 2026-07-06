@@ -34,6 +34,8 @@ check(exists("web/dist/index.html"), "web/dist/index.html exists");
 check(exists("scripts/urai-jobs-e2e.mjs"), "scripts/urai-jobs-e2e.mjs exists");
 check(exists("scripts/urai-jobs-verify.mjs"), "scripts/urai-jobs-verify.mjs exists");
 check(exists("scripts/urai-jobs-smoke.mjs"), "scripts/urai-jobs-smoke.mjs exists");
+check(exists("scripts/deploy-workers.sh"), "canonical worker deployment script exists");
+check(exists(".github/workflows/deploy-asset-worker.yml"), "Asset worker deployment workflow exists");
 check(exists("docs/URAI_JOBS_DEPLOYMENT_READINESS.md"), "docs/URAI_JOBS_DEPLOYMENT_READINESS.md exists");
 
 const firebaseJson = readJson("firebase.json");
@@ -57,6 +59,40 @@ check(
   storageRules.includes("match /{allPaths=**}") &&
     storageRules.includes("allow read, write: if false"),
   "storage.rules has default deny"
+);
+
+const workerDeploy = fs.readFileSync("scripts/deploy-workers.sh", "utf8");
+check(
+  workerDeploy.includes('WORKERS=("narrator-worker")'),
+  "canonical deploy script includes only the production narrator worker"
+);
+check(
+  workerDeploy.includes("WORKER_RUNTIME_SERVICE_ACCOUNT") &&
+    workerDeploy.includes("URAI_JOBS_WORKER_TOKEN_SECRET"),
+  "canonical deploy requires a runtime service account and Secret Manager token"
+);
+check(
+  !workerDeploy.includes('"spatial-worker"') && !workerDeploy.includes('"studio-worker"'),
+  "placeholder Spatial and Studio workers cannot deploy from the canonical script"
+);
+
+const assetDeploy = fs.readFileSync(".github/workflows/deploy-asset-worker.yml", "utf8");
+check(
+  assetDeploy.includes("workflow_dispatch:") && !assetDeploy.includes("push:"),
+  "Asset worker deployment is manual-only"
+);
+check(
+  assetDeploy.includes("inputs.confirm == 'DEPLOY'") && assetDeploy.includes("environment: production"),
+  "Asset worker deployment requires typed confirmation and the production environment"
+);
+check(
+  assetDeploy.includes("URAI_JOBS_WORKER_TOKEN=urai-jobs-worker-token:latest") &&
+    assetDeploy.includes("URAI_JOBS_CALLBACK_SECRET=urai-jobs-callback-secret:latest"),
+  "Asset worker deployment binds separate dispatch and callback secrets"
+);
+check(
+  assetDeploy.includes('grep -q "Invalid worker authorization" index.js'),
+  "Asset deployment fails closed until dispatch authentication is implemented"
 );
 
 const packageJson = readJson("package.json");
