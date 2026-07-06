@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { handleJob } from './handlers/index.js';
 
@@ -11,6 +12,12 @@ function runtimeEnv(): string {
   return String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
 }
 
+function timingSafeTokenMatch(actualHeader: string, expectedToken: string): boolean {
+  const actualHash = crypto.createHash('sha256').update(actualHeader).digest();
+  const expectedHash = crypto.createHash('sha256').update(`Bearer ${expectedToken}`).digest();
+  return crypto.timingSafeEqual(actualHash, expectedHash);
+}
+
 function requireWorkerAuth(req: Request, res: Response, next: NextFunction) {
   const expectedToken = process.env.URAI_JOBS_WORKER_TOKEN;
   const env = runtimeEnv();
@@ -18,7 +25,7 @@ function requireWorkerAuth(req: Request, res: Response, next: NextFunction) {
 
   if (!expectedToken && localBypass) return next();
   if (!expectedToken) return res.status(503).send({ ok: false, error: 'worker auth is not configured' });
-  if ((req.get('authorization') || '') !== `Bearer ${expectedToken}`) {
+  if (!timingSafeTokenMatch(req.get('authorization') || '', expectedToken)) {
     return res.status(401).send({ ok: false, error: 'unauthorized' });
   }
   return next();
