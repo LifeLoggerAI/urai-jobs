@@ -8,6 +8,9 @@ on:
       - main
       - hardening/urai-jobs-runtime
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     name: Validate runtime
@@ -29,8 +32,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+      - name: Install dependencies from frozen lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Verify activation readiness guardrails
         run: pnpm activation:verify
@@ -77,8 +80,8 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+      - name: Install dependencies from frozen lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Build functions and shared types
         run: pnpm --filter @urai-jobs/shared-types build && pnpm --filter urai-jobs-functions build
@@ -88,7 +91,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          npx --yes firebase-tools@latest emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
+          npx --yes firebase-tools@13.35.1 emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
@@ -100,7 +103,7 @@ jobs:
           name: urai-jobs-emulator-e2e-log
           path: urai-jobs-emulator-e2e.log
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
 
       - name: Enforce callable E2E result
         shell: bash
