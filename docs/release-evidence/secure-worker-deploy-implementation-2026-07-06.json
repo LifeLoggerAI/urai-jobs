@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "urai-material-change-receipt-1",
+  "receiptId": "UJ-SECURE-DEPLOY-20260706-001",
+  "recordedAt": "2026-07-06T07:10:00Z",
+  "status": "IMPLEMENTED BUT NOT DEPLOYED",
+  "repository": "LifeLoggerAI/urai-jobs",
+  "branch": "secure-worker-deploy-20260706",
+  "implementationSha": "765a57f2e26da663ab8533efa6348ae61fb1942c",
+  "pullRequests": [63, 74, 75],
+  "issues": [53, 64, 65, 66, 67, 68, 69, 70, 71],
+  "changedAreas": [
+    "Firebase executeJob Secret Manager binding",
+    "Narrator worker startup/auth probes",
+    "Asset worker startup/auth probes and canonical payload compatibility",
+    "canonical Cloud Run worker deployment script",
+    "canonical exact-SHA deployment workflow",
+    "Firebase deployment secret preflight",
+    "legacy deployment workflow disablement",
+    "synthetic worker deployment disablement",
+    "CI secure-deployment contract"
+  ],
+  "verification": {
+    "staticContractCommand": "pnpm security:worker-deploy",
+    "exactHeadWorkflowStatus": "PENDING",
+    "providerCallsExecuted": 0,
+    "deploymentExecuted": false,
+    "secretsReadOrChanged": false
+  },
+  "deployment": {
+    "target": null,
+    "deployedSha": null,
+    "rollbackSha": null,
+    "workerRevisions": [],
+    "publicUrls": [],
+    "reason": "Staging credentials, Secret Manager entries, runtime/deploy service accounts, exact rollback authority, and live lifecycle authorization have not been proven in this session."
+  },
+  "requiredLiveEvidence": [
+    "all exact-head PR workflows green",
+    "Workload Identity provider and deploy service account",
+    "worker runtime service account",
+    "URAI_JOBS_WORKER_TOKEN secret",
+    "urai-wheel-github-token secret",
+    "urai-jobs-callback-secret secret",
+    "staging target SHA and approved rollback SHA",
+    "unauthorized and authorized live auth probes",
+    "create/lease/execute/success/failure lifecycle smoke",
+    "rollback rehearsal"
+  ]
+}
