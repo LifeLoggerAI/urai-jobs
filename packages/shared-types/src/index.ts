@@ -73,6 +73,7 @@ export interface JobQueueEntry {
   lease?: JobLease;
   availableAt?: unknown;
   attemptCount?: number;
+  retryCount?: number;
   priority?: number;
   leaseOwner?: string | null;
   createdAt?: unknown;
