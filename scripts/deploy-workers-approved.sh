@@ -11,6 +11,7 @@ WORKERS_CSV="${URAI_JOBS_DEPLOY_WORKERS:-narrator-worker,asset-worker}"
 URAI_JOBS_WORKER_TOKEN_SECRET="${URAI_JOBS_WORKER_TOKEN_SECRET:-urai-jobs-worker-token}"
 URAI_WHEEL_GITHUB_TOKEN_SECRET="${URAI_WHEEL_GITHUB_TOKEN_SECRET:-urai-wheel-github-token}"
 URAI_JOBS_CALLBACK_SECRET_NAME="${URAI_JOBS_CALLBACK_SECRET_NAME:-urai-jobs-callback-secret}"
+export REAL_GCLOUD WORKERS_CSV URAI_JOBS_WORKER_TOKEN_SECRET URAI_WHEEL_GITHUB_TOKEN_SECRET URAI_JOBS_CALLBACK_SECRET_NAME
 
 required_bindings_json="$(WORKERS_CSV="$WORKERS_CSV" node <<'NODE'
 const workers = String(process.env.WORKERS_CSV || '').split(',').map((value) => value.trim()).filter(Boolean);
@@ -97,7 +98,6 @@ gcloud() {
   "$REAL_GCLOUD" "$@"
 }
 
-export REAL_GCLOUD
 export -f gcloud logical_binding_for_secret approved_version_for_binding
 
 echo "[PASS] Exact target Secret Manager versions approved before mutation."
