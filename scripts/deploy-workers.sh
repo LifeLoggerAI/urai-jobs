@@ -5,6 +5,7 @@ set -euo pipefail
 : "${GCP_REGION:=us-central1}"
 : "${GCS_BUCKET_NAME:?GCS_BUCKET_NAME is required}"
 : "${WORKER_RUNTIME_SERVICE_ACCOUNT:?WORKER_RUNTIME_SERVICE_ACCOUNT is required}"
+: "${ARTIFACT_REGISTRY_REPOSITORY:=urai-jobs}"
 : "${URAI_JOBS_WORKER_TOKEN_SECRET:=urai-jobs-worker-token}"
 : "${URAI_WHEEL_GITHUB_TOKEN_SECRET:=urai-wheel-github-token}"
 : "${URAI_JOBS_CALLBACK_SECRET_NAME:=urai-jobs-callback-secret}"
@@ -68,6 +69,14 @@ done
 gcloud iam service-accounts describe "$WORKER_RUNTIME_SERVICE_ACCOUNT" \
   --project "$GCLOUD_PROJECT" >/dev/null 2>&1 || {
   echo "[FAIL] Runtime service account does not exist: $WORKER_RUNTIME_SERVICE_ACCOUNT" >&2
+  exit 1
+}
+
+gcloud artifacts repositories describe "$ARTIFACT_REGISTRY_REPOSITORY" \
+  --project "$GCLOUD_PROJECT" \
+  --location "$GCP_REGION" >/dev/null 2>&1 || {
+  echo "[FAIL] Artifact Registry repository does not exist: ${GCP_REGION}-docker.pkg.dev/$GCLOUD_PROJECT/$ARTIFACT_REGISTRY_REPOSITORY" >&2
+  echo "[FAIL] Refusing to create paid cloud infrastructure from the deployment script." >&2
   exit 1
 }
 
@@ -149,7 +158,7 @@ NODE
 deploy_worker() {
   local worker="$1"
   local dir="workers/$worker"
-  local image="gcr.io/$GCLOUD_PROJECT/$worker:${GITHUB_SHA:-manual-$(date +%Y%m%d%H%M%S)}"
+  local image="${GCP_REGION}-docker.pkg.dev/$GCLOUD_PROJECT/$ARTIFACT_REGISTRY_REPOSITORY/$worker:${GITHUB_SHA:-manual-$(date +%Y%m%d%H%M%S)}"
   local build_id=""
   local rollback_revision=""
 
@@ -201,7 +210,7 @@ deploy_worker() {
     --set-secrets "$secret_vars" \
     --quiet
 
-  local url revision image_digest worker_token unauthorized_code authorized_code config_fingerprint
+  local url revision image_digest worker_token unauthorized_code authorized_code config_fingerprint config_input
   url="$(gcloud run services describe "$worker" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.url)')"
   revision="$(gcloud run services describe "$worker" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.latestReadyRevisionName)')"
   image_digest="$(gcloud run revisions describe "$revision" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.imageDigest)' 2>/dev/null || true)"
@@ -219,7 +228,8 @@ deploy_worker() {
     exit 1
   }
 
-  config_fingerprint="$(printf '%s' "$worker|$URAI_ENV|$GCP_REGION|$GCS_BUCKET_NAME|$WORKER_RUNTIME_SERVICE_ACCOUNT|$secret_vars" | sha256sum | awk '{print $1}')"
+  config_input="$worker|$URAI_ENV|$GCP_REGION|$GCS_BUCKET_NAME|$WORKER_RUNTIME_SERVICE_ACCOUNT|$secret_vars"
+  config_fingerprint="$(CONFIG_INPUT="$config_input" node -e "const crypto=require('node:crypto');process.stdout.write(crypto.createHash('sha256').update(process.env.CONFIG_INPUT||'').digest('hex'))")"
   append_receipt "$worker" "$build_id" "$url" "$revision" "$rollback_revision" "$image_digest" "$config_fingerprint"
   echo "[PASS] [$worker] deployed and auth probes passed: $url"
 }
@@ -240,6 +250,7 @@ const receipt = {
   project: process.env.GCLOUD_PROJECT,
   region: process.env.GCP_REGION,
   environment: process.env.URAI_ENV,
+  artifactRegistryRepository: process.env.ARTIFACT_REGISTRY_REPOSITORY,
   runtimeServiceAccount: process.env.WORKER_RUNTIME_SERVICE_ACCOUNT,
   services,
   caveats: [
