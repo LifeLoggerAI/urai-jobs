@@ -26,7 +26,7 @@ requireText('scripts/deploy-workers.sh', 'rollbackRevision', 'worker deploy rece
 requireText('scripts/deploy-workers.sh', 'unauthorized auth probe returned', 'worker deploy must prove unauthorized access is rejected');
 requireText('scripts/deploy-workers.sh', 'authorized auth probe returned', 'worker deploy must prove authorized access succeeds');
 requireText('package.json', 'bash scripts/verify-deploy-authority.sh', 'worker deployment must run through immutable authority verification');
-requireText('package.json', 'GITHUB_SHA=\\"$DEPLOY_SOURCE_SHA\\"', 'verified source SHA must bind image tags and receipts');
+requireText('package.json', 'GITHUB_SHA="$DEPLOY_SOURCE_SHA"', 'verified source SHA must bind image tags and receipts');
 requireText('scripts/verify-deploy-authority.sh', 'git status --porcelain --untracked-files=all', 'deployment authority must require a clean tree');
 requireText('scripts/verify-deploy-authority.sh', 'git merge-base --is-ancestor', 'rollback must be an ancestor of the deployment SHA');
 requireText('scripts/verify-deploy-authority.sh', 'DEPLOY-URAI-JOBS-STAGING', 'staging requires environment-specific confirmation');
@@ -34,6 +34,9 @@ requireText('scripts/verify-deploy-authority.sh', 'DEPLOY-URAI-JOBS-PRODUCTION',
 requireText('scripts/ensure-gcs-bucket.sh', 'GCS_BUCKET_CREATION_APPROVAL', 'bucket creation must require separate infrastructure approval');
 requireText('scripts/ensure-gcs-bucket.sh', 'PRODUCTION_INFRASTRUCTURE_APPROVAL', 'production infrastructure creation must require explicit approval');
 requireText('scripts/deploy-firebase.sh', 'URAI_JOBS_WORKER_TOKEN_SECRET:-URAI_JOBS_WORKER_TOKEN', 'Firebase deploy must require the canonical worker secret');
+requireText('scripts/deploy-firebase.sh', 'HOSTING_SITE_CREATION_APPROVAL', 'hosting creation must require separate infrastructure approval');
+requireText('scripts/deploy-firebase.sh', 'FIREBASE_PROJECT_ID and GCLOUD_PROJECT must match', 'Firebase and Google Cloud project identities must agree');
+requireText('scripts/deploy-firebase.sh', 'DEPLOY_SOURCE_SHA', 'Firebase deployment must remain bound to the verified source SHA');
 rejectText('scripts/deploy-firebase.sh', 'WEBHOOK_SIGNING_SECRET=', 'secrets must not be written into functions/.env');
 requireText('scripts/deploy-career-worker.sh', '[BLOCKED]', 'career scaffold deploy must be disabled');
 requireText('scripts/deploy-managed-worker.sh', '[BLOCKED]', 'generic synthetic worker deploy must be disabled');
