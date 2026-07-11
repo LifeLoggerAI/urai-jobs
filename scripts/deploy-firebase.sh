@@ -85,7 +85,7 @@ verify_worker_secret() {
 }
 
 write_functions_env() {
-  for key in NARRATOR_WORKER_URL ASSET_WORKER_URL GCS_BUCKET_NAME API_ALLOWED_ORIGINS URAI_ENV GCP_REGION GCLOUD_PROJECT GOOGLE_CLOUD_PROJECT FIREBASE_PROJECT_ID; do
+  for key in NARRATOR_WORKER_URL ASSET_WORKER_URL GCS_BUCKET_NAME API_ALLOWED_ORIGINS URAI_ENV GCP_REGION GCLOUD_PROJECT GOOGLE_CLOUD_PROJECT FIREBASE_PROJECT_ID DEPLOY_SOURCE_SHA; do
     if [ -z "${!key:-}" ] || [[ "${!key}" == *$'\n'* ]] || [[ "${!key}" == *$'\r'* ]]; then
       echo "[FAIL] $key is missing or contains a newline" >&2
       exit 1
@@ -93,6 +93,7 @@ write_functions_env() {
   done
   cat > "$FUNCTIONS_ENV_FILE" <<EOF
 URAI_ENV=${URAI_ENV}
+URAI_BUILD_SHA=${DEPLOY_SOURCE_SHA}
 FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID
 GCLOUD_PROJECT=$GCLOUD_PROJECT
 GOOGLE_CLOUD_PROJECT=$GOOGLE_CLOUD_PROJECT
@@ -116,6 +117,11 @@ const fs = require('fs');
 const config = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
 if (!config.hosting || Array.isArray(config.hosting)) throw new Error('Expected firebase.json hosting to be a single hosting object.');
 config.hosting.site = process.env.SITE;
+const rewrites = Array.isArray(config.hosting.rewrites) ? config.hosting.rewrites : [];
+config.hosting.rewrites = [
+  { source: '/api/buildinfo', function: 'buildInfo' },
+  ...rewrites.filter((rewrite) => rewrite?.source !== '/api/buildinfo'),
+];
 fs.writeFileSync(process.env.OUTPUT, `${JSON.stringify(config, null, 2)}\n`, { flag: 'wx' });
 NODE
 }
@@ -133,7 +139,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const hashFile = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const receipt = {
-  schemaVersion: 'urai-jobs-firebase-deploy-config-1',
+  schemaVersion: 'urai-jobs-firebase-deploy-config-2',
   generatedAt: new Date().toISOString(),
   repository: process.env.GITHUB_REPOSITORY || 'LifeLoggerAI/urai-jobs',
   workflowRunId: process.env.GITHUB_RUN_ID || null,
@@ -149,7 +155,10 @@ const receipt = {
   firebaseCliVersion: process.env.FIREBASE_CLI_VERSION || null,
   firebaseConfigSha256: hashFile(process.env.FIREBASE_DEPLOY_CONFIG_PATH),
   functionsEnvSha256: hashFile(process.env.FUNCTIONS_ENV_FILE),
+  buildInfoPath: '/api/buildinfo',
+  buildInfoExpectedSha: process.env.DEPLOY_SOURCE_SHA,
   deploymentCommandCompleted: process.env.DEPLOYMENT_COMPLETED === 'true',
+  runtimeIdentityVerified: false,
   secretValuesIncluded: false,
 };
 fs.writeFileSync(process.env.FIREBASE_CONFIG_RECEIPT_PATH, `${JSON.stringify(receipt, null, 2)}\n`);
@@ -191,4 +200,4 @@ cleanup
 trap - EXIT
 assert_only_evidence_residue
 
-echo "[PASS] Firebase deployment completed for $FIREBASE_PROJECT_ID with only release evidence remaining in the worktree"
+echo "[PASS] Firebase deployment command completed for $FIREBASE_PROJECT_ID; public runtime identity verification is still required"
