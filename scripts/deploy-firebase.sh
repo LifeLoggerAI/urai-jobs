@@ -6,6 +6,9 @@ HOSTING_SITE="${FIREBASE_HOSTING_SITE:-urai-jobs}"
 FALLBACK_HOSTING_SITE="${FIREBASE_FALLBACK_HOSTING_SITE:-}"
 ALLOW_CREATE_HOSTING_SITE="${ALLOW_CREATE_HOSTING_SITE:-false}"
 FUNCTIONS_ENV_FILE="functions/.env"
+FIREBASE_CONFIG_RECEIPT_PATH="${FIREBASE_CONFIG_RECEIPT_PATH:-docs/release-evidence/firebase-deploy-config-receipt.json}"
+RUNNER_TEMP_ROOT="${RUNNER_TEMP:-/tmp}"
+FIREBASE_DEPLOY_CONFIG_PATH="${URAI_FIREBASE_DEPLOY_CONFIG_PATH:-${RUNNER_TEMP_ROOT}/urai-jobs-firebase-${DEPLOY_SOURCE_SHA:-unknown}.json}"
 URAI_JOBS_WORKER_TOKEN_SECRET="${URAI_JOBS_WORKER_TOKEN_SECRET:-URAI_JOBS_WORKER_TOKEN}"
 
 : "${FIREBASE_PROJECT_ID:?FIREBASE_PROJECT_ID is required}"
@@ -17,7 +20,10 @@ command -v firebase >/dev/null 2>&1 || { echo "[FAIL] firebase CLI is required" 
 command -v gcloud >/dev/null 2>&1 || { echo "[FAIL] gcloud CLI is required" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { echo "[FAIL] node is required" >&2; exit 1; }
 
-trap 'rm -f "$FUNCTIONS_ENV_FILE"' EXIT
+cleanup() {
+  rm -f "$FUNCTIONS_ENV_FILE" "$FIREBASE_DEPLOY_CONFIG_PATH"
+}
+trap cleanup EXIT
 
 if [ "$TARGET" != "prod" ] && [ "$TARGET" != "staging" ]; then
   echo "[FAIL] Canonical Firebase deployment target must be staging or prod. Got: $TARGET" >&2
@@ -31,18 +37,19 @@ if [ "$DEPLOY_SOURCE_SHA" != "$(git rev-parse HEAD)" ]; then
   echo "[FAIL] Firebase deployment must use the exact verified target SHA" >&2
   exit 1
 fi
+if [ "$FIREBASE_PROJECT_ID" != "$GCLOUD_PROJECT" ]; then
+  echo "[FAIL] FIREBASE_PROJECT_ID and GCLOUD_PROJECT must match" >&2
+  exit 1
+fi
 
-set_hosting_site_in_firebase_json() {
-  local site="$1"
-  SITE="$site" node <<'NODE'
-const fs = require('fs');
-const config = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
-const site = process.env.SITE;
-if (!config.hosting || Array.isArray(config.hosting)) throw new Error('Expected firebase.json hosting to be a single hosting object.');
-config.hosting.site = site;
-fs.writeFileSync('firebase.json', `${JSON.stringify(config, null, 2)}\n`);
-NODE
+RUNNER_TEMP_ROOT="$RUNNER_TEMP_ROOT" FIREBASE_DEPLOY_CONFIG_PATH="$FIREBASE_DEPLOY_CONFIG_PATH" node <<'NODE'
+const path = require('path');
+const root = path.resolve(process.env.RUNNER_TEMP_ROOT);
+const candidate = path.resolve(process.env.FIREBASE_DEPLOY_CONFIG_PATH);
+if (candidate !== root && !candidate.startsWith(`${root}${path.sep}`)) {
+  throw new Error('Temporary Firebase config must stay inside RUNNER_TEMP.');
 }
+NODE
 
 ensure_hosting_site() {
   local site="$1"
@@ -78,7 +85,7 @@ verify_worker_secret() {
 
 write_functions_env() {
   for key in NARRATOR_WORKER_URL ASSET_WORKER_URL GCS_BUCKET_NAME API_ALLOWED_ORIGINS URAI_ENV GCP_REGION GCLOUD_PROJECT GOOGLE_CLOUD_PROJECT FIREBASE_PROJECT_ID; do
-    if [ -z "${!key:-}" ] || [[ "${!key}" == *$'\n'* ]]; then
+    if [ -z "${!key:-}" ] || [[ "${!key}" == *$'\n'* ]] || [[ "${!key}" == *$'\r'* ]]; then
       echo "[FAIL] $key is missing or contains a newline" >&2
       exit 1
     fi
@@ -96,36 +103,77 @@ ASSET_WORKER_URL=$ASSET_WORKER_URL
 EOF
   for key in SPATIAL_WORKER_URL STUDIO_WORKER_URL CAREER_WORKER_URL CONTENT_WORKER_URL STORYTIME_WORKER_URL ANALYTICS_WORKER_URL COMMUNICATIONS_WORKER_URL PUBSUB_JOB_EXECUTION_TOPIC URAI_JOBS_WORKER_TIMEOUT_MS; do
     if [ -n "${!key:-}" ]; then
-      [[ "${!key}" != *$'\n'* ]] || { echo "[FAIL] $key contains a newline" >&2; exit 1; }
+      [[ "${!key}" != *$'\n'* && "${!key}" != *$'\r'* ]] || { echo "[FAIL] $key contains a newline" >&2; exit 1; }
       printf '%s=%s\n' "$key" "${!key}" >> "$FUNCTIONS_ENV_FILE"
     fi
   done
 }
 
+write_temporary_config() {
+  SITE="$HOSTING_SITE" OUTPUT="$FIREBASE_DEPLOY_CONFIG_PATH" node <<'NODE'
+const fs = require('fs');
+const config = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
+if (!config.hosting || Array.isArray(config.hosting)) throw new Error('Expected firebase.json hosting to be a single hosting object.');
+config.hosting.site = process.env.SITE;
+fs.writeFileSync(process.env.OUTPUT, `${JSON.stringify(config, null, 2)}\n`, { flag: 'wx' });
+NODE
+}
+
+write_config_receipt() {
+  local completed="$1"
+  mkdir -p "$(dirname "$FIREBASE_CONFIG_RECEIPT_PATH")"
+  FIREBASE_CONFIG_RECEIPT_PATH="$FIREBASE_CONFIG_RECEIPT_PATH" \
+  FIREBASE_DEPLOY_CONFIG_PATH="$FIREBASE_DEPLOY_CONFIG_PATH" \
+  FUNCTIONS_ENV_FILE="$FUNCTIONS_ENV_FILE" \
+  HOSTING_SITE="$HOSTING_SITE" \
+  TARGET="$TARGET" \
+  DEPLOYMENT_COMPLETED="$completed" node <<'NODE'
+const crypto = require('crypto');
+const fs = require('fs');
+const hashFile = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+const receipt = {
+  schemaVersion: 'urai-jobs-firebase-deploy-config-1',
+  generatedAt: new Date().toISOString(),
+  repository: process.env.GITHUB_REPOSITORY || 'LifeLoggerAI/urai-jobs',
+  workflowRunId: process.env.GITHUB_RUN_ID || null,
+  sourceSha: process.env.DEPLOY_SOURCE_SHA,
+  environment: process.env.TARGET,
+  project: process.env.FIREBASE_PROJECT_ID,
+  region: process.env.GCP_REGION,
+  hostingSite: process.env.HOSTING_SITE,
+  artifactBucket: process.env.GCS_BUCKET_NAME,
+  allowedOrigins: String(process.env.API_ALLOWED_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean).sort(),
+  narratorWorkerUrl: process.env.NARRATOR_WORKER_URL,
+  assetWorkerUrl: process.env.ASSET_WORKER_URL,
+  firebaseCliVersion: process.env.FIREBASE_CLI_VERSION || null,
+  firebaseConfigSha256: hashFile(process.env.FIREBASE_DEPLOY_CONFIG_PATH),
+  functionsEnvSha256: hashFile(process.env.FUNCTIONS_ENV_FILE),
+  deploymentCommandCompleted: process.env.DEPLOYMENT_COMPLETED === 'true',
+  secretValuesIncluded: false,
+};
+fs.writeFileSync(process.env.FIREBASE_CONFIG_RECEIPT_PATH, `${JSON.stringify(receipt, null, 2)}\n`);
+NODE
+}
+
 echo "[INFO] Verifying source-bound Firebase prebuilt bytes"
 node scripts/firebase-prebuilt-manifest.mjs --verify
 
-if [ "$FIREBASE_PROJECT_ID" != "$GCLOUD_PROJECT" ]; then
-  echo "[FAIL] FIREBASE_PROJECT_ID and GCLOUD_PROJECT must match" >&2
-  exit 1
-fi
-firebase use "$FIREBASE_PROJECT_ID"
-
 if ! ensure_hosting_site "$HOSTING_SITE"; then
-  if [ -n "$FALLBACK_HOSTING_SITE" ]; then
-    ensure_hosting_site "$FALLBACK_HOSTING_SITE"
-  else
-    exit 1
-  fi
+  if [ -n "$FALLBACK_HOSTING_SITE" ]; then ensure_hosting_site "$FALLBACK_HOSTING_SITE"; else exit 1; fi
 fi
 
 verify_worker_secret
-set_hosting_site_in_firebase_json "$HOSTING_SITE"
 write_functions_env
-
+write_temporary_config
 node scripts/firebase-prebuilt-manifest.mjs --verify
+write_config_receipt false
 
 echo "[INFO] Deploying verified Firebase Functions, Firestore rules/indexes, and Hosting"
-firebase deploy --only functions,firestore,hosting --project "$FIREBASE_PROJECT_ID" --non-interactive
+firebase deploy \
+  --config "$FIREBASE_DEPLOY_CONFIG_PATH" \
+  --only functions,firestore,hosting \
+  --project "$FIREBASE_PROJECT_ID" \
+  --non-interactive
+write_config_receipt true
 
 echo "[PASS] Firebase deployment completed for $FIREBASE_PROJECT_ID"
