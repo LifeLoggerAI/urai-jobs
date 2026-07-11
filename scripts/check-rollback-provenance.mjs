@@ -69,6 +69,31 @@ requireText(
   "ASSET_FACTORY_REPO = 'LifeLoggerAI/asset-factory'",
   'asset rollback configuration must bind its repository authority',
 );
+requireText(
+  'scripts/verify-rollback-revision.mjs',
+  'URAI_ROLLBACK_SHA must differ from URAI_SOURCE_SHA',
+  'rollback verifier must bind the rollback revision ancestor',
+);
+requireText(
+  'scripts/deploy-workers.sh',
+  'node scripts/validate-rollback-config-receipt.mjs "$ROLLBACK_CONFIG_RECEIPT_PATH"',
+  'deploy script must validate the approved rollback receipt before mutation',
+);
+requireText(
+  'scripts/deploy-workers.sh',
+  'Live rollback revision $rollback_revision changed after approval',
+  'deploy script must refuse rollback revision drift after approval',
+);
+requireText(
+  'scripts/deploy-workers.sh',
+  'Live rollback digest $rollback_image_digest changed after approval',
+  'deploy script must refuse rollback digest drift after approval',
+);
+requireText(
+  'scripts/deploy-workers.sh',
+  'expected_rollback_revision="$(rollback_receipt_value "$worker" rollbackRevision)"',
+  'deploy script must use the receipt revision as immutable rollback authority',
+);
 
 try {
   runRollbackRevisionVerifierSelfTest();
@@ -83,6 +108,7 @@ if (failures.length > 0) {
 }
 
 console.log('[PASS] rollback configuration provenance contract');
-console.log('[PASS] rollback revision source, labels, environment, service account, bucket, secret versions, and digest are fingerprint-bound');
+console.log('[PASS] rollback revision source, labels, environment, service account, bucket, secret versions, ancestor, and digest are fingerprint-bound');
 console.log('[PASS] explicit per-worker rollback fingerprint approval is required before worker mutation');
+console.log('[PASS] live rollback revision and digest must remain identical to the approved receipt');
 console.log('[PASS] dedicated rollback configuration receipt is required');
