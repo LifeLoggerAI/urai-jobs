@@ -35,7 +35,7 @@
     "deploy:dev": "firebase use dev && firebase deploy",
     "deploy:staging": "firebase use staging && firebase deploy",
     "deploy:prod": "firebase use prod && firebase deploy",
-    "deploy:workers": "bash scripts/verify-deploy-authority.sh && GITHUB_SHA=\"$DEPLOY_SOURCE_SHA\" node scripts/verify-rollback-revision.mjs && GITHUB_SHA=\"$DEPLOY_SOURCE_SHA\" bash scripts/deploy-workers.sh",
+    "deploy:workers": "bash scripts/verify-deploy-authority.sh && GITHUB_SHA=\"$DEPLOY_SOURCE_SHA\" node scripts/verify-rollback-revision.mjs && GITHUB_SHA=\"$DEPLOY_SOURCE_SHA\" bash scripts/deploy-workers-approved.sh",
     "deploy:firebase:prod": "bash scripts/deploy-firebase.sh prod",
     "deploy:managed-worker": "bash scripts/deploy-managed-worker.sh",
     "deploy:managed-worker:bootstrap": "bash scripts/bootstrap-managed-worker-iam.sh",
