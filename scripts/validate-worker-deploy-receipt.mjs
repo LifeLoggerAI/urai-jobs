@@ -25,10 +25,9 @@ function fingerprint(value) {
 }
 
 function requiredSecretNames(worker) {
-  if (worker === 'asset-worker') {
-    return ['URAI_JOBS_WORKER_TOKEN', 'URAI_WHEEL_GITHUB_TOKEN', 'URAI_JOBS_CALLBACK_SECRET'];
-  }
-  return ['URAI_JOBS_WORKER_TOKEN'];
+  return worker === 'asset-worker'
+    ? ['URAI_JOBS_WORKER_TOKEN', 'URAI_WHEEL_GITHUB_TOKEN', 'URAI_JOBS_CALLBACK_SECRET']
+    : ['URAI_JOBS_WORKER_TOKEN'];
 }
 
 export function validateWorkerDeployReceipt(receipt) {
@@ -46,10 +45,13 @@ export function validateWorkerDeployReceipt(receipt) {
   }
   if (!nonEmptyString(receipt.repository)) failures.push('repository is required');
   if (!SHA_PATTERN.test(String(receipt.commitSha ?? ''))) failures.push('commitSha must be a full lowercase 40-character SHA');
+  if (!SHA_PATTERN.test(String(receipt.rollbackSha ?? ''))) failures.push('rollbackSha must be a full lowercase 40-character SHA');
+  if (receipt.commitSha === receipt.rollbackSha) failures.push('rollbackSha must differ from commitSha');
   if (!nonEmptyString(receipt.project)) failures.push('project is required');
   if (!nonEmptyString(receipt.region)) failures.push('region is required');
   if (!ALLOWED_ENVIRONMENTS.has(String(receipt.environment ?? ''))) failures.push('environment must be staging, prod, or production');
   if (!nonEmptyString(receipt.artifactRegistryRepository)) failures.push('artifactRegistryRepository is required');
+  if (!nonEmptyString(receipt.artifactBucket)) failures.push('artifactBucket is required');
   if (!nonEmptyString(receipt.runtimeServiceAccount)) failures.push('runtimeServiceAccount is required');
 
   if (!Array.isArray(receipt.services) || receipt.services.length === 0) {
@@ -64,49 +66,22 @@ export function validateWorkerDeployReceipt(receipt) {
       }
 
       if (!nonEmptyString(service.worker)) failures.push(`${prefix}.worker is required`);
-      if (!['narrator-worker', 'asset-worker'].includes(String(service.worker ?? ''))) {
-        failures.push(`${prefix}.worker is not an approved production worker`);
-      }
+      if (!['narrator-worker', 'asset-worker'].includes(String(service.worker ?? ''))) failures.push(`${prefix}.worker is not approved`);
       if (seenWorkers.has(service.worker)) failures.push(`${prefix}.worker duplicates ${service.worker}`);
       seenWorkers.add(service.worker);
-
       if (!nonEmptyString(service.buildId)) failures.push(`${prefix}.buildId is required`);
-      if (!nonEmptyString(service.serviceUrl) || !String(service.serviceUrl).startsWith('https://')) {
-        failures.push(`${prefix}.serviceUrl must be an https URL`);
-      }
+      if (!nonEmptyString(service.serviceUrl) || !String(service.serviceUrl).startsWith('https://')) failures.push(`${prefix}.serviceUrl must be an https URL`);
 
       const expectedImage = `${receipt.region}-docker.pkg.dev/${receipt.project}/${receipt.artifactRegistryRepository}/${service.worker}:${receipt.commitSha}`;
-      if (service.image !== expectedImage) {
-        failures.push(`${prefix}.image must equal exact source-bound image ${expectedImage}`);
-      }
+      if (service.image !== expectedImage) failures.push(`${prefix}.image must equal exact source-bound image ${expectedImage}`);
+      if (service.sourceSha !== receipt.commitSha) failures.push(`${prefix}.sourceSha must equal commitSha`);
+      if (service.rollbackSourceSha !== receipt.rollbackSha) failures.push(`${prefix}.rollbackSourceSha must equal rollbackSha`);
 
-      if (!nonEmptyString(service.revision) || !String(service.revision).startsWith(`${service.worker}-`)) {
-        failures.push(`${prefix}.revision must belong to ${service.worker}`);
-      }
-      if (!IMAGE_DIGEST_PATTERN.test(String(service.imageDigest ?? ''))) {
-        failures.push(`${prefix}.imageDigest must be an immutable sha256 digest`);
-      }
-
-      const hasRollback = nonEmptyString(service.rollbackRevision);
-      if (hasRollback) {
-        if (!String(service.rollbackRevision).startsWith(`${service.worker}-`)) {
-          failures.push(`${prefix}.rollbackRevision must belong to ${service.worker}`);
-        }
-        if (service.rollbackRevision === service.revision) {
-          failures.push(`${prefix}.rollbackRevision must differ from revision`);
-        }
-        if (!IMAGE_DIGEST_PATTERN.test(String(service.rollbackImageDigest ?? ''))) {
-          failures.push(`${prefix}.rollbackImageDigest must bind the rollback revision to an immutable sha256 digest`);
-        }
-      } else if (service.rollbackImageDigest !== null && service.rollbackImageDigest !== undefined && service.rollbackImageDigest !== '') {
-        failures.push(`${prefix}.rollbackImageDigest cannot exist without rollbackRevision`);
-      }
-      if ((receipt.environment === 'prod' || receipt.environment === 'production') && !hasRollback) {
-        failures.push(`${prefix}.rollbackRevision is required for production`);
-      }
-      if ((receipt.environment === 'prod' || receipt.environment === 'production') && !IMAGE_DIGEST_PATTERN.test(String(service.rollbackImageDigest ?? ''))) {
-        failures.push(`${prefix}.rollbackImageDigest is required for production`);
-      }
+      if (!nonEmptyString(service.revision) || !String(service.revision).startsWith(`${service.worker}-`)) failures.push(`${prefix}.revision must belong to ${service.worker}`);
+      if (!nonEmptyString(service.rollbackRevision) || !String(service.rollbackRevision).startsWith(`${service.worker}-`)) failures.push(`${prefix}.rollbackRevision must belong to ${service.worker}`);
+      if (service.rollbackRevision === service.revision) failures.push(`${prefix}.rollbackRevision must differ from revision`);
+      if (!IMAGE_DIGEST_PATTERN.test(String(service.imageDigest ?? ''))) failures.push(`${prefix}.imageDigest must be immutable`);
+      if (!IMAGE_DIGEST_PATTERN.test(String(service.rollbackImageDigest ?? ''))) failures.push(`${prefix}.rollbackImageDigest must bind the rollback revision`);
 
       if (!service.secretVersions || typeof service.secretVersions !== 'object' || Array.isArray(service.secretVersions)) {
         failures.push(`${prefix}.secretVersions must be an object of pinned numeric versions`);
@@ -114,16 +89,12 @@ export function validateWorkerDeployReceipt(receipt) {
         const required = requiredSecretNames(service.worker);
         const allowed = new Set(required);
         for (const name of required) {
-          if (!NUMERIC_SECRET_VERSION_PATTERN.test(String(service.secretVersions[name] ?? ''))) {
-            failures.push(`${prefix}.secretVersions.${name} must be an exact numeric Secret Manager version`);
-          }
+          if (!NUMERIC_SECRET_VERSION_PATTERN.test(String(service.secretVersions[name] ?? ''))) failures.push(`${prefix}.secretVersions.${name} must be numeric`);
         }
         for (const [name, version] of Object.entries(service.secretVersions)) {
           if (!allowed.has(name)) failures.push(`${prefix}.secretVersions contains unexpected binding ${name}`);
           if (String(version).toLowerCase() === 'latest') failures.push(`${prefix}.secretVersions.${name} must not use latest`);
-          if (!NUMERIC_SECRET_VERSION_PATTERN.test(String(version))) {
-            failures.push(`${prefix}.secretVersions.${name} must be numeric`);
-          }
+          if (!NUMERIC_SECRET_VERSION_PATTERN.test(String(version))) failures.push(`${prefix}.secretVersions.${name} must be numeric`);
         }
       }
 
@@ -131,48 +102,41 @@ export function validateWorkerDeployReceipt(receipt) {
         worker: service.worker,
         environment: receipt.environment,
         region: receipt.region,
-        bucket: service.configuration?.bucket,
+        bucket: receipt.artifactBucket,
         runtimeServiceAccount: receipt.runtimeServiceAccount,
         secretVersions: service.secretVersions,
       };
       if (!service.configuration || typeof service.configuration !== 'object' || Array.isArray(service.configuration)) {
         failures.push(`${prefix}.configuration is required`);
-      } else {
-        if (!nonEmptyString(service.configuration.bucket)) failures.push(`${prefix}.configuration.bucket is required`);
-        if (JSON.stringify(stable(service.configuration)) !== JSON.stringify(stable(expectedConfiguration))) {
-          failures.push(`${prefix}.configuration does not match receipt runtime identity and pinned secrets`);
-        }
+      } else if (JSON.stringify(stable(service.configuration)) !== JSON.stringify(stable(expectedConfiguration))) {
+        failures.push(`${prefix}.configuration does not match receipt runtime identity and pinned secrets`);
       }
       const expectedFingerprint = fingerprint(expectedConfiguration);
-      if (!HEX64_PATTERN.test(String(service.configFingerprint ?? ''))) {
-        failures.push(`${prefix}.configFingerprint must be a lowercase 64-character SHA-256 value`);
-      } else if (service.configFingerprint !== expectedFingerprint) {
-        failures.push(`${prefix}.configFingerprint does not match the canonical configuration`);
-      }
+      if (!HEX64_PATTERN.test(String(service.configFingerprint ?? ''))) failures.push(`${prefix}.configFingerprint must be a SHA-256 value`);
+      else if (service.configFingerprint !== expectedFingerprint) failures.push(`${prefix}.configFingerprint does not match the canonical configuration`);
 
       if (service.unauthorizedProbe !== 'PASS') failures.push(`${prefix}.unauthorizedProbe must equal PASS`);
       if (service.authorizedProbe !== 'PASS') failures.push(`${prefix}.authorizedProbe must equal PASS`);
     }
   }
 
-  if (failures.length > 0) {
-    throw new Error(`worker deployment receipt validation failed:\n- ${failures.join('\n- ')}`);
-  }
-
+  if (failures.length > 0) throw new Error(`worker deployment receipt validation failed:\n- ${failures.join('\n- ')}`);
   return true;
 }
 
-function validFixture({ environment = 'staging', withRollback = false } = {}) {
+function validFixture() {
   const receipt = {
     schemaVersion: 'urai-jobs-worker-deploy-receipt-2',
     generatedAt: '2026-07-11T15:00:00.000Z',
     repository: 'LifeLoggerAI/urai-jobs',
     branch: 'secure-worker-deploy-20260706',
     commitSha: 'a'.repeat(40),
+    rollbackSha: 'e'.repeat(40),
     project: 'urai-jobs-staging',
     region: 'us-central1',
-    environment,
+    environment: 'staging',
     artifactRegistryRepository: 'urai-jobs',
+    artifactBucket: 'urai-jobs-staging-artifacts',
     runtimeServiceAccount: 'urai-jobs-worker@example.iam.gserviceaccount.com',
     services: [],
     caveats: [],
@@ -180,9 +144,9 @@ function validFixture({ environment = 'staging', withRollback = false } = {}) {
   const secretVersions = { URAI_JOBS_WORKER_TOKEN: '7' };
   const configuration = {
     worker: 'narrator-worker',
-    environment,
+    environment: receipt.environment,
     region: receipt.region,
-    bucket: 'urai-jobs-staging-artifacts',
+    bucket: receipt.artifactBucket,
     runtimeServiceAccount: receipt.runtimeServiceAccount,
     secretVersions,
   };
@@ -192,9 +156,11 @@ function validFixture({ environment = 'staging', withRollback = false } = {}) {
     image: `${receipt.region}-docker.pkg.dev/${receipt.project}/${receipt.artifactRegistryRepository}/narrator-worker:${receipt.commitSha}`,
     serviceUrl: 'https://narrator-worker.example.run.app',
     revision: 'narrator-worker-00002-def',
-    rollbackRevision: withRollback ? 'narrator-worker-00001-abc' : null,
+    sourceSha: receipt.commitSha,
+    rollbackRevision: 'narrator-worker-00001-abc',
+    rollbackSourceSha: receipt.rollbackSha,
     imageDigest: `sha256:${'b'.repeat(64)}`,
-    rollbackImageDigest: withRollback ? `sha256:${'d'.repeat(64)}` : null,
+    rollbackImageDigest: `sha256:${'d'.repeat(64)}`,
     secretVersions,
     configuration,
     configFingerprint: fingerprint(configuration),
@@ -217,44 +183,17 @@ function expectRejected(name, mutate) {
 
 export function runWorkerDeployReceiptValidatorSelfTest() {
   validateWorkerDeployReceipt(validFixture());
-  validateWorkerDeployReceipt(validFixture({ environment: 'production', withRollback: true }));
-
-  expectRejected('missing image digest', (fixture) => {
-    fixture.services[0].imageDigest = null;
-  });
-  expectRejected('invalid source SHA', (fixture) => {
-    fixture.commitSha = 'manual';
-  });
+  expectRejected('missing image digest', (fixture) => { fixture.services[0].imageDigest = null; });
+  expectRejected('invalid source SHA', (fixture) => { fixture.commitSha = 'manual'; });
   expectRejected('mutable latest secret', (fixture) => {
     fixture.services[0].secretVersions.URAI_JOBS_WORKER_TOKEN = 'latest';
     fixture.services[0].configuration.secretVersions.URAI_JOBS_WORKER_TOKEN = 'latest';
     fixture.services[0].configFingerprint = fingerprint(fixture.services[0].configuration);
   });
-  expectRejected('same revision and rollback', (fixture) => {
-    fixture.services[0].rollbackRevision = fixture.services[0].revision;
-    fixture.services[0].rollbackImageDigest = `sha256:${'d'.repeat(64)}`;
-  });
-  expectRejected('tampered configuration fingerprint', (fixture) => {
-    fixture.services[0].configFingerprint = 'c'.repeat(64);
-  });
-
-  const productionWithoutRollback = validFixture({ environment: 'production' });
-  try {
-    validateWorkerDeployReceipt(productionWithoutRollback);
-    throw new Error('production receipt without rollback fixture unexpectedly passed');
-  } catch (error) {
-    if (String(error).includes('unexpectedly passed')) throw error;
-  }
-
-  const productionMissingRollbackDigest = validFixture({ environment: 'production', withRollback: true });
-  productionMissingRollbackDigest.services[0].rollbackImageDigest = null;
-  try {
-    validateWorkerDeployReceipt(productionMissingRollbackDigest);
-    throw new Error('production receipt without rollback digest fixture unexpectedly passed');
-  } catch (error) {
-    if (String(error).includes('unexpectedly passed')) throw error;
-  }
-
+  expectRejected('same revision and rollback', (fixture) => { fixture.services[0].rollbackRevision = fixture.services[0].revision; });
+  expectRejected('missing rollback digest', (fixture) => { fixture.services[0].rollbackImageDigest = null; });
+  expectRejected('rollback source mismatch', (fixture) => { fixture.services[0].rollbackSourceSha = 'f'.repeat(40); });
+  expectRejected('tampered configuration fingerprint', (fixture) => { fixture.services[0].configFingerprint = 'c'.repeat(64); });
   return true;
 }
 
