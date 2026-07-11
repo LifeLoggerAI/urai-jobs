@@ -25,6 +25,14 @@ requireText('scripts/deploy-workers.sh', '--service-account "$WORKER_RUNTIME_SER
 requireText('scripts/deploy-workers.sh', 'rollbackRevision', 'worker deploy receipt must record rollback revision');
 requireText('scripts/deploy-workers.sh', 'unauthorized auth probe returned', 'worker deploy must prove unauthorized access is rejected');
 requireText('scripts/deploy-workers.sh', 'authorized auth probe returned', 'worker deploy must prove authorized access succeeds');
+requireText('package.json', 'bash scripts/verify-deploy-authority.sh', 'worker deployment must run through immutable authority verification');
+requireText('package.json', 'GITHUB_SHA=\\"$DEPLOY_SOURCE_SHA\\"', 'verified source SHA must bind image tags and receipts');
+requireText('scripts/verify-deploy-authority.sh', 'git status --porcelain --untracked-files=all', 'deployment authority must require a clean tree');
+requireText('scripts/verify-deploy-authority.sh', 'git merge-base --is-ancestor', 'rollback must be an ancestor of the deployment SHA');
+requireText('scripts/verify-deploy-authority.sh', 'DEPLOY-URAI-JOBS-STAGING', 'staging requires environment-specific confirmation');
+requireText('scripts/verify-deploy-authority.sh', 'DEPLOY-URAI-JOBS-PRODUCTION', 'production requires environment-specific confirmation');
+requireText('scripts/ensure-gcs-bucket.sh', 'GCS_BUCKET_CREATION_APPROVAL', 'bucket creation must require separate infrastructure approval');
+requireText('scripts/ensure-gcs-bucket.sh', 'PRODUCTION_INFRASTRUCTURE_APPROVAL', 'production infrastructure creation must require explicit approval');
 requireText('scripts/deploy-firebase.sh', 'URAI_JOBS_WORKER_TOKEN_SECRET:-URAI_JOBS_WORKER_TOKEN', 'Firebase deploy must require the canonical worker secret');
 rejectText('scripts/deploy-firebase.sh', 'WEBHOOK_SIGNING_SECRET=', 'secrets must not be written into functions/.env');
 requireText('scripts/deploy-career-worker.sh', '[BLOCKED]', 'career scaffold deploy must be disabled');
@@ -35,6 +43,11 @@ rejectText('scripts/deploy-managed-worker.sh', 'gcloud run deploy', 'generic syn
 const canonicalWorkflow = '.github/workflows/urai-jobs-production-deploy.yml';
 requireText(canonicalWorkflow, 'expected_sha:', 'canonical workflow must require an exact target SHA');
 requireText(canonicalWorkflow, 'rollback_sha:', 'canonical workflow must require a rollback SHA');
+requireText(canonicalWorkflow, 'fetch-depth: 0', 'canonical workflow must fetch rollback history');
+requireText(canonicalWorkflow, 'persist-credentials: false', 'canonical checkout must not persist credentials');
+requireText(canonicalWorkflow, 'git merge-base --is-ancestor', 'canonical workflow must reject unrelated rollback commits');
+requireText(canonicalWorkflow, 'DEPLOY_SOURCE_SHA:', 'canonical workflow must pass exact source identity into worker deployment');
+requireText(canonicalWorkflow, 'ALLOW_CREATE_GCS_BUCKET: "false"', 'canonical deploy must not create billable bucket infrastructure');
 requireText(canonicalWorkflow, 'workload_identity_provider:', 'canonical workflow must use workload identity');
 requireText(canonicalWorkflow, 'pnpm install --frozen-lockfile', 'canonical workflow must use the frozen lockfile');
 requireText(canonicalWorkflow, 'PAID-PROVIDER-SMOKE', 'provider spend must require explicit authorization');
@@ -58,6 +71,8 @@ if (failures.length > 0) {
 
 console.log('[PASS] secure worker deployment contract');
 console.log('[PASS] canonical deployment authority: .github/workflows/urai-jobs-production-deploy.yml');
+console.log('[PASS] exact clean SHA and ancestor rollback authority required');
+console.log('[PASS] implicit billable infrastructure creation blocked');
 console.log('[PASS] production workers: narrator-worker, asset-worker');
 console.log('[PASS] disabled workers: spatial-worker, studio-worker, career-worker, generic managed worker');
 console.log('[PASS] provider calls executed: 0');
