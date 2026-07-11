@@ -9,7 +9,8 @@
     "workers/*"
   ],
   "scripts": {
-    "urai-jobs:verify": "node scripts/urai-jobs-verify.mjs && node scripts/release-sequence-verify.mjs && node scripts/activation-readiness-verify.mjs && node scripts/career-surfaces-verify.mjs && node scripts/career-runtime-smoke.mjs && node scripts/check-secure-worker-deploy.mjs && node scripts/check-rollback-provenance.mjs",
+    "urai-jobs:verify": "node scripts/urai-jobs-verify.mjs && node scripts/release-sequence-verify.mjs && node scripts/activation-readiness-verify.mjs && node scripts/career-surfaces-verify.mjs && node scripts/career-runtime-smoke.mjs && node scripts/check-secure-worker-deploy.mjs && node scripts/check-rollback-provenance.mjs && node scripts/check-required-ci-exact-head.mjs",
+    "ci:exact-head": "node scripts/check-required-ci-exact-head.mjs",
     "activation:verify": "node scripts/activation-readiness-verify.mjs && node scripts/career-surfaces-verify.mjs",
     "security:worker-deploy": "node scripts/check-secure-worker-deploy.mjs && node scripts/check-rollback-provenance.mjs",
     "rollback:verify": "node scripts/verify-rollback-revision.mjs --self-test && node scripts/check-rollback-provenance.mjs",
