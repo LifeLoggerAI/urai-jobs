@@ -442,9 +442,7 @@ jobs:
           const narrator = services.get('narrator-worker');
           const asset = services.get('asset-worker');
           if (services.size !== 2 || !narrator || !asset) failures.push('canonical worker set');
-          for (const service of [narrator, asset].filter(Boolean)) {
-            if (!String(service.serviceUrl || '').startsWith('https://')) failures.push(`${service.worker} URL`);
-          }
+          for (const service of [narrator, asset].filter(Boolean)) if (!String(service.serviceUrl || '').startsWith('https://')) failures.push(`${service.worker} URL`);
           if (!input.hostingSite) failures.push('hosting site');
           if (failures.length) throw new Error(`Mutation evidence mismatch: ${failures.join(', ')}`);
           fs.appendFileSync(process.env.GITHUB_ENV, [
@@ -456,27 +454,31 @@ jobs:
           NODE
 
       - name: Verify canonical worker health publicly
+        id: worker_health
         run: node scripts/verify-worker-health.mjs
 
       - name: Verify Firebase and optional custom domains publicly
+        id: domain_verify
         shell: bash
         run: |
           set -euo pipefail
           domains=("https://${FIREBASE_HOSTING_SITE}.web.app")
-          if [ "$REQUIRE_CUSTOM_DOMAINS" = 'true' ]; then
-            domains+=("https://uraijobs.com" "https://www.uraijobs.com")
-          fi
+          if [ "$REQUIRE_CUSTOM_DOMAINS" = 'true' ]; then domains+=("https://uraijobs.com" "https://www.uraijobs.com"); fi
           node scripts/verify-custom-domains.mjs "${domains[@]}"
 
-      - name: Write public verification receipt
+      - name: Write outcome-exact public verification receipt
         if: always()
         shell: bash
         env:
           JOB_STATUS: ${{ job.status }}
+          WORKER_HEALTH_OUTCOME: ${{ steps.worker_health.outcome }}
+          DOMAIN_VERIFY_OUTCOME: ${{ steps.domain_verify.outcome }}
         run: |
           mkdir -p docs/release-evidence
           node - <<'NODE'
           const fs = require('fs');
+          const workerPassed = process.env.WORKER_HEALTH_OUTCOME === 'success';
+          const domainsPassed = process.env.DOMAIN_VERIFY_OUTCOME === 'success';
           fs.writeFileSync('docs/release-evidence/public-verification.json', `${JSON.stringify({
             schemaVersion: 'urai-jobs-public-verification-1',
             generatedAt: new Date().toISOString(),
@@ -487,13 +489,16 @@ jobs:
             environment: process.env.INPUT_TARGET,
             status: process.env.JOB_STATUS,
             cloudAuthenticated: false,
-            publicWorkerHealthChecked: true,
-            publicHostingChecked: true,
+            workerHealthOutcome: process.env.WORKER_HEALTH_OUTCOME || 'not-run',
+            domainVerificationOutcome: process.env.DOMAIN_VERIFY_OUTCOME || 'not-run',
+            publicWorkerHealthChecked: workerPassed,
+            publicHostingChecked: domainsPassed,
             customDomainsRequired: process.env.REQUIRE_CUSTOM_DOMAINS === 'true',
+            publicVerificationCompleted: workerPassed && domainsPassed,
             paidProviderCalls: 0,
           }, null, 2)}\n`);
           NODE
-          DEPLOY_GIT_SHA="$TARGET_SHA" DEPLOY_ENVIRONMENT="$INPUT_TARGET" pnpm prod:stamp
+          DEPLOY_GIT_SHA="$TARGET_SHA" DEPLOY_ENVIRONMENT="$INPUT_TARGET" node scripts/stamp-deployment-artifact.mjs
 
       - name: Upload public verification evidence
         if: always()
