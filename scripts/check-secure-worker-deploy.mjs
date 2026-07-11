@@ -21,14 +21,31 @@ requireText('workers/narrator-worker/src/index.ts', "validateRequiredEnv(product
 requireText('workers/narrator-worker/src/index.ts', "app.get('/authz', requireWorkerAuth", 'narrator auth probe must be protected');
 requireText('functions/src/jobs/executeJob.ts', "defineSecret('URAI_JOBS_WORKER_TOKEN')", 'Firebase worker token must use Secret Manager');
 requireText('functions/src/jobs/executeJob.ts', 'secrets: [workerTokenSecret]', 'PubSub function must bind the worker secret');
+
+requireText('scripts/deploy-workers.sh', ': "${GITHUB_SHA:?GITHUB_SHA must contain the verified deployment source SHA}"', 'worker deploy must independently require an exact source SHA');
 requireText('scripts/deploy-workers.sh', '--set-secrets "$secret_vars"', 'worker deploy must inject Secret Manager values');
 requireText('scripts/deploy-workers.sh', '--service-account "$WORKER_RUNTIME_SERVICE_ACCOUNT"', 'worker deploy must use an explicit runtime service account');
-requireText('scripts/deploy-workers.sh', 'rollbackRevision', 'worker deploy receipt must record rollback revision');
+requireText('scripts/deploy-workers.sh', "--filter='state=ENABLED'", 'worker deploy must resolve enabled Secret Manager versions');
+requireText('scripts/deploy-workers.sh', 'Mutable Secret Manager aliases are forbidden', 'worker deploy must reject mutable secret aliases');
+rejectText('scripts/deploy-workers.sh', ':latest', 'worker deploy must not bind Cloud Run revisions to mutable latest secret aliases');
+requireText('scripts/deploy-workers.sh', 'verify_revision_secret_versions', 'worker deploy must verify observed revision secret versions');
+requireText('scripts/deploy-workers.sh', 'deployed version ${observed[name]', 'observed revision secret provenance must fail on mismatch');
+requireText('scripts/deploy-workers.sh', 'rollbackImageDigest', 'worker deploy receipt must record rollback image digest');
+requireText('scripts/deploy-workers.sh', 'Deployment did not create a revision distinct from rollback', 'new revision must differ from rollback');
+requireText('scripts/deploy-workers.sh', 'Existing rollback revision lacks an immutable image digest', 'rollback revision must have immutable image provenance');
 requireText('scripts/deploy-workers.sh', 'Production deployment requires an existing rollback revision', 'production deploy must fail before creating a revision when no rollback revision exists');
 requireText('scripts/deploy-workers.sh', 'Immutable image digest is missing or invalid', 'worker deploy must fail when Cloud Run image digest proof is absent');
+requireText('scripts/deploy-workers.sh', "schemaVersion: 'urai-jobs-worker-deploy-receipt-2'", 'worker deploy must emit the hardened receipt schema');
 requireText('scripts/deploy-workers.sh', 'validate-worker-deploy-receipt.mjs', 'worker deploy must validate the completed receipt before success');
 requireText('scripts/deploy-workers.sh', 'unauthorized auth probe returned', 'worker deploy must prove unauthorized access is rejected');
 requireText('scripts/deploy-workers.sh', 'authorized auth probe returned', 'worker deploy must prove authorized access succeeds');
+
+requireText('scripts/validate-worker-deploy-receipt.mjs', 'secretVersions', 'receipt validator must require pinned secret versions');
+requireText('scripts/validate-worker-deploy-receipt.mjs', 'must not use latest', 'receipt validator must reject mutable aliases');
+requireText('scripts/validate-worker-deploy-receipt.mjs', 'rollbackImageDigest', 'receipt validator must bind rollback image provenance');
+requireText('scripts/validate-worker-deploy-receipt.mjs', 'rollbackRevision must differ from revision', 'receipt validator must reject same revision and rollback');
+requireText('scripts/validate-worker-deploy-receipt.mjs', 'configFingerprint does not match the canonical configuration', 'receipt validator must recompute configuration identity');
+
 requireText('package.json', 'bash scripts/verify-deploy-authority.sh', 'worker deployment must run through immutable authority verification');
 requireText('package.json', 'GITHUB_SHA="$DEPLOY_SOURCE_SHA"', 'verified source SHA must bind image tags and receipts');
 requireText('scripts/verify-deploy-authority.sh', 'git status --porcelain --untracked-files=all', 'deployment authority must require a clean tree');
@@ -84,8 +101,8 @@ if (failures.length > 0) {
 
 console.log('[PASS] secure worker deployment contract');
 console.log('[PASS] canonical deployment authority: .github/workflows/urai-jobs-production-deploy.yml');
-console.log('[PASS] exact clean SHA and ancestor rollback authority required');
-console.log('[PASS] immutable image digest and production rollback receipt required');
+console.log('[PASS] exact clean SHA, pinned secrets, and ancestor rollback authority required');
+console.log('[PASS] new and rollback revisions bind immutable image digests');
 console.log('[PASS] implicit billable infrastructure creation blocked');
 console.log('[PASS] production workers: narrator-worker, asset-worker');
 console.log('[PASS] disabled workers: spatial-worker, studio-worker, career-worker, generic managed worker');
