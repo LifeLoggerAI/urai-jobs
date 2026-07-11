@@ -10,16 +10,25 @@ URAI_JOBS_WORKER_TOKEN_SECRET="${URAI_JOBS_WORKER_TOKEN_SECRET:-URAI_JOBS_WORKER
 
 : "${FIREBASE_PROJECT_ID:?FIREBASE_PROJECT_ID is required}"
 : "${GCLOUD_PROJECT:?GCLOUD_PROJECT is required}"
+: "${DEPLOY_SOURCE_SHA:?DEPLOY_SOURCE_SHA is required}"
+: "${URAI_FIREBASE_PREBUILT_VERIFIED:?URAI_FIREBASE_PREBUILT_VERIFIED is required}"
 
 command -v firebase >/dev/null 2>&1 || { echo "[FAIL] firebase CLI is required" >&2; exit 1; }
 command -v gcloud >/dev/null 2>&1 || { echo "[FAIL] gcloud CLI is required" >&2; exit 1; }
-command -v pnpm >/dev/null 2>&1 || { echo "[FAIL] pnpm is required" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { echo "[FAIL] node is required" >&2; exit 1; }
 
 trap 'rm -f "$FUNCTIONS_ENV_FILE"' EXIT
 
-if [ "$TARGET" != "prod" ] && [ "$TARGET" != "staging" ] && [ "$TARGET" != "dev" ]; then
-  echo "[FAIL] TARGET must be dev, staging, or prod. Got: $TARGET" >&2
+if [ "$TARGET" != "prod" ] && [ "$TARGET" != "staging" ]; then
+  echo "[FAIL] Canonical Firebase deployment target must be staging or prod. Got: $TARGET" >&2
+  exit 1
+fi
+if [ "$URAI_FIREBASE_PREBUILT_VERIFIED" != "1" ]; then
+  echo "[FAIL] Canonical Firebase deployment requires URAI_FIREBASE_PREBUILT_VERIFIED=1" >&2
+  exit 1
+fi
+if [ "$DEPLOY_SOURCE_SHA" != "$(git rev-parse HEAD)" ]; then
+  echo "[FAIL] Firebase deployment must use the exact verified target SHA" >&2
   exit 1
 fi
 
@@ -27,18 +36,17 @@ set_hosting_site_in_firebase_json() {
   local site="$1"
   SITE="$site" node <<'NODE'
 const fs = require('fs');
-const path = 'firebase.json';
+const config = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
 const site = process.env.SITE;
-const config = JSON.parse(fs.readFileSync(path, 'utf8'));
 if (!config.hosting || Array.isArray(config.hosting)) throw new Error('Expected firebase.json hosting to be a single hosting object.');
 config.hosting.site = site;
-fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+fs.writeFileSync('firebase.json', `${JSON.stringify(config, null, 2)}\n`);
 NODE
 }
 
 ensure_hosting_site() {
   local site="$1"
-  echo "[INFO] Ensuring Firebase Hosting site exists: $site"
+  echo "[INFO] Verifying Firebase Hosting site: $site"
   if firebase hosting:sites:get "$site" --project "$FIREBASE_PROJECT_ID" >/dev/null 2>&1; then
     echo "[PASS] Hosting site exists: $site"
     HOSTING_SITE="$site"
@@ -50,14 +58,13 @@ ensure_hosting_site() {
     return 1
   fi
   if [ "${HOSTING_SITE_CREATION_APPROVAL:-}" != "CREATE-URAI-JOBS-HOSTING-SITE" ]; then
-    echo "[FAIL] Hosting creation requires HOSTING_SITE_CREATION_APPROVAL=CREATE-URAI-JOBS-HOSTING-SITE" >&2
+    echo "[FAIL] Hosting creation requires separate infrastructure approval" >&2
     return 1
   fi
   if [ "$TARGET" = "prod" ] && [ "${PRODUCTION_INFRASTRUCTURE_APPROVAL:-}" != "APPROVE-URAI-JOBS-PRODUCTION-INFRASTRUCTURE" ]; then
-    echo "[FAIL] Production hosting creation requires PRODUCTION_INFRASTRUCTURE_APPROVAL=APPROVE-URAI-JOBS-PRODUCTION-INFRASTRUCTURE" >&2
+    echo "[FAIL] Production hosting creation requires separate production infrastructure approval" >&2
     return 1
   fi
-  echo "[WARN] Creating explicitly approved hosting site $site"
   firebase hosting:sites:create "$site" --project "$FIREBASE_PROJECT_ID" --non-interactive
   HOSTING_SITE="$site"
 }
@@ -67,19 +74,17 @@ verify_worker_secret() {
     echo "[FAIL] Firebase executeJob requires Secret Manager secret: $URAI_JOBS_WORKER_TOKEN_SECRET" >&2
     exit 1
   }
-  echo "[PASS] Worker bearer token secret exists and matches the canonical Firebase binding."
 }
 
 write_functions_env() {
-  echo "[INFO] Writing non-secret Firebase Functions environment file: $FUNCTIONS_ENV_FILE"
   for key in NARRATOR_WORKER_URL ASSET_WORKER_URL GCS_BUCKET_NAME API_ALLOWED_ORIGINS URAI_ENV GCP_REGION GCLOUD_PROJECT GOOGLE_CLOUD_PROJECT FIREBASE_PROJECT_ID; do
-    if [ -z "${!key:-}" ]; then
-      echo "[FAIL] $key is required before Firebase Functions deploy." >&2
+    if [ -z "${!key:-}" ] || [[ "${!key}" == *$'\n'* ]]; then
+      echo "[FAIL] $key is missing or contains a newline" >&2
       exit 1
     fi
   done
   cat > "$FUNCTIONS_ENV_FILE" <<EOF
-URAI_ENV=${URAI_ENV:-prod}
+URAI_ENV=${URAI_ENV}
 FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID
 GCLOUD_PROJECT=$GCLOUD_PROJECT
 GOOGLE_CLOUD_PROJECT=$GOOGLE_CLOUD_PROJECT
@@ -90,20 +95,16 @@ NARRATOR_WORKER_URL=$NARRATOR_WORKER_URL
 ASSET_WORKER_URL=$ASSET_WORKER_URL
 EOF
   for key in SPATIAL_WORKER_URL STUDIO_WORKER_URL CAREER_WORKER_URL CONTENT_WORKER_URL STORYTIME_WORKER_URL ANALYTICS_WORKER_URL COMMUNICATIONS_WORKER_URL PUBSUB_JOB_EXECUTION_TOPIC URAI_JOBS_WORKER_TIMEOUT_MS; do
-    if [ -n "${!key:-}" ]; then printf '%s=%s\n' "$key" "${!key}" >> "$FUNCTIONS_ENV_FILE"; fi
+    if [ -n "${!key:-}" ]; then
+      [[ "${!key}" != *$'\n'* ]] || { echo "[FAIL] $key contains a newline" >&2; exit 1; }
+      printf '%s=%s\n' "$key" "${!key}" >> "$FUNCTIONS_ENV_FILE"
+    fi
   done
-  echo "[PASS] Firebase Functions non-secret environment file prepared."
 }
 
-echo "[INFO] Running production precheck for target=$TARGET"
-pnpm prod:precheck
+echo "[INFO] Verifying source-bound Firebase prebuilt bytes"
+node scripts/firebase-prebuilt-manifest.mjs --verify
 
-echo "[INFO] Building shared types, functions, and web"
-pnpm --filter @urai-jobs/shared-types build
-pnpm --filter urai-jobs-functions build
-pnpm --filter urai-jobs-web build
-
-echo "[INFO] Selecting Firebase project: $FIREBASE_PROJECT_ID"
 if [ "$FIREBASE_PROJECT_ID" != "$GCLOUD_PROJECT" ]; then
   echo "[FAIL] FIREBASE_PROJECT_ID and GCLOUD_PROJECT must match" >&2
   exit 1
@@ -112,7 +113,6 @@ firebase use "$FIREBASE_PROJECT_ID"
 
 if ! ensure_hosting_site "$HOSTING_SITE"; then
   if [ -n "$FALLBACK_HOSTING_SITE" ]; then
-    echo "[WARN] Primary hosting site '$HOSTING_SITE' is unavailable. Trying fallback '$FALLBACK_HOSTING_SITE'."
     ensure_hosting_site "$FALLBACK_HOSTING_SITE"
   else
     exit 1
@@ -120,18 +120,12 @@ if ! ensure_hosting_site "$HOSTING_SITE"; then
 fi
 
 verify_worker_secret
-
-echo "[INFO] Setting firebase.json hosting.site to $HOSTING_SITE"
 set_hosting_site_in_firebase_json "$HOSTING_SITE"
 write_functions_env
 
-SOURCE_SHA="${DEPLOY_SOURCE_SHA:-${TARGET_SHA:-}}"
-if [ -z "$SOURCE_SHA" ] || [ "$SOURCE_SHA" != "$(git rev-parse HEAD)" ]; then
-  echo "[FAIL] Firebase deployment must use the same verified target SHA as worker deployment" >&2
-  exit 1
-fi
+node scripts/firebase-prebuilt-manifest.mjs --verify
 
-echo "[INFO] Deploying Firebase Functions, Firestore rules/indexes, and Hosting"
+echo "[INFO] Deploying verified Firebase Functions, Firestore rules/indexes, and Hosting"
 firebase deploy --only functions,firestore,hosting --project "$FIREBASE_PROJECT_ID" --non-interactive
 
 echo "[PASS] Firebase deployment completed for $FIREBASE_PROJECT_ID"
