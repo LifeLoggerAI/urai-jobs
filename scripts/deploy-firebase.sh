@@ -7,8 +7,8 @@ FALLBACK_HOSTING_SITE="${FIREBASE_FALLBACK_HOSTING_SITE:-}"
 ALLOW_CREATE_HOSTING_SITE="${ALLOW_CREATE_HOSTING_SITE:-false}"
 FUNCTIONS_ENV_FILE="functions/.env"
 FIREBASE_CONFIG_RECEIPT_PATH="${FIREBASE_CONFIG_RECEIPT_PATH:-docs/release-evidence/firebase-deploy-config-receipt.json}"
-RUNNER_TEMP_ROOT="${RUNNER_TEMP:-/tmp}"
-FIREBASE_DEPLOY_CONFIG_PATH="${URAI_FIREBASE_DEPLOY_CONFIG_PATH:-${RUNNER_TEMP_ROOT}/urai-jobs-firebase-${DEPLOY_SOURCE_SHA:-unknown}.json}"
+REPOSITORY_ROOT="$(pwd -P)"
+FIREBASE_DEPLOY_CONFIG_PATH="${URAI_FIREBASE_DEPLOY_CONFIG_PATH:-${REPOSITORY_ROOT}/.urai-jobs-firebase-${DEPLOY_SOURCE_SHA:-unknown}.json}"
 URAI_JOBS_WORKER_TOKEN_SECRET="${URAI_JOBS_WORKER_TOKEN_SECRET:-URAI_JOBS_WORKER_TOKEN}"
 
 : "${FIREBASE_PROJECT_ID:?FIREBASE_PROJECT_ID is required}"
@@ -42,12 +42,13 @@ if [ "$FIREBASE_PROJECT_ID" != "$GCLOUD_PROJECT" ]; then
   exit 1
 fi
 
-RUNNER_TEMP_ROOT="$RUNNER_TEMP_ROOT" FIREBASE_DEPLOY_CONFIG_PATH="$FIREBASE_DEPLOY_CONFIG_PATH" node <<'NODE'
+REPOSITORY_ROOT="$REPOSITORY_ROOT" FIREBASE_DEPLOY_CONFIG_PATH="$FIREBASE_DEPLOY_CONFIG_PATH" DEPLOY_SOURCE_SHA="$DEPLOY_SOURCE_SHA" node <<'NODE'
 const path = require('path');
-const root = path.resolve(process.env.RUNNER_TEMP_ROOT);
+const root = path.resolve(process.env.REPOSITORY_ROOT);
 const candidate = path.resolve(process.env.FIREBASE_DEPLOY_CONFIG_PATH);
-if (candidate !== root && !candidate.startsWith(`${root}${path.sep}`)) {
-  throw new Error('Temporary Firebase config must stay inside RUNNER_TEMP.');
+if (path.dirname(candidate) !== root) throw new Error('Temporary Firebase config must stay at the repository root.');
+if (path.basename(candidate) !== `.urai-jobs-firebase-${process.env.DEPLOY_SOURCE_SHA}.json`) {
+  throw new Error('Temporary Firebase config filename must bind the exact source SHA.');
 }
 NODE
 
