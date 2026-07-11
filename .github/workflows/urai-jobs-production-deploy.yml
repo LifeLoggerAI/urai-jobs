@@ -23,6 +23,10 @@ on:
         description: Approved ancestor rollback repository SHA
         required: true
         type: string
+      rollback_config_fingerprints_json:
+        description: JSON object mapping each approved worker name to the exact SHA-256 fingerprint of its rollback revision configuration
+        required: true
+        type: string
       paid_provider_smoke_authorization:
         description: Type PAID-PROVIDER-SMOKE to authorize the real narrator provider smoke; otherwise it remains skipped
         required: false
@@ -52,6 +56,7 @@ env:
   URAI_JOBS_WORKER_TOKEN_SECRET: URAI_JOBS_WORKER_TOKEN
   URAI_WHEEL_GITHUB_TOKEN_SECRET: urai-wheel-github-token
   URAI_JOBS_CALLBACK_SECRET_NAME: urai-jobs-callback-secret
+  DEPLOY_ROLLBACK_CONFIG_FINGERPRINTS_JSON: ${{ inputs.rollback_config_fingerprints_json }}
 
 jobs:
   deploy:
@@ -103,6 +108,7 @@ jobs:
             echo "rollback_sha must be an ancestor of the target SHA" >&2
             exit 1
           }
+          node -e 'const value=JSON.parse(process.env.DEPLOY_ROLLBACK_CONFIG_FINGERPRINTS_JSON); if (!value || Array.isArray(value) || typeof value !== "object") process.exit(1); for (const [worker, hash] of Object.entries(value)) { if (!/^(narrator-worker|asset-worker)$/.test(worker) || !/^[0-9a-f]{64}$/.test(String(hash))) process.exit(1); } if (Object.keys(value).sort().join(",") !== "asset-worker,narrator-worker") process.exit(1);'
           echo "TARGET_SHA=$ACTUAL_SHA" >> "$GITHUB_ENV"
           echo "ROLLBACK_SHA=${{ inputs.rollback_sha }}" >> "$GITHUB_ENV"
           echo "DEPLOY_CONFIRMATION=$EXPECTED_CONFIRMATION" >> "$GITHUB_ENV"
@@ -150,6 +156,7 @@ jobs:
           test -n "$API_ALLOWED_ORIGINS"
           test -n "$FIREBASE_HOSTING_SITE"
           test -n "$WORKER_RUNTIME_SERVICE_ACCOUNT"
+          test -n "$DEPLOY_ROLLBACK_CONFIG_FINGERPRINTS_JSON"
           gcloud secrets describe URAI_JOBS_WORKER_TOKEN --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud secrets describe urai-wheel-github-token --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud secrets describe urai-jobs-callback-secret --project "$DEPLOY_PROJECT_ID" >/dev/null
@@ -183,6 +190,7 @@ jobs:
           DEPLOY_SOURCE_SHA: ${{ env.TARGET_SHA }}
           DEPLOY_ROLLBACK_SHA: ${{ env.ROLLBACK_SHA }}
           URAI_DEPLOY_CONFIRM: ${{ env.DEPLOY_CONFIRMATION }}
+          ROLLBACK_CONFIG_RECEIPT_PATH: docs/release-evidence/worker-rollback-config-receipt.json
           DEPLOY_RECEIPT_PATH: docs/release-evidence/worker-deploy-receipt.json
         run: pnpm deploy:workers
 
@@ -239,12 +247,13 @@ jobs:
           const path = 'docs/release-evidence/canonical-deploy-inputs.json';
           fs.mkdirSync('docs/release-evidence', { recursive: true });
           fs.writeFileSync(path, JSON.stringify({
-            schemaVersion: 'urai-jobs-canonical-deploy-inputs-2',
+            schemaVersion: 'urai-jobs-canonical-deploy-inputs-3',
             generatedAt: new Date().toISOString(),
             repository: process.env.GITHUB_REPOSITORY,
             workflowRunId: process.env.GITHUB_RUN_ID,
             targetSha: process.env.TARGET_SHA,
             rollbackSha: process.env.ROLLBACK_SHA,
+            rollbackConfigFingerprints: JSON.parse(process.env.DEPLOY_ROLLBACK_CONFIG_FINGERPRINTS_JSON),
             environment: '${{ inputs.target }}',
             project: process.env.DEPLOY_PROJECT_ID,
             region: process.env.GCP_REGION,
