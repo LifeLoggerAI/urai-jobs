@@ -8,14 +8,31 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+env:
+  TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   gates:
     name: Build, typecheck, smoke, emulator E2E
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout exact reviewed head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove exact clean head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
@@ -36,8 +53,12 @@ jobs:
       - name: Verify functions npm lockfile
         run: npm --prefix functions ci --ignore-scripts
 
-      - name: Install workspace dependencies
-        run: pnpm install --no-frozen-lockfile
+      - name: Install exact workspace dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove installs preserved exact source
+        shell: bash
+        run: test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Verify Firebase SDK versions
         run: pnpm --filter urai-jobs-functions list firebase-functions firebase-admin --depth 0
@@ -59,7 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           log_file="${RUNNER_TEMP}/urai-jobs-emulator-e2e.log"
-          if npx --yes firebase-tools@latest emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" >"$log_file" 2>&1; then
+          if pnpm exec firebase emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" >"$log_file" 2>&1; then
             grep -E '\[STEP|\[PASS|URAI_JOBS_E2E_VALIDATION' "$log_file" || true
             exit 0
           fi
