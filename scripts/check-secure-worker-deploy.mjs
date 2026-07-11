@@ -48,7 +48,7 @@ for (const [text, description] of [
   ['--service-account "$WORKER_RUNTIME_SERVICE_ACCOUNT"', 'worker deploy must use explicit runtime service account'],
   ['Mutable Secret Manager aliases are forbidden', 'worker deploy must reject mutable aliases'],
   ['gcloud builds describe "$build_id"', 'worker deploy must read Cloud Build result'],
-  ["value(results.images[0].digest)", 'worker deploy must bind Cloud Build digest'],
+  ['value(results.images[0].digest)', 'worker deploy must bind Cloud Build digest'],
   ['gcloud artifacts docker images describe "$immutable_image"', 'worker deploy must resolve Artifact Registry digest'],
   ['--image "$immutable_image"', 'worker deploy must deploy immutable digest'],
   ['--labels "urai-source-sha=$GITHUB_SHA,urai-environment=$URAI_ENV"', 'revision labels must bind source and environment'],
@@ -118,10 +118,21 @@ for (const [text, description] of [
   ['Canonical Firebase deployment target must be staging or prod', 'Firebase target must be bounded'],
   ['FIREBASE_PROJECT_ID and GCLOUD_PROJECT must match', 'Firebase and Google Cloud projects must agree'],
   ['Refusing to create hosting infrastructure during deployment', 'Firebase deploy must not create hosting implicitly'],
+  ['Temporary Firebase config must stay at the repository root.', 'temporary Firebase config must stay at the project root for relative paths'],
+  ['Temporary Firebase config filename must bind the exact source SHA.', 'temporary Firebase config must bind source identity'],
+  ["schemaVersion: 'urai-jobs-firebase-deploy-config-1'", 'Firebase deploy must emit a runtime configuration receipt'],
+  ['firebaseConfigSha256', 'Firebase receipt must hash effective Firebase configuration'],
+  ['functionsEnvSha256', 'Firebase receipt must hash effective functions environment'],
+  ['secretValuesIncluded: false', 'Firebase receipt must explicitly exclude secret values'],
+  ['assert_only_evidence_residue', 'Firebase deploy must verify cleanup residue'],
+  ['Firebase deployment left unexpected repository changes', 'Firebase deploy must fail on source residue'],
+  ['trap - EXIT', 'Firebase deploy must disable the cleanup trap only after explicit cleanup'],
+  ['with only release evidence remaining in the worktree', 'Firebase deploy must record successful cleanup proof'],
 ]) requireText('scripts/deploy-firebase.sh', text, description);
 rejectText('scripts/deploy-firebase.sh', 'pnpm prod:precheck', 'credentialed Firebase deploy must not run production precheck');
 rejectText('scripts/deploy-firebase.sh', 'pnpm --filter', 'credentialed Firebase deploy must not rebuild source');
 rejectText('scripts/deploy-firebase.sh', 'WEBHOOK_SIGNING_SECRET=', 'secrets must not enter functions/.env');
+rejectText('scripts/deploy-firebase.sh', 'set_hosting_site_in_firebase_json', 'Firebase deploy must not edit tracked firebase.json');
 
 for (const [path, text, description] of [
   ['scripts/validate-worker-deploy-receipt.mjs', 'buildImageDigest', 'validator must bind build and revision digests'],
@@ -255,6 +266,7 @@ console.log('[PASS] credential-free preflight builds and attests exact Firebase 
 console.log('[PASS] protected worker mutation starts from clean exact source without dependency builds');
 console.log('[PASS] target and rollback secret versions are approval-bound and receipt-verified');
 console.log('[PASS] Firebase artifact verifies externally and after materialization');
+console.log('[PASS] Firebase deploy cleans temporary source changes and leaves only release evidence');
 console.log('[PASS] cloud credentials are destroyed before evidence handoff');
 console.log('[PASS] public verification and outcome-exact receipts run without cloud identity');
 console.log('[PASS] canonical deployment can execute zero paid provider calls');
