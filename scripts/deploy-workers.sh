@@ -31,6 +31,7 @@ URAI_ENV="${URAI_ENV:-prod}"
 WORKER_BUILD_TIMEOUT_SECONDS="${WORKER_BUILD_TIMEOUT_SECONDS:-900}"
 WORKER_BUILD_POLL_SECONDS="${WORKER_BUILD_POLL_SECONDS:-10}"
 DEPLOY_RECEIPT_PATH="${DEPLOY_RECEIPT_PATH:-docs/release-evidence/worker-deploy-receipt.json}"
+ROLLBACK_CONFIG_RECEIPT_PATH="${ROLLBACK_CONFIG_RECEIPT_PATH:-docs/release-evidence/worker-rollback-config-receipt.json}"
 WORKERS_CSV="${URAI_JOBS_DEPLOY_WORKERS:-narrator-worker,asset-worker}"
 IFS=',' read -r -a WORKERS <<< "$WORKERS_CSV"
 
@@ -62,6 +63,12 @@ for worker in "${WORKERS[@]}"; do
       ;;
   esac
 done
+
+[ -f "$ROLLBACK_CONFIG_RECEIPT_PATH" ] || {
+  echo "[FAIL] Approved rollback configuration receipt is missing: $ROLLBACK_CONFIG_RECEIPT_PATH" >&2
+  exit 1
+}
+node scripts/validate-rollback-config-receipt.mjs "$ROLLBACK_CONFIG_RECEIPT_PATH"
 
 required_secrets=("$URAI_JOBS_WORKER_TOKEN_SECRET")
 for worker in "${WORKERS[@]}"; do
@@ -192,6 +199,38 @@ process.stdout.write(JSON.stringify({
 NODE
 }
 
+rollback_receipt_value() {
+  local worker="$1"
+  local field="$2"
+  RECEIPT_PATH="$ROLLBACK_CONFIG_RECEIPT_PATH" WORKER="$worker" FIELD="$field" \
+  EXPECTED_TARGET_SHA="$GITHUB_SHA" EXPECTED_ROLLBACK_SHA="$DEPLOY_ROLLBACK_SHA" \
+  EXPECTED_PROJECT="$GCLOUD_PROJECT" EXPECTED_REGION="$GCP_REGION" EXPECTED_ENVIRONMENT="$URAI_ENV" \
+  EXPECTED_BUCKET="$GCS_BUCKET_NAME" EXPECTED_SERVICE_ACCOUNT="$WORKER_RUNTIME_SERVICE_ACCOUNT" node <<'NODE'
+const fs = require('fs');
+const receipt = JSON.parse(fs.readFileSync(process.env.RECEIPT_PATH, 'utf8'));
+const failures = [];
+if (receipt.targetSha !== process.env.EXPECTED_TARGET_SHA) failures.push('target SHA');
+if (receipt.rollbackSha !== process.env.EXPECTED_ROLLBACK_SHA) failures.push('rollback SHA');
+if (receipt.project !== process.env.EXPECTED_PROJECT) failures.push('project');
+if (receipt.region !== process.env.EXPECTED_REGION) failures.push('region');
+if (receipt.environment !== process.env.EXPECTED_ENVIRONMENT) failures.push('environment');
+if (receipt.artifactBucket !== process.env.EXPECTED_BUCKET) failures.push('artifact bucket');
+if (receipt.runtimeServiceAccount !== process.env.EXPECTED_SERVICE_ACCOUNT) failures.push('runtime service account');
+const service = Array.isArray(receipt.services) ? receipt.services.find((entry) => entry?.worker === process.env.WORKER) : null;
+if (!service) failures.push(`worker ${process.env.WORKER}`);
+if (failures.length) {
+  console.error(`[FAIL] Rollback configuration receipt is stale or mismatched: ${failures.join(', ')}`);
+  process.exit(1);
+}
+const value = service[process.env.FIELD];
+if (typeof value !== 'string' || value.length === 0) {
+  console.error(`[FAIL] Rollback configuration receipt field ${process.env.FIELD} is missing for ${process.env.WORKER}`);
+  process.exit(1);
+}
+process.stdout.write(value);
+NODE
+}
+
 verify_revision_configuration() {
   local revision_json="$1"
   local expected_secret_versions_json="$2"
@@ -315,12 +354,16 @@ deploy_worker() {
   local rollback_image_digest=""
   local rollback_revision_json=""
   local rollback_source_sha=""
+  local expected_rollback_revision=""
+  local expected_rollback_image_digest=""
 
   [ -d "$dir" ] || {
     echo "[FAIL] Missing worker directory: $dir" >&2
     exit 1
   }
 
+  expected_rollback_revision="$(rollback_receipt_value "$worker" rollbackRevision)"
+  expected_rollback_image_digest="$(rollback_receipt_value "$worker" imageDigest)"
   rollback_revision="$(gcloud run services describe "$worker" \
     --project "$GCLOUD_PROJECT" \
     --region "$GCP_REGION" \
@@ -334,6 +377,10 @@ deploy_worker() {
     echo "[FAIL] [$worker] Existing rollback revision does not belong to the worker service: $rollback_revision" >&2
     exit 1
   }
+  [ "$rollback_revision" = "$expected_rollback_revision" ] || {
+    echo "[FAIL] [$worker] Live rollback revision $rollback_revision changed after approval; expected $expected_rollback_revision" >&2
+    exit 1
+  }
   rollback_revision_json="$(gcloud run revisions describe "$rollback_revision" \
     --project "$GCLOUD_PROJECT" \
     --region "$GCP_REGION" \
@@ -345,6 +392,10 @@ deploy_worker() {
   rollback_image_digest="${rollback_image_digest#@}"
   [[ "$rollback_image_digest" =~ $digest_pattern ]] || {
     echo "[FAIL] [$worker] Existing rollback revision lacks an immutable image digest: ${rollback_image_digest:-<empty>}" >&2
+    exit 1
+  }
+  [ "$rollback_image_digest" = "$expected_rollback_image_digest" ] || {
+    echo "[FAIL] [$worker] Live rollback digest $rollback_image_digest changed after approval; expected $expected_rollback_image_digest" >&2
     exit 1
   }
   rollback_source_sha="$(revision_plain_env_value "$rollback_revision_json" URAI_SOURCE_SHA)"
