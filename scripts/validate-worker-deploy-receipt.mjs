@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const HEX64_PATTERN = /^[0-9a-f]{64}$/;
 const NUMERIC_SECRET_VERSION_PATTERN = /^[1-9][0-9]*$/;
-const IMAGE_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
+const IMAGE_DIGEST_PATTERN = /(?:^|@)sha256:[0-9a-f]{64}$/;
 const ALLOWED_ENVIRONMENTS = new Set(['staging', 'prod', 'production']);
 
 function nonEmptyString(value) {
@@ -37,8 +37,8 @@ export function validateWorkerDeployReceipt(receipt) {
     throw new Error('worker deployment receipt must be a JSON object');
   }
 
-  if (receipt.schemaVersion !== 'urai-jobs-worker-deploy-receipt-3') {
-    failures.push('schemaVersion must equal urai-jobs-worker-deploy-receipt-3');
+  if (receipt.schemaVersion !== 'urai-jobs-worker-deploy-receipt-2') {
+    failures.push('schemaVersion must equal urai-jobs-worker-deploy-receipt-2');
   }
   if (!nonEmptyString(receipt.generatedAt) || !Number.isFinite(Date.parse(receipt.generatedAt))) {
     failures.push('generatedAt must be a valid timestamp');
@@ -72,31 +72,16 @@ export function validateWorkerDeployReceipt(receipt) {
       if (!nonEmptyString(service.buildId)) failures.push(`${prefix}.buildId is required`);
       if (!nonEmptyString(service.serviceUrl) || !String(service.serviceUrl).startsWith('https://')) failures.push(`${prefix}.serviceUrl must be an https URL`);
 
-      const imageBase = `${receipt.region}-docker.pkg.dev/${receipt.project}/${receipt.artifactRegistryRepository}/${service.worker}`;
-      const expectedImageTag = `${imageBase}:${receipt.commitSha}`;
-      if (service.imageTag !== expectedImageTag) failures.push(`${prefix}.imageTag must equal exact source-bound tag ${expectedImageTag}`);
-      if (!IMAGE_DIGEST_PATTERN.test(String(service.buildImageDigest ?? ''))) failures.push(`${prefix}.buildImageDigest must be immutable`);
-      if (!IMAGE_DIGEST_PATTERN.test(String(service.imageDigest ?? ''))) failures.push(`${prefix}.imageDigest must be immutable`);
-      if (service.buildImageDigest !== service.imageDigest) failures.push(`${prefix}.buildImageDigest must equal observed revision imageDigest`);
-      const expectedImage = `${imageBase}@${service.imageDigest}`;
-      if (service.image !== expectedImage) failures.push(`${prefix}.image must equal immutable digest reference ${expectedImage}`);
+      const expectedImage = `${receipt.region}-docker.pkg.dev/${receipt.project}/${receipt.artifactRegistryRepository}/${service.worker}:${receipt.commitSha}`;
+      if (service.image !== expectedImage) failures.push(`${prefix}.image must equal exact source-bound image ${expectedImage}`);
       if (service.sourceSha !== receipt.commitSha) failures.push(`${prefix}.sourceSha must equal commitSha`);
       if (service.rollbackSourceSha !== receipt.rollbackSha) failures.push(`${prefix}.rollbackSourceSha must equal rollbackSha`);
 
       if (!nonEmptyString(service.revision) || !String(service.revision).startsWith(`${service.worker}-`)) failures.push(`${prefix}.revision must belong to ${service.worker}`);
       if (!nonEmptyString(service.rollbackRevision) || !String(service.rollbackRevision).startsWith(`${service.worker}-`)) failures.push(`${prefix}.rollbackRevision must belong to ${service.worker}`);
       if (service.rollbackRevision === service.revision) failures.push(`${prefix}.rollbackRevision must differ from revision`);
+      if (!IMAGE_DIGEST_PATTERN.test(String(service.imageDigest ?? ''))) failures.push(`${prefix}.imageDigest must be immutable`);
       if (!IMAGE_DIGEST_PATTERN.test(String(service.rollbackImageDigest ?? ''))) failures.push(`${prefix}.rollbackImageDigest must bind the rollback revision`);
-
-      const expectedRevisionLabels = {
-        'urai-source-sha': receipt.commitSha,
-        'urai-environment': receipt.environment,
-      };
-      if (!service.revisionLabels || typeof service.revisionLabels !== 'object' || Array.isArray(service.revisionLabels)) {
-        failures.push(`${prefix}.revisionLabels must contain observed revision labels`);
-      } else if (JSON.stringify(stable(service.revisionLabels)) !== JSON.stringify(stable(expectedRevisionLabels))) {
-        failures.push(`${prefix}.revisionLabels must bind exact source SHA and environment`);
-      }
 
       if (!service.secretVersions || typeof service.secretVersions !== 'object' || Array.isArray(service.secretVersions)) {
         failures.push(`${prefix}.secretVersions must be an object of pinned numeric versions`);
@@ -119,16 +104,12 @@ export function validateWorkerDeployReceipt(receipt) {
         region: receipt.region,
         bucket: receipt.artifactBucket,
         runtimeServiceAccount: receipt.runtimeServiceAccount,
-        sourceSha: receipt.commitSha,
-        rollbackSha: receipt.rollbackSha,
-        imageDigest: service.imageDigest,
-        revisionLabels: expectedRevisionLabels,
         secretVersions: service.secretVersions,
       };
       if (!service.configuration || typeof service.configuration !== 'object' || Array.isArray(service.configuration)) {
         failures.push(`${prefix}.configuration is required`);
       } else if (JSON.stringify(stable(service.configuration)) !== JSON.stringify(stable(expectedConfiguration))) {
-        failures.push(`${prefix}.configuration does not match immutable runtime identity, revision labels, and pinned secrets`);
+        failures.push(`${prefix}.configuration does not match receipt runtime identity and pinned secrets`);
       }
       const expectedFingerprint = fingerprint(expectedConfiguration);
       if (!HEX64_PATTERN.test(String(service.configFingerprint ?? ''))) failures.push(`${prefix}.configFingerprint must be a SHA-256 value`);
@@ -145,7 +126,7 @@ export function validateWorkerDeployReceipt(receipt) {
 
 function validFixture() {
   const receipt = {
-    schemaVersion: 'urai-jobs-worker-deploy-receipt-3',
+    schemaVersion: 'urai-jobs-worker-deploy-receipt-2',
     generatedAt: '2026-07-11T15:00:00.000Z',
     repository: 'LifeLoggerAI/urai-jobs',
     branch: 'secure-worker-deploy-20260706',
@@ -161,37 +142,24 @@ function validFixture() {
     caveats: [],
   };
   const secretVersions = { URAI_JOBS_WORKER_TOKEN: '7' };
-  const imageDigest = `sha256:${'b'.repeat(64)}`;
-  const revisionLabels = {
-    'urai-source-sha': receipt.commitSha,
-    'urai-environment': receipt.environment,
-  };
   const configuration = {
     worker: 'narrator-worker',
     environment: receipt.environment,
     region: receipt.region,
     bucket: receipt.artifactBucket,
     runtimeServiceAccount: receipt.runtimeServiceAccount,
-    sourceSha: receipt.commitSha,
-    rollbackSha: receipt.rollbackSha,
-    imageDigest,
-    revisionLabels,
     secretVersions,
   };
-  const imageBase = `${receipt.region}-docker.pkg.dev/${receipt.project}/${receipt.artifactRegistryRepository}/narrator-worker`;
   receipt.services.push({
     worker: 'narrator-worker',
     buildId: 'build-123',
-    imageTag: `${imageBase}:${receipt.commitSha}`,
-    image: `${imageBase}@${imageDigest}`,
-    buildImageDigest: imageDigest,
+    image: `${receipt.region}-docker.pkg.dev/${receipt.project}/${receipt.artifactRegistryRepository}/narrator-worker:${receipt.commitSha}`,
     serviceUrl: 'https://narrator-worker.example.run.app',
     revision: 'narrator-worker-00002-def',
-    revisionLabels,
     sourceSha: receipt.commitSha,
     rollbackRevision: 'narrator-worker-00001-abc',
     rollbackSourceSha: receipt.rollbackSha,
-    imageDigest,
+    imageDigest: `sha256:${'b'.repeat(64)}`,
     rollbackImageDigest: `sha256:${'d'.repeat(64)}`,
     secretVersions,
     configuration,
@@ -217,13 +185,6 @@ export function runWorkerDeployReceiptValidatorSelfTest() {
   validateWorkerDeployReceipt(validFixture());
   expectRejected('missing image digest', (fixture) => { fixture.services[0].imageDigest = null; });
   expectRejected('invalid source SHA', (fixture) => { fixture.commitSha = 'manual'; });
-  expectRejected('mutable tag-only image', (fixture) => { fixture.services[0].image = fixture.services[0].imageTag; });
-  expectRejected('build and revision digest mismatch', (fixture) => { fixture.services[0].buildImageDigest = `sha256:${'c'.repeat(64)}`; });
-  expectRejected('revision source label mismatch', (fixture) => {
-    fixture.services[0].revisionLabels['urai-source-sha'] = 'f'.repeat(40);
-    fixture.services[0].configuration.revisionLabels['urai-source-sha'] = 'f'.repeat(40);
-    fixture.services[0].configFingerprint = fingerprint(fixture.services[0].configuration);
-  });
   expectRejected('mutable latest secret', (fixture) => {
     fixture.services[0].secretVersions.URAI_JOBS_WORKER_TOKEN = 'latest';
     fixture.services[0].configuration.secretVersions.URAI_JOBS_WORKER_TOKEN = 'latest';
