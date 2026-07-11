@@ -15,3 +15,4 @@ export { cancelJob } from "./jobs/cancelJob.js";
 export { listJobs, listJobLogs, retryJob } from "./jobs/admin.js";
 
 export { listJobsV2, listJobLogsV2, retryJobV2 } from "./jobs/admin-v2.js";
+export { buildInfo } from "./system/buildInfo.js";
