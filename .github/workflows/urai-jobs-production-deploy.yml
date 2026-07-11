@@ -48,9 +48,9 @@ env:
 
 jobs:
   preflight:
-    name: Verify exact candidate without cloud authority
+    name: Verify and build exact candidate without cloud authority
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     permissions:
       contents: read
     env:
@@ -113,7 +113,7 @@ jobs:
       - name: Frozen dependency installation
         run: pnpm install --frozen-lockfile
 
-      - name: Repository verification gates
+      - name: Repository verification and build gates
         run: |
           pnpm activation:verify
           pnpm urai-jobs:verify
@@ -122,6 +122,13 @@ jobs:
           pnpm build
           pnpm test
           pnpm urai-jobs:deploy-precheck
+
+      - name: Create source-bound Firebase prebuilt manifest
+        env:
+          DEPLOY_SOURCE_SHA: ${{ env.INPUT_EXPECTED_SHA }}
+        run: |
+          node scripts/firebase-prebuilt-manifest.mjs --write
+          node scripts/firebase-prebuilt-manifest.mjs --verify
 
       - name: Write credential-free preflight receipt
         if: always()
@@ -146,7 +153,7 @@ jobs:
           }, null, 2)}\n`);
           NODE
 
-      - name: Upload preflight evidence
+      - name: Upload credential-free preflight receipt
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -154,6 +161,18 @@ jobs:
           path: docs/release-evidence/canonical-preflight.json
           if-no-files-found: error
           retention-days: 90
+
+      - name: Upload exact Firebase prebuilt artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: urai-jobs-firebase-prebuilt-${{ inputs.target }}-${{ inputs.expected_sha }}
+          path: |
+            packages/shared-types/dist/
+            functions/lib/
+            web/dist/
+            docs/release-evidence/firebase-prebuilt-manifest.json
+          if-no-files-found: error
+          retention-days: 7
 
   deploy:
     name: Protected worker and Firebase mutation
@@ -175,21 +194,30 @@ jobs:
       URAI_JOBS_WORKER_TOKEN_SECRET: URAI_JOBS_WORKER_TOKEN
       URAI_WHEEL_GITHUB_TOKEN_SECRET: urai-wheel-github-token
       URAI_JOBS_CALLBACK_SECRET_NAME: urai-jobs-callback-secret
+      FIREBASE_PREBUILT_ROOT: ${{ runner.temp }}/urai-jobs-firebase-prebuilt
     steps:
-      - name: Checkout exact candidate with rollback history
+      - name: Checkout exact clean mutation authority
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.expected_sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Prove exact clean mutation source
+      - name: Prove exact clean mutation source and authority
         shell: bash
+        env:
+          DEPLOY_SOURCE_SHA: ${{ env.TARGET_SHA }}
+          DEPLOY_ROLLBACK_SHA: ${{ env.ROLLBACK_SHA }}
+          URAI_ENV: ${{ env.INPUT_TARGET }}
+          URAI_DEPLOY_CONFIRM: ${{ inputs.target == 'prod' && 'DEPLOY-URAI-JOBS-PRODUCTION' || 'DEPLOY-URAI-JOBS-STAGING' }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$TARGET_SHA"
           test -z "$(git status --porcelain --untracked-files=all)"
-          git merge-base --is-ancestor "$ROLLBACK_SHA" "$TARGET_SHA"
+          bash scripts/verify-deploy-authority.sh
+          node scripts/check-secure-worker-deploy.mjs
+          node scripts/check-rollback-provenance.mjs
+          test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Setup Node
         uses: actions/setup-node@1e60f620b9541d80c77f7b4a3bcd8bf5e940c37 # v4.4.0
@@ -197,41 +225,35 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org
 
-      - name: Enable exact pnpm
-        shell: bash
-        run: |
-          set -euo pipefail
-          corepack enable
-          corepack prepare "pnpm@${PNPM_VERSION}" --activate
-          test "$(pnpm --version)" = "$PNPM_VERSION"
+      - name: Download exact Firebase prebuilt artifact outside repository
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: urai-jobs-firebase-prebuilt-${{ inputs.target }}-${{ inputs.expected_sha }}
+          path: ${{ env.FIREBASE_PREBUILT_ROOT }}
 
-      - name: Install exact candidate dependencies before cloud authentication
-        run: pnpm install --frozen-lockfile
-
-      - name: Revalidate deployment source contracts before cloud authentication
-        run: pnpm security:worker-deploy
-
-      - name: Build and hash Firebase deployable bytes before cloud authentication
+      - name: Verify external Firebase artifact before cloud authentication
         env:
           DEPLOY_SOURCE_SHA: ${{ env.TARGET_SHA }}
+          URAI_FIREBASE_PREBUILT_ROOT: ${{ env.FIREBASE_PREBUILT_ROOT }}
         run: |
-          pnpm prod:precheck
-          pnpm --filter @urai-jobs/shared-types build
-          pnpm --filter urai-jobs-functions build
-          pnpm --filter urai-jobs-web build
-          node scripts/firebase-prebuilt-manifest.mjs --write
           node scripts/firebase-prebuilt-manifest.mjs --verify
+          test -z "$(git status --porcelain --untracked-files=all)"
 
-      - name: Install exact Firebase CLI before cloud authentication
+      - name: Install exact Firebase CLI outside repository before cloud authentication
         shell: bash
         run: |
           set -euo pipefail
           [[ "$FIREBASE_CLI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]
-          mkdir -p docs/release-evidence
+          [[ "$GCLOUD_CLI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]
+          CLI_ROOT="$RUNNER_TEMP/firebase-cli"
+          mkdir -p "$CLI_ROOT" docs/release-evidence
           npm view "firebase-tools@$FIREBASE_CLI_VERSION" dist.integrity --json > docs/release-evidence/firebase-cli-integrity.json
           test -s docs/release-evidence/firebase-cli-integrity.json
-          pnpm add --global "firebase-tools@$FIREBASE_CLI_VERSION"
-          test "$(firebase --version)" = "$FIREBASE_CLI_VERSION"
+          npm install --prefix "$CLI_ROOT" --no-audit --no-fund "firebase-tools@$FIREBASE_CLI_VERSION"
+          test "$("$CLI_ROOT/node_modules/.bin/firebase" --version)" = "$FIREBASE_CLI_VERSION"
+          echo "$CLI_ROOT/node_modules/.bin" >> "$GITHUB_PATH"
+          echo "URAI_FIREBASE_CLI=$CLI_ROOT/node_modules/.bin/firebase" >> "$GITHUB_ENV"
+          test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Authenticate to Google Cloud with workload identity
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
@@ -272,7 +294,6 @@ jobs:
             if (key !== 'FIREBASE_FALLBACK_HOSTING_SITE' && !value) throw new Error(`${key} is required`);
             if (String(value).includes('\n') || String(value).includes('\r')) throw new Error(`${key} contains a newline`);
           }
-          if (!/^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$/.test(process.env.GCLOUD_CLI_VERSION || '')) throw new Error('GCLOUD_CLI_VERSION must be an exact protected semver');
           fs.appendFileSync(process.env.GITHUB_ENV, Object.entries(values).map(([key, value]) => `${key}=${value}`).join('\n') + '\n');
           NODE
 
@@ -309,7 +330,10 @@ jobs:
           URAI_DEPLOY_CONFIRM: ${{ inputs.target == 'prod' && 'DEPLOY-URAI-JOBS-PRODUCTION' || 'DEPLOY-URAI-JOBS-STAGING' }}
           ROLLBACK_CONFIG_RECEIPT_PATH: docs/release-evidence/worker-rollback-config-receipt.json
           DEPLOY_RECEIPT_PATH: docs/release-evidence/worker-deploy-receipt.json
-        run: pnpm deploy:workers
+          GITHUB_SHA: ${{ env.TARGET_SHA }}
+        run: |
+          node scripts/verify-rollback-revision.mjs
+          bash scripts/deploy-workers-approved.sh
 
       - name: Export canonical URLs from immutable worker receipt
         env:
@@ -318,6 +342,12 @@ jobs:
           DEPLOY_SOURCE_SHA: ${{ env.TARGET_SHA }}
           DEPLOY_RECEIPT_PATH: docs/release-evidence/worker-deploy-receipt.json
         run: node scripts/export-worker-urls-from-receipt.mjs
+
+      - name: Materialize verified Firebase bytes after worker mutation
+        env:
+          DEPLOY_SOURCE_SHA: ${{ env.TARGET_SHA }}
+          URAI_FIREBASE_PREBUILT_ROOT: ${{ env.FIREBASE_PREBUILT_ROOT }}
+        run: node scripts/firebase-prebuilt-manifest.mjs --materialize
 
       - name: Deploy verified prebuilt Firebase runtime
         env:
@@ -328,7 +358,7 @@ jobs:
           DEPLOY_SOURCE_SHA: ${{ env.TARGET_SHA }}
           URAI_FIREBASE_PREBUILT_VERIFIED: '1'
           ALLOW_CREATE_HOSTING_SITE: 'false'
-        run: pnpm deploy:firebase:prod -- "$INPUT_TARGET"
+        run: bash scripts/deploy-firebase.sh "$INPUT_TARGET"
 
       - name: Write mutation receipt before credential cleanup
         shell: bash
@@ -336,9 +366,8 @@ jobs:
           set -euo pipefail
           node - <<'NODE'
           const fs = require('fs');
-          const path = 'docs/release-evidence/canonical-deploy-inputs.json';
           fs.mkdirSync('docs/release-evidence', { recursive: true });
-          fs.writeFileSync(path, `${JSON.stringify({
+          fs.writeFileSync('docs/release-evidence/canonical-deploy-inputs.json', `${JSON.stringify({
             schemaVersion: 'urai-jobs-canonical-deploy-inputs-4',
             generatedAt: new Date().toISOString(),
             repository: process.env.GITHUB_REPOSITORY,
@@ -405,6 +434,13 @@ jobs:
           ref: ${{ inputs.expected_sha }}
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Prove exact clean public verifier source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Setup Node
         uses: actions/setup-node@1e60f620b9541d80c77f7b4a3bcd8bf5e940c37 # v4.4.0
