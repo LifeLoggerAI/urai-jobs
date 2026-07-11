@@ -72,24 +72,24 @@ export const retryExpiredLeases = onSchedule('every 1 minutes', async () => {
 
         const now = FieldValue.serverTimestamp();
         if (!jobSnapshot.exists) {
-          transaction.set(queueRef, {
+          transaction.update(queueRef, {
             status: 'DEAD',
             lease: FieldValue.delete(),
             updatedAt: now,
             'dispatch.lastError': 'Master job document is missing during expired-lease recovery.',
             'dispatch.recoveredAt': now,
-          }, { merge: true });
+          });
           return 'dead-missing-job' as const;
         }
 
         const job = jobSnapshot.data() as Job;
         if (isTerminalJobStatus(job.status)) {
-          transaction.set(queueRef, {
+          transaction.update(queueRef, {
             status: terminalQueueStatus(job.status),
             lease: FieldValue.delete(),
             updatedAt: now,
             'dispatch.recoveredAt': now,
-          }, { merge: true });
+          });
           return 'reconciled-terminal' as const;
         }
 
@@ -100,42 +100,42 @@ export const retryExpiredLeases = onSchedule('every 1 minutes', async () => {
         const currentRetryCount = Number(job.retryCount || 0);
         const maxRetries = Number(job.execution?.maxAttempts || job.maxAttempts || MAX_RETRIES);
         if (!Number.isInteger(maxRetries) || maxRetries < 1) {
-          transaction.set(jobRef, {
+          transaction.update(jobRef, {
             status: 'DEAD',
             lease: FieldValue.delete(),
             error: { message: 'Invalid max-attempt policy during expired-lease recovery.' },
             updatedAt: now,
             completedAt: now,
-          }, { merge: true });
-          transaction.set(queueRef, {
+          });
+          transaction.update(queueRef, {
             status: 'DEAD',
             lease: FieldValue.delete(),
             updatedAt: now,
-          }, { merge: true });
+          });
           return 'dead-invalid-policy' as const;
         }
 
         if (currentRetryCount >= maxRetries) {
-          transaction.set(jobRef, {
+          transaction.update(jobRef, {
             status: 'DEAD',
             lease: FieldValue.delete(),
             error: { message: `Job exceeded ${maxRetries} expired-lease recoveries before execution started.` },
             updatedAt: now,
             completedAt: now,
             'dispatch.recoveredAt': now,
-          }, { merge: true });
-          transaction.set(queueRef, {
+          });
+          transaction.update(queueRef, {
             status: 'DEAD',
             lease: FieldValue.delete(),
             updatedAt: now,
             'dispatch.recoveredAt': now,
-          }, { merge: true });
+          });
           return 'dead-max-retries' as const;
         }
 
         const nextRetryCount = currentRetryCount + 1;
         const nextAvailableAt = new Date(Date.now() + RETRY_BACKOFF_MS * nextRetryCount);
-        transaction.set(jobRef, {
+        transaction.update(jobRef, {
           status: 'PENDING',
           retryCount: nextRetryCount,
           lease: FieldValue.delete(),
@@ -143,8 +143,8 @@ export const retryExpiredLeases = onSchedule('every 1 minutes', async () => {
           'dispatch.recoveryCount': FieldValue.increment(1),
           'dispatch.recoveredAt': now,
           'dispatch.lastError': 'Lease expired before execution entered RUNNING.',
-        }, { merge: true });
-        transaction.set(queueRef, {
+        });
+        transaction.update(queueRef, {
           status: 'PENDING',
           availableAt: nextAvailableAt,
           retryCount: nextRetryCount,
@@ -153,7 +153,7 @@ export const retryExpiredLeases = onSchedule('every 1 minutes', async () => {
           'dispatch.recoveryCount': FieldValue.increment(1),
           'dispatch.recoveredAt': now,
           'dispatch.lastError': 'Lease expired before execution entered RUNNING.',
-        }, { merge: true });
+        });
         return 'requeued' as const;
       });
 
