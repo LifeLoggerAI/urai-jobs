@@ -14,97 +14,149 @@ function rejectText(path, text, description) {
   if (source.includes(text)) failures.push(`${description}: ${path} still contains ${JSON.stringify(text)}`);
 }
 
-requireText('workers/asset-worker/index.js', "app.post('/', requireWorkerAuth", 'asset execution must require bearer auth');
-requireText('workers/asset-worker/index.js', "app.get('/authz', requireWorkerAuth", 'asset auth probe must be protected');
-requireText('workers/asset-worker/index.js', 'validateProductionConfiguration();', 'asset worker must fail closed at startup');
-requireText('workers/narrator-worker/src/index.ts', "validateRequiredEnv(productionRuntime ? ['URAI_JOBS_WORKER_TOKEN', 'GCS_BUCKET_NAME'] : []);", 'narrator production secrets must be mandatory');
-requireText('workers/narrator-worker/src/index.ts', "app.get('/authz', requireWorkerAuth", 'narrator auth probe must be protected');
-requireText('functions/src/jobs/executeJob.ts', "defineSecret('URAI_JOBS_WORKER_TOKEN')", 'Firebase worker token must use Secret Manager');
-requireText('functions/src/jobs/executeJob.ts', 'secrets: [workerTokenSecret]', 'PubSub function must bind the worker secret');
+function requireOrder(path, markers, description) {
+  const source = read(path);
+  const indexes = markers.map((marker) => source.indexOf(marker));
+  if (indexes.some((index) => index < 0) || indexes.some((value, index) => index > 0 && value <= indexes[index - 1])) {
+    failures.push(`${description}: ${path} does not preserve ${markers.join(' -> ')}`);
+  }
+}
 
-requireText('scripts/deploy-workers.sh', ': "${GITHUB_SHA:?GITHUB_SHA must contain the verified deployment source SHA}"', 'worker deploy must independently require exact source SHA');
-requireText('scripts/deploy-workers.sh', ': "${DEPLOY_ROLLBACK_SHA:?DEPLOY_ROLLBACK_SHA must contain the approved rollback source SHA}"', 'worker deploy must independently require approved rollback SHA');
-requireText('scripts/deploy-workers.sh', '--set-secrets "$secret_vars"', 'worker deploy must inject Secret Manager values');
-requireText('scripts/deploy-workers.sh', '--service-account "$WORKER_RUNTIME_SERVICE_ACCOUNT"', 'worker deploy must use explicit runtime service account');
-requireText('scripts/deploy-workers.sh', "--filter='state=ENABLED'", 'worker deploy must resolve enabled Secret Manager versions');
-requireText('scripts/deploy-workers.sh', 'Mutable Secret Manager aliases are forbidden', 'worker deploy must reject mutable secret aliases');
-rejectText('scripts/deploy-workers.sh', ':latest', 'worker deploy must not bind revisions to latest secret aliases');
-requireText('scripts/deploy-workers.sh', 'gcloud builds describe "$build_id"', 'worker deploy must read immutable Cloud Build results');
-requireText('scripts/deploy-workers.sh', 'value(results.images[0].digest)', 'worker deploy must bind the image digest emitted by Cloud Build');
-requireText('scripts/deploy-workers.sh', 'gcloud artifacts docker images describe "$immutable_image"', 'worker deploy must resolve the build digest in Artifact Registry');
-requireText('scripts/deploy-workers.sh', '--image "$immutable_image"', 'worker deploy must deploy by immutable digest rather than mutable tag');
-requireText('scripts/deploy-workers.sh', '--labels "urai-source-sha=$GITHUB_SHA,urai-environment=$URAI_ENV"', 'deployed revision must carry source and environment labels');
-requireText('scripts/deploy-workers.sh', 'verify_revision_configuration', 'worker deploy must verify observed revision configuration');
-requireText('scripts/deploy-workers.sh', 'revision source SHA label mismatch', 'new runtime revision must bind exact source SHA label');
-requireText('scripts/deploy-workers.sh', 'revision environment label mismatch', 'new runtime revision must bind environment label');
-requireText('scripts/deploy-workers.sh', 'revision image digest mismatch', 'new runtime revision must bind Cloud Build digest');
-requireText('scripts/deploy-workers.sh', 'Deployed revision digest', 'observed revision digest must equal Cloud Build digest');
-requireText('scripts/deploy-workers.sh', 'Runtime rollback revision source SHA', 'runtime rollback must match approved repository rollback SHA');
-requireText('scripts/deploy-workers.sh', 'Canonical staging and production deployment require an existing runtime rollback revision', 'all canonical deployments require runtime rollback authority');
-requireText('scripts/deploy-workers.sh', 'rollbackImageDigest', 'worker receipt must record rollback image digest');
-requireText('scripts/deploy-workers.sh', 'buildImageDigest', 'worker receipt must record Cloud Build digest separately');
-requireText('scripts/deploy-workers.sh', 'revisionLabels', 'worker receipt must record observed revision labels');
-requireText('scripts/deploy-workers.sh', 'Deployment did not create a revision distinct from rollback', 'new revision must differ from rollback');
-requireText('scripts/deploy-workers.sh', 'Existing rollback revision lacks an immutable image digest', 'rollback revision must have immutable image provenance');
-requireText('scripts/deploy-workers.sh', 'Cloud Build result did not expose an immutable image digest', 'build must expose immutable provenance');
-requireText('scripts/deploy-workers.sh', "schemaVersion: 'urai-jobs-worker-deploy-receipt-3'", 'worker deploy must emit hardened receipt schema');
-requireText('scripts/deploy-workers.sh', 'validate-worker-deploy-receipt.mjs', 'worker deploy must validate completed receipt');
-requireText('scripts/deploy-workers.sh', 'unauthorized auth probe returned', 'worker deploy must prove unauthorized rejection');
-requireText('scripts/deploy-workers.sh', 'authorized auth probe returned', 'worker deploy must prove authorized access');
+for (const [path, text, description] of [
+  ['workers/asset-worker/index.js', "app.post('/', requireWorkerAuth", 'asset execution must require bearer auth'],
+  ['workers/asset-worker/index.js', "app.get('/authz', requireWorkerAuth", 'asset auth probe must be protected'],
+  ['workers/asset-worker/index.js', 'validateProductionConfiguration();', 'asset worker must fail closed at startup'],
+  ['workers/narrator-worker/src/index.ts', "validateRequiredEnv(productionRuntime ? ['URAI_JOBS_WORKER_TOKEN', 'GCS_BUCKET_NAME'] : []);", 'narrator production secrets must be mandatory'],
+  ['workers/narrator-worker/src/index.ts', "app.get('/authz', requireWorkerAuth", 'narrator auth probe must be protected'],
+  ['functions/src/jobs/executeJob.ts', "defineSecret('URAI_JOBS_WORKER_TOKEN')", 'Firebase worker token must use Secret Manager'],
+  ['functions/src/jobs/executeJob.ts', 'secrets: [workerTokenSecret]', 'PubSub function must bind the worker secret'],
+]) requireText(path, text, description);
 
-requireText('scripts/validate-worker-deploy-receipt.mjs', 'imageTag', 'validator must bind exact source tag separately');
-requireText('scripts/validate-worker-deploy-receipt.mjs', 'buildImageDigest', 'validator must bind Cloud Build and revision digests');
-requireText('scripts/validate-worker-deploy-receipt.mjs', 'immutable digest reference', 'validator must reject mutable image references');
-requireText('scripts/validate-worker-deploy-receipt.mjs', 'revisionLabels', 'validator must bind observed revision labels');
-requireText('scripts/validate-worker-deploy-receipt.mjs', 'secretVersions', 'validator must require pinned secret versions');
-requireText('scripts/validate-worker-deploy-receipt.mjs', 'must not use latest', 'validator must reject mutable aliases');
-requireText('scripts/validate-worker-deploy-receipt.mjs', 'rollbackSourceSha must equal rollbackSha', 'validator must bind runtime rollback to approved SHA');
-requireText('scripts/validate-worker-deploy-receipt.mjs', 'rollbackImageDigest must bind the rollback revision', 'validator must bind rollback image provenance');
-requireText('scripts/validate-worker-deploy-receipt.mjs', 'rollbackRevision must differ from revision', 'validator must reject same revision and rollback');
-requireText('scripts/validate-worker-deploy-receipt.mjs', 'configFingerprint does not match the canonical configuration', 'validator must recompute configuration identity');
-requireText('scripts/validate-worker-deploy-receipt.mjs', 'mutable tag-only image', 'validator self-test must reject tag-only deployment evidence');
-requireText('scripts/validate-worker-deploy-receipt.mjs', 'build and revision digest mismatch', 'validator self-test must reject digest mismatch');
-requireText('scripts/validate-worker-deploy-receipt.mjs', 'revision source label mismatch', 'validator self-test must reject label mismatch');
+for (const [text, description] of [
+  [': "${GITHUB_SHA:?GITHUB_SHA must contain the verified deployment source SHA}"', 'worker deploy must require exact source SHA'],
+  [': "${DEPLOY_ROLLBACK_SHA:?DEPLOY_ROLLBACK_SHA must contain the approved rollback source SHA}"', 'worker deploy must require rollback SHA'],
+  ['--set-secrets "$secret_vars"', 'worker deploy must inject exact Secret Manager bindings'],
+  ['--service-account "$WORKER_RUNTIME_SERVICE_ACCOUNT"', 'worker deploy must use explicit runtime service account'],
+  ['Mutable Secret Manager aliases are forbidden', 'worker deploy must reject mutable aliases'],
+  ['gcloud builds describe "$build_id"', 'worker deploy must read Cloud Build result'],
+  ["value(results.images[0].digest)", 'worker deploy must bind Cloud Build digest'],
+  ['gcloud artifacts docker images describe "$immutable_image"', 'worker deploy must resolve Artifact Registry digest'],
+  ['--image "$immutable_image"', 'worker deploy must deploy immutable digest'],
+  ['--labels "urai-source-sha=$GITHUB_SHA,urai-environment=$URAI_ENV"', 'revision labels must bind source and environment'],
+  ['verify_revision_configuration', 'deployed revision configuration must be read back'],
+  ['Deployment did not create a revision distinct from rollback', 'new revision must differ from rollback'],
+  ["schemaVersion: 'urai-jobs-worker-deploy-receipt-3'", 'worker deploy must emit hardened receipt'],
+  ['validate-worker-deploy-receipt.mjs', 'worker deploy receipt must be validated'],
+  ['unauthorized auth probe returned', 'unauthorized probe must be verified'],
+  ['authorized auth probe returned', 'authorized probe must be verified'],
+]) requireText('scripts/deploy-workers.sh', text, description);
+rejectText('scripts/deploy-workers.sh', ':latest', 'worker deploy must not bind mutable secret aliases');
 
-requireText('package.json', 'bash scripts/verify-deploy-authority.sh', 'worker deployment must run through immutable authority verification');
-requireText('package.json', 'GITHUB_SHA="$DEPLOY_SOURCE_SHA"', 'verified source SHA must bind image tags and receipts');
-requireText('scripts/verify-deploy-authority.sh', 'git status --porcelain --untracked-files=all', 'deployment authority must require a clean tree');
-requireText('scripts/verify-deploy-authority.sh', 'git merge-base --is-ancestor', 'rollback must be an ancestor of deployment SHA');
-requireText('scripts/verify-deploy-authority.sh', 'DEPLOY-URAI-JOBS-STAGING', 'staging requires environment-specific confirmation');
-requireText('scripts/verify-deploy-authority.sh', 'DEPLOY-URAI-JOBS-PRODUCTION', 'production requires environment-specific confirmation');
-requireText('scripts/ensure-gcs-bucket.sh', 'GCS_BUCKET_CREATION_APPROVAL', 'bucket creation must require separate infrastructure approval');
-requireText('scripts/ensure-gcs-bucket.sh', 'PRODUCTION_INFRASTRUCTURE_APPROVAL', 'production infrastructure creation must require explicit approval');
-requireText('scripts/deploy-firebase.sh', 'URAI_JOBS_WORKER_TOKEN_SECRET:-URAI_JOBS_WORKER_TOKEN', 'Firebase deploy must require canonical worker secret');
-requireText('scripts/deploy-firebase.sh', 'HOSTING_SITE_CREATION_APPROVAL', 'hosting creation must require separate infrastructure approval');
-requireText('scripts/deploy-firebase.sh', 'FIREBASE_PROJECT_ID and GCLOUD_PROJECT must match', 'Firebase and Google Cloud projects must agree');
-requireText('scripts/deploy-firebase.sh', 'DEPLOY_SOURCE_SHA', 'Firebase deployment must remain bound to verified source SHA');
+for (const [text, description] of [
+  ['DEPLOY_TARGET_SECRET_VERSIONS_JSON is required', 'approved target-secret input must be mandatory'],
+  ["Target secret approvals must contain exactly", 'approval must have exact logical binding set'],
+  ['must use an exact numeric Secret Manager version', 'approved versions must be numeric'],
+  ['secrets versions describe', 'approved versions must exist and be enabled before mutation'],
+  ['No approved logical binding exists for secret', 'unapproved secret names must fail closed'],
+  ['Exact target Secret Manager versions approved before mutation', 'wrapper must record the approval boundary'],
+  ['bash scripts/deploy-workers.sh', 'wrapper must delegate only after approval'],
+]) requireText('scripts/deploy-workers-approved.sh', text, description);
+
+requireText('package.json', 'bash scripts/deploy-workers-approved.sh', 'canonical package command must use the approved-version wrapper');
+requireText('package.json', '"deploy:firebase:prod": "bash scripts/deploy-firebase.sh"', 'Firebase target must be passed explicitly rather than hard-coded to prod');
+
+for (const [text, description] of [
+  ["schemaVersion: 'urai-jobs-firebase-prebuilt-1'", 'Firebase manifest must have a schema'],
+  ['Firebase prebuilt source mismatch', 'Firebase output must bind exact source SHA'],
+  ['Firebase prebuilt output contains a symlink', 'Firebase output must reject symlinks'],
+  ['file set, sizes, or hashes', 'Firebase verifier must compare exact bytes'],
+  ['workflow run ID', 'Firebase verifier must bind the workflow run'],
+]) requireText('scripts/firebase-prebuilt-manifest.mjs', text, description);
+requireText('firebase.json', 'node scripts/firebase-prebuilt-manifest.mjs --verify', 'Firebase predeploy must verify prebuilt bytes');
+rejectText('firebase.json', 'npx --yes', 'Firebase predeploy must not download or build under cloud authority');
+
+for (const [text, description] of [
+  ['URAI_FIREBASE_PREBUILT_VERIFIED is required', 'Firebase deploy must require prebuilt authority'],
+  ['node scripts/firebase-prebuilt-manifest.mjs --verify', 'Firebase deploy must verify prebuilt bytes'],
+  ['Canonical Firebase deployment target must be staging or prod', 'Firebase target must be bounded'],
+  ['FIREBASE_PROJECT_ID and GCLOUD_PROJECT must match', 'Firebase and Google Cloud projects must agree'],
+  ['Refusing to create hosting infrastructure during deployment', 'Firebase deploy must not create hosting implicitly'],
+]) requireText('scripts/deploy-firebase.sh', text, description);
+rejectText('scripts/deploy-firebase.sh', 'pnpm prod:precheck', 'credentialed Firebase deploy must not run repository precheck');
+rejectText('scripts/deploy-firebase.sh', 'pnpm --filter', 'credentialed Firebase deploy must not rebuild source');
 rejectText('scripts/deploy-firebase.sh', 'WEBHOOK_SIGNING_SECRET=', 'secrets must not be written into functions/.env');
-requireText('scripts/deploy-career-worker.sh', '[BLOCKED]', 'career scaffold deploy must be disabled');
-requireText('scripts/deploy-managed-worker.sh', '[BLOCKED]', 'generic synthetic worker deploy must be disabled');
-rejectText('scripts/deploy-career-worker.sh', 'gcloud run deploy', 'career scaffold must not contain deploy command');
-rejectText('scripts/deploy-managed-worker.sh', 'gcloud run deploy', 'generic synthetic worker must not contain deploy command');
+
+for (const [path, text, description] of [
+  ['scripts/validate-worker-deploy-receipt.mjs', 'buildImageDigest', 'validator must bind build and revision digests'],
+  ['scripts/validate-worker-deploy-receipt.mjs', 'secretVersions', 'validator must require numeric secret versions'],
+  ['scripts/validate-worker-deploy-receipt.mjs', 'must not use latest', 'validator must reject latest aliases'],
+  ['scripts/validate-worker-deploy-receipt.mjs', 'configFingerprint does not match the canonical configuration', 'validator must recompute current configuration'],
+  ['scripts/verify-deploy-authority.sh', 'git status --porcelain --untracked-files=all', 'deployment authority must require clean source'],
+  ['scripts/verify-deploy-authority.sh', 'git merge-base --is-ancestor', 'rollback must be an ancestor'],
+  ['scripts/ensure-gcs-bucket.sh', 'GCS_BUCKET_CREATION_APPROVAL', 'bucket creation must need separate approval'],
+]) requireText(path, text, description);
 
 const canonicalWorkflow = '.github/workflows/urai-jobs-production-deploy.yml';
-requireText(canonicalWorkflow, 'expected_sha:', 'canonical workflow must require exact target SHA');
-requireText(canonicalWorkflow, 'rollback_sha:', 'canonical workflow must require rollback SHA');
-requireText(canonicalWorkflow, 'fetch-depth: 0', 'canonical workflow must fetch rollback history');
-requireText(canonicalWorkflow, 'persist-credentials: false', 'canonical checkout must not persist credentials');
-requireText(canonicalWorkflow, 'git merge-base --is-ancestor', 'canonical workflow must reject unrelated rollback commits');
-requireText(canonicalWorkflow, 'DEPLOY_SOURCE_SHA:', 'canonical workflow must pass exact source identity');
-requireText(canonicalWorkflow, 'ALLOW_CREATE_GCS_BUCKET: "false"', 'canonical deploy must not create billable bucket infrastructure');
-requireText(canonicalWorkflow, 'workload_identity_provider:', 'canonical workflow must use workload identity');
-requireText(canonicalWorkflow, 'pnpm install --frozen-lockfile', 'canonical workflow must use frozen lockfile');
-requireText(canonicalWorkflow, 'PAID-PROVIDER-SMOKE', 'provider spend must require explicit authorization');
-requireText(canonicalWorkflow, 'worker-deploy-receipt.json', 'canonical workflow must upload worker receipts');
+for (const [text, description] of [
+  ['target_secret_versions_json:', 'workflow must require exact target secret versions'],
+  ['name: Verify exact candidate without cloud authority', 'workflow must have credential-free preflight'],
+  ['cloudAuthenticated: false', 'preflight receipt must prove no cloud authentication'],
+  ['name: Protected worker and Firebase mutation', 'workflow must isolate protected mutation'],
+  ['needs: preflight', 'mutation must depend on preflight'],
+  ['environment: ${{ inputs.target }}', 'mutation must use protected environment'],
+  ['actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683', 'checkout must be immutable'],
+  ['actions/setup-node@1e60f620b9541d80c77f7b4a3bcd8bf5e940c37', 'Node setup must be immutable'],
+  ['google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed', 'Google auth must be immutable'],
+  ['google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f', 'gcloud setup must be immutable'],
+  ['actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02', 'artifact upload must be immutable'],
+  ['FIREBASE_CLI_VERSION: ${{ vars.FIREBASE_CLI_VERSION }}', 'Firebase CLI must use protected exact version'],
+  ['GCLOUD_CLI_VERSION: ${{ vars.GCLOUD_CLI_VERSION }}', 'gcloud CLI must use protected exact version'],
+  ['Build and hash Firebase deployable bytes before cloud authentication', 'Firebase bytes must be built before auth'],
+  ['Authenticate to Google Cloud with workload identity', 'workflow must use OIDC'],
+  ['Deploy canonical worker fleet with approved target secret versions', 'worker mutation must use approved secret versions'],
+  ['URAI_FIREBASE_PREBUILT_VERIFIED: \'1\'', 'Firebase mutation must require verified prebuilt bytes'],
+  ['paidProviderSmokeAuthorized: false', 'canonical deploy receipt must prohibit paid smoke'],
+  ['paidProviderCalls: 0', 'canonical deploy receipt must record zero paid calls'],
+  ["Canonical deployment cannot execute paid provider smoke", 'paid provider path must be separately blocked'],
+]) requireText(canonicalWorkflow, text, description);
+
+rejectText(canonicalWorkflow, 'paid_provider_smoke_authorization:', 'canonical workflow must not expose a paid-smoke switch');
+rejectText(canonicalWorkflow, 'PAID-PROVIDER-SMOKE', 'canonical workflow must not contain a paid provider authorization token');
+rejectText(canonicalWorkflow, 'actions/checkout@v4', 'checkout tag must not be mutable');
+rejectText(canonicalWorkflow, 'actions/setup-node@v4', 'setup-node tag must not be mutable');
+rejectText(canonicalWorkflow, 'google-github-actions/auth@v2', 'Google auth tag must not be mutable');
+rejectText(canonicalWorkflow, 'google-github-actions/setup-gcloud@v2', 'gcloud tag must not be mutable');
+rejectText(canonicalWorkflow, 'actions/upload-artifact@v4', 'artifact tag must not be mutable');
+rejectText(canonicalWorkflow, 'pnpm/action-setup@', 'pnpm setup action must be replaced by exact corepack activation');
+rejectText(canonicalWorkflow, 'actions/setup-java@', 'unused Java setup must not expand the credential chain');
+rejectText(canonicalWorkflow, 'pnpm add --global firebase-tools\n', 'Firebase CLI must include an exact version');
+
+requireOrder(canonicalWorkflow, [
+  'Install exact candidate dependencies before cloud authentication',
+  'Revalidate deployment source contracts before cloud authentication',
+  'Build and hash Firebase deployable bytes before cloud authentication',
+  'Install exact Firebase CLI before cloud authentication',
+  'Authenticate to Google Cloud with workload identity',
+  'Deploy canonical worker fleet with approved target secret versions',
+  'Deploy verified prebuilt Firebase runtime',
+], 'workflow must preserve no-credential build and protected mutation order');
+
+const workflowSource = read(canonicalWorkflow);
+const authIndex = workflowSource.indexOf('Authenticate to Google Cloud with workload identity');
+const deployJobIndex = workflowSource.indexOf('\n  deploy:\n');
+if (authIndex < 0 || deployJobIndex < 0) failures.push('canonical workflow auth/deploy section is missing');
+else if (workflowSource.slice(deployJobIndex, authIndex).includes('secrets.')) {
+  failures.push('canonical workflow exposes repository/environment secrets before the authentication boundary');
+}
 
 for (const legacyWorkflow of [
   '.github/workflows/production-deploy-publish.yml',
   '.github/workflows/deploy-asset-worker.yml',
   '.github/workflows/career-production-release.yml',
 ]) {
-  requireText(legacyWorkflow, '[BLOCKED]', 'legacy deployment authority must be disabled');
-  rejectText(legacyWorkflow, 'gcloud run deploy', 'legacy deployment authority must not deploy Cloud Run');
-  rejectText(legacyWorkflow, 'firebase deploy', 'legacy deployment authority must not deploy Firebase');
+  requireText(legacyWorkflow, '[BLOCKED]', 'legacy deployment authority must remain disabled');
+  rejectText(legacyWorkflow, 'gcloud run deploy', 'legacy authority must not deploy Cloud Run');
+  rejectText(legacyWorkflow, 'firebase deploy', 'legacy authority must not deploy Firebase');
 }
 
 try {
@@ -113,17 +165,14 @@ try {
   failures.push(`worker deploy receipt behavioral validation failed: ${error instanceof Error ? error.message : String(error)}`);
 }
 
-if (failures.length > 0) {
+if (failures.length) {
   console.error('[FAIL] secure worker deployment contract');
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log('[PASS] secure worker deployment contract');
-console.log('[PASS] canonical deployment authority: .github/workflows/urai-jobs-production-deploy.yml');
-console.log('[PASS] exact source, immutable Cloud Build digest, revision labels, pinned secrets, and ancestor rollback authority required');
-console.log('[PASS] current and rollback revisions bind immutable image digests');
-console.log('[PASS] implicit billable infrastructure creation blocked');
-console.log('[PASS] production workers: narrator-worker, asset-worker');
-console.log('[PASS] disabled workers: spatial-worker, studio-worker, career-worker, generic managed worker');
-console.log('[PASS] provider calls executed: 0');
+console.log('[PASS] credential-free exact-head preflight precedes protected mutation');
+console.log('[PASS] target and rollback secret versions are explicit, numeric, and approval-bound');
+console.log('[PASS] Firebase bytes are built and hashed before cloud authentication');
+console.log('[PASS] credential-bearing actions and artifact upload use immutable commits');
+console.log('[PASS] canonical deployment can execute zero paid provider calls');
