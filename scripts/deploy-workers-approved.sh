@@ -11,7 +11,8 @@ WORKERS_CSV="${URAI_JOBS_DEPLOY_WORKERS:-narrator-worker,asset-worker}"
 URAI_JOBS_WORKER_TOKEN_SECRET="${URAI_JOBS_WORKER_TOKEN_SECRET:-urai-jobs-worker-token}"
 URAI_WHEEL_GITHUB_TOKEN_SECRET="${URAI_WHEEL_GITHUB_TOKEN_SECRET:-urai-wheel-github-token}"
 URAI_JOBS_CALLBACK_SECRET_NAME="${URAI_JOBS_CALLBACK_SECRET_NAME:-urai-jobs-callback-secret}"
-export REAL_GCLOUD WORKERS_CSV URAI_JOBS_WORKER_TOKEN_SECRET URAI_WHEEL_GITHUB_TOKEN_SECRET URAI_JOBS_CALLBACK_SECRET_NAME
+DEPLOY_RECEIPT_PATH="${DEPLOY_RECEIPT_PATH:-docs/release-evidence/worker-deploy-receipt.json}"
+export REAL_GCLOUD WORKERS_CSV URAI_JOBS_WORKER_TOKEN_SECRET URAI_WHEEL_GITHUB_TOKEN_SECRET URAI_JOBS_CALLBACK_SECRET_NAME DEPLOY_RECEIPT_PATH
 
 required_bindings_json="$(WORKERS_CSV="$WORKERS_CSV" node <<'NODE'
 const workers = String(process.env.WORKERS_CSV || '').split(',').map((value) => value.trim()).filter(Boolean);
@@ -102,3 +103,28 @@ export -f gcloud logical_binding_for_secret approved_version_for_binding
 
 echo "[PASS] Exact target Secret Manager versions approved before mutation."
 bash scripts/deploy-workers.sh
+
+node <<'NODE'
+const fs = require('fs');
+const approval = JSON.parse(process.env.DEPLOY_TARGET_SECRET_VERSIONS_JSON || '{}');
+const workers = String(process.env.WORKERS_CSV || '').split(',').map((value) => value.trim()).filter(Boolean).sort();
+const receipt = JSON.parse(fs.readFileSync(process.env.DEPLOY_RECEIPT_PATH, 'utf8'));
+if (receipt.schemaVersion !== 'urai-jobs-worker-deploy-receipt-3') throw new Error('Unexpected worker deploy receipt schema.');
+const services = Array.isArray(receipt.services) ? receipt.services : [];
+if (JSON.stringify(services.map((service) => service.worker).sort()) !== JSON.stringify(workers)) {
+  throw new Error('Worker deploy receipt service set does not match the approved worker set.');
+}
+for (const service of services) {
+  const expected = service.worker === 'asset-worker'
+    ? {
+        URAI_JOBS_WORKER_TOKEN: String(approval.URAI_JOBS_WORKER_TOKEN),
+        URAI_WHEEL_GITHUB_TOKEN: String(approval.URAI_WHEEL_GITHUB_TOKEN),
+        URAI_JOBS_CALLBACK_SECRET: String(approval.URAI_JOBS_CALLBACK_SECRET),
+      }
+    : { URAI_JOBS_WORKER_TOKEN: String(approval.URAI_JOBS_WORKER_TOKEN) };
+  if (JSON.stringify(service.secretVersions) !== JSON.stringify(expected)) {
+    throw new Error(`${service.worker} deployed secret versions do not equal the explicit target approval.`);
+  }
+}
+console.log('[PASS] Deployed worker receipt secret versions equal the explicit target approval.');
+NODE
