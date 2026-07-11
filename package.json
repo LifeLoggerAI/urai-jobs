@@ -9,10 +9,10 @@
     "workers/*"
   ],
   "scripts": {
-    "urai-jobs:verify": "node scripts/urai-jobs-verify.mjs && node scripts/release-sequence-verify.mjs && node scripts/activation-readiness-verify.mjs && node scripts/career-surfaces-verify.mjs && node scripts/career-runtime-smoke.mjs && node scripts/check-secure-worker-deploy.mjs && node scripts/check-rollback-provenance.mjs && node scripts/check-required-ci-exact-head.mjs",
+    "urai-jobs:verify": "node scripts/urai-jobs-verify.mjs && node scripts/release-sequence-verify.mjs && node scripts/activation-readiness-verify.mjs && node scripts/career-surfaces-verify.mjs && node scripts/career-runtime-smoke.mjs && node scripts/check-secure-worker-deploy.mjs && node scripts/check-firebase-runtime-identity.mjs && node scripts/check-rollback-provenance.mjs && node scripts/check-required-ci-exact-head.mjs",
     "ci:exact-head": "node scripts/check-required-ci-exact-head.mjs",
     "activation:verify": "node scripts/activation-readiness-verify.mjs && node scripts/career-surfaces-verify.mjs",
-    "security:worker-deploy": "node scripts/check-secure-worker-deploy.mjs && node scripts/check-rollback-provenance.mjs",
+    "security:worker-deploy": "node scripts/check-secure-worker-deploy.mjs && node scripts/check-firebase-runtime-identity.mjs && node scripts/check-rollback-provenance.mjs",
     "rollback:verify": "node scripts/verify-rollback-revision.mjs --self-test && node scripts/check-rollback-provenance.mjs",
     "career:verify": "node scripts/career-surfaces-verify.mjs && node scripts/career-runtime-smoke.mjs",
     "career:smoke": "node scripts/career-runtime-smoke.mjs",
@@ -65,7 +65,7 @@
     "job:queue": "node scripts/queue-job.mjs",
     "leases:reclaim": "node scripts/reclaim-stale-leases.mjs",
     "dead:requeue": "node scripts/requeue-dead.mjs",
-    "urai-jobs:deploy-precheck": "node scripts/urai-jobs-deploy-precheck.mjs",
+    "urai-jobs:deploy-precheck": "node scripts/urai-jobs-deploy-precheck.mjs && node scripts/check-firebase-runtime-identity.mjs",
     "dev": "npm run dev --prefix web",
     "dev:all": "npm run dev --prefix web",
     "check:workspace": "npm ls --depth=0 --workspaces --include-workspace-root"
@@ -74,7 +74,7 @@
     "@types/uuid": "^10.0.0",
     "@urai-jobs/shared-types": "workspace:^",
     "firebase-admin": "^12.1.0",
-    "ulid": "^2.3.0"
+    "ulid": "^3.0.0"
   },
   "dependencies": {
     "axios": "^1.15.0"
