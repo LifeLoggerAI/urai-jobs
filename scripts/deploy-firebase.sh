@@ -156,6 +156,16 @@ fs.writeFileSync(process.env.FIREBASE_CONFIG_RECEIPT_PATH, `${JSON.stringify(rec
 NODE
 }
 
+assert_only_evidence_residue() {
+  local residual
+  residual="$(git status --porcelain --untracked-files=all | grep -vE '^\?\? docs/release-evidence/' || true)"
+  if [ -n "$residual" ]; then
+    echo "[FAIL] Firebase deployment left unexpected repository changes:" >&2
+    printf '%s\n' "$residual" >&2
+    exit 1
+  fi
+}
+
 echo "[INFO] Verifying source-bound Firebase prebuilt bytes"
 node scripts/firebase-prebuilt-manifest.mjs --verify
 
@@ -177,4 +187,8 @@ firebase deploy \
   --non-interactive
 write_config_receipt true
 
-echo "[PASS] Firebase deployment completed for $FIREBASE_PROJECT_ID"
+cleanup
+trap - EXIT
+assert_only_evidence_residue
+
+echo "[PASS] Firebase deployment completed for $FIREBASE_PROJECT_ID with only release evidence remaining in the worktree"
