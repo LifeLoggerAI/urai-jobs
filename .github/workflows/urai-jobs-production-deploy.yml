@@ -12,7 +12,7 @@ on:
           - staging
           - prod
       confirm_launch_unlock:
-        description: Type LAUNCH-UNLOCK after reviewing the target and rollback SHA
+        description: Type DEPLOY-URAI-JOBS-STAGING or DEPLOY-URAI-JOBS-PRODUCTION to match the selected environment
         required: true
         type: string
       expected_sha:
@@ -20,7 +20,7 @@ on:
         required: true
         type: string
       rollback_sha:
-        description: Approved rollback repository SHA
+        description: Approved ancestor rollback repository SHA
         required: true
         type: string
       paid_provider_smoke_authorization:
@@ -61,17 +61,24 @@ jobs:
     environment: ${{ inputs.target }}
 
     steps:
-      - name: Checkout exact target
+      - name: Checkout exact target with rollback history
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.expected_sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Enforce exact SHA and rollback gate
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ inputs.confirm_launch_unlock }}" != "LAUNCH-UNLOCK" ]; then
-            echo "confirm_launch_unlock must exactly equal LAUNCH-UNLOCK" >&2
+          case "${{ inputs.target }}" in
+            staging) EXPECTED_CONFIRMATION="DEPLOY-URAI-JOBS-STAGING" ;;
+            prod) EXPECTED_CONFIRMATION="DEPLOY-URAI-JOBS-PRODUCTION" ;;
+            *) echo "Unsupported deployment target" >&2; exit 1 ;;
+          esac
+          if [ "${{ inputs.confirm_launch_unlock }}" != "$EXPECTED_CONFIRMATION" ]; then
+            echo "confirm_launch_unlock must exactly equal $EXPECTED_CONFIRMATION" >&2
             exit 1
           fi
           ACTUAL_SHA="$(git rev-parse HEAD)"
@@ -79,16 +86,26 @@ jobs:
             echo "Expected SHA ${{ inputs.expected_sha }} but checked out $ACTUAL_SHA" >&2
             exit 1
           fi
+          if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+            echo "Exact checkout is not clean" >&2
+            git status --short >&2
+            exit 1
+          fi
           git cat-file -e "${{ inputs.rollback_sha }}^{commit}" || {
-            echo "rollback_sha is not a commit reachable in this repository" >&2
+            echo "rollback_sha is not a repository commit" >&2
             exit 1
           }
           if [ "$ACTUAL_SHA" = "${{ inputs.rollback_sha }}" ]; then
             echo "rollback_sha must differ from the target SHA" >&2
             exit 1
           fi
+          git merge-base --is-ancestor "${{ inputs.rollback_sha }}" "$ACTUAL_SHA" || {
+            echo "rollback_sha must be an ancestor of the target SHA" >&2
+            exit 1
+          }
           echo "TARGET_SHA=$ACTUAL_SHA" >> "$GITHUB_ENV"
           echo "ROLLBACK_SHA=${{ inputs.rollback_sha }}" >> "$GITHUB_ENV"
+          echo "DEPLOY_CONFIRMATION=$EXPECTED_CONFIRMATION" >> "$GITHUB_ENV"
 
       - name: Enable pnpm
         uses: pnpm/action-setup@v4
@@ -137,6 +154,10 @@ jobs:
           gcloud secrets describe urai-wheel-github-token --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud secrets describe urai-jobs-callback-secret --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud iam service-accounts describe "$WORKER_RUNTIME_SERVICE_ACCOUNT" --project "$DEPLOY_PROJECT_ID" >/dev/null
+          gcloud storage buckets describe "gs://${GCS_BUCKET_NAME}" --project "$DEPLOY_PROJECT_ID" >/dev/null || {
+            echo "Required artifact bucket does not exist; create infrastructure under separate approval before deployment" >&2
+            exit 1
+          }
 
       - name: Repository verification gates
         run: |
@@ -148,15 +169,20 @@ jobs:
           pnpm test
           pnpm urai-jobs:deploy-precheck
 
-      - name: Ensure artifact bucket
+      - name: Verify existing artifact bucket without creating infrastructure
         env:
           GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          URAI_ENV: ${{ inputs.target }}
+          ALLOW_CREATE_GCS_BUCKET: "false"
         run: bash scripts/ensure-gcs-bucket.sh
 
       - name: Deploy canonical worker fleet
         env:
           URAI_ENV: ${{ inputs.target }}
           GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
+          DEPLOY_SOURCE_SHA: ${{ env.TARGET_SHA }}
+          DEPLOY_ROLLBACK_SHA: ${{ env.ROLLBACK_SHA }}
+          URAI_DEPLOY_CONFIRM: ${{ env.DEPLOY_CONFIRMATION }}
           DEPLOY_RECEIPT_PATH: docs/release-evidence/worker-deploy-receipt.json
         run: pnpm deploy:workers
 
@@ -213,7 +239,7 @@ jobs:
           const path = 'docs/release-evidence/canonical-deploy-inputs.json';
           fs.mkdirSync('docs/release-evidence', { recursive: true });
           fs.writeFileSync(path, JSON.stringify({
-            schemaVersion: 'urai-jobs-canonical-deploy-inputs-1',
+            schemaVersion: 'urai-jobs-canonical-deploy-inputs-2',
             generatedAt: new Date().toISOString(),
             repository: process.env.GITHUB_REPOSITORY,
             workflowRunId: process.env.GITHUB_RUN_ID,
@@ -223,6 +249,7 @@ jobs:
             project: process.env.DEPLOY_PROJECT_ID,
             region: process.env.GCP_REGION,
             paidProviderSmokeAuthorized: '${{ inputs.paid_provider_smoke_authorization }}' === 'PAID-PROVIDER-SMOKE',
+            infrastructureCreatedByWorkflow: false,
           }, null, 2) + '\n');
           NODE
 
