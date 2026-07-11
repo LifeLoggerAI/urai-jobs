@@ -173,6 +173,11 @@ deploy_worker() {
     --platform managed \
     --format='value(status.latestReadyRevisionName)' 2>/dev/null || true)"
 
+  if { [ "$URAI_ENV" = "prod" ] || [ "$URAI_ENV" = "production" ]; } && [ -z "$rollback_revision" ]; then
+    echo "[FAIL] [$worker] Production deployment requires an existing rollback revision before any new revision is created" >&2
+    exit 1
+  fi
+
   echo "[INFO] [$worker] Building $image"
   build_id="$(gcloud builds submit "$dir" \
     --project "$GCLOUD_PROJECT" \
@@ -214,6 +219,10 @@ deploy_worker() {
   url="$(gcloud run services describe "$worker" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.url)')"
   revision="$(gcloud run services describe "$worker" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.latestReadyRevisionName)')"
   image_digest="$(gcloud run revisions describe "$revision" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.imageDigest)' 2>/dev/null || true)"
+  if [[ ! "$image_digest" =~ (^|@)sha256:[0-9a-f]{64}$ ]]; then
+    echo "[FAIL] [$worker] Immutable image digest is missing or invalid for revision $revision: ${image_digest:-<empty>}" >&2
+    exit 1
+  fi
   worker_token="$(gcloud secrets versions access latest --secret "$URAI_JOBS_WORKER_TOKEN_SECRET" --project "$GCLOUD_PROJECT")"
 
   curl --fail-with-body --retry 6 --retry-delay 5 "$url/healthz" >/dev/null
@@ -261,6 +270,8 @@ const receipt = {
 };
 fs.writeFileSync(process.env.RECEIPT_PATH, `${JSON.stringify(receipt, null, 2)}\n`);
 NODE
+
+node scripts/validate-worker-deploy-receipt.mjs "$DEPLOY_RECEIPT_PATH"
 
 rm -f "$receipt_tmp"
 echo "[PASS] Worker deployment receipt: $DEPLOY_RECEIPT_PATH"
