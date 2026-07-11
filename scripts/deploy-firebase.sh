@@ -6,7 +6,7 @@ HOSTING_SITE="${FIREBASE_HOSTING_SITE:-urai-jobs}"
 FALLBACK_HOSTING_SITE="${FIREBASE_FALLBACK_HOSTING_SITE:-}"
 ALLOW_CREATE_HOSTING_SITE="${ALLOW_CREATE_HOSTING_SITE:-false}"
 FUNCTIONS_ENV_FILE="functions/.env"
-URAI_JOBS_WORKER_TOKEN_SECRET="URAI_JOBS_WORKER_TOKEN"
+URAI_JOBS_WORKER_TOKEN_SECRET="${URAI_JOBS_WORKER_TOKEN_SECRET:-URAI_JOBS_WORKER_TOKEN}"
 
 : "${FIREBASE_PROJECT_ID:?FIREBASE_PROJECT_ID is required}"
 : "${GCLOUD_PROJECT:?GCLOUD_PROJECT is required}"
@@ -62,11 +62,21 @@ ensure_hosting_site() {
 
   if [ "$ALLOW_CREATE_HOSTING_SITE" != "true" ]; then
     echo "[FAIL] Hosting site '$site' was not found in project '$FIREBASE_PROJECT_ID'." >&2
-    echo "[FAIL] Refusing to create hosting sites during production deploy." >&2
+    echo "[FAIL] Refusing to create hosting infrastructure during deployment." >&2
     return 1
   fi
 
-  echo "[WARN] Creating hosting site $site because ALLOW_CREATE_HOSTING_SITE=true"
+  if [ "${HOSTING_SITE_CREATION_APPROVAL:-}" != "CREATE-URAI-JOBS-HOSTING-SITE" ]; then
+    echo "[FAIL] Hosting creation requires HOSTING_SITE_CREATION_APPROVAL=CREATE-URAI-JOBS-HOSTING-SITE" >&2
+    return 1
+  fi
+
+  if [ "$TARGET" = "prod" ] && [ "${PRODUCTION_INFRASTRUCTURE_APPROVAL:-}" != "APPROVE-URAI-JOBS-PRODUCTION-INFRASTRUCTURE" ]; then
+    echo "[FAIL] Production hosting creation requires PRODUCTION_INFRASTRUCTURE_APPROVAL=APPROVE-URAI-JOBS-PRODUCTION-INFRASTRUCTURE" >&2
+    return 1
+  fi
+
+  echo "[WARN] Creating explicitly approved hosting site $site"
   firebase hosting:sites:create "$site" --project "$FIREBASE_PROJECT_ID" --non-interactive
   HOSTING_SITE="$site"
 }
@@ -120,6 +130,10 @@ pnpm --filter urai-jobs-functions build
 pnpm --filter urai-jobs-web build
 
 echo "[INFO] Selecting Firebase project: $FIREBASE_PROJECT_ID"
+if [ "$FIREBASE_PROJECT_ID" != "$GCLOUD_PROJECT" ]; then
+  echo "[FAIL] FIREBASE_PROJECT_ID and GCLOUD_PROJECT must match" >&2
+  exit 1
+fi
 firebase use "$FIREBASE_PROJECT_ID"
 
 if ! ensure_hosting_site "$HOSTING_SITE"; then
@@ -138,6 +152,10 @@ set_hosting_site_in_firebase_json "$HOSTING_SITE"
 write_functions_env
 
 echo "[INFO] Deploying Firebase Functions, Firestore rules/indexes, and Hosting"
+if [ "${DEPLOY_SOURCE_SHA:-}" != "$(git rev-parse HEAD)" ]; then
+  echo "[FAIL] Firebase deployment must use the same verified DEPLOY_SOURCE_SHA as worker deployment" >&2
+  exit 1
+fi
 firebase deploy --only functions,firestore,hosting --project "$FIREBASE_PROJECT_ID" --non-interactive
 
 echo "[PASS] Firebase deployment completed for $FIREBASE_PROJECT_ID"
