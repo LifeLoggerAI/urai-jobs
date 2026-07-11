@@ -6,20 +6,46 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
+env:
+  TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout exact reviewed head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove exact clean head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
       - uses: pnpm/action-setup@v4
         with:
           version: 8.15.9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: pnpm
 
-      - run: pnpm install --no-frozen-lockfile
+      - name: Install exact dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove install preserved exact source
+        shell: bash
+        run: test -z "$(git status --porcelain --untracked-files=all)"
+
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
