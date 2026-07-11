@@ -159,9 +159,7 @@ build_secret_versions_json() {
   WHEEL_TOKEN_VERSION="${SECRET_VERSION_IDS[$URAI_WHEEL_GITHUB_TOKEN_SECRET]:-}" \
   CALLBACK_SECRET_VERSION="${SECRET_VERSION_IDS[$URAI_JOBS_CALLBACK_SECRET_NAME]:-}" \
   node <<'NODE'
-const versions = {
-  URAI_JOBS_WORKER_TOKEN: process.env.WORKER_TOKEN_VERSION,
-};
+const versions = { URAI_JOBS_WORKER_TOKEN: process.env.WORKER_TOKEN_VERSION };
 if (process.env.WORKER === 'asset-worker') {
   versions.URAI_WHEEL_GITHUB_TOKEN = process.env.WHEEL_TOKEN_VERSION;
   versions.URAI_JOBS_CALLBACK_SECRET = process.env.CALLBACK_SECRET_VERSION;
@@ -170,11 +168,14 @@ process.stdout.write(JSON.stringify(versions));
 NODE
 }
 
-revision_source_sha() {
+revision_plain_env_value() {
   local revision_json="$1"
-  REVISION_JSON="$revision_json" node <<'NODE'
+  local key="$2"
+  REVISION_JSON="$revision_json" ENV_KEY="$key" node <<'NODE'
 const revision = JSON.parse(process.env.REVISION_JSON || '{}');
-process.stdout.write(String(revision?.metadata?.labels?.['urai-source-sha'] || ''));
+const env = revision?.spec?.containers?.[0]?.env || [];
+const match = env.find((entry) => entry?.name === process.env.ENV_KEY && Object.prototype.hasOwnProperty.call(entry, 'value'));
+process.stdout.write(String(match?.value || ''));
 NODE
 }
 
@@ -182,8 +183,9 @@ verify_revision_configuration() {
   local revision_json="$1"
   local expected_secret_versions_json="$2"
   REVISION_JSON="$revision_json" EXPECTED_SECRET_VERSIONS_JSON="$expected_secret_versions_json" \
-  EXPECTED_SOURCE_SHA="$GITHUB_SHA" EXPECTED_ENVIRONMENT="$URAI_ENV" \
-  EXPECTED_BUCKET="$GCS_BUCKET_NAME" EXPECTED_SERVICE_ACCOUNT="$WORKER_RUNTIME_SERVICE_ACCOUNT" node <<'NODE'
+  EXPECTED_SOURCE_SHA="$GITHUB_SHA" EXPECTED_ROLLBACK_SHA="$DEPLOY_ROLLBACK_SHA" \
+  EXPECTED_ENVIRONMENT="$URAI_ENV" EXPECTED_BUCKET="$GCS_BUCKET_NAME" \
+  EXPECTED_SERVICE_ACCOUNT="$WORKER_RUNTIME_SERVICE_ACCOUNT" node <<'NODE'
 const revision = JSON.parse(process.env.REVISION_JSON || '{}');
 const expectedSecrets = JSON.parse(process.env.EXPECTED_SECRET_VERSIONS_JSON || '{}');
 const container = revision?.spec?.containers?.[0] || {};
@@ -200,8 +202,8 @@ for (const [name, version] of Object.entries(expectedSecrets)) {
   if (!/^[1-9][0-9]*$/.test(String(version))) failures.push(`${name} expected version is not numeric`);
   if (observedSecrets[name] !== String(version)) failures.push(`${name} deployed version ${observedSecrets[name] || '<missing>'} does not match pinned ${version}`);
 }
-if (String(revision?.metadata?.labels?.['urai-source-sha'] || '') !== process.env.EXPECTED_SOURCE_SHA) failures.push('revision source SHA label mismatch');
-if (String(revision?.metadata?.labels?.['urai-environment'] || '') !== process.env.EXPECTED_ENVIRONMENT) failures.push('revision environment label mismatch');
+if (observedValues.URAI_SOURCE_SHA !== process.env.EXPECTED_SOURCE_SHA) failures.push('revision source SHA mismatch');
+if (observedValues.URAI_ROLLBACK_SHA !== process.env.EXPECTED_ROLLBACK_SHA) failures.push('revision rollback SHA mismatch');
 if (String(revision?.spec?.serviceAccountName || '') !== process.env.EXPECTED_SERVICE_ACCOUNT) failures.push('revision service account mismatch');
 if (observedValues.URAI_ENV !== process.env.EXPECTED_ENVIRONMENT) failures.push('revision URAI_ENV mismatch');
 if (observedValues.GCS_BUCKET_NAME !== process.env.EXPECTED_BUCKET) failures.push('revision GCS_BUCKET_NAME mismatch');
@@ -234,9 +236,7 @@ const crypto = require('node:crypto');
 const fs = require('fs');
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]));
-  }
+  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]));
   return value;
 }
 const secretVersions = JSON.parse(process.env.SECRET_VERSIONS_JSON || '{}');
@@ -312,7 +312,7 @@ deploy_worker() {
     echo "[FAIL] [$worker] Existing rollback revision lacks an immutable image digest: ${rollback_image_digest:-<empty>}" >&2
     exit 1
   }
-  rollback_source_sha="$(revision_source_sha "$rollback_revision_json")"
+  rollback_source_sha="$(revision_plain_env_value "$rollback_revision_json" URAI_SOURCE_SHA)"
   [ "$rollback_source_sha" = "$DEPLOY_ROLLBACK_SHA" ] || {
     echo "[FAIL] [$worker] Runtime rollback revision source SHA ${rollback_source_sha:-<missing>} does not match approved rollback SHA $DEPLOY_ROLLBACK_SHA" >&2
     exit 1
@@ -331,7 +331,7 @@ deploy_worker() {
   wait_for_build "$build_id" "$worker"
 
   local worker_token_version="${SECRET_VERSION_IDS[$URAI_JOBS_WORKER_TOKEN_SECRET]}"
-  local env_vars="URAI_ENV=$URAI_ENV,GCS_BUCKET_NAME=$GCS_BUCKET_NAME"
+  local env_vars="URAI_ENV=$URAI_ENV,GCS_BUCKET_NAME=$GCS_BUCKET_NAME,URAI_SOURCE_SHA=$GITHUB_SHA,URAI_ROLLBACK_SHA=$DEPLOY_ROLLBACK_SHA"
   local secret_vars="URAI_JOBS_WORKER_TOKEN=${URAI_JOBS_WORKER_TOKEN_SECRET}:${worker_token_version}"
   if [ "$worker" = "asset-worker" ]; then
     env_vars="$env_vars,ASSET_FACTORY_REPO=LifeLoggerAI/asset-factory"
@@ -342,7 +342,7 @@ deploy_worker() {
     exit 1
   }
 
-  echo "[INFO] [$worker] Deploying with exact Secret Manager versions and source labels"
+  echo "[INFO] [$worker] Deploying with revision-bound source identity and exact Secret Manager versions"
   gcloud run deploy "$worker" \
     --project "$GCLOUD_PROJECT" \
     --image "$image" \
@@ -356,7 +356,6 @@ deploy_worker() {
     --max-instances 3 \
     --concurrency 20 \
     --timeout 300 \
-    --labels "urai-source-sha=$GITHUB_SHA,urai-environment=$URAI_ENV" \
     --set-env-vars "$env_vars" \
     --set-secrets "$secret_vars" \
     --quiet
