@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { runWorkerDeployReceiptValidatorSelfTest } from './validate-worker-deploy-receipt.mjs';
 
 const read = (path) => fs.readFileSync(path, 'utf8');
 const failures = [];
@@ -23,6 +24,9 @@ requireText('functions/src/jobs/executeJob.ts', 'secrets: [workerTokenSecret]', 
 requireText('scripts/deploy-workers.sh', '--set-secrets "$secret_vars"', 'worker deploy must inject Secret Manager values');
 requireText('scripts/deploy-workers.sh', '--service-account "$WORKER_RUNTIME_SERVICE_ACCOUNT"', 'worker deploy must use an explicit runtime service account');
 requireText('scripts/deploy-workers.sh', 'rollbackRevision', 'worker deploy receipt must record rollback revision');
+requireText('scripts/deploy-workers.sh', 'Production deployment requires an existing rollback revision', 'production deploy must fail before creating a revision when no rollback revision exists');
+requireText('scripts/deploy-workers.sh', 'Immutable image digest is missing or invalid', 'worker deploy must fail when Cloud Run image digest proof is absent');
+requireText('scripts/deploy-workers.sh', 'validate-worker-deploy-receipt.mjs', 'worker deploy must validate the completed receipt before success');
 requireText('scripts/deploy-workers.sh', 'unauthorized auth probe returned', 'worker deploy must prove unauthorized access is rejected');
 requireText('scripts/deploy-workers.sh', 'authorized auth probe returned', 'worker deploy must prove authorized access succeeds');
 requireText('package.json', 'bash scripts/verify-deploy-authority.sh', 'worker deployment must run through immutable authority verification');
@@ -66,6 +70,12 @@ for (const legacyWorkflow of [
   rejectText(legacyWorkflow, 'firebase deploy', 'legacy deployment authority must not deploy Firebase');
 }
 
+try {
+  runWorkerDeployReceiptValidatorSelfTest();
+} catch (error) {
+  failures.push(`worker deploy receipt behavioral validation failed: ${error instanceof Error ? error.message : String(error)}`);
+}
+
 if (failures.length > 0) {
   console.error('[FAIL] secure worker deployment contract');
   for (const failure of failures) console.error(`- ${failure}`);
@@ -75,6 +85,7 @@ if (failures.length > 0) {
 console.log('[PASS] secure worker deployment contract');
 console.log('[PASS] canonical deployment authority: .github/workflows/urai-jobs-production-deploy.yml');
 console.log('[PASS] exact clean SHA and ancestor rollback authority required');
+console.log('[PASS] immutable image digest and production rollback receipt required');
 console.log('[PASS] implicit billable infrastructure creation blocked');
 console.log('[PASS] production workers: narrator-worker, asset-worker');
 console.log('[PASS] disabled workers: spatial-worker, studio-worker, career-worker, generic managed worker');
