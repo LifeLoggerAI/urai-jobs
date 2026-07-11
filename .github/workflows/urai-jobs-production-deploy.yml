@@ -8,9 +8,7 @@ on:
         required: true
         default: staging
         type: choice
-        options:
-          - staging
-          - prod
+        options: [staging, prod]
       confirm_launch_unlock:
         description: Type DEPLOY-URAI-JOBS-STAGING or DEPLOY-URAI-JOBS-PRODUCTION
         required: true
@@ -28,11 +26,11 @@ on:
         required: true
         type: string
       target_secret_versions_json:
-        description: Exact numeric target versions for URAI_JOBS_WORKER_TOKEN, URAI_WHEEL_GITHUB_TOKEN, and URAI_JOBS_CALLBACK_SECRET
+        description: Exact numeric target versions for all canonical worker secret bindings
         required: true
         type: string
       require_custom_domains:
-        description: Require custom-domain checks in addition to Firebase Hosting URLs
+        description: Require uraijobs.com and www.uraijobs.com checks
         required: true
         default: false
         type: boolean
@@ -88,14 +86,12 @@ jobs:
           git cat-file -e "$INPUT_ROLLBACK_SHA^{commit}"
           git merge-base --is-ancestor "$INPUT_ROLLBACK_SHA" "$INPUT_EXPECTED_SHA"
           node - <<'NODE'
-          function exactObject(raw, required, label, valuePattern) {
+          function exactObject(raw, required, label, pattern) {
             const value = JSON.parse(raw);
             if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error(`${label} must be an object`);
             const keys = Object.keys(value).sort();
             if (JSON.stringify(keys) !== JSON.stringify([...required].sort())) throw new Error(`${label} keys must equal ${required.join(', ')}`);
-            for (const [key, item] of Object.entries(value)) {
-              if (!valuePattern.test(String(item))) throw new Error(`${label}.${key} is invalid`);
-            }
+            for (const [key, item] of Object.entries(value)) if (!pattern.test(String(item))) throw new Error(`${label}.${key} is invalid`);
           }
           exactObject(process.env.INPUT_ROLLBACK_FINGERPRINTS, ['asset-worker', 'narrator-worker'], 'rollback fingerprints', /^[0-9a-f]{64}$/);
           exactObject(process.env.INPUT_TARGET_SECRET_VERSIONS, ['URAI_JOBS_CALLBACK_SECRET', 'URAI_JOBS_WORKER_TOKEN', 'URAI_WHEEL_GITHUB_TOKEN'], 'target secret versions', /^[1-9][0-9]*$/);
@@ -136,7 +132,7 @@ jobs:
           mkdir -p docs/release-evidence
           node - <<'NODE'
           const fs = require('fs');
-          const receipt = {
+          fs.writeFileSync('docs/release-evidence/canonical-preflight.json', `${JSON.stringify({
             schemaVersion: 'urai-jobs-canonical-preflight-1',
             repository: process.env.GITHUB_REPOSITORY,
             workflowRunId: process.env.GITHUB_RUN_ID,
@@ -147,8 +143,7 @@ jobs:
             cloudAuthenticated: false,
             deploymentPerformed: false,
             paidProviderCalls: 0,
-          };
-          fs.writeFileSync('docs/release-evidence/canonical-preflight.json', `${JSON.stringify(receipt, null, 2)}\n`);
+          }, null, 2)}\n`);
           NODE
 
       - name: Upload preflight evidence
@@ -277,9 +272,7 @@ jobs:
             if (key !== 'FIREBASE_FALLBACK_HOSTING_SITE' && !value) throw new Error(`${key} is required`);
             if (String(value).includes('\n') || String(value).includes('\r')) throw new Error(`${key} contains a newline`);
           }
-          if (!/^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$/.test(process.env.GCLOUD_CLI_VERSION || '')) {
-            throw new Error('GCLOUD_CLI_VERSION must be an exact protected semver');
-          }
+          if (!/^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$/.test(process.env.GCLOUD_CLI_VERSION || '')) throw new Error('GCLOUD_CLI_VERSION must be an exact protected semver');
           fs.appendFileSync(process.env.GITHUB_ENV, Object.entries(values).map(([key, value]) => `${key}=${value}`).join('\n') + '\n');
           NODE
 
@@ -313,17 +306,18 @@ jobs:
           GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
           DEPLOY_SOURCE_SHA: ${{ env.TARGET_SHA }}
           DEPLOY_ROLLBACK_SHA: ${{ env.ROLLBACK_SHA }}
-          URAI_DEPLOY_CONFIRM: ${{ env.INPUT_TARGET == 'prod' && 'DEPLOY-URAI-JOBS-PRODUCTION' || 'DEPLOY-URAI-JOBS-STAGING' }}
+          URAI_DEPLOY_CONFIRM: ${{ inputs.target == 'prod' && 'DEPLOY-URAI-JOBS-PRODUCTION' || 'DEPLOY-URAI-JOBS-STAGING' }}
           ROLLBACK_CONFIG_RECEIPT_PATH: docs/release-evidence/worker-rollback-config-receipt.json
           DEPLOY_RECEIPT_PATH: docs/release-evidence/worker-deploy-receipt.json
         run: pnpm deploy:workers
 
-      - name: Export deployed worker URLs
+      - name: Export canonical URLs from immutable worker receipt
         env:
-          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
+          URAI_ENV: ${{ env.INPUT_TARGET }}
           GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
-          GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
-        run: node scripts/export-worker-urls.mjs
+          DEPLOY_SOURCE_SHA: ${{ env.TARGET_SHA }}
+          DEPLOY_RECEIPT_PATH: docs/release-evidence/worker-deploy-receipt.json
+        run: node scripts/export-worker-urls-from-receipt.mjs
 
       - name: Deploy verified prebuilt Firebase runtime
         env:
@@ -334,28 +328,12 @@ jobs:
           DEPLOY_SOURCE_SHA: ${{ env.TARGET_SHA }}
           URAI_FIREBASE_PREBUILT_VERIFIED: '1'
           ALLOW_CREATE_HOSTING_SITE: 'false'
-        run: pnpm deploy:firebase:prod -- $INPUT_TARGET
+        run: pnpm deploy:firebase:prod -- "$INPUT_TARGET"
 
-      - name: Verify workers and Firebase Hosting
+      - name: Write mutation receipt before credential cleanup
+        shell: bash
         run: |
-          pnpm prod:verify-workers
-          pnpm domains:verify -- "https://${FIREBASE_HOSTING_SITE}.web.app"
-
-      - name: Verify custom domains
-        if: ${{ inputs.require_custom_domains }}
-        run: pnpm domains:verify -- https://uraijobs.com https://www.uraijobs.com
-
-      - name: Record paid-provider boundary
-        run: echo '[BLOCKED] Canonical deployment cannot execute paid provider smoke; separate explicit approval and workflow are required.'
-
-      - name: Stamp canonical deployment receipt
-        env:
-          URAI_ENV: ${{ env.INPUT_TARGET }}
-          FIREBASE_PROJECT_ID: ${{ env.DEPLOY_PROJECT_ID }}
-          GCLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
-          GOOGLE_CLOUD_PROJECT: ${{ env.DEPLOY_PROJECT_ID }}
-        run: |
-          pnpm prod:stamp
+          set -euo pipefail
           node - <<'NODE'
           const fs = require('fs');
           const path = 'docs/release-evidence/canonical-deploy-inputs.json';
@@ -372,21 +350,156 @@ jobs:
             environment: process.env.INPUT_TARGET,
             project: process.env.DEPLOY_PROJECT_ID,
             region: process.env.GCP_REGION,
+            hostingSite: process.env.FIREBASE_HOSTING_SITE,
             firebaseCliVersion: process.env.FIREBASE_CLI_VERSION,
             gcloudCliVersion: process.env.GCLOUD_CLI_VERSION,
             paidProviderSmokeAuthorized: false,
             paidProviderCalls: 0,
             infrastructureCreatedByWorkflow: false,
+            mutationCompleted: true,
+            publicVerificationCompleted: false,
           }, null, 2)}\n`);
           NODE
 
-      - name: Upload immutable deployment evidence
+      - name: Destroy cloud credentials before evidence handoff
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          gcloud auth revoke --all --quiet >/dev/null 2>&1
+          for file in "${GOOGLE_GHA_CREDS_PATH:-}" "${GOOGLE_APPLICATION_CREDENTIALS:-}" "${CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE:-}"; do
+            if [ -n "$file" ] && [ -f "$file" ]; then rm -f "$file"; fi
+          done
+          rm -rf "$HOME/.config/gcloud"
+          {
+            echo 'GOOGLE_GHA_CREDS_PATH='
+            echo 'GOOGLE_APPLICATION_CREDENTIALS='
+            echo 'CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE='
+          } >> "$GITHUB_ENV"
+
+      - name: Upload mutation evidence after credential cleanup
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: urai-jobs-canonical-deploy-${{ inputs.target }}-${{ inputs.expected_sha }}
-          path: |
-            docs/release-evidence/*.json
-            docs/release-evidence/*.md
+          name: urai-jobs-mutation-${{ inputs.target }}-${{ inputs.expected_sha }}
+          path: docs/release-evidence/
+          if-no-files-found: error
+          retention-days: 365
+
+  public-verify:
+    name: Public verification without cloud identity
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      TARGET_SHA: ${{ inputs.expected_sha }}
+      ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+      INPUT_TARGET: ${{ inputs.target }}
+      REQUIRE_CUSTOM_DOMAINS: ${{ inputs.require_custom_domains }}
+    steps:
+      - name: Checkout exact verified source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@1e60f620b9541d80c77f7b4a3bcd8bf5e940c37 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download mutation evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: urai-jobs-mutation-${{ inputs.target }}-${{ inputs.expected_sha }}
+          path: mutation-evidence
+
+      - name: Bind public verification to mutation receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORKER_RECEIPT="$(find mutation-evidence -type f -name worker-deploy-receipt.json -print -quit)"
+          INPUT_RECEIPT="$(find mutation-evidence -type f -name canonical-deploy-inputs.json -print -quit)"
+          test -n "$WORKER_RECEIPT"
+          test -n "$INPUT_RECEIPT"
+          WORKER_RECEIPT="$WORKER_RECEIPT" INPUT_RECEIPT="$INPUT_RECEIPT" node - <<'NODE'
+          const fs = require('fs');
+          const worker = JSON.parse(fs.readFileSync(process.env.WORKER_RECEIPT, 'utf8'));
+          const input = JSON.parse(fs.readFileSync(process.env.INPUT_RECEIPT, 'utf8'));
+          const failures = [];
+          if (worker.schemaVersion !== 'urai-jobs-worker-deploy-receipt-3') failures.push('worker schema');
+          if (input.schemaVersion !== 'urai-jobs-canonical-deploy-inputs-4') failures.push('input schema');
+          if (worker.commitSha !== process.env.TARGET_SHA || input.targetSha !== process.env.TARGET_SHA) failures.push('target SHA');
+          if (worker.rollbackSha !== process.env.ROLLBACK_SHA || input.rollbackSha !== process.env.ROLLBACK_SHA) failures.push('rollback SHA');
+          if (worker.environment !== process.env.INPUT_TARGET || input.environment !== process.env.INPUT_TARGET) failures.push('environment');
+          if (worker.project !== input.project) failures.push('project');
+          if (input.paidProviderSmokeAuthorized !== false || input.paidProviderCalls !== 0) failures.push('paid-provider boundary');
+          if (input.mutationCompleted !== true || input.publicVerificationCompleted !== false) failures.push('phase state');
+          const services = new Map((worker.services || []).map((service) => [service.worker, service]));
+          const narrator = services.get('narrator-worker');
+          const asset = services.get('asset-worker');
+          if (services.size !== 2 || !narrator || !asset) failures.push('canonical worker set');
+          for (const service of [narrator, asset].filter(Boolean)) {
+            if (!String(service.serviceUrl || '').startsWith('https://')) failures.push(`${service.worker} URL`);
+          }
+          if (!input.hostingSite) failures.push('hosting site');
+          if (failures.length) throw new Error(`Mutation evidence mismatch: ${failures.join(', ')}`);
+          fs.appendFileSync(process.env.GITHUB_ENV, [
+            `NARRATOR_WORKER_URL=${narrator.serviceUrl}`,
+            `ASSET_WORKER_URL=${asset.serviceUrl}`,
+            `FIREBASE_HOSTING_SITE=${input.hostingSite}`,
+            `FIREBASE_PROJECT_ID=${input.project}`,
+          ].join('\n') + '\n');
+          NODE
+
+      - name: Verify canonical worker health publicly
+        run: node scripts/verify-worker-health.mjs
+
+      - name: Verify Firebase and optional custom domains publicly
+        shell: bash
+        run: |
+          set -euo pipefail
+          domains=("https://${FIREBASE_HOSTING_SITE}.web.app")
+          if [ "$REQUIRE_CUSTOM_DOMAINS" = 'true' ]; then
+            domains+=("https://uraijobs.com" "https://www.uraijobs.com")
+          fi
+          node scripts/verify-custom-domains.mjs "${domains[@]}"
+
+      - name: Write public verification receipt
+        if: always()
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p docs/release-evidence
+          node - <<'NODE'
+          const fs = require('fs');
+          fs.writeFileSync('docs/release-evidence/public-verification.json', `${JSON.stringify({
+            schemaVersion: 'urai-jobs-public-verification-1',
+            generatedAt: new Date().toISOString(),
+            repository: process.env.GITHUB_REPOSITORY,
+            workflowRunId: process.env.GITHUB_RUN_ID,
+            targetSha: process.env.TARGET_SHA,
+            rollbackSha: process.env.ROLLBACK_SHA,
+            environment: process.env.INPUT_TARGET,
+            status: process.env.JOB_STATUS,
+            cloudAuthenticated: false,
+            publicWorkerHealthChecked: true,
+            publicHostingChecked: true,
+            customDomainsRequired: process.env.REQUIRE_CUSTOM_DOMAINS === 'true',
+            paidProviderCalls: 0,
+          }, null, 2)}\n`);
+          NODE
+          DEPLOY_GIT_SHA="$TARGET_SHA" DEPLOY_ENVIRONMENT="$INPUT_TARGET" pnpm prod:stamp
+
+      - name: Upload public verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: urai-jobs-public-verification-${{ inputs.target }}-${{ inputs.expected_sha }}
+          path: docs/release-evidence/
           if-no-files-found: error
           retention-days: 365
