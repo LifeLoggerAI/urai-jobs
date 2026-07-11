@@ -41,6 +41,17 @@ for (const path of requiredWorkflows) {
   rejectText(path, source, 'corepack prepare pnpm@latest', 'mutable pnpm tool version is forbidden');
   rejectText(path, source, 'firebase-tools@latest', 'mutable Firebase CLI version is forbidden');
 
+  const concurrencyMatch = source.match(/\nconcurrency:\n([\s\S]*?)(?=\nenv:|\njobs:)/);
+  if (!concurrencyMatch) {
+    failures.push(`${path}: workflow must define PR/ref-scoped concurrency`);
+  } else {
+    const concurrency = concurrencyMatch[0];
+    requireText(path, concurrency, 'github.event.pull_request.number || github.ref', 'concurrency must collapse superseded runs for the same PR or ref');
+    requireText(path, concurrency, 'cancel-in-progress: true', 'superseded runs must be cancelled');
+    rejectText(path, concurrency, 'github.event.pull_request.head.sha', 'concurrency must not preserve one group per commit SHA');
+    rejectText(path, concurrency, 'github.sha', 'concurrency must not preserve one group per commit SHA');
+  }
+
   if (source.includes('pnpm install')) {
     requireText(path, source, 'pnpm install --frozen-lockfile', 'pnpm workflows must install the exact lockfile graph');
     requireText(path, source, 'Prove install preserved exact source', 'pnpm workflows must prove installation did not mutate source');
@@ -92,4 +103,5 @@ if (failures.length > 0) {
 
 console.log(`[PASS] exact-head CI evidence contract: ${requiredWorkflows.length} workflows`);
 console.log('[PASS] exact source checkout, clean tree, frozen dependencies, read-only checkout credentials');
+console.log('[PASS] PR/ref concurrency cancels superseded runs without weakening exact-head evidence');
 console.log('[PASS] emulator CLI version pinned: firebase-tools 15.23.0');
