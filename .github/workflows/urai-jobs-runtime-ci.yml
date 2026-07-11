@@ -8,6 +8,13 @@ on:
       - main
       - hardening/urai-jobs-runtime
 
+permissions:
+  contents: read
+
+env:
+  TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+  FIREBASE_TOOLS_VERSION: 15.23.0
+
 jobs:
   validate:
     name: Validate runtime
@@ -15,8 +22,19 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Checkout
+      - name: Checkout exact reviewed head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove exact clean head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Enable pnpm
         uses: pnpm/action-setup@v4
@@ -29,8 +47,12 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+      - name: Install exact dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove install preserved exact source
+        shell: bash
+        run: test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Verify activation readiness guardrails
         run: pnpm activation:verify
@@ -57,8 +79,19 @@ jobs:
     needs: validate
 
     steps:
-      - name: Checkout
+      - name: Checkout exact reviewed head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove exact clean head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Enable pnpm
         uses: pnpm/action-setup@v4
@@ -77,8 +110,12 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+      - name: Install exact dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove install preserved exact source
+        shell: bash
+        run: test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Build functions and shared types
         run: pnpm --filter @urai-jobs/shared-types build && pnpm --filter urai-jobs-functions build
@@ -88,7 +125,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          npx --yes firebase-tools@latest emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
+          npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
@@ -97,10 +134,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: urai-jobs-emulator-e2e-log
+          name: urai-jobs-emulator-e2e-${{ env.TARGET_SHA }}
           path: urai-jobs-emulator-e2e.log
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 365
 
       - name: Enforce callable E2E result
         shell: bash
