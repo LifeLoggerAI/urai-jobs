@@ -60,7 +60,18 @@ for (const [text, description] of [
   ['No approved logical binding exists for secret', 'unapproved secret names must fail closed'],
   ['Exact target Secret Manager versions approved before mutation', 'wrapper must record the approval boundary'],
   ['bash scripts/deploy-workers.sh', 'wrapper must delegate only after approval'],
+  ['DEPLOY_RECEIPT_PATH', 'wrapper must read the exact worker deployment receipt'],
+  ["receipt.schemaVersion !== 'urai-jobs-worker-deploy-receipt-3'", 'post-deploy verification must require the hardened receipt schema'],
+  ['Worker deploy receipt service set does not match the approved worker set', 'post-deploy verification must bind the exact approved worker set'],
+  ['deployed secret versions do not equal the explicit target approval', 'post-deploy verification must reject secret-version drift'],
+  ['Deployed worker receipt secret versions equal the explicit target approval', 'wrapper must record successful receipt-to-approval equality'],
 ]) requireText('scripts/deploy-workers-approved.sh', text, description);
+
+requireOrder('scripts/deploy-workers-approved.sh', [
+  'Exact target Secret Manager versions approved before mutation',
+  'bash scripts/deploy-workers.sh',
+  'Deployed worker receipt secret versions equal the explicit target approval',
+], 'approved wrapper must verify target approvals before mutation and receipt equality after mutation');
 
 requireText('package.json', 'bash scripts/deploy-workers-approved.sh', 'canonical package command must use the approved-version wrapper');
 requireText('package.json', '"deploy:firebase:prod": "bash scripts/deploy-firebase.sh"', 'Firebase target must be passed explicitly rather than hard-coded to prod');
@@ -172,7 +183,7 @@ if (failures.length) {
 }
 
 console.log('[PASS] credential-free exact-head preflight precedes protected mutation');
-console.log('[PASS] target and rollback secret versions are explicit, numeric, and approval-bound');
+console.log('[PASS] target and rollback secret versions are explicit, numeric, approval-bound, and receipt-verified');
 console.log('[PASS] Firebase bytes are built and hashed before cloud authentication');
 console.log('[PASS] credential-bearing actions and artifact upload use immutable commits');
 console.log('[PASS] canonical deployment can execute zero paid provider calls');
