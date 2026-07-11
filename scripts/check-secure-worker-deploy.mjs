@@ -30,8 +30,9 @@ requireText('scripts/deploy-workers.sh', "--filter='state=ENABLED'", 'worker dep
 requireText('scripts/deploy-workers.sh', 'Mutable Secret Manager aliases are forbidden', 'worker deploy must reject mutable secret aliases');
 rejectText('scripts/deploy-workers.sh', ':latest', 'worker deploy must not bind revisions to latest secret aliases');
 requireText('scripts/deploy-workers.sh', 'verify_revision_configuration', 'worker deploy must verify observed revision configuration');
-requireText('scripts/deploy-workers.sh', 'revision source SHA label mismatch', 'new runtime revision must bind exact source SHA');
-requireText('scripts/deploy-workers.sh', '--labels "urai-source-sha=$GITHUB_SHA,urai-environment=$URAI_ENV"', 'deployed revision must carry source and environment labels');
+requireText('scripts/deploy-workers.sh', 'URAI_SOURCE_SHA=$GITHUB_SHA,URAI_ROLLBACK_SHA=$DEPLOY_ROLLBACK_SHA', 'source and rollback identity must be revision-bound environment values');
+requireText('scripts/deploy-workers.sh', 'revision source SHA mismatch', 'new runtime revision must bind exact source SHA');
+requireText('scripts/deploy-workers.sh', 'revision rollback SHA mismatch', 'new runtime revision must bind approved rollback SHA');
 requireText('scripts/deploy-workers.sh', 'Runtime rollback revision source SHA', 'runtime rollback must match approved repository rollback SHA');
 requireText('scripts/deploy-workers.sh', 'Canonical staging and production deployment require an existing runtime rollback revision', 'all canonical deployments require runtime rollback authority');
 requireText('scripts/deploy-workers.sh', 'rollbackImageDigest', 'worker receipt must record rollback image digest');
@@ -105,7 +106,7 @@ if (failures.length > 0) {
 
 console.log('[PASS] secure worker deployment contract');
 console.log('[PASS] canonical deployment authority: .github/workflows/urai-jobs-production-deploy.yml');
-console.log('[PASS] exact source, runtime rollback source, pinned secrets, and ancestor rollback authority required');
+console.log('[PASS] exact source, revision-bound rollback source, pinned secrets, and ancestor rollback authority required');
 console.log('[PASS] current and rollback revisions bind immutable image digests');
 console.log('[PASS] implicit billable infrastructure creation blocked');
 console.log('[PASS] production workers: narrator-worker, asset-worker');
