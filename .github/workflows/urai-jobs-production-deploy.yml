@@ -110,8 +110,18 @@ jobs:
           corepack prepare "pnpm@${PNPM_VERSION}" --activate
           test "$(pnpm --version)" = "$PNPM_VERSION"
 
-      - name: Frozen dependency installation
-        run: pnpm install --frozen-lockfile
+      - name: Install frozen dependencies with lifecycle scripts disabled
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Prove install preserved exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$INPUT_EXPECTED_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Build required shared types explicitly
+        run: pnpm --filter @urai-jobs/shared-types build
 
       - name: Repository verification and build gates
         run: |
@@ -203,6 +213,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Setup exact Node for authority verification
+        uses: actions/setup-node@1e60f620b9541d80c77f7b4a3bcd8bf5e940c37 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+
       - name: Prove exact clean mutation source and authority
         shell: bash
         env:
@@ -218,12 +234,6 @@ jobs:
           node scripts/check-secure-worker-deploy.mjs
           node scripts/check-rollback-provenance.mjs
           test -z "$(git status --porcelain --untracked-files=all)"
-
-      - name: Setup Node
-        uses: actions/setup-node@1e60f620b9541d80c77f7b4a3bcd8bf5e940c37 # v4.4.0
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          registry-url: https://registry.npmjs.org
 
       - name: Download exact Firebase prebuilt artifact outside repository
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -246,13 +256,15 @@ jobs:
           [[ "$FIREBASE_CLI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]
           [[ "$GCLOUD_CLI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]
           CLI_ROOT="$RUNNER_TEMP/firebase-cli"
-          mkdir -p "$CLI_ROOT" docs/release-evidence
-          npm view "firebase-tools@$FIREBASE_CLI_VERSION" dist.integrity --json > docs/release-evidence/firebase-cli-integrity.json
-          test -s docs/release-evidence/firebase-cli-integrity.json
+          INTEGRITY_FILE="$RUNNER_TEMP/firebase-cli-integrity.json"
+          mkdir -p "$CLI_ROOT"
+          npm view "firebase-tools@$FIREBASE_CLI_VERSION" dist.integrity --json > "$INTEGRITY_FILE"
+          test -s "$INTEGRITY_FILE"
           npm install --prefix "$CLI_ROOT" --no-audit --no-fund "firebase-tools@$FIREBASE_CLI_VERSION"
           test "$("$CLI_ROOT/node_modules/.bin/firebase" --version)" = "$FIREBASE_CLI_VERSION"
           echo "$CLI_ROOT/node_modules/.bin" >> "$GITHUB_PATH"
           echo "URAI_FIREBASE_CLI=$CLI_ROOT/node_modules/.bin/firebase" >> "$GITHUB_ENV"
+          echo "FIREBASE_CLI_INTEGRITY_FILE=$INTEGRITY_FILE" >> "$GITHUB_ENV"
           test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Authenticate to Google Cloud with workload identity
@@ -334,6 +346,13 @@ jobs:
         run: |
           node scripts/verify-rollback-revision.mjs
           bash scripts/deploy-workers-approved.sh
+
+      - name: Preserve Firebase CLI integrity evidence after worker mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/release-evidence
+          cp "$FIREBASE_CLI_INTEGRITY_FILE" docs/release-evidence/firebase-cli-integrity.json
 
       - name: Export canonical URLs from immutable worker receipt
         env:
@@ -459,19 +478,24 @@ jobs:
           set -euo pipefail
           WORKER_RECEIPT="$(find mutation-evidence -type f -name worker-deploy-receipt.json -print -quit)"
           INPUT_RECEIPT="$(find mutation-evidence -type f -name canonical-deploy-inputs.json -print -quit)"
+          FIREBASE_RECEIPT="$(find mutation-evidence -type f -name firebase-deploy-config-receipt.json -print -quit)"
           test -n "$WORKER_RECEIPT"
           test -n "$INPUT_RECEIPT"
-          WORKER_RECEIPT="$WORKER_RECEIPT" INPUT_RECEIPT="$INPUT_RECEIPT" node - <<'NODE'
+          test -n "$FIREBASE_RECEIPT"
+          WORKER_RECEIPT="$WORKER_RECEIPT" INPUT_RECEIPT="$INPUT_RECEIPT" FIREBASE_RECEIPT="$FIREBASE_RECEIPT" node - <<'NODE'
           const fs = require('fs');
           const worker = JSON.parse(fs.readFileSync(process.env.WORKER_RECEIPT, 'utf8'));
           const input = JSON.parse(fs.readFileSync(process.env.INPUT_RECEIPT, 'utf8'));
+          const firebase = JSON.parse(fs.readFileSync(process.env.FIREBASE_RECEIPT, 'utf8'));
           const failures = [];
           if (worker.schemaVersion !== 'urai-jobs-worker-deploy-receipt-3') failures.push('worker schema');
           if (input.schemaVersion !== 'urai-jobs-canonical-deploy-inputs-4') failures.push('input schema');
-          if (worker.commitSha !== process.env.TARGET_SHA || input.targetSha !== process.env.TARGET_SHA) failures.push('target SHA');
+          if (firebase.schemaVersion !== 'urai-jobs-firebase-deploy-config-1') failures.push('Firebase schema');
+          if (worker.commitSha !== process.env.TARGET_SHA || input.targetSha !== process.env.TARGET_SHA || firebase.sourceSha !== process.env.TARGET_SHA) failures.push('target SHA');
           if (worker.rollbackSha !== process.env.ROLLBACK_SHA || input.rollbackSha !== process.env.ROLLBACK_SHA) failures.push('rollback SHA');
-          if (worker.environment !== process.env.INPUT_TARGET || input.environment !== process.env.INPUT_TARGET) failures.push('environment');
-          if (worker.project !== input.project) failures.push('project');
+          if (worker.environment !== process.env.INPUT_TARGET || input.environment !== process.env.INPUT_TARGET || firebase.environment !== process.env.INPUT_TARGET) failures.push('environment');
+          if (worker.project !== input.project || firebase.project !== input.project) failures.push('project');
+          if (firebase.deploymentCommandCompleted !== true || firebase.secretValuesIncluded !== false) failures.push('Firebase completion boundary');
           if (input.paidProviderSmokeAuthorized !== false || input.paidProviderCalls !== 0) failures.push('paid-provider boundary');
           if (input.mutationCompleted !== true || input.publicVerificationCompleted !== false) failures.push('phase state');
           const services = new Map((worker.services || []).map((service) => [service.worker, service]));
@@ -479,7 +503,8 @@ jobs:
           const asset = services.get('asset-worker');
           if (services.size !== 2 || !narrator || !asset) failures.push('canonical worker set');
           for (const service of [narrator, asset].filter(Boolean)) if (!String(service.serviceUrl || '').startsWith('https://')) failures.push(`${service.worker} URL`);
-          if (!input.hostingSite) failures.push('hosting site');
+          if (firebase.narratorWorkerUrl !== narrator?.serviceUrl || firebase.assetWorkerUrl !== asset?.serviceUrl) failures.push('Firebase worker URL binding');
+          if (!input.hostingSite || firebase.hostingSite !== input.hostingSite) failures.push('hosting site');
           if (failures.length) throw new Error(`Mutation evidence mismatch: ${failures.join(', ')}`);
           fs.appendFileSync(process.env.GITHUB_ENV, [
             `NARRATOR_WORKER_URL=${narrator.serviceUrl}`,
