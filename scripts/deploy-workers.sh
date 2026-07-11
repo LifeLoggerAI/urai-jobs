@@ -13,6 +13,7 @@ set -euo pipefail
 : "${DEPLOY_ROLLBACK_SHA:?DEPLOY_ROLLBACK_SHA must contain the approved rollback source SHA}"
 
 sha_pattern='^[0-9a-f]{40}$'
+digest_pattern='^sha256:[0-9a-f]{64}$'
 [[ "$GITHUB_SHA" =~ $sha_pattern ]] || {
   echo "[FAIL] GITHUB_SHA must be a full lowercase 40-character SHA" >&2
   exit 1
@@ -179,17 +180,31 @@ process.stdout.write(String(match?.value || ''));
 NODE
 }
 
+revision_labels_json() {
+  local revision_json="$1"
+  REVISION_JSON="$revision_json" node <<'NODE'
+const revision = JSON.parse(process.env.REVISION_JSON || '{}');
+const labels = revision?.metadata?.labels || revision?.labels || {};
+process.stdout.write(JSON.stringify({
+  'urai-source-sha': String(labels['urai-source-sha'] || ''),
+  'urai-environment': String(labels['urai-environment'] || ''),
+}));
+NODE
+}
+
 verify_revision_configuration() {
   local revision_json="$1"
   local expected_secret_versions_json="$2"
+  local expected_image_digest="$3"
   REVISION_JSON="$revision_json" EXPECTED_SECRET_VERSIONS_JSON="$expected_secret_versions_json" \
   EXPECTED_SOURCE_SHA="$GITHUB_SHA" EXPECTED_ROLLBACK_SHA="$DEPLOY_ROLLBACK_SHA" \
   EXPECTED_ENVIRONMENT="$URAI_ENV" EXPECTED_BUCKET="$GCS_BUCKET_NAME" \
-  EXPECTED_SERVICE_ACCOUNT="$WORKER_RUNTIME_SERVICE_ACCOUNT" node <<'NODE'
+  EXPECTED_SERVICE_ACCOUNT="$WORKER_RUNTIME_SERVICE_ACCOUNT" EXPECTED_IMAGE_DIGEST="$expected_image_digest" node <<'NODE'
 const revision = JSON.parse(process.env.REVISION_JSON || '{}');
 const expectedSecrets = JSON.parse(process.env.EXPECTED_SECRET_VERSIONS_JSON || '{}');
 const container = revision?.spec?.containers?.[0] || {};
 const env = container.env || [];
+const labels = revision?.metadata?.labels || revision?.labels || {};
 const observedSecrets = {};
 const observedValues = {};
 for (const entry of env) {
@@ -197,6 +212,7 @@ for (const entry of env) {
   if (entry?.name && ref?.version) observedSecrets[entry.name] = String(ref.version);
   if (entry?.name && Object.prototype.hasOwnProperty.call(entry, 'value')) observedValues[entry.name] = String(entry.value);
 }
+const normalizeDigest = (value) => String(value || '').replace(/^@/, '');
 const failures = [];
 for (const [name, version] of Object.entries(expectedSecrets)) {
   if (!/^[1-9][0-9]*$/.test(String(version))) failures.push(`${name} expected version is not numeric`);
@@ -204,9 +220,12 @@ for (const [name, version] of Object.entries(expectedSecrets)) {
 }
 if (observedValues.URAI_SOURCE_SHA !== process.env.EXPECTED_SOURCE_SHA) failures.push('revision source SHA mismatch');
 if (observedValues.URAI_ROLLBACK_SHA !== process.env.EXPECTED_ROLLBACK_SHA) failures.push('revision rollback SHA mismatch');
+if (String(labels['urai-source-sha'] || '') !== process.env.EXPECTED_SOURCE_SHA) failures.push('revision source SHA label mismatch');
+if (String(labels['urai-environment'] || '') !== process.env.EXPECTED_ENVIRONMENT) failures.push('revision environment label mismatch');
 if (String(revision?.spec?.serviceAccountName || '') !== process.env.EXPECTED_SERVICE_ACCOUNT) failures.push('revision service account mismatch');
 if (observedValues.URAI_ENV !== process.env.EXPECTED_ENVIRONMENT) failures.push('revision URAI_ENV mismatch');
 if (observedValues.GCS_BUCKET_NAME !== process.env.EXPECTED_BUCKET) failures.push('revision GCS_BUCKET_NAME mismatch');
+if (normalizeDigest(revision?.status?.imageDigest) !== normalizeDigest(process.env.EXPECTED_IMAGE_DIGEST)) failures.push('revision image digest mismatch');
 if (failures.length) {
   console.error(`[FAIL] Deployed revision configuration mismatch:\n- ${failures.join('\n- ')}`);
   process.exit(1);
@@ -217,21 +236,25 @@ NODE
 append_receipt() {
   local worker="$1"
   local build_id="$2"
-  local image="$3"
-  local url="$4"
-  local revision="$5"
-  local rollback_revision="$6"
-  local image_digest="$7"
-  local rollback_image_digest="$8"
-  local rollback_source_sha="$9"
-  local secret_versions_json="${10}"
+  local image_tag="$3"
+  local immutable_image="$4"
+  local url="$5"
+  local revision="$6"
+  local rollback_revision="$7"
+  local image_digest="$8"
+  local rollback_image_digest="$9"
+  local rollback_source_sha="${10}"
+  local secret_versions_json="${11}"
+  local revision_labels="${12}"
 
-  WORKER="$worker" BUILD_ID="$build_id" IMAGE="$image" SERVICE_URL="$url" REVISION="$revision" \
-  SOURCE_SHA="$GITHUB_SHA" ROLLBACK_REVISION="$rollback_revision" ROLLBACK_SOURCE_SHA="$rollback_source_sha" \
-  IMAGE_DIGEST="$image_digest" ROLLBACK_IMAGE_DIGEST="$rollback_image_digest" \
+  WORKER="$worker" BUILD_ID="$build_id" IMAGE_TAG="$image_tag" IMAGE="$immutable_image" \
+  SERVICE_URL="$url" REVISION="$revision" SOURCE_SHA="$GITHUB_SHA" \
+  ROLLBACK_REVISION="$rollback_revision" ROLLBACK_SOURCE_SHA="$rollback_source_sha" \
+  BUILD_IMAGE_DIGEST="$image_digest" IMAGE_DIGEST="$image_digest" \
+  ROLLBACK_IMAGE_DIGEST="$rollback_image_digest" REVISION_LABELS_JSON="$revision_labels" \
   SECRET_VERSIONS_JSON="$secret_versions_json" URAI_ENV="$URAI_ENV" GCP_REGION="$GCP_REGION" \
   GCS_BUCKET_NAME="$GCS_BUCKET_NAME" WORKER_RUNTIME_SERVICE_ACCOUNT="$WORKER_RUNTIME_SERVICE_ACCOUNT" \
-  RECEIPT_TMP="$receipt_tmp" node <<'NODE'
+  DEPLOY_ROLLBACK_SHA="$DEPLOY_ROLLBACK_SHA" RECEIPT_TMP="$receipt_tmp" node <<'NODE'
 const crypto = require('node:crypto');
 const fs = require('fs');
 function stable(value) {
@@ -240,12 +263,17 @@ function stable(value) {
   return value;
 }
 const secretVersions = JSON.parse(process.env.SECRET_VERSIONS_JSON || '{}');
+const revisionLabels = JSON.parse(process.env.REVISION_LABELS_JSON || '{}');
 const configuration = {
   worker: process.env.WORKER,
   environment: process.env.URAI_ENV,
   region: process.env.GCP_REGION,
   bucket: process.env.GCS_BUCKET_NAME,
   runtimeServiceAccount: process.env.WORKER_RUNTIME_SERVICE_ACCOUNT,
+  sourceSha: process.env.SOURCE_SHA,
+  rollbackSha: process.env.DEPLOY_ROLLBACK_SHA,
+  imageDigest: process.env.IMAGE_DIGEST,
+  revisionLabels,
   secretVersions,
 };
 const configFingerprint = crypto.createHash('sha256').update(JSON.stringify(stable(configuration))).digest('hex');
@@ -254,9 +282,12 @@ const current = JSON.parse(fs.readFileSync(path, 'utf8'));
 current.push({
   worker: process.env.WORKER,
   buildId: process.env.BUILD_ID,
+  imageTag: process.env.IMAGE_TAG,
   image: process.env.IMAGE,
+  buildImageDigest: process.env.BUILD_IMAGE_DIGEST,
   serviceUrl: process.env.SERVICE_URL,
   revision: process.env.REVISION,
+  revisionLabels,
   sourceSha: process.env.SOURCE_SHA,
   rollbackRevision: process.env.ROLLBACK_REVISION,
   rollbackSourceSha: process.env.ROLLBACK_SOURCE_SHA,
@@ -275,8 +306,11 @@ NODE
 deploy_worker() {
   local worker="$1"
   local dir="workers/$worker"
-  local image="${GCP_REGION}-docker.pkg.dev/$GCLOUD_PROJECT/$ARTIFACT_REGISTRY_REPOSITORY/$worker:${GITHUB_SHA}"
+  local image_base="${GCP_REGION}-docker.pkg.dev/$GCLOUD_PROJECT/$ARTIFACT_REGISTRY_REPOSITORY/$worker"
+  local image_tag="${image_base}:${GITHUB_SHA}"
+  local immutable_image=""
   local build_id=""
+  local build_image_digest=""
   local rollback_revision=""
   local rollback_image_digest=""
   local rollback_revision_json=""
@@ -308,7 +342,8 @@ deploy_worker() {
     --project "$GCLOUD_PROJECT" \
     --region "$GCP_REGION" \
     --format='value(status.imageDigest)' 2>/dev/null || true)"
-  [[ "$rollback_image_digest" =~ (^|@)sha256:[0-9a-f]{64}$ ]] || {
+  rollback_image_digest="${rollback_image_digest#@}"
+  [[ "$rollback_image_digest" =~ $digest_pattern ]] || {
     echo "[FAIL] [$worker] Existing rollback revision lacks an immutable image digest: ${rollback_image_digest:-<empty>}" >&2
     exit 1
   }
@@ -318,10 +353,10 @@ deploy_worker() {
     exit 1
   }
 
-  echo "[INFO] [$worker] Building $image"
+  echo "[INFO] [$worker] Building $image_tag"
   build_id="$(gcloud builds submit "$dir" \
     --project "$GCLOUD_PROJECT" \
-    --tag "$image" \
+    --tag "$image_tag" \
     --async \
     --format='value(id)')"
   [ -n "$build_id" ] || {
@@ -329,6 +364,21 @@ deploy_worker() {
     exit 1
   }
   wait_for_build "$build_id" "$worker"
+
+  build_image_digest="$(gcloud builds describe "$build_id" \
+    --project "$GCLOUD_PROJECT" \
+    --format='value(results.images[0].digest)' 2>/dev/null || true)"
+  build_image_digest="${build_image_digest#@}"
+  [[ "$build_image_digest" =~ $digest_pattern ]] || {
+    echo "[FAIL] [$worker] Cloud Build result did not expose an immutable image digest: ${build_image_digest:-<empty>}" >&2
+    exit 1
+  }
+  immutable_image="${image_base}@${build_image_digest}"
+  gcloud artifacts docker images describe "$immutable_image" \
+    --project "$GCLOUD_PROJECT" >/dev/null 2>&1 || {
+    echo "[FAIL] [$worker] Cloud Build digest is not resolvable in Artifact Registry: $immutable_image" >&2
+    exit 1
+  }
 
   local worker_token_version="${SECRET_VERSION_IDS[$URAI_JOBS_WORKER_TOKEN_SECRET]}"
   local env_vars="URAI_ENV=$URAI_ENV,GCS_BUCKET_NAME=$GCS_BUCKET_NAME,URAI_SOURCE_SHA=$GITHUB_SHA,URAI_ROLLBACK_SHA=$DEPLOY_ROLLBACK_SHA"
@@ -342,10 +392,10 @@ deploy_worker() {
     exit 1
   }
 
-  echo "[INFO] [$worker] Deploying with revision-bound source identity and exact Secret Manager versions"
+  echo "[INFO] [$worker] Deploying immutable digest with revision-bound source identity and exact Secret Manager versions"
   gcloud run deploy "$worker" \
     --project "$GCLOUD_PROJECT" \
-    --image "$image" \
+    --image "$immutable_image" \
     --platform managed \
     --region "$GCP_REGION" \
     --service-account "$WORKER_RUNTIME_SERVICE_ACCOUNT" \
@@ -356,11 +406,12 @@ deploy_worker() {
     --max-instances 3 \
     --concurrency 20 \
     --timeout 300 \
+    --labels "urai-source-sha=$GITHUB_SHA,urai-environment=$URAI_ENV" \
     --set-env-vars "$env_vars" \
     --set-secrets "$secret_vars" \
     --quiet
 
-  local url revision image_digest worker_token unauthorized_code authorized_code revision_json secret_versions_json
+  local url revision image_digest worker_token unauthorized_code authorized_code revision_json secret_versions_json labels_json
   url="$(gcloud run services describe "$worker" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.url)')"
   revision="$(gcloud run services describe "$worker" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.latestReadyRevisionName)')"
   [[ "$revision" == "$worker-"* ]] || {
@@ -372,14 +423,20 @@ deploy_worker() {
     exit 1
   }
   image_digest="$(gcloud run revisions describe "$revision" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.imageDigest)' 2>/dev/null || true)"
-  [[ "$image_digest" =~ (^|@)sha256:[0-9a-f]{64}$ ]] || {
+  image_digest="${image_digest#@}"
+  [[ "$image_digest" =~ $digest_pattern ]] || {
     echo "[FAIL] [$worker] Immutable image digest is missing or invalid for revision $revision: ${image_digest:-<empty>}" >&2
+    exit 1
+  }
+  [ "$image_digest" = "$build_image_digest" ] || {
+    echo "[FAIL] [$worker] Deployed revision digest $image_digest does not match Cloud Build digest $build_image_digest" >&2
     exit 1
   }
 
   secret_versions_json="$(build_secret_versions_json "$worker")"
   revision_json="$(gcloud run revisions describe "$revision" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format=json)"
-  verify_revision_configuration "$revision_json" "$secret_versions_json"
+  verify_revision_configuration "$revision_json" "$secret_versions_json" "$build_image_digest"
+  labels_json="$(revision_labels_json "$revision_json")"
   worker_token="$(gcloud secrets versions access "$worker_token_version" --secret "$URAI_JOBS_WORKER_TOKEN_SECRET" --project "$GCLOUD_PROJECT")"
 
   curl --fail-with-body --retry 6 --retry-delay 5 "$url/healthz" >/dev/null
@@ -394,8 +451,9 @@ deploy_worker() {
     exit 1
   }
 
-  append_receipt "$worker" "$build_id" "$image" "$url" "$revision" "$rollback_revision" "$image_digest" "$rollback_image_digest" "$rollback_source_sha" "$secret_versions_json"
-  echo "[PASS] [$worker] deployed with source-bound rollback, pinned secrets, and auth probes: $url"
+  append_receipt "$worker" "$build_id" "$image_tag" "$immutable_image" "$url" "$revision" "$rollback_revision" \
+    "$image_digest" "$rollback_image_digest" "$rollback_source_sha" "$secret_versions_json" "$labels_json"
+  echo "[PASS] [$worker] deployed immutable digest with source-bound rollback, revision labels, pinned secrets, and auth probes: $url"
 }
 
 for worker in "${WORKERS[@]}"; do
@@ -411,7 +469,7 @@ WORKER_RUNTIME_SERVICE_ACCOUNT="$WORKER_RUNTIME_SERVICE_ACCOUNT" node <<'NODE'
 const fs = require('fs');
 const services = JSON.parse(fs.readFileSync(process.env.RECEIPT_TMP, 'utf8'));
 const receipt = {
-  schemaVersion: 'urai-jobs-worker-deploy-receipt-2',
+  schemaVersion: 'urai-jobs-worker-deploy-receipt-3',
   generatedAt: new Date().toISOString(),
   repository: process.env.GITHUB_REPOSITORY,
   branch: process.env.GITHUB_REF_NAME || null,
