@@ -57,7 +57,7 @@ jobs:
       - name: Install exact workspace dependency graph
         run: pnpm install --frozen-lockfile
 
-      - name: Prove installs preserved exact source
+      - name: Prove install preserved exact source
         shell: bash
         run: test -z "$(git status --porcelain --untracked-files=all)"
 
