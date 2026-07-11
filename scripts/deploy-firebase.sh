@@ -139,7 +139,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const hashFile = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const receipt = {
-  schemaVersion: 'urai-jobs-firebase-deploy-config-2',
+  schemaVersion: 'urai-jobs-firebase-deploy-config-1',
   generatedAt: new Date().toISOString(),
   repository: process.env.GITHUB_REPOSITORY || 'LifeLoggerAI/urai-jobs',
   workflowRunId: process.env.GITHUB_RUN_ID || null,
