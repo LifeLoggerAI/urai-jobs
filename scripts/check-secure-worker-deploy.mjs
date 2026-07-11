@@ -29,27 +29,42 @@ requireText('scripts/deploy-workers.sh', '--service-account "$WORKER_RUNTIME_SER
 requireText('scripts/deploy-workers.sh', "--filter='state=ENABLED'", 'worker deploy must resolve enabled Secret Manager versions');
 requireText('scripts/deploy-workers.sh', 'Mutable Secret Manager aliases are forbidden', 'worker deploy must reject mutable secret aliases');
 rejectText('scripts/deploy-workers.sh', ':latest', 'worker deploy must not bind revisions to latest secret aliases');
+requireText('scripts/deploy-workers.sh', 'gcloud builds describe "$build_id"', 'worker deploy must read immutable Cloud Build results');
+requireText('scripts/deploy-workers.sh', 'value(results.images[0].digest)', 'worker deploy must bind the image digest emitted by Cloud Build');
+requireText('scripts/deploy-workers.sh', 'gcloud artifacts docker images describe "$immutable_image"', 'worker deploy must resolve the build digest in Artifact Registry');
+requireText('scripts/deploy-workers.sh', '--image "$immutable_image"', 'worker deploy must deploy by immutable digest rather than mutable tag');
+requireText('scripts/deploy-workers.sh', '--labels "urai-source-sha=$GITHUB_SHA,urai-environment=$URAI_ENV"', 'deployed revision must carry source and environment labels');
 requireText('scripts/deploy-workers.sh', 'verify_revision_configuration', 'worker deploy must verify observed revision configuration');
-requireText('scripts/deploy-workers.sh', 'URAI_SOURCE_SHA=$GITHUB_SHA,URAI_ROLLBACK_SHA=$DEPLOY_ROLLBACK_SHA', 'source and rollback identity must be revision-bound environment values');
-requireText('scripts/deploy-workers.sh', 'revision source SHA mismatch', 'new runtime revision must bind exact source SHA');
-requireText('scripts/deploy-workers.sh', 'revision rollback SHA mismatch', 'new runtime revision must bind approved rollback SHA');
+requireText('scripts/deploy-workers.sh', 'revision source SHA label mismatch', 'new runtime revision must bind exact source SHA label');
+requireText('scripts/deploy-workers.sh', 'revision environment label mismatch', 'new runtime revision must bind environment label');
+requireText('scripts/deploy-workers.sh', 'revision image digest mismatch', 'new runtime revision must bind Cloud Build digest');
+requireText('scripts/deploy-workers.sh', 'Deployed revision digest', 'observed revision digest must equal Cloud Build digest');
 requireText('scripts/deploy-workers.sh', 'Runtime rollback revision source SHA', 'runtime rollback must match approved repository rollback SHA');
 requireText('scripts/deploy-workers.sh', 'Canonical staging and production deployment require an existing runtime rollback revision', 'all canonical deployments require runtime rollback authority');
 requireText('scripts/deploy-workers.sh', 'rollbackImageDigest', 'worker receipt must record rollback image digest');
+requireText('scripts/deploy-workers.sh', 'buildImageDigest', 'worker receipt must record Cloud Build digest separately');
+requireText('scripts/deploy-workers.sh', 'revisionLabels', 'worker receipt must record observed revision labels');
 requireText('scripts/deploy-workers.sh', 'Deployment did not create a revision distinct from rollback', 'new revision must differ from rollback');
 requireText('scripts/deploy-workers.sh', 'Existing rollback revision lacks an immutable image digest', 'rollback revision must have immutable image provenance');
-requireText('scripts/deploy-workers.sh', 'Immutable image digest is missing or invalid', 'new revision must have immutable image provenance');
-requireText('scripts/deploy-workers.sh', "schemaVersion: 'urai-jobs-worker-deploy-receipt-2'", 'worker deploy must emit hardened receipt schema');
+requireText('scripts/deploy-workers.sh', 'Cloud Build result did not expose an immutable image digest', 'build must expose immutable provenance');
+requireText('scripts/deploy-workers.sh', "schemaVersion: 'urai-jobs-worker-deploy-receipt-3'", 'worker deploy must emit hardened receipt schema');
 requireText('scripts/deploy-workers.sh', 'validate-worker-deploy-receipt.mjs', 'worker deploy must validate completed receipt');
 requireText('scripts/deploy-workers.sh', 'unauthorized auth probe returned', 'worker deploy must prove unauthorized rejection');
 requireText('scripts/deploy-workers.sh', 'authorized auth probe returned', 'worker deploy must prove authorized access');
 
+requireText('scripts/validate-worker-deploy-receipt.mjs', 'imageTag', 'validator must bind exact source tag separately');
+requireText('scripts/validate-worker-deploy-receipt.mjs', 'buildImageDigest', 'validator must bind Cloud Build and revision digests');
+requireText('scripts/validate-worker-deploy-receipt.mjs', 'immutable digest reference', 'validator must reject mutable image references');
+requireText('scripts/validate-worker-deploy-receipt.mjs', 'revisionLabels', 'validator must bind observed revision labels');
 requireText('scripts/validate-worker-deploy-receipt.mjs', 'secretVersions', 'validator must require pinned secret versions');
 requireText('scripts/validate-worker-deploy-receipt.mjs', 'must not use latest', 'validator must reject mutable aliases');
 requireText('scripts/validate-worker-deploy-receipt.mjs', 'rollbackSourceSha must equal rollbackSha', 'validator must bind runtime rollback to approved SHA');
 requireText('scripts/validate-worker-deploy-receipt.mjs', 'rollbackImageDigest must bind the rollback revision', 'validator must bind rollback image provenance');
 requireText('scripts/validate-worker-deploy-receipt.mjs', 'rollbackRevision must differ from revision', 'validator must reject same revision and rollback');
 requireText('scripts/validate-worker-deploy-receipt.mjs', 'configFingerprint does not match the canonical configuration', 'validator must recompute configuration identity');
+requireText('scripts/validate-worker-deploy-receipt.mjs', 'mutable tag-only image', 'validator self-test must reject tag-only deployment evidence');
+requireText('scripts/validate-worker-deploy-receipt.mjs', 'build and revision digest mismatch', 'validator self-test must reject digest mismatch');
+requireText('scripts/validate-worker-deploy-receipt.mjs', 'revision source label mismatch', 'validator self-test must reject label mismatch');
 
 requireText('package.json', 'bash scripts/verify-deploy-authority.sh', 'worker deployment must run through immutable authority verification');
 requireText('package.json', 'GITHUB_SHA="$DEPLOY_SOURCE_SHA"', 'verified source SHA must bind image tags and receipts');
@@ -106,7 +121,7 @@ if (failures.length > 0) {
 
 console.log('[PASS] secure worker deployment contract');
 console.log('[PASS] canonical deployment authority: .github/workflows/urai-jobs-production-deploy.yml');
-console.log('[PASS] exact source, revision-bound rollback source, pinned secrets, and ancestor rollback authority required');
+console.log('[PASS] exact source, immutable Cloud Build digest, revision labels, pinned secrets, and ancestor rollback authority required');
 console.log('[PASS] current and rollback revisions bind immutable image digests');
 console.log('[PASS] implicit billable infrastructure creation blocked');
 console.log('[PASS] production workers: narrator-worker, asset-worker');
