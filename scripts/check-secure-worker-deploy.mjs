@@ -123,18 +123,34 @@ for (const [text, description] of [
   ["schemaVersion: 'urai-jobs-firebase-deploy-config-1'", 'Firebase deploy must emit a runtime configuration receipt'],
   ['firebaseConfigSha256', 'Firebase receipt must hash effective Firebase configuration'],
   ['functionsEnvSha256', 'Firebase receipt must hash effective functions environment'],
+  ['URAI_BUILD_SHA=${DEPLOY_SOURCE_SHA}', 'Firebase functions must receive the exact source SHA'],
+  ["{ source: '/api/buildinfo', function: 'buildInfo' }", 'temporary Hosting config must expose build identity'],
+  ["buildInfoPath: '/api/buildinfo'", 'Firebase receipt must record build identity path'],
+  ['buildInfoExpectedSha: process.env.DEPLOY_SOURCE_SHA', 'Firebase receipt must record expected runtime SHA'],
+  ['runtimeIdentityVerified: false', 'mutation receipt must not self-certify public runtime identity'],
   ['secretValuesIncluded: false', 'Firebase receipt must explicitly exclude secret values'],
   ['assert_only_evidence_residue', 'Firebase deploy must verify cleanup residue'],
   ['Firebase deployment left unexpected repository changes', 'Firebase deploy must fail on source residue'],
   ['trap - EXIT', 'Firebase deploy must disable the cleanup trap only after explicit cleanup'],
-  ['with only release evidence remaining in the worktree', 'Firebase deploy must record successful cleanup proof'],
+  ['public runtime identity verification is still required', 'Firebase deploy must preserve the two-phase completion boundary'],
 ]) requireText('scripts/deploy-firebase.sh', text, description);
 rejectText('scripts/deploy-firebase.sh', 'pnpm prod:precheck', 'credentialed Firebase deploy must not run production precheck');
 rejectText('scripts/deploy-firebase.sh', 'pnpm --filter', 'credentialed Firebase deploy must not rebuild source');
 rejectText('scripts/deploy-firebase.sh', 'WEBHOOK_SIGNING_SECRET=', 'secrets must not enter functions/.env');
 rejectText('scripts/deploy-firebase.sh', 'set_hosting_site_in_firebase_json', 'Firebase deploy must not edit tracked firebase.json');
+rejectText('scripts/deploy-firebase.sh', 'runtimeIdentityVerified: true', 'mutation receipt must not claim public identity verification');
 
 for (const [path, text, description] of [
+  ['functions/src/system/buildInfo.ts', "schemaVersion: 'urai-jobs-build-info-1'", 'build-info endpoint must expose a versioned schema'],
+  ['functions/src/system/buildInfo.ts', 'process.env.URAI_BUILD_SHA', 'build-info endpoint must report source SHA'],
+  ['functions/src/system/buildInfo.ts', 'process.env.URAI_ENV', 'build-info endpoint must report environment'],
+  ['functions/src/system/buildInfo.ts', 'process.env.FIREBASE_PROJECT_ID', 'build-info endpoint must report project'],
+  ['functions/src/index.ts', 'export { buildInfo } from "./system/buildInfo.js";', 'build-info endpoint must be exported'],
+  ['scripts/verify-custom-domains.mjs', '`${base}/api/buildinfo`', 'public verifier must call build-info endpoint'],
+  ['scripts/verify-custom-domains.mjs', 'buildInfo?.sourceSha === expectedSha', 'public verifier must require exact source SHA'],
+  ['scripts/verify-custom-domains.mjs', 'buildInfo?.environment === expectedEnvironment', 'public verifier must require exact environment'],
+  ['scripts/verify-custom-domains.mjs', 'buildInfo?.projectId === projectId', 'public verifier must require exact project'],
+  ['scripts/verify-custom-domains.mjs', 'result.ok && result.hasAppShell && result.identityMatches', 'public verifier must combine app-shell and runtime identity'],
   ['scripts/validate-worker-deploy-receipt.mjs', 'buildImageDigest', 'validator must bind build and revision digests'],
   ['scripts/validate-worker-deploy-receipt.mjs', 'secretVersions', 'validator must require numeric secret versions'],
   ['scripts/validate-worker-deploy-receipt.mjs', 'must not use latest', 'validator must reject latest aliases'],
@@ -267,6 +283,7 @@ console.log('[PASS] protected worker mutation starts from clean exact source wit
 console.log('[PASS] target and rollback secret versions are approval-bound and receipt-verified');
 console.log('[PASS] Firebase artifact verifies externally and after materialization');
 console.log('[PASS] Firebase deploy cleans temporary source changes and leaves only release evidence');
+console.log('[PASS] Firebase mutation receipt remains non-certifying until public exact-runtime verification');
 console.log('[PASS] cloud credentials are destroyed before evidence handoff');
-console.log('[PASS] public verification and outcome-exact receipts run without cloud identity');
+console.log('[PASS] public verification requires exact Firebase SHA, environment, project and app shell');
 console.log('[PASS] canonical deployment can execute zero paid provider calls');
