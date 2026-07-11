@@ -7,26 +7,52 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+env:
+  TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   verify:
     name: Verify workspace and launch lock
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout exact reviewed head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove exact clean head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 8.15.9
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - name: Install
-        run: pnpm install --no-frozen-lockfile
+
+      - name: Install exact dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove install preserved exact source
+        shell: bash
+        run: test -z "$(git status --porcelain --untracked-files=all)"
+
       - name: Verify URAI Jobs contracts
         run: pnpm urai-jobs:verify
+
       - name: Verify legal routes and launch lock
         run: |
           test -f verification/launch-lock.json
@@ -47,21 +73,41 @@ jobs:
     name: Web typecheck and build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout exact reviewed head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove exact clean head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 8.15.9
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - name: Install
-        run: pnpm install --no-frozen-lockfile
+
+      - name: Install exact dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove install preserved exact source
+        shell: bash
+        run: test -z "$(git status --porcelain --untracked-files=all)"
+
       - name: Typecheck web
         run: pnpm --dir web typecheck
+
       - name: Build web
         run: pnpm --dir web build
 
@@ -69,21 +115,41 @@ jobs:
     name: Functions build and tests
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout exact reviewed head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove exact clean head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 8.15.9
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - name: Install
-        run: pnpm install --no-frozen-lockfile
+
+      - name: Install exact dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove install preserved exact source
+        shell: bash
+        run: test -z "$(git status --porcelain --untracked-files=all)"
+
       - name: Build functions
         run: pnpm --filter urai-jobs-functions build
+
       - name: Test functions
         run: pnpm --filter urai-jobs-functions test
 
@@ -91,12 +157,25 @@ jobs:
     name: Firebase config smoke
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout exact reviewed head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove exact clean head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
       - name: Validate Firebase JSON
         run: |
           python -m json.tool firebase.json > /dev/null
           python -m json.tool firestore.indexes.json > /dev/null
+
       - name: Verify Firebase deployment config
         run: |
           grep -q "nodejs22" firebase.json
