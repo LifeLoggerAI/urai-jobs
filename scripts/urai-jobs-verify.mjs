@@ -60,6 +60,7 @@ const adminFns = read("functions/src/jobs/admin.ts");
 const adminFnsV2 = read("functions/src/jobs/admin-v2.ts");
 const cancelFn = read("functions/src/jobs/cancelJob.ts");
 const createJob = read("functions/src/jobs/createJob.ts");
+const getJobStatus = read("functions/src/jobs/getJobStatus.ts");
 const executeJob = read("functions/src/jobs/executeJob.ts");
 const workerHandler = read("workers/narrator-worker/src/handlers/index.ts");
 const narratorTts = read("workers/narrator-worker/src/handlers/narrator-tts.ts");
@@ -73,6 +74,9 @@ check("backend cancelJob exists", cancelFn.includes("cancelJob") || adminFns.inc
 
 check("createJob writes canonical type", createJob.includes("type: jobType"));
 check("createJob writes compatibility jobType", createJob.includes("jobType: jobType") || createJob.includes("jobType,"));
+check("getJobStatus binds owner reads to Firebase Auth UID", getJobStatus.includes("const authenticatedUid = context.auth?.uid"));
+check("getJobStatus compares owner to authenticated UID", getJobStatus.includes("job.ownerUid !== authenticatedUid"));
+check("getJobStatus does not trust mutable profile UID", !getJobStatus.includes("job.ownerUid !== user.uid"));
 check("executeJob posts to narrator /execute-job", executeJob.includes("/execute-job"));
 check("executeJob does not post to stale /execute route", !executeJob.includes("${NARRATOR_WORKER_URL}/execute`"));
 check("worker handler resolves type or jobType", workerHandler.includes("job.type") && workerHandler.includes("job.jobType"));
