@@ -1,12 +1,39 @@
 // URAI-JOBS: System Reconciliation (Retry, Dead-letter, Lease Recovery)
-// Version: 1.0.0
+// Version: 1.1.0
 
 import * as functions from 'firebase-functions/v1';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { jobDoc, jobQueueCollection, jobQueueEntryDoc, jobsCollection } from '../core/firestore-paths.js';
 
 const MAX_RETRIES = 3;
-const LEASE_STALE_MINUTES = 10; // When a RUNNING job is considered stale
+const LEASE_STALE_MINUTES = 10;
+
+function timestampMillis(value: unknown): number | null {
+  if (value instanceof Date) return value.getTime();
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toMillis' in value &&
+    typeof (value as { toMillis?: unknown }).toMillis === 'function'
+  ) {
+    const millis = (value as { toMillis: () => number }).toMillis();
+    return Number.isFinite(millis) ? millis : null;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const millis = new Date(value).getTime();
+    return Number.isFinite(millis) ? millis : null;
+  }
+  return null;
+}
+
+function protectedAsyncCallbackPending(job: Record<string, unknown>, nowMillis: number): boolean {
+  const execution = job.execution && typeof job.execution === 'object'
+    ? job.execution as Record<string, unknown>
+    : {};
+  if (execution.asyncCallbackPending !== true) return false;
+  const deadlineMillis = timestampMillis(execution.callbackDeadlineAt);
+  return deadlineMillis !== null && deadlineMillis > nowMillis;
+}
 
 /**
  * Resets a job to PENDING or moves it to the DEAD state if retries are exhausted.
@@ -24,7 +51,12 @@ async function _resetOrDeadLetterJob(db: FirebaseFirestore.Firestore, jobId: str
       return;
     }
 
-    const retryCount = jobData.retryCount || 0;
+    if (protectedAsyncCallbackPending(jobData, Date.now())) {
+      console.log(`Skipping stale-runner recovery for ${jobId}: an unexpired asynchronous callback lease is pending.`);
+      return;
+    }
+
+    const retryCount = Number(jobData.retryCount || 0);
 
     if (retryCount >= MAX_RETRIES) {
       console.warn(`Job ${jobId} has exhausted all retries. Moving to DEAD state. Reason: ${reason}`);
@@ -37,6 +69,10 @@ async function _resetOrDeadLetterJob(db: FirebaseFirestore.Firestore, jobId: str
         status: 'DEAD',
         updatedAt: FieldValue.serverTimestamp(),
         lease: FieldValue.delete(),
+        'execution.asyncCallbackPending': false,
+        'execution.callbackTokenHash': FieldValue.delete(),
+        'execution.callbackLeaseToken': FieldValue.delete(),
+        'execution.callbackDeadlineAt': FieldValue.delete(),
         result,
       });
       transaction.update(queueRef, {
@@ -51,6 +87,10 @@ async function _resetOrDeadLetterJob(db: FirebaseFirestore.Firestore, jobId: str
         updatedAt: FieldValue.serverTimestamp(),
         retryCount: FieldValue.increment(1),
         lease: FieldValue.delete(),
+        'execution.asyncCallbackPending': false,
+        'execution.callbackTokenHash': FieldValue.delete(),
+        'execution.callbackLeaseToken': FieldValue.delete(),
+        'execution.callbackDeadlineAt': FieldValue.delete(),
       });
       transaction.update(queueRef, {
         status: 'PENDING',
@@ -82,11 +122,12 @@ async function reconcileExpiredLeases(db: FirebaseFirestore.Firestore): Promise<
 }
 
 /**
- * Finds RUNNING jobs with stale heartbeats and resets them.
+ * Finds RUNNING jobs with stale heartbeats and resets them, except for an
+ * explicitly deadline-bound asynchronous callback attempt.
  */
 async function reconcileStaleRunners(db: FirebaseFirestore.Firestore): Promise<void> {
-  const staleThreshold = Timestamp.fromMillis(Date.now() - LEASE_STALE_MINUTES * 60 * 1000);
-  // NOTE: This query requires a composite index on (status, lease.heartbeatAt)
+  const nowMillis = Date.now();
+  const staleThreshold = Timestamp.fromMillis(nowMillis - LEASE_STALE_MINUTES * 60 * 1000);
   const query = jobsCollection()
     .where('status', '==', 'RUNNING')
     .where('lease.heartbeatAt', '<', staleThreshold);
@@ -94,8 +135,15 @@ async function reconcileStaleRunners(db: FirebaseFirestore.Firestore): Promise<v
   const snapshot = await query.get();
   if (snapshot.empty) return;
 
-  console.log(`Found ${snapshot.size} jobs with stale heartbeats.`);
-  const promises = snapshot.docs.map(doc =>
+  const recoverable = snapshot.docs.filter((doc) => !protectedAsyncCallbackPending(doc.data(), nowMillis));
+  const protectedCount = snapshot.size - recoverable.length;
+  if (protectedCount > 0) {
+    console.log(`Protected ${protectedCount} asynchronous job(s) with unexpired callback deadlines from stale-runner recovery.`);
+  }
+  if (recoverable.length === 0) return;
+
+  console.log(`Found ${recoverable.length} recoverable job(s) with stale heartbeats.`);
+  const promises = recoverable.map(doc =>
     _resetOrDeadLetterJob(db, doc.id, 'Heartbeat stale').catch(e => console.error(`Error reconciling heartbeat for job ${doc.id}`, e))
   );
   await Promise.all(promises);
@@ -104,7 +152,7 @@ async function reconcileStaleRunners(db: FirebaseFirestore.Firestore): Promise<v
 /**
  * A scheduled function that runs periodically to find and fix stuck jobs.
  */
-export const systemReconcile = functions.pubsub.schedule('every 5 minutes').onRun(async (context) => {
+export const systemReconcile = functions.pubsub.schedule('every 5 minutes').onRun(async () => {
   console.log('Starting system reconciliation...');
   const db = getFirestore();
 
