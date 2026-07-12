@@ -1,5 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { PubSub } from '@google-cloud/pubsub';
 import { ulid } from 'ulid';
 import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/shared-types';
@@ -7,6 +7,7 @@ import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { canRequeueUnstartedLease, isTerminalJobStatus } from './executionGuards.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
+const MAX_DISPATCH_RETRIES = 3;
 const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
 const LEASE_DURATION_MS = 60 * 1000;
 const PUBLISH_RETRY_BACKOFF_MS = 5 * 1000;
@@ -92,6 +93,36 @@ async function compensatePublishFailure(
     const normalizedRetryCount = Number.isInteger(currentRetryCount) && currentRetryCount >= 0
       ? currentRetryCount
       : 0;
+
+    if (normalizedRetryCount >= MAX_DISPATCH_RETRIES) {
+      const terminalError = `Pub/Sub publish failed after ${MAX_DISPATCH_RETRIES + 1} dispatch attempts: ${message}`;
+      transaction.update(jobRef, {
+        status: 'DEAD',
+        retryCount: normalizedRetryCount,
+        lease: FieldValue.delete(),
+        updatedAt: now,
+        completedAt: now,
+        result: {
+          status: 'DEAD',
+          error: { message: terminalError },
+          finishedAt: Timestamp.now(),
+        },
+        'dispatch.recoveryCount': FieldValue.increment(1),
+        'dispatch.recoveredAt': now,
+        'dispatch.lastError': terminalError,
+      });
+      transaction.update(queueRef, {
+        status: 'DEAD',
+        retryCount: normalizedRetryCount,
+        lease: FieldValue.delete(),
+        updatedAt: now,
+        'dispatch.recoveryCount': FieldValue.increment(1),
+        'dispatch.recoveredAt': now,
+        'dispatch.lastError': terminalError,
+      });
+      return 'dead-retries-exhausted';
+    }
+
     const nextRetryCount = normalizedRetryCount + 1;
     const availableAt = new Date(
       Date.now() + PUBLISH_RETRY_BACKOFF_MS * Math.min(nextRetryCount, 12),
