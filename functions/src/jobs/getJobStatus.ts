@@ -9,10 +9,15 @@ const GetJobStatusSchema = z.object({
   jobId: z.string().min(1),
 });
 
-async function handler(data: unknown, _context: CallableContext, user: User) {
+async function handler(data: unknown, context: CallableContext, user: User) {
   const validationResult = GetJobStatusSchema.safeParse(data);
   if (!validationResult.success) {
     throw httpsError('invalid-argument', 'Invalid data.', validationResult.error.flatten());
+  }
+
+  const authenticatedUid = context.auth?.uid;
+  if (!authenticatedUid) {
+    throw httpsError('unauthenticated', 'User must be authenticated.');
   }
 
   const { jobId } = validationResult.data;
@@ -28,7 +33,7 @@ async function handler(data: unknown, _context: CallableContext, user: User) {
   }
 
   const canReadAny = user.role === 'admin' || user.role === 'operator';
-  if (!canReadAny && job.ownerUid !== user.uid) {
+  if (!canReadAny && job.ownerUid !== authenticatedUid) {
     throw httpsError('permission-denied', 'You do not have permission to view this job.');
   }
 
