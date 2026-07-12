@@ -66,6 +66,7 @@ const workerHandler = read("workers/narrator-worker/src/handlers/index.ts");
 const narratorTts = read("workers/narrator-worker/src/handlers/narrator-tts.ts");
 const createJobPage = read("web/src/pages/CreateJobPage.tsx");
 const index = read("functions/src/index.ts");
+const firestoreRules = read("firestore.rules");
 
 check("backend listJobs exists", adminFns.includes("listJobs") || index.includes("listJobs"));
 check("backend retryJob exists", adminFns.includes("retryJob") || index.includes("retryJob"));
@@ -77,6 +78,7 @@ check("createJob writes compatibility jobType", createJob.includes("jobType: job
 check("getJobStatus binds owner reads to Firebase Auth UID", getJobStatus.includes("const authenticatedUid = context.auth?.uid"));
 check("getJobStatus compares owner to authenticated UID", getJobStatus.includes("job.ownerUid !== authenticatedUid"));
 check("getJobStatus does not trust mutable profile UID", !getJobStatus.includes("job.ownerUid !== user.uid"));
+check("Firestore profile updates cannot mutate embedded uid", firestoreRules.includes("request.resource.data.get('uid', null) == resource.data.get('uid', null)"));
 check("executeJob posts to narrator /execute-job", executeJob.includes("/execute-job"));
 check("executeJob does not post to stale /execute route", !executeJob.includes("${NARRATOR_WORKER_URL}/execute`"));
 check("worker handler resolves type or jobType", workerHandler.includes("job.type") && workerHandler.includes("job.jobType"));
