@@ -23,7 +23,8 @@ service cloud.firestore {
       return request.resource.data.role == resource.data.role
         && request.resource.data.orgId == resource.data.orgId
         && request.resource.data.permissions == resource.data.permissions
-        && request.resource.data.disabled == resource.data.disabled;
+        && request.resource.data.disabled == resource.data.disabled
+        && request.resource.data.get('uid', null) == resource.data.get('uid', null);
     }
 
     match /users/{uid} {
