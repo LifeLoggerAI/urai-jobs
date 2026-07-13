@@ -32,7 +32,8 @@ for (const path of requiredWorkflows) {
   requireText(path, source, 'contents: read', 'workflow must use read-only repository contents permission');
   requireText(path, source, 'TARGET_SHA:', 'workflow must resolve an exact source SHA');
   requireText(path, source, 'ref: ${{ env.TARGET_SHA }}', 'workflow must checkout the resolved exact source SHA');
-  requireText(path, source, 'fetch-depth: 0', 'workflow must fetch complete history for source identity and rollback checks');
+  requireText(path, source, 'fetch-depth: 1', 'workflow must fetch only the exact reviewed source SHA');
+  rejectText(path, source, 'fetch-depth: 0', 'full-history checkout is forbidden in required PR evidence workflows');
   requireText(path, source, 'persist-credentials: false', 'workflow must not persist checkout credentials');
   requireText(path, source, 'test "$(git rev-parse HEAD)" = "$TARGET_SHA"', 'workflow must prove checked-out source identity');
   requireText(path, source, 'git status --porcelain --untracked-files=all', 'workflow must prove a clean source tree');
@@ -43,13 +44,12 @@ for (const path of requiredWorkflows) {
 
   const concurrencyMatch = source.match(/\nconcurrency:\n([\s\S]*?)(?=\nenv:|\njobs:)/);
   if (!concurrencyMatch) {
-    failures.push(`${path}: workflow must define PR/ref-scoped concurrency`);
+    failures.push(`${path}: workflow must define PR/ref-and-SHA-scoped concurrency`);
   } else {
     const concurrency = concurrencyMatch[0];
-    requireText(path, concurrency, 'github.event.pull_request.number || github.ref', 'concurrency must collapse superseded runs for the same PR or ref');
+    requireText(path, concurrency, 'github.event.pull_request.number || github.ref', 'concurrency must identify the PR or ref');
+    requireText(path, concurrency, 'github.event.pull_request.head.sha || github.sha', 'concurrency must isolate evidence by exact reviewed SHA');
     requireText(path, concurrency, 'cancel-in-progress: true', 'superseded runs must be cancelled');
-    rejectText(path, concurrency, 'github.event.pull_request.head.sha', 'concurrency must not preserve one group per commit SHA');
-    rejectText(path, concurrency, 'github.sha', 'concurrency must not preserve one group per commit SHA');
   }
 
   if (source.includes('pnpm install')) {
@@ -102,6 +102,6 @@ if (failures.length > 0) {
 }
 
 console.log(`[PASS] exact-head CI evidence contract: ${requiredWorkflows.length} workflows`);
-console.log('[PASS] exact source checkout, clean tree, frozen dependencies, read-only checkout credentials');
-console.log('[PASS] PR/ref concurrency cancels superseded runs without weakening exact-head evidence');
+console.log('[PASS] shallow exact source checkout, clean tree, frozen dependencies, read-only checkout credentials');
+console.log('[PASS] PR/ref and exact-SHA concurrency cancel superseded runs without mixing evidence');
 console.log('[PASS] emulator CLI version pinned: firebase-tools 15.23.0');
