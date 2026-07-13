@@ -65,7 +65,14 @@ jobs:
       - name: Verify
         run: node scripts/urai-production-verify.mjs
 
-      - name: Prove final clean tree
+      - name: Reject tracked mutation and remove generated output
         if: always()
         shell: bash
-        run: test -z "$(git status --porcelain --untracked-files=all)"
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git diff --exit-code
+          git diff --cached --exit-code
+          git status --short --untracked-files=all
+          git clean -fdx
+          test -z "$(git status --porcelain --untracked-files=all)"
