@@ -38,9 +38,13 @@ jobs:
           set +e
           set -o pipefail
           checkout_log="$RUNNER_TEMP/urai-jobs-checkout-diagnostics.log"
+          checkout_home="$RUNNER_TEMP/urai-jobs-checkout-home"
           rm -f -- "$checkout_log"
+          rm -rf -- "$checkout_home"
+          mkdir -m 700 -- "$checkout_home"
           {
             set -euo pipefail
+            export HOME="$checkout_home"
             find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
             gh auth setup-git >/dev/null
             git init .
@@ -49,7 +53,8 @@ jobs:
             git checkout --detach --force "$TARGET_SHA"
             test "$(git rev-parse HEAD)" = "$TARGET_SHA"
             git remote set-url origin "https://github.com/$GITHUB_REPOSITORY"
-            git config --local --unset-all http.https://github.com/.extraheader || true
+            rm -rf -- "$checkout_home"
+            test -z "$(git status --porcelain --untracked-files=all)"
           } 2>&1 | tee "$checkout_log"
           status=${PIPESTATUS[0]}
           echo "status=$status" >> "$GITHUB_OUTPUT"
@@ -122,5 +127,8 @@ jobs:
           rm -rf artifacts
           if git rev-parse --git-dir >/dev/null 2>&1; then
             test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+            git diff --exit-code
+            git diff --cached --exit-code
+            git clean -fdx
             test -z "$(git status --porcelain --untracked-files=all)"
           fi
