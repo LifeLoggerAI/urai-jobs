@@ -152,6 +152,49 @@ async function compensatePublishFailure(
   });
 }
 
+async function recordDispatchPublished(
+  db: ReturnType<typeof getFirestore>,
+  jobId: string,
+  leaseToken: string,
+): Promise<string> {
+  return db.runTransaction(async (transaction) => {
+    const queueRef = jobQueueEntryDoc(jobId);
+    const jobRef = jobDoc(jobId);
+    const [queueSnapshot, jobSnapshot] = await Promise.all([
+      transaction.get(queueRef),
+      transaction.get(jobRef),
+    ]);
+
+    if (!queueSnapshot.exists || !jobSnapshot.exists) return 'missing-state';
+
+    const current = jobSnapshot.data() as Job;
+    const queueEntry = queueSnapshot.data() as JobQueueEntry;
+    if (current.status === 'RUNNING') {
+      return 'already-running';
+    }
+    if (
+      current.lease?.leaseToken !== leaseToken ||
+      queueEntry.lease?.leaseToken !== leaseToken
+    ) {
+      return 'superseded-lease';
+    }
+    if (current.status !== 'LEASED' || queueEntry.status !== 'LEASED') {
+      return 'state-changed';
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const receipt = {
+      'dispatch.publishedAt': now,
+      'dispatch.topic': JOB_EXECUTION_TOPIC,
+      'dispatch.leaseToken': leaseToken,
+      updatedAt: now,
+    };
+    transaction.update(jobRef, receipt);
+    transaction.update(queueRef, receipt);
+    return 'recorded';
+  });
+}
+
 export const processQueueTick = onSchedule('every 1 minutes', async () => {
   const db = getFirestore();
   const tickWorkerId = `tick-${ulid()}`;
@@ -229,7 +272,10 @@ export const processQueueTick = onSchedule('every 1 minutes', async () => {
       await pubsub.topic(JOB_EXECUTION_TOPIC).publishMessage({
         json: { jobId, leaseToken },
       });
-      console.log(`[${tickWorkerId}] Published execution message for job ${jobId}.`);
+      const receiptOutcome = await recordDispatchPublished(db, jobId, leaseToken);
+      console.log(
+        `[${tickWorkerId}] Published execution message for job ${jobId}; receipt outcome: ${receiptOutcome}.`,
+      );
     } catch (error) {
       const outcome = await compensatePublishFailure(db, jobId, leaseToken, error);
       console.error(
