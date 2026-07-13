@@ -25,7 +25,8 @@ function requireWorkerAuth(req: Request, res: Response, next: NextFunction) {
 
   if (!expectedToken && localBypass) return next();
   if (!expectedToken) return res.status(503).send({ ok: false, error: 'worker auth is not configured' });
-  if (!timingSafeTokenMatch(req.get('authorization') || '', expectedToken)) {
+  const authorization = req.get('Authorization') || '';
+  if (!timingSafeTokenMatch(authorization, expectedToken)) {
     return res.status(401).send({ ok: false, error: 'unauthorized' });
   }
   return next();
@@ -41,6 +42,15 @@ app.get('/healthz', (_req, res) => {
     ok: true,
     implementationReady: false,
     authConfigured: Boolean(process.env.URAI_JOBS_WORKER_TOKEN),
+  });
+});
+
+app.get('/authz', requireWorkerAuth, (_req, res) => {
+  res.status(200).send({
+    service: 'career-worker',
+    ok: true,
+    authorized: true,
+    environment: runtimeEnv(),
   });
 });
 
