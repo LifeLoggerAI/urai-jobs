@@ -19,12 +19,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact reviewed head
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          ref: ${{ env.TARGET_SHA }}
-          fetch-depth: 1
-          persist-credentials: false
-          show-progress: false
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          checkout_home="$RUNNER_TEMP/urai-jobs-checkout-home"
+          rm -rf -- "$checkout_home"
+          mkdir -m 700 -- "$checkout_home"
+          export HOME="$checkout_home"
+          gh auth setup-git >/dev/null
+          find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+          git init .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY"
+          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin "$TARGET_SHA"
+          git checkout --detach --force "$TARGET_SHA"
+          git remote set-url origin "https://github.com/$GITHUB_REPOSITORY"
+          rm -rf -- "$checkout_home"
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Prove exact clean head
         shell: bash
