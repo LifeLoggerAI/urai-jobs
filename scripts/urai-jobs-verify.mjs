@@ -43,6 +43,16 @@ check("source does not contain repeated .js.js imports", offenders.length === 0)
 const webTsconfig = JSON.parse(read("web/tsconfig.json") || "{}");
 check("web TypeScript validation cannot emit into tracked source", webTsconfig.compilerOptions?.noEmit === true);
 
+const workersTsconfig = JSON.parse(read("workers/tsconfig.json") || "{}");
+check(
+  "aggregate worker TypeScript emits outside tracked source",
+  workersTsconfig.compilerOptions?.rootDir === ".." && workersTsconfig.compilerOptions?.outDir === "lib",
+);
+check(
+  "aggregate worker build output is ignored",
+  read(".gitignore").split(/\r?\n/).some((line) => line.trim() === "workers/lib/"),
+);
+
 const adminPage = read("web/src/pages/AdminPage.tsx");
 check("AdminPage exists", adminPage.length > 0);
 check("AdminPage has no mockData identifier", !adminPage.includes("mockData"));
