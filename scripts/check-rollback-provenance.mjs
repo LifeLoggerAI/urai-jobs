@@ -3,19 +3,32 @@ import { runRollbackRevisionVerifierSelfTest } from './verify-rollback-revision.
 
 const failures = [];
 const read = (path) => fs.readFileSync(path, 'utf8');
+const packageJson = JSON.parse(read('package.json'));
+const packageScripts = packageJson?.scripts ?? {};
 
 function requireText(path, text, description) {
   const source = read(path);
   if (!source.includes(text)) failures.push(`${description}: ${path} is missing ${JSON.stringify(text)}`);
 }
 
-requireText(
-  'package.json',
-  'GITHUB_SHA=\"$DEPLOY_SOURCE_SHA\" node scripts/verify-rollback-revision.mjs',
+function requireScriptText(scriptName, text, description) {
+  const command = packageScripts[scriptName];
+  if (typeof command !== 'string') {
+    failures.push(`${description}: package.json is missing script ${JSON.stringify(scriptName)}`);
+    return;
+  }
+  if (!command.includes(text)) {
+    failures.push(`${description}: package.json script ${JSON.stringify(scriptName)} is missing ${JSON.stringify(text)}`);
+  }
+}
+
+requireScriptText(
+  'deploy:workers',
+  'GITHUB_SHA="$DEPLOY_SOURCE_SHA" node scripts/verify-rollback-revision.mjs',
   'canonical worker deployment must verify the rollback revision before mutation',
 );
-requireText(
-  'package.json',
+requireScriptText(
+  'urai-jobs:verify',
   'node scripts/check-rollback-provenance.mjs',
   'repository verification must include rollback provenance checks',
 );
@@ -108,6 +121,7 @@ if (failures.length > 0) {
 }
 
 console.log('[PASS] rollback configuration provenance contract');
+console.log('[PASS] package deployment command is verified from decoded package.json scripts');
 console.log('[PASS] canonical deploy input schema v4 is bound to the current workflow authority');
 console.log('[PASS] rollback revision source, labels, environment, service account, bucket, secret versions, ancestor, and digest are fingerprint-bound');
 console.log('[PASS] explicit per-worker rollback fingerprint approval is required before worker mutation');
