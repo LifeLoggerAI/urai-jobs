@@ -93,8 +93,8 @@ const diagnostics = fs.readFileSync('.github/workflows/urai-jobs-typecheck-diagn
 requireText(
   '.github/workflows/urai-jobs-typecheck-diagnostics.yml',
   diagnostics,
-  'urai-jobs-typecheck-diagnostics-${{ env.TARGET_SHA }}',
-  'diagnostic artifact must bind the exact source SHA',
+  'urai-jobs-verification-diagnostics-${{ env.TARGET_SHA }}',
+  'verification diagnostic artifact must bind the exact source SHA',
 );
 requireText(
   '.github/workflows/urai-jobs-typecheck-diagnostics.yml',
