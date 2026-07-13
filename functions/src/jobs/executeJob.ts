@@ -31,6 +31,8 @@ type InlineWorkerResult = {
   completedAt: string;
 };
 
+type FailureOutcome = 'failed' | 'ignored' | 'callback-pending';
+
 const JobExecutionMessageSchema = z.object({
   jobId: z.string().min(1),
   leaseToken: z.string().min(1),
@@ -100,6 +102,32 @@ function getPayloadRecord(job: Job): Record<string, unknown> {
 function cleanPrefix(value: unknown, fallback: string): string {
   const raw = typeof value === 'string' && value.trim() ? value.trim() : fallback;
   return raw.replace(/^\/+|\/+$/g, '') || fallback;
+}
+
+function timestampMillis(value: unknown): number | null {
+  if (value instanceof Date) return value.getTime();
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toMillis' in value &&
+    typeof (value as { toMillis?: unknown }).toMillis === 'function'
+  ) {
+    const millis = (value as { toMillis: () => number }).toMillis();
+    return Number.isFinite(millis) ? millis : null;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const millis = new Date(value).getTime();
+    return Number.isFinite(millis) ? millis : null;
+  }
+  return null;
+}
+
+function activeAsyncCallbackForLease(job: Job, leaseToken: string, nowMillis: number): boolean {
+  const execution = job.execution;
+  if (execution?.asyncCallbackPending !== true) return false;
+  if (execution.callbackLeaseToken !== leaseToken) return false;
+  const deadlineMillis = timestampMillis(execution.callbackDeadlineAt);
+  return deadlineMillis !== null && deadlineMillis > nowMillis;
 }
 
 function createInlineWorkerResult(job: Job, jobId: string, jobType: string): InlineWorkerResult {
@@ -193,33 +221,54 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
   const queueRef = jobQueueEntryDoc(jobId);
   const errorMessage = error instanceof Error ? error.message : String(error);
 
-  const failed = await db.runTransaction(async (transaction) => {
+  const outcome = await db.runTransaction<FailureOutcome>(async (transaction) => {
     const snapshot = await transaction.get(jobRef);
-    if (!snapshot.exists) return false;
+    if (!snapshot.exists) return 'ignored';
 
     const current = snapshot.data() as Job;
-    if (isTerminalJobStatus(current.status) || current.execution?.leaseToken !== leaseToken) {
-      return false;
+    if (current.status !== 'RUNNING' || current.execution?.leaseToken !== leaseToken) {
+      return 'ignored';
+    }
+    if (activeAsyncCallbackForLease(current, leaseToken, Date.now())) {
+      return 'callback-pending';
     }
 
     const now = FieldValue.serverTimestamp();
     transaction.update(jobRef, {
       status: 'FAILED',
       error: { message: errorMessage },
+      lease: FieldValue.delete(),
       updatedAt: now,
       completedAt: now,
+      'execution.leaseToken': FieldValue.delete(),
       'execution.completedAt': now,
+      'execution.asyncCallbackPending': false,
+      'execution.callbackTokenHash': FieldValue.delete(),
+      'execution.callbackLeaseToken': FieldValue.delete(),
+      'execution.callbackDeadlineAt': FieldValue.delete(),
     });
     transaction.set(queueRef, {
       jobId,
       status: 'DONE',
+      lease: FieldValue.delete(),
       updatedAt: now,
     }, { merge: true });
-    return true;
+    return 'failed';
   });
 
-  if (!failed) {
-    console.warn(`Ignored execution failure for stale or terminal job ${jobId}:`, errorMessage);
+  if (outcome === 'callback-pending') {
+    console.warn(`Preserved active asynchronous callback attempt for ${jobId} after ambiguous dispatch error:`, errorMessage);
+    await appendJobLog(jobId, {
+      level: 'warn',
+      source: 'executeJob',
+      message: 'Dispatch returned an error after the worker registered an active callback attempt; terminal failure was deferred.',
+      metadata: { error: errorMessage, leaseTokenBound: true },
+    });
+    return;
+  }
+
+  if (outcome === 'ignored') {
+    console.warn(`Ignored execution failure for stale, non-running, or terminal job ${jobId}:`, errorMessage);
     return;
   }
 
@@ -266,6 +315,10 @@ export const executeJob = onMessagePublished({
       'execution.leaseToken': leaseToken,
       'execution.startedAt': now,
       'execution.attemptCount': FieldValue.increment(1),
+      'execution.asyncCallbackPending': false,
+      'execution.callbackTokenHash': FieldValue.delete(),
+      'execution.callbackLeaseToken': FieldValue.delete(),
+      'execution.callbackDeadlineAt': FieldValue.delete(),
       'lease.heartbeatAt': now,
       updatedAt: now,
     });
@@ -374,12 +427,22 @@ export const executeJob = onMessagePublished({
         result,
         output: result,
         error: FieldValue.delete(),
+        lease: FieldValue.delete(),
         updatedAt: now,
         completedAt: now,
+        'execution.leaseToken': FieldValue.delete(),
         'execution.completedAt': now,
-        'lease.heartbeatAt': now,
+        'execution.asyncCallbackPending': false,
+        'execution.callbackTokenHash': FieldValue.delete(),
+        'execution.callbackLeaseToken': FieldValue.delete(),
+        'execution.callbackDeadlineAt': FieldValue.delete(),
       });
-      transaction.set(queueRef, { jobId, status: 'DONE', updatedAt: now }, { merge: true });
+      transaction.set(queueRef, {
+        jobId,
+        status: 'DONE',
+        lease: FieldValue.delete(),
+        updatedAt: now,
+      }, { merge: true });
       return true;
     });
 
