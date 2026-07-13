@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 const createJob = await readFile(new URL('../functions/src/jobs/createJob.ts', import.meta.url), 'utf8');
 const tick = await readFile(new URL('../functions/src/jobs/processQueueTick.ts', import.meta.url), 'utf8');
+const manual = await readFile(new URL('../functions/src/jobs/processQueueNow.ts', import.meta.url), 'utf8');
 const retry = await readFile(new URL('../functions/src/jobs/retryExpiredLeases.ts', import.meta.url), 'utf8');
 const guards = await readFile(new URL('../functions/src/jobs/executionGuards.ts', import.meta.url), 'utf8');
 const reconcile = await readFile(new URL('../functions/src/jobs/systemReconcile.ts', import.meta.url), 'utf8');
@@ -62,6 +63,38 @@ assert.match(
 assert.match(tick, /transaction\.update\(jobRef, receipt\);\s*transaction\.update\(queueRef, receipt\);/);
 
 for (const marker of [
+  'transaction.get(queueRef)',
+  'transaction.get(masterJobRef)',
+  'isTerminalJobStatus(job.status)',
+  "job.status !== 'PENDING'",
+  "outcome: 'missing-job'",
+  "outcome: 'terminal-job'",
+  "outcome: 'master-not-pending'",
+]) {
+  assert.ok(manual.includes(marker), `processQueueNow missing ${marker}`);
+}
+assert.match(
+  manual,
+  /const \[queueDoc, masterJobDoc\] = await Promise\.all\(\[[\s\S]*transaction\.get\(queueRef\),[\s\S]*transaction\.get\(masterJobRef\),[\s\S]*\]\);/,
+  'manual dispatch must read queue and master job in the same transaction before leasing',
+);
+assert.match(
+  manual,
+  /if \(isTerminalJobStatus\(job\.status\)\) \{[\s\S]*transaction\.update\(queueRef,[\s\S]*return \{ lease: null, outcome: 'terminal-job' as const \};[\s\S]*\}/,
+  'manual dispatch must reconcile terminal jobs without leasing or publishing them',
+);
+assert.match(
+  manual,
+  /if \(job\.status !== 'PENDING'\) \{\s*return \{ lease: null, outcome: 'master-not-pending' as const \};\s*\}/,
+  'manual dispatch must refuse any non-pending master job',
+);
+assert.match(
+  manual,
+  /transaction\.update\(queueRef, leaseUpdate\);\s*transaction\.update\(masterJobRef, leaseUpdate\);/,
+  'manual dispatch may lease both records only after queue and master state checks pass',
+);
+
+for (const marker of [
   "where('status', '==', 'LEASED')",
   "where('lease.expiresAt', '<=', observedAt)",
   "orderBy('lease.expiresAt')",
@@ -111,5 +144,6 @@ assert.match(assetWorker, /callbackDeadlineMillis <= Date\.now\(\)/);
 assert.doesNotMatch(assetWorker, /await jobRef\.update\(update\)/);
 
 console.log('[PASS] transactional job creation precedes dispatch publication');
+console.log('[PASS] scheduled and manual dispatch preserve master job terminal/non-pending state');
 console.log('[PASS] post-publish receipt preserves running and superseding leases');
 console.log('[PASS] single safe queue recovery and exact async-callback authority contract');
