@@ -11,7 +11,7 @@ function requireText(path, text, description) {
 
 requireText(
   'package.json',
-  'GITHUB_SHA=\\"$DEPLOY_SOURCE_SHA\\" node scripts/verify-rollback-revision.mjs',
+  'GITHUB_SHA=\"$DEPLOY_SOURCE_SHA\" node scripts/verify-rollback-revision.mjs',
   'canonical worker deployment must verify the rollback revision before mutation',
 );
 requireText(
@@ -31,8 +31,8 @@ requireText(
 );
 requireText(
   '.github/workflows/urai-jobs-production-deploy.yml',
-  "schemaVersion: 'urai-jobs-canonical-deploy-inputs-3'",
-  'canonical deployment input receipt must record the strengthened authority schema',
+  "schemaVersion: 'urai-jobs-canonical-deploy-inputs-4'",
+  'canonical deployment input receipt must record the current strengthened authority schema',
 );
 requireText(
   'scripts/verify-rollback-revision.mjs',
@@ -108,6 +108,7 @@ if (failures.length > 0) {
 }
 
 console.log('[PASS] rollback configuration provenance contract');
+console.log('[PASS] canonical deploy input schema v4 is bound to the current workflow authority');
 console.log('[PASS] rollback revision source, labels, environment, service account, bucket, secret versions, ancestor, and digest are fingerprint-bound');
 console.log('[PASS] explicit per-worker rollback fingerprint approval is required before worker mutation');
 console.log('[PASS] live rollback revision and digest must remain identical to the approved receipt');
