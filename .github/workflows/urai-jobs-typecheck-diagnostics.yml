@@ -9,9 +9,10 @@ on:
       - 'workers/**'
       - 'packages/**'
       - 'types/**'
+      - 'scripts/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
-      - '.github/workflows/urai-jobs-typecheck-diagnostics.yml'
+      - '.github/workflows/**'
 
 permissions:
   contents: read
@@ -25,7 +26,7 @@ env:
 
 jobs:
   diagnostics:
-    name: Capture checkout and typecheck output
+    name: Capture checkout, typecheck, and contract output
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -99,6 +100,7 @@ jobs:
         run: test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Capture typecheck log
+        id: typecheck
         shell: bash
         run: |
           set +e
@@ -107,18 +109,35 @@ jobs:
           pnpm typecheck 2>&1 | tee artifacts/ci-diagnostics/typecheck-diagnostics.log
           status=${PIPESTATUS[0]}
           echo "$status" > artifacts/ci-diagnostics/typecheck-exit-code.txt
-          exit "$status"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
 
-      - name: Upload typecheck diagnostics
+      - name: Capture exact-head contract verification
+        id: contracts
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          pnpm urai-jobs:verify 2>&1 | tee artifacts/ci-diagnostics/contract-verification.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > artifacts/ci-diagnostics/contract-verification-exit-code.txt
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload verification diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: urai-jobs-typecheck-diagnostics-${{ env.TARGET_SHA }}-${{ github.run_id }}
-          path: |
-            artifacts/ci-diagnostics/typecheck-diagnostics.log
-            artifacts/ci-diagnostics/typecheck-exit-code.txt
-          if-no-files-found: ignore
+          name: urai-jobs-verification-diagnostics-${{ env.TARGET_SHA }}-${{ github.run_id }}
+          path: artifacts/ci-diagnostics
+          if-no-files-found: error
           retention-days: 365
+
+      - name: Enforce typecheck and contracts
+        shell: bash
+        run: |
+          test "${{ steps.typecheck.outputs.status }}" = "0"
+          test "${{ steps.contracts.outputs.status }}" = "0"
 
       - name: Restore and prove clean tree
         if: always()
