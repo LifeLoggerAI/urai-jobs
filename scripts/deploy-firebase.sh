@@ -10,11 +10,14 @@ FIREBASE_CONFIG_RECEIPT_PATH="${FIREBASE_CONFIG_RECEIPT_PATH:-docs/release-evide
 REPOSITORY_ROOT="$(pwd -P)"
 FIREBASE_DEPLOY_CONFIG_PATH="${URAI_FIREBASE_DEPLOY_CONFIG_PATH:-${REPOSITORY_ROOT}/.urai-jobs-firebase-${DEPLOY_SOURCE_SHA:-unknown}.json}"
 URAI_JOBS_WORKER_TOKEN_SECRET="${URAI_JOBS_WORKER_TOKEN_SECRET:-URAI_JOBS_WORKER_TOKEN}"
+APPROVED_WORKER_TOKEN_VERSION=""
+RESOLVED_WORKER_TOKEN_VERSION=""
 
 : "${FIREBASE_PROJECT_ID:?FIREBASE_PROJECT_ID is required}"
 : "${GCLOUD_PROJECT:?GCLOUD_PROJECT is required}"
 : "${DEPLOY_SOURCE_SHA:?DEPLOY_SOURCE_SHA is required}"
 : "${URAI_FIREBASE_PREBUILT_VERIFIED:?URAI_FIREBASE_PREBUILT_VERIFIED is required}"
+: "${DEPLOY_TARGET_SECRET_VERSIONS_JSON:?DEPLOY_TARGET_SECRET_VERSIONS_JSON is required}"
 
 command -v firebase >/dev/null 2>&1 || { echo "[FAIL] firebase CLI is required" >&2; exit 1; }
 command -v gcloud >/dev/null 2>&1 || { echo "[FAIL] gcloud CLI is required" >&2; exit 1; }
@@ -77,11 +80,48 @@ ensure_hosting_site() {
   HOSTING_SITE="$site"
 }
 
+approved_worker_token_version() {
+  node <<'NODE'
+const approval = JSON.parse(process.env.DEPLOY_TARGET_SECRET_VERSIONS_JSON || 'null');
+if (!approval || Array.isArray(approval) || typeof approval !== 'object') {
+  throw new Error('DEPLOY_TARGET_SECRET_VERSIONS_JSON must be a JSON object.');
+}
+const value = String(approval.URAI_JOBS_WORKER_TOKEN || '');
+if (!/^[1-9][0-9]*$/.test(value)) {
+  throw new Error('URAI_JOBS_WORKER_TOKEN must use an exact numeric Secret Manager version.');
+}
+process.stdout.write(value);
+NODE
+}
+
 verify_worker_secret() {
-  gcloud secrets describe "$URAI_JOBS_WORKER_TOKEN_SECRET" --project "$GCLOUD_PROJECT" >/dev/null 2>&1 || {
-    echo "[FAIL] Firebase executeJob requires Secret Manager secret: $URAI_JOBS_WORKER_TOKEN_SECRET" >&2
+  APPROVED_WORKER_TOKEN_VERSION="$(approved_worker_token_version)"
+  local state
+  state="$(gcloud secrets versions describe "$APPROVED_WORKER_TOKEN_VERSION" \
+    --secret "$URAI_JOBS_WORKER_TOKEN_SECRET" \
+    --project "$GCLOUD_PROJECT" \
+    --format='value(state)')"
+  [ "$state" = "ENABLED" ] || {
+    echo "[FAIL] Approved worker token version $APPROVED_WORKER_TOKEN_VERSION is not ENABLED" >&2
     exit 1
   }
+
+  RESOLVED_WORKER_TOKEN_VERSION="$(gcloud secrets versions list "$URAI_JOBS_WORKER_TOKEN_SECRET" \
+    --project "$GCLOUD_PROJECT" \
+    --filter='state=ENABLED' \
+    --sort-by='~createTime' \
+    --limit=1 \
+    --format='value(name.basename())')"
+  [[ "$RESOLVED_WORKER_TOKEN_VERSION" =~ ^[1-9][0-9]*$ ]] || {
+    echo "[FAIL] Unable to resolve the current enabled worker token version" >&2
+    exit 1
+  }
+  [ "$RESOLVED_WORKER_TOKEN_VERSION" = "$APPROVED_WORKER_TOKEN_VERSION" ] || {
+    echo "[FAIL] Firebase Functions would bind worker token version $RESOLVED_WORKER_TOKEN_VERSION, but protected approval requires $APPROVED_WORKER_TOKEN_VERSION" >&2
+    exit 1
+  }
+  export APPROVED_WORKER_TOKEN_VERSION RESOLVED_WORKER_TOKEN_VERSION
+  echo "[PASS] Firebase Functions worker token binding matches approved numeric version $APPROVED_WORKER_TOKEN_VERSION"
 }
 
 write_functions_env() {
@@ -155,6 +195,9 @@ const receipt = {
   firebaseCliVersion: process.env.FIREBASE_CLI_VERSION || null,
   firebaseConfigSha256: hashFile(process.env.FIREBASE_DEPLOY_CONFIG_PATH),
   functionsEnvSha256: hashFile(process.env.FUNCTIONS_ENV_FILE),
+  workerTokenSecretName: process.env.URAI_JOBS_WORKER_TOKEN_SECRET,
+  approvedWorkerTokenVersion: process.env.APPROVED_WORKER_TOKEN_VERSION,
+  resolvedWorkerTokenVersion: process.env.RESOLVED_WORKER_TOKEN_VERSION,
   buildInfoPath: '/api/buildinfo',
   buildInfoExpectedSha: process.env.DEPLOY_SOURCE_SHA,
   deploymentCommandCompleted: process.env.DEPLOYMENT_COMPLETED === 'true',
@@ -194,6 +237,7 @@ firebase deploy \
   --only functions,firestore,hosting \
   --project "$FIREBASE_PROJECT_ID" \
   --non-interactive
+verify_worker_secret
 write_config_receipt true
 
 cleanup
