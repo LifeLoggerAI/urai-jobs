@@ -8,13 +8,17 @@ const guards = await readFile(new URL('../functions/src/jobs/executionGuards.ts'
 const reconcile = await readFile(new URL('../functions/src/jobs/systemReconcile.ts', import.meta.url), 'utf8');
 const assetWorker = await readFile(new URL('../workers/asset-worker/index.js', import.meta.url), 'utf8');
 
-for (const marker of [
-  'db.runTransaction',
-  'transaction.create(jobRef, jobRecord)',
-  'transaction.create(queueRef, queueEntry)',
-]) {
-  assert.ok(createJob.includes(marker), `createJob missing transactional persistence marker ${marker}`);
-}
+assert.ok(createJob.includes('db.runTransaction'), 'createJob must use a Firestore transaction');
+assert.match(
+  createJob,
+  /transaction\.create\(jobRef, \{[\s\S]*?\.\.\.newJob,[\s\S]*?createdAt: now,[\s\S]*?updatedAt: now,[\s\S]*?\}\);/,
+  'createJob must atomically create the canonical job record with server timestamps',
+);
+assert.match(
+  createJob,
+  /transaction\.create\(queueRef, \{[\s\S]*?\.\.\.newQueueEntry,[\s\S]*?availableAt: now,[\s\S]*?createdAt: now,[\s\S]*?\}\);/,
+  'createJob must atomically create the canonical queue entry with availability and creation timestamps',
+);
 assert.equal(
   createJob.includes('publishMessage'),
   false,
