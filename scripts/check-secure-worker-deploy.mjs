@@ -47,6 +47,9 @@ for (const [text, description] of [
   ['--set-secrets "$secret_vars"', 'worker deploy must inject exact Secret Manager bindings'],
   ['--service-account "$WORKER_RUNTIME_SERVICE_ACCOUNT"', 'worker deploy must use explicit runtime service account'],
   ['Mutable Secret Manager aliases are forbidden', 'worker deploy must reject mutable aliases'],
+  ['[[ "$version_id" =~ ^[1-9][0-9]*$ ]]', 'discovered Secret Manager versions must be exact positive integers'],
+  ['SECRET_VERSION_IDS["$secret_name"]="$version_id"', 'validated numeric Secret Manager versions must be retained by secret name'],
+  ['local worker_token_version="${SECRET_VERSION_IDS[$URAI_JOBS_WORKER_TOKEN_SECRET]}"', 'worker token binding must use the validated numeric version map'],
   ['gcloud builds describe "$build_id"', 'worker deploy must read Cloud Build result'],
   ['value(results.images[0].digest)', 'worker deploy must bind Cloud Build digest'],
   ['gcloud artifacts docker images describe "$immutable_image"', 'worker deploy must resolve Artifact Registry digest'],
@@ -59,7 +62,13 @@ for (const [text, description] of [
   ['unauthorized auth probe returned', 'unauthorized probe must be verified'],
   ['authorized auth probe returned', 'authorized probe must be verified'],
 ]) requireText('scripts/deploy-workers.sh', text, description);
-rejectText('scripts/deploy-workers.sh', ':latest', 'worker deploy must not bind mutable secret aliases');
+
+const deployWorkersSource = read('scripts/deploy-workers.sh');
+for (const line of deployWorkersSource.split('\n')) {
+  if (/^\s*(?:local\s+)?secret_vars=.*:latest(?:[",]|$)/.test(line)) {
+    failures.push(`worker deploy constructs a mutable Secret Manager alias: ${line.trim()}`);
+  }
+}
 
 for (const [text, description] of [
   ['DEPLOY_TARGET_SECRET_VERSIONS_JSON is required', 'approved target-secret input must be mandatory'],
@@ -202,7 +211,7 @@ for (const [text, description] of [
   ['id: worker_health', 'worker outcome must be captured'],
   ['id: domain_verify', 'domain outcome must be captured'],
   ['publicWorkerHealthChecked: workerPassed', 'worker receipt field must derive from outcome'],
-  ['publicHostingChecked: domainsPassed', 'domain receipt field must derive from outcome'],
+  ['publicHostingChecked: domainsPassed', 'public receipt field must derive from outcome'],
   ['publicVerificationCompleted: workerPassed && domainsPassed', 'public receipt must not self-certify'],
   ['node scripts/stamp-deployment-artifact.mjs', 'public stamp must not require installed dependencies'],
   ['paidProviderSmokeAuthorized: false', 'canonical mutation must prohibit paid smoke'],
@@ -280,7 +289,7 @@ if (failures.length) {
 
 console.log('[PASS] credential-free preflight builds and attests exact Firebase bytes');
 console.log('[PASS] protected worker mutation starts from clean exact source without dependency builds');
-console.log('[PASS] target and rollback secret versions are approval-bound and receipt-verified');
+console.log('[PASS] target and rollback secret versions are numeric, approval-bound and receipt-verified');
 console.log('[PASS] Firebase artifact verifies externally and after materialization');
 console.log('[PASS] Firebase deploy cleans temporary source changes and leaves only release evidence');
 console.log('[PASS] Firebase mutation receipt remains non-certifying until public exact-runtime verification');
