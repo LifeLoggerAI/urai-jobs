@@ -26,9 +26,12 @@ function timestampMillis(value: unknown): number | null {
   return null;
 }
 
-function protectedAsyncCallbackPending(job: Record<string, unknown>, nowMillis: number): boolean {
-  const execution = job.execution && typeof job.execution === 'object'
-    ? job.execution as Record<string, unknown>
+function protectedAsyncCallbackPending(job: unknown, nowMillis: number): boolean {
+  const record = job && typeof job === 'object'
+    ? job as { execution?: unknown }
+    : {};
+  const execution = record.execution && typeof record.execution === 'object'
+    ? record.execution as Record<string, unknown>
     : {};
   if (execution.asyncCallbackPending !== true) return false;
   const deadlineMillis = timestampMillis(execution.callbackDeadlineAt);
