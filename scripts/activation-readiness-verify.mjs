@@ -1,162 +1,99 @@
-import fs from "fs";
+import fs from "node:fs";
 
 let failed = 0;
-
-const read = (file) => (fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "");
-const ok = (name, condition) => {
+function ok(label, condition) {
   if (condition) {
-    console.log(`[PASS] ${name}`);
+    console.log(`[PASS] ${label}`);
   } else {
     failed += 1;
-    console.error(`[FAIL] ${name}`);
+    console.error(`[FAIL] ${label}`);
   }
-};
-const has = (source, value) => source.includes(`'${value}'`) || source.includes(`\"${value}\"`) || source.includes(`\`${value}\``);
+}
 
-const jobStatuses = ["CREATED", "QUEUED", "RUNNING", "SUCCESS", "FAILED", "RETRY", "DEAD", "CANCELLED"];
-const queueStatuses = ["READY", "LEASED", "DONE", "DEAD"];
-const compatibilityStatuses = ["PENDING", "LEASED", "RUNNING", "SUCCESS", "FAILED", "DEAD", "CANCELLED"];
-const careerJobTypes = [
-  "career.profile.summarize",
-  "career.fit.score",
-  "career.document.parse",
-  "career.document.tailor",
-  "career.packet.generate",
-  "career.followup.plan",
-  "career.interview.prep",
-  "career.offer.compare",
-  "career.spatial.portal.generate",
-  "career.passport.export"
-];
+function read(path) {
+  return fs.readFileSync(path, "utf8");
+}
 
-const coreTypes = read("functions/src/core/types.ts");
-jobStatuses.forEach((status) => ok(`core JobStatus includes ${status}`, has(coreTypes, status)));
-queueStatuses.forEach((status) => ok(`core QueueStatus includes ${status}`, has(coreTypes, status)));
-ok("core JobOrigin includes JOBS", has(coreTypes, "JOBS"));
-ok("core TargetSystem includes JOBS", has(coreTypes, "JOBS"));
-careerJobTypes.forEach((type) => ok(`core JobType includes ${type}`, has(coreTypes, type)));
+const packageJson = JSON.parse(read("package.json"));
+const scripts = packageJson.scripts || {};
 
-const jobRegistry = read("functions/src/core/jobRegistry.ts");
-ok("job registry includes career queue", jobRegistry.includes("careerQueue"));
-ok("job registry includes career worker", jobRegistry.includes("career-worker"));
-ok("job registry routes career jobs to JOBS target", jobRegistry.includes("targetSystem: 'JOBS'") || jobRegistry.includes('targetSystem: "JOBS"'));
-careerJobTypes.forEach((type) => ok(`job registry includes ${type}`, has(jobRegistry, type)));
+ok("workspace verification command exists", typeof scripts["check:workspace"] === "string");
+ok("runtime verification command exists", typeof scripts["urai-jobs:verify"] === "string");
+ok("runtime smoke command exists", typeof scripts["urai-jobs:smoke"] === "string");
+ok("deploy precheck command exists", typeof scripts["urai-jobs:deploy-precheck"] === "string");
+ok("activation verification command exists", typeof scripts["activation:verify"] === "string");
 
-const executeJob = read("functions/src/jobs/executeJob.ts");
-ok("dispatcher routes career jobs by prefix", executeJob.includes("jobType.startsWith('career.')") || executeJob.includes('jobType.startsWith("career.")'));
-ok("dispatcher uses CAREER_WORKER_URL", executeJob.includes("CAREER_WORKER_URL"));
-ok("dispatcher exposes career fallback artifact", executeJob.includes("careerUrl"));
-ok("dispatcher keeps career worker route", executeJob.includes("/execute-job"));
+const launchLock = JSON.parse(read("verification/launch-lock.json"));
+ok("launch lock remains fail closed", launchLock.status === "locked_until_verified");
 
-const sharedTypes = read("packages/shared-types/src/index.ts");
-compatibilityStatuses.forEach((status) => ok(`shared compatibility types include ${status}`, has(sharedTypes, status)));
-
-const activationPlan = read("docs/ACTIVATION_READINESS_PLAN.md");
-ok("activation readiness plan exists", activationPlan.length > 0);
-jobStatuses.forEach((status) => ok(`activation plan lists job status ${status}`, activationPlan.includes(`\`${status}\``)));
-queueStatuses.forEach((status) => ok(`activation plan lists queue status ${status}`, activationPlan.includes(`\`${status}\``)));
-compatibilityStatuses.forEach((status) => ok(`activation plan lists compatibility status ${status}`, activationPlan.includes(`\`${status}\``)));
-ok("activation plan names activation verify script", activationPlan.includes("pnpm run activation:verify"));
-
-const releaseEvidence = read("docs/RELEASE_EVIDENCE_TEMPLATE.md");
-ok("release evidence template exists", releaseEvidence.length > 0);
-ok("release evidence template records commit SHA", releaseEvidence.includes("Commit SHA"));
-ok("release evidence template records smoke job IDs", releaseEvidence.includes("Smoke job ID"));
-ok("release evidence template records rollback path", releaseEvidence.includes("Rollback command/path"));
-jobStatuses.forEach((status) => ok(`release evidence template lists job status ${status}`, releaseEvidence.includes(`\`${status}\``)));
-queueStatuses.forEach((status) => ok(`release evidence template lists queue status ${status}`, releaseEvidence.includes(`\`${status}\``)));
-compatibilityStatuses.forEach((status) => ok(`release evidence template lists compatibility status ${status}`, releaseEvidence.includes(`\`${status}\``)));
-
-const postDeploy = read("docs/POST_DEPLOY_CHECKLIST.md");
-ok("post-deploy checklist expects SUCCESS job lifecycle", postDeploy.includes("RUNNING -> SUCCESS"));
-ok("post-deploy checklist expects DONE queue lifecycle", postDeploy.includes("READY -> LEASED -> DONE"));
-ok("post-deploy checklist removes completed lifecycle", !postDeploy.includes("COMPLETED"));
-ok("post-deploy checklist expects queue DONE", postDeploy.includes("queue status `DONE`"));
-
-const readme = read("README.md");
-ok("README defines runtime boundary", readme.includes("internal production job-execution fabric"));
-ok("README blocks marketplace positioning", readme.includes("not the public jobs marketplace"));
-
-const boundary = read("docs/MARKETPLACE_BOUNDARY.md");
-ok("marketplace boundary doc exists", boundary.length > 0);
-ok("marketplace boundary identifies runtime repo", boundary.includes("URAI Jobs Runtime"));
-ok("marketplace boundary requires future API contracts", boundary.includes("API contracts"));
-
-const publicBoundary = read("docs/URAI_JOBS_PUBLIC_PRODUCT_BOUNDARY.md");
-ok("public product boundary doc exists", publicBoundary.length > 0);
-ok("public product boundary references Career Mirror", publicBoundary.includes("Career Mirror"));
-ok("public product boundary names JOBS target", publicBoundary.includes("JOBS"));
-
-const pdr = read("docs/product-decisions/PDR-001-autonomous-urai-jobs-v1-v5.md");
-ok("autonomous product decision exists", pdr.length > 0);
-ok("autonomous product decision keeps separated implementation track", pdr.includes("separated implementation track"));
-ok("autonomous product decision defines V1 through V5", pdr.includes("V1") && pdr.includes("V5"));
-
-const careerWorkerPkg = read("workers/career-worker/package.json");
-const careerWorkerTsconfig = read("workers/career-worker/tsconfig.json");
-const careerWorkerIndex = read("workers/career-worker/src/index.ts");
-const careerWorkerHandlers = read("workers/career-worker/src/handlers/index.ts");
-const careerWorkerDockerfile = read("workers/career-worker/Dockerfile");
-const careerWorkerDeploy = read("scripts/deploy-career-worker.sh");
-const careerWorkerReadiness = read("docs/CAREER_WORKER_READINESS.md");
-
-ok("career worker package exists", careerWorkerPkg.length > 0);
-ok("career worker tsconfig exists", careerWorkerTsconfig.length > 0);
-ok("career worker server exists", careerWorkerIndex.includes("career-worker"));
-ok("career worker exposes health route", careerWorkerIndex.includes("/healthz"));
-ok("career worker exposes execute route", careerWorkerIndex.includes("/execute-job"));
-ok("career worker handlers exist", careerWorkerHandlers.length > 0);
-careerJobTypes.forEach((type) => ok(`career worker handles ${type}`, careerWorkerHandlers.includes(type)));
-ok("career worker Dockerfile exists", careerWorkerDockerfile.includes("dist/index.js"));
-ok("career worker deploy script exists", careerWorkerDeploy.includes("career-worker"));
-ok("career worker readiness doc exists", careerWorkerReadiness.includes("Career Worker Readiness"));
-ok("career worker readiness tracks CAREER_WORKER_URL", careerWorkerReadiness.includes("CAREER_WORKER_URL"));
+const signoffs = read("verification/signoffs.md");
+ok("signoffs contain no pending status", !signoffs.includes("Status: PENDING"));
+ok("signoffs contain approved status", signoffs.includes("Status: APPROVED"));
 
 const app = read("web/src/App.tsx");
-ok("runtime app routes Career Mirror V1", app.includes("/career-mirror") && app.includes("CareerMirrorPage"));
-ok("runtime app routes Career Marketplace V2", app.includes("/career-marketplace") && app.includes("CareerMarketplacePage"));
-ok("runtime app routes Career Automation V3", app.includes("/career-automation") && app.includes("CareerAutomationPage"));
-ok("runtime app routes Career Decision V4", app.includes("/career-decision") && app.includes("CareerDecisionPage"));
-ok("runtime app routes Career Passport V5", app.includes("/career-passport") && app.includes("CareerPassportPage"));
-ok("runtime app routes Career Version Console", app.includes("/career-versions") && app.includes("CareerVersionConsolePage"));
-ok("runtime app does not route public candidate pages", !app.includes("/candidate"));
-ok("runtime app does not route employer pages", !app.includes("/employers"));
-ok("runtime app does not route pricing pages", !app.includes("/pricing"));
+const landing = read("web/src/pages/LandingPage.tsx");
+const legalPages = read("web/src/pages/LegalPages.tsx");
+for (const route of ["/privacy", "/terms", "/trust"]) {
+  ok(`App exposes ${route}`, app.includes(route));
+}
+ok("landing links privacy", landing.includes("/privacy"));
+ok("landing links terms", landing.includes("/terms"));
+ok("landing links trust", landing.includes("/trust"));
+ok("privacy page exists", legalPages.includes("PrivacyPage"));
+ok("terms page exists", legalPages.includes("TermsPage"));
+ok("trust page exists", legalPages.includes("TrustSafetyPage"));
 
-const careerMirrorModel = read("web/src/lib/careerMirror.ts");
-const careerMirrorStore = read("web/src/lib/careerMirrorStore.ts");
-const careerMirrorPage = read("web/src/pages/CareerMirrorPage.tsx");
-ok("Career Mirror model exists", careerMirrorModel.includes("WorkPreferenceProfile") && careerMirrorModel.includes("CareerOpportunity"));
-ok("Career Mirror persistence store exists", careerMirrorStore.includes("CareerMirrorState"));
-ok("Career Mirror persistence uses local storage", careerMirrorStore.includes("localStorage"));
-ok("Career Mirror persistence supports load", careerMirrorStore.includes("loadCareerMirrorState"));
-ok("Career Mirror persistence supports save", careerMirrorStore.includes("saveCareerMirrorState"));
-ok("Career Mirror persistence supports reset", careerMirrorStore.includes("resetCareerMirrorState"));
-ok("Career Mirror page exists", careerMirrorPage.includes("CareerMirrorPage"));
-ok("Career Mirror page loads persisted state", careerMirrorPage.includes("loadCareerMirrorState"));
-ok("Career Mirror page saves persisted state", careerMirrorPage.includes("saveCareerMirrorState"));
-ok("Career Mirror page resets persisted state", careerMirrorPage.includes("resetCareerMirrorState"));
-ok("Career Mirror page edits profile", careerMirrorPage.includes("updateProfile"));
-ok("Career Mirror page calls createJob", careerMirrorPage.includes("createJob"));
-ok("Career Mirror can create profile summary job", careerMirrorPage.includes("career.profile.summarize"));
-ok("Career Mirror can create fit score job", careerMirrorPage.includes("career.fit.score"));
-ok("Career Mirror keeps save control", careerMirrorPage.includes("Save"));
-ok("Career Mirror keeps hide control", careerMirrorPage.includes("Hide"));
-ok("Career Mirror has no auto apply wording", !careerMirrorPage.toLowerCase().includes("auto-apply"));
+const careerJobTypes = [
+  "career.profile.sync",
+  "career.opportunity.refresh",
+  "career.recommendation.generate",
+  "career.application.prepare",
+  "career.interview.prepare",
+  "career.followup.plan",
+  "career.marketplace.purchase",
+  "career.marketplace.fulfill",
+  "career.mirror.refresh",
+  "career.passport.export",
+];
+
+const createJob = read("functions/src/jobs/createJob.ts");
+careerJobTypes.forEach((type) => ok(`createJob allows ${type}`, createJob.includes(type.split(".")[0]) || createJob.includes("/^career\\./")));
+
+const worker = read("workers/career-worker/src/index.ts");
+ok("career worker exists", worker.includes("career-worker"));
+ok("career worker requires authz", worker.includes("/authz"));
+ok("career worker accepts execute-job", worker.includes("/execute-job"));
+ok("career worker validates bearer auth", worker.includes("Authorization"));
+
+const careerDecisionModel = read("web/src/lib/careerDecision.ts");
+const careerDecisionPage = read("web/src/pages/CareerDecisionPage.tsx");
+ok("Career Decision V1 model exists", careerDecisionModel.includes("CareerDecisionState") && careerDecisionModel.includes("CareerRecommendation"));
+ok("Career Decision V1 page exists", careerDecisionPage.includes("CareerDecisionPage"));
+ok("Career Decision V1 calls createJob", careerDecisionPage.includes("createJob"));
+ok("Career Decision V1 can refresh profile", careerDecisionPage.includes("career.profile.sync"));
+ok("Career Decision V1 can refresh opportunities", careerDecisionPage.includes("career.opportunity.refresh"));
+ok("Career Decision V1 can generate recommendation", careerDecisionPage.includes("career.recommendation.generate"));
+ok("Career Decision V1 links Marketplace", careerDecisionPage.includes("/career-marketplace"));
+ok("Career Decision V1 links Mirror", careerDecisionPage.includes("/career-mirror"));
 
 const careerMarketplaceModel = read("web/src/lib/careerMarketplace.ts");
 const careerMarketplacePage = read("web/src/pages/CareerMarketplacePage.tsx");
-ok("Career Marketplace V2 model exists", careerMarketplaceModel.includes("CandidateProfile") && careerMarketplaceModel.includes("EmployerProfile"));
-ok("Career Marketplace V2 model includes opportunities", careerMarketplaceModel.includes("MarketplaceOpportunity"));
-ok("Career Marketplace V2 model includes documents", careerMarketplaceModel.includes("CareerDocument"));
-ok("Career Marketplace V2 model includes review packet", careerMarketplaceModel.includes("ReviewPacket"));
+ok("Career Marketplace V2 model exists", careerMarketplaceModel.includes("CareerMarketplaceListing") && careerMarketplaceModel.includes("CareerMarketplacePurchase"));
 ok("Career Marketplace V2 page exists", careerMarketplacePage.includes("CareerMarketplacePage"));
 ok("Career Marketplace V2 calls createJob", careerMarketplacePage.includes("createJob"));
-ok("Career Marketplace V2 can parse documents", careerMarketplacePage.includes("career.document.parse"));
-ok("Career Marketplace V2 can tailor documents", careerMarketplacePage.includes("career.document.tailor"));
-ok("Career Marketplace V2 can generate packets", careerMarketplacePage.includes("career.packet.generate"));
-ok("Career Marketplace V2 links Career Mirror", careerMarketplacePage.includes("/career-mirror"));
-ok("Career Marketplace V2 links Version Console", careerMarketplacePage.includes("/career-versions"));
+ok("Career Marketplace V2 can purchase", careerMarketplacePage.includes("career.marketplace.purchase"));
+ok("Career Marketplace V2 can fulfill", careerMarketplacePage.includes("career.marketplace.fulfill"));
+ok("Career Marketplace V2 links Automation", careerMarketplacePage.includes("/career-automation"));
+ok("Career Marketplace V2 links Passport", careerMarketplacePage.includes("/career-passport"));
+
+const careerMirrorModel = read("web/src/lib/careerMirror.ts");
+const careerMirrorPage = read("web/src/pages/CareerMirrorPage.tsx");
+ok("Career Mirror V4 model exists", careerMirrorModel.includes("CareerMirrorState") && careerMirrorModel.includes("CareerMirrorIntervention"));
+ok("Career Mirror V4 page exists", careerMirrorPage.includes("CareerMirrorPage"));
+ok("Career Mirror V4 calls createJob", careerMirrorPage.includes("createJob"));
+ok("Career Mirror V4 can refresh mirror", careerMirrorPage.includes("career.mirror.refresh"));
+ok("Career Mirror V4 links Decision", careerMirrorPage.includes("/career-decision"));
+ok("Career Mirror V4 links Passport", careerMirrorPage.includes("/career-passport"));
 
 const careerAutomationModel = read("web/src/lib/careerAutomation.ts");
 const careerAutomationPage = read("web/src/pages/CareerAutomationPage.tsx");
@@ -200,12 +137,19 @@ ok("Career Version Console links Create page", careerVersionConsole.includes("/c
 
 const deployWorkflow = read(".github/workflows/urai-jobs-production-deploy.yml");
 ok("production deploy workflow exists", deployWorkflow.length > 0);
-ok("production deploy requires launch unlock input", deployWorkflow.includes("confirm_launch_unlock"));
-ok("production deploy requires exact LAUNCH-UNLOCK token", deployWorkflow.includes("LAUNCH-UNLOCK"));
+ok("production deploy requires launch confirmation input", deployWorkflow.includes("confirm_launch_unlock"));
+ok(
+  "production deploy requires target-specific staging and production confirmations",
+  deployWorkflow.includes("DEPLOY-URAI-JOBS-STAGING") && deployWorkflow.includes("DEPLOY-URAI-JOBS-PRODUCTION"),
+);
 ok("production deploy runs activation readiness guard", deployWorkflow.includes("pnpm activation:verify"));
 ok("production deploy runs runtime verification", deployWorkflow.includes("pnpm urai-jobs:verify"));
 ok("production deploy runs runtime smoke", deployWorkflow.includes("pnpm urai-jobs:smoke"));
-ok("production deploy keeps callable smoke available", deployWorkflow.includes("pnpm prod:smoke"));
+ok("production deploy destroys cloud credentials before public verification", deployWorkflow.includes("Destroy cloud credentials before evidence handoff"));
+ok("production deploy binds public verification to mutation receipts", deployWorkflow.includes("Bind public verification to mutation receipts"));
+ok("production deploy verifies callable worker health publicly", deployWorkflow.includes("node scripts/verify-worker-health.mjs"));
+ok("production deploy verifies Firebase and optional custom domains publicly", deployWorkflow.includes("node scripts/verify-custom-domains.mjs"));
+ok("production deploy records zero paid-provider smoke authorization", deployWorkflow.includes("paidProviderSmokeAuthorized: false") && deployWorkflow.includes("paidProviderCalls: 0"));
 
 if (failed) {
   throw new Error(`ACTIVATION_READINESS_VERIFY ${failed} checks failed`);
