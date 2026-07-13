@@ -65,6 +65,24 @@ jobs:
       - name: Verify
         run: node scripts/urai-production-verify.mjs
 
+      - name: Capture source mutation diagnostics
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts/source-mutation
+          git status --short --untracked-files=all > artifacts/source-mutation/status.txt
+          git diff --binary > artifacts/source-mutation/working-tree.patch
+          git diff --cached --binary > artifacts/source-mutation/index.patch
+
+      - name: Upload source mutation diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: urai-jobs-source-mutation-${{ env.TARGET_SHA }}-${{ github.run_id }}
+          path: artifacts/source-mutation
+          if-no-files-found: error
+          retention-days: 365
+
       - name: Reject tracked mutation and remove generated output
         if: always()
         shell: bash
@@ -73,6 +91,6 @@ jobs:
           test "$(git rev-parse HEAD)" = "$TARGET_SHA"
           git diff --exit-code
           git diff --cached --exit-code
-          git status --short --untracked-files=all
+          rm -rf artifacts
           git clean -fdx
           test -z "$(git status --porcelain --untracked-files=all)"
