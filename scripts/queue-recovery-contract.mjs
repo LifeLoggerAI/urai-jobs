@@ -27,14 +27,16 @@ assert.equal(
 
 for (const marker of [
   'compensatePublishFailure',
+  'recordDispatchPublished',
   'canRequeueUnstartedLease',
   'publishMessage',
   'MAX_DISPATCH_RETRIES',
   "return 'dead-retries-exhausted'",
   "status: 'DEAD'",
-  "if (current.status === 'running')",
+  "if (current.status === 'RUNNING')",
   'current.lease?.leaseToken !== leaseToken',
-  'queueEntry.leaseToken !== leaseToken',
+  'queueEntry.lease?.leaseToken !== leaseToken',
+  "'dispatch.publishedAt': now",
 ]) {
   assert.ok(tick.includes(marker), `processQueueTick missing ${marker}`);
 }
@@ -44,14 +46,20 @@ assert.match(tick, /transaction\.update\(jobRef, \{[\s\S]*status: 'DEAD'/);
 assert.match(tick, /transaction\.update\(queueRef, \{[\s\S]*status: 'DEAD'/);
 assert.match(
   tick,
-  /if \(current\.status === 'running'\) \{\s*return;\s*\}/,
-  'post-publish bookkeeping must preserve a job already claimed by another dispatcher',
+  /if \(current\.status === 'RUNNING'\) \{\s*return 'already-running';\s*\}/,
+  'post-publish bookkeeping must preserve a job already claimed by the execution subscriber',
 );
 assert.match(
   tick,
-  /if \(current\.lease\?\.leaseToken !== leaseToken \|\| queueEntry\.leaseToken !== leaseToken\) \{\s*return;\s*\}/,
+  /if \(\s*current\.lease\?\.leaseToken !== leaseToken \|\|\s*queueEntry\.lease\?\.leaseToken !== leaseToken\s*\) \{\s*return 'superseded-lease';\s*\}/,
   'post-publish bookkeeping must not overwrite a superseding lease',
 );
+assert.match(
+  tick,
+  /if \(current\.status !== 'LEASED' \|\| queueEntry\.status !== 'LEASED'\) \{\s*return 'state-changed';\s*\}/,
+  'dispatch publication receipts must be written only while both records remain lease-owned',
+);
+assert.match(tick, /transaction\.update\(jobRef, receipt\);\s*transaction\.update\(queueRef, receipt\);/);
 
 for (const marker of [
   "where('status', '==', 'LEASED')",
@@ -103,5 +111,5 @@ assert.match(assetWorker, /callbackDeadlineMillis <= Date\.now\(\)/);
 assert.doesNotMatch(assetWorker, /await jobRef\.update\(update\)/);
 
 console.log('[PASS] transactional job creation precedes dispatch publication');
-console.log('[PASS] post-publish bookkeeping preserves running and superseding leases');
+console.log('[PASS] post-publish receipt preserves running and superseding leases');
 console.log('[PASS] single safe queue recovery and exact async-callback authority contract');
