@@ -31,10 +31,18 @@ for (const path of requiredWorkflows) {
   requireText(path, source, 'permissions:', 'workflow must declare minimal permissions');
   requireText(path, source, 'contents: read', 'workflow must use read-only repository contents permission');
   requireText(path, source, 'TARGET_SHA:', 'workflow must resolve an exact source SHA');
-  requireText(path, source, 'ref: ${{ env.TARGET_SHA }}', 'workflow must checkout the resolved exact source SHA');
-  requireText(path, source, 'fetch-depth: 1', 'workflow must fetch only the exact reviewed source SHA');
+  requireText(path, source, 'GH_TOKEN: ${{ github.token }}', 'checkout must use the workflow-scoped read token');
+  requireText(path, source, 'checkout_home="$RUNNER_TEMP/urai-jobs-checkout-home"', 'checkout credentials must be confined to an ephemeral home');
+  requireText(path, source, 'export HOME="$checkout_home"', 'checkout must isolate Git and GitHub CLI configuration');
+  requireText(path, source, 'gh auth setup-git >/dev/null', 'checkout must configure token-scoped Git authentication');
+  requireText(path, source, 'git init .', 'checkout must initialize an isolated repository');
+  requireText(path, source, 'git remote add origin "https://github.com/$GITHUB_REPOSITORY"', 'checkout must bind the canonical repository');
+  requireText(path, source, 'git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin "$TARGET_SHA"', 'workflow must shallow-fetch only the exact reviewed SHA');
+  requireText(path, source, 'git checkout --detach --force "$TARGET_SHA"', 'workflow must detach at the exact reviewed SHA');
+  requireText(path, source, 'git remote set-url origin "https://github.com/$GITHUB_REPOSITORY"', 'checkout must restore a credential-free canonical remote');
+  requireText(path, source, 'rm -rf -- "$checkout_home"', 'checkout must delete ephemeral credential configuration before verification');
+  rejectText(path, source, 'uses: actions/checkout@', 'the failing reusable checkout action is forbidden in required evidence workflows');
   rejectText(path, source, 'fetch-depth: 0', 'full-history checkout is forbidden in required PR evidence workflows');
-  requireText(path, source, 'persist-credentials: false', 'workflow must not persist checkout credentials');
   requireText(path, source, 'test "$(git rev-parse HEAD)" = "$TARGET_SHA"', 'workflow must prove checked-out source identity');
   requireText(path, source, 'git status --porcelain --untracked-files=all', 'workflow must prove a clean source tree');
   rejectText(path, source, 'pnpm install --no-frozen-lockfile', 'mutable pnpm installation is forbidden');
@@ -94,6 +102,18 @@ requireText(
   'retention-days: 365',
   'diagnostic artifact must use release-evidence retention',
 );
+requireText(
+  '.github/workflows/urai-jobs-typecheck-diagnostics.yml',
+  diagnostics,
+  'git diff --exit-code',
+  'diagnostic cleanup must reject tracked source mutation before removing generated output',
+);
+requireText(
+  '.github/workflows/urai-jobs-typecheck-diagnostics.yml',
+  diagnostics,
+  'git clean -fdx',
+  'diagnostic cleanup must remove generated untracked output before the final clean-tree proof',
+);
 
 if (failures.length > 0) {
   console.error('[FAIL] required exact-head CI evidence contract');
@@ -102,6 +122,7 @@ if (failures.length > 0) {
 }
 
 console.log(`[PASS] exact-head CI evidence contract: ${requiredWorkflows.length} workflows`);
-console.log('[PASS] shallow exact source checkout, clean tree, frozen dependencies, read-only checkout credentials');
+console.log('[PASS] isolated temporary credential configuration, shallow exact-SHA fetch, detached checkout, clean tree, and frozen dependencies');
+console.log('[PASS] reusable checkout action excluded from required Jobs evidence lanes after repository-specific checkout failures');
 console.log('[PASS] PR/ref and exact-SHA concurrency cancel superseded runs without mixing evidence');
 console.log('[PASS] emulator CLI version pinned: firebase-tools 15.23.0');
