@@ -85,8 +85,14 @@ requireText(
 requireText(
   '.github/workflows/urai-jobs-runtime-ci.yml',
   runtimeCi,
+  'retention-days: 90',
+  'public-repository emulator artifact must use the supported 90-day release-evidence retention',
+);
+rejectText(
+  '.github/workflows/urai-jobs-runtime-ci.yml',
+  runtimeCi,
   'retention-days: 365',
-  'emulator artifact must use release-evidence retention',
+  'public-repository emulator artifact must not request unsupported 365-day retention',
 );
 
 const diagnostics = fs.readFileSync('.github/workflows/urai-jobs-typecheck-diagnostics.yml', 'utf8');
