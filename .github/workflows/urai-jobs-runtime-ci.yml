@@ -137,7 +137,7 @@ jobs:
           cache: pnpm
 
       - name: Setup Java 21 for Firebase emulators
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.7.1
         with:
           distribution: temurin
           java-version: 21
@@ -169,7 +169,7 @@ jobs:
           name: urai-jobs-emulator-e2e-${{ env.TARGET_SHA }}-${{ github.run_id }}
           path: urai-jobs-emulator-e2e.log
           if-no-files-found: error
-          retention-days: 365
+          retention-days: 90
 
       - name: Enforce callable E2E result
         shell: bash
