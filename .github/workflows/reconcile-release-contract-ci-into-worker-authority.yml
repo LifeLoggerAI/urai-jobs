@@ -38,17 +38,19 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.AUTHORITY_SHA }}
-          fetch-depth: 0
+          fetch-depth: 1
+          filter: blob:none
           persist-credentials: false
           show-progress: false
 
-      - name: Verify source authority and fetch retained branches
+      - name: Verify source authority and fetch only required histories
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$AUTHORITY_SHA"
           test "$(git status --porcelain --untracked-files=all)" = ""
-          git fetch --no-tags origin \
+          git fetch --no-tags --filter=blob:none --depth=500 origin \
+            +refs/heads/secure-worker-deploy-20260706:refs/remotes/origin/secure-worker-deploy-20260706 \
             +refs/heads/fix/canonical-v1-v5-release-contract-20260706:refs/remotes/origin/fix/canonical-v1-v5-release-contract-20260706 \
             +refs/heads/fix/reproducible-runtime-ci-20260706:refs/remotes/origin/fix/reproducible-runtime-ci-20260706
 
@@ -131,4 +133,4 @@ jobs:
           git commit --amend --no-edit
           auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
-            push --force-with-lease origin HEAD:$AUTHORITY_BRANCH
+            push origin HEAD:$AUTHORITY_BRANCH
