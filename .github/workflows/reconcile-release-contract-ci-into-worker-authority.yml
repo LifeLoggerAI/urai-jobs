@@ -1,0 +1,133 @@
+name: Reconcile Jobs release contract and CI into worker authority
+
+on:
+  push:
+    branches:
+      - reconcile/jobs-release-contract-ci-into-75-20260714
+    paths:
+      - .github/workflows/reconcile-release-contract-ci-into-worker-authority.yml
+  pull_request:
+    branches:
+      - secure-worker-deploy-20260706
+    types:
+      - opened
+      - synchronize
+    paths:
+      - .github/workflows/reconcile-release-contract-ci-into-worker-authority.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: reconcile-jobs-release-contract-ci-into-75
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    if: >-
+      github.repository == 'LifeLoggerAI/urai-jobs' &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/reconcile/jobs-release-contract-ci-into-75-20260714') ||
+       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'reconcile/jobs-release-contract-ci-into-75-20260714'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      AUTHORITY_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      AUTHORITY_BRANCH: reconcile/jobs-release-contract-ci-into-75-20260714
+    steps:
+      - name: Checkout exact reconciliation head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.AUTHORITY_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify source authority and fetch retained branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AUTHORITY_SHA"
+          test "$(git status --porcelain --untracked-files=all)" = ""
+          git fetch --no-tags origin \
+            +refs/heads/fix/canonical-v1-v5-release-contract-20260706:refs/remotes/origin/fix/canonical-v1-v5-release-contract-20260706 \
+            +refs/heads/fix/reproducible-runtime-ci-20260706:refs/remotes/origin/fix/reproducible-runtime-ci-20260706
+
+      - name: Attempt sequential source reconciliation
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/jobs-reconciliation"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          status=0
+          for source in \
+            origin/fix/canonical-v1-v5-release-contract-20260706 \
+            origin/fix/reproducible-runtime-ci-20260706; do
+            set +e
+            git merge --no-commit --no-ff "$source" >> "$RUNNER_TEMP/jobs-reconciliation/merge.log" 2>&1
+            status=$?
+            set -e
+            if [ "$status" -ne 0 ]; then
+              git diff --name-only --diff-filter=U | sort > "$RUNNER_TEMP/jobs-reconciliation/conflicts.txt"
+              printf '%s\n' "$source" > "$RUNNER_TEMP/jobs-reconciliation/failed-source.txt"
+              git merge --abort || true
+              printf 'conflicted=true\n' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            git commit -m "Temporarily reconcile $source"
+          done
+          printf 'conflicted=false\n' >> "$GITHUB_OUTPUT"
+
+      - name: Upload conflict evidence
+        if: steps.merge.outputs.conflicted == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: jobs-release-contract-ci-reconciliation-${{ env.AUTHORITY_SHA }}
+          path: ${{ runner.temp }}/jobs-reconciliation
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Fail closed on conflicts
+        if: steps.merge.outputs.conflicted == 'true'
+        shell: bash
+        run: |
+          echo 'Jobs authority conflicts require path-by-path reconciliation. Evidence retained.'
+          exit 1
+
+      - name: Finalize clean reconciliation
+        if: steps.merge.outputs.conflicted == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/reconcile-release-contract-ci-into-worker-authority.yml
+          mkdir -p docs/release-evidence
+          cat > docs/release-evidence/JOBS-RELEASE-CONTRACT-CI-RECONCILIATION-20260714.md <<EOF
+          # Jobs release-contract and CI reconciliation
+
+          - Canonical worker authority base: 3f0b87d692ba0e4de2d24098fa0766fadc600e98
+          - Release-contract source: 331c720f284d9dd085ccaae08c5d021eaa7cc147
+          - Frozen-runtime-CI source: 6d3893e8574d1bb635294ac19750960d6debd82e
+          - Trigger SHA: $AUTHORITY_SHA
+          - Cloud Run deployment: false
+          - Firebase mutation: false
+          - Provider call: false
+          - Credential mutation: false
+          - Production-data mutation: false
+
+          Both retained source branches reconciled without conflicts into the canonical worker authority. Exact-head testing, artifact inspection and independent review remain required before consumption into PR #75.
+          EOF
+          git add docs/release-evidence/JOBS-RELEASE-CONTRACT-CI-RECONCILIATION-20260714.md
+          git diff --cached --check
+
+      - name: Commit final reconciliation and push
+        if: steps.merge.outputs.conflicted == 'false'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git commit --amend --no-edit
+          auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+            push --force-with-lease origin HEAD:$AUTHORITY_BRANCH
