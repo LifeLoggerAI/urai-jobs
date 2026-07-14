@@ -171,8 +171,9 @@ const systemReconcile = read("functions/src/jobs/systemReconcile.ts");
 const indexes = read("firestore.indexes.json");
 
 check("processQueueTick writes lease.expiresAt", processQueueTick.includes("expiresAt"));
-check("retryExpiredLeases queries lease.expiresAt", retryExpiredLeases.includes("lease.expiresAt"));
-check("systemReconcile queries lease.expiresAt", systemReconcile.includes("lease.expiresAt"));
+check("retryExpiredLeases solely queries lease.expiresAt", retryExpiredLeases.includes("lease.expiresAt"));
+check("systemReconcile does not duplicate LEASED expiry recovery", !systemReconcile.includes("lease.expiresAt"));
+check("systemReconcile revalidates stale RUNNING heartbeats", systemReconcile.includes("lease.heartbeatAt"));
 check("firestore index covers lease.expiresAt", indexes.includes("lease.expiresAt"));
 check("firestore index covers stale heartbeat reconciliation", indexes.includes("lease.heartbeatAt"));
 
