@@ -119,8 +119,8 @@ for (const marker of [
   'verify_worker_secret\nwrite_config_receipt true',
 ]) assert.ok(firebaseDeploy.includes(marker), `deploy-firebase missing ${marker}`);
 
-assert.match(workspace, /^\s*- workers\s*$/m, 'root workers package must participate in pnpm installation');
-assert.match(workspace, /^\s*- workers\/\*\s*$/m, 'individual worker packages must participate in pnpm installation');
+assert.match(workspace, /^\s*-\s*["']?workers["']?\s*$/m, 'root workers package must participate in pnpm installation');
+assert.match(workspace, /^\s*-\s*["']?workers\/\*["']?\s*$/m, 'individual worker packages must participate in pnpm installation');
 
 console.log('[PASS] transactional creation precedes publication');
 console.log('[PASS] scheduled and manual dispatch preserve master state');
