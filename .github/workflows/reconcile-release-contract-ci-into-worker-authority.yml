@@ -1,3 +1,4 @@
+# Synchronization revision 2026-07-14T22:04Z; no authority or behavior change.
 name: Reconcile Jobs release contract and CI into worker authority
 
 on:
