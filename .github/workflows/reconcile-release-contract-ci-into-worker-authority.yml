@@ -6,14 +6,6 @@ on:
       - reconcile/jobs-release-contract-ci-into-75-20260714
     paths:
       - .github/workflows/reconcile-release-contract-ci-into-worker-authority.yml
-  pull_request:
-    branches:
-      - secure-worker-deploy-20260706
-    types:
-      - opened
-      - synchronize
-    paths:
-      - .github/workflows/reconcile-release-contract-ci-into-worker-authority.yml
 
 permissions:
   contents: write
@@ -26,12 +18,11 @@ jobs:
   reconcile:
     if: >-
       github.repository == 'LifeLoggerAI/urai-jobs' &&
-      ((github.event_name == 'push' && github.ref == 'refs/heads/reconcile/jobs-release-contract-ci-into-75-20260714') ||
-       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'reconcile/jobs-release-contract-ci-into-75-20260714'))
+      github.ref == 'refs/heads/reconcile/jobs-release-contract-ci-into-75-20260714'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      AUTHORITY_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      AUTHORITY_SHA: ${{ github.sha }}
       AUTHORITY_BRANCH: reconcile/jobs-release-contract-ci-into-75-20260714
     steps:
       - name: Materialize only required source histories
@@ -54,7 +45,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$AUTHORITY_SHA"
           test "$(git status --porcelain --untracked-files=all)" = ""
 
-      - name: Attempt sequential source reconciliation
+      - name: Reconcile release contract and focused runtime CI
         id: merge
         shell: bash
         run: |
@@ -63,27 +54,56 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          status=0
-          for source in \
-            origin/fix/canonical-v1-v5-release-contract-20260706 \
-            origin/fix/reproducible-runtime-ci-20260706; do
-            set +e
-            git merge --no-commit --no-ff "$source" >> "$RUNNER_TEMP/jobs-reconciliation/merge.log" 2>&1
-            status=$?
-            set -e
-            if [ "$status" -ne 0 ]; then
-              git diff --name-only --diff-filter=U | sort > "$RUNNER_TEMP/jobs-reconciliation/conflicts.txt"
-              printf '%s\n' "$source" > "$RUNNER_TEMP/jobs-reconciliation/failed-source.txt"
-              git merge --abort || true
-              printf 'conflicted=true\n' >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            git commit -m "Temporarily reconcile $source"
-          done
-          printf 'conflicted=false\n' >> "$GITHUB_OUTPUT"
+          git merge --no-commit --no-ff origin/fix/canonical-v1-v5-release-contract-20260706 \
+            >> "$RUNNER_TEMP/jobs-reconciliation/merge.log" 2>&1
+          git commit -m "Reconcile canonical V1-V5 release contract"
 
-      - name: Upload conflict evidence
-        if: steps.merge.outputs.conflicted == 'true'
+          set +e
+          git merge --no-commit --no-ff origin/fix/reproducible-runtime-ci-20260706 \
+            >> "$RUNNER_TEMP/jobs-reconciliation/merge.log" 2>&1
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$RUNNER_TEMP/jobs-reconciliation/runtime-ci-merge-exit.txt"
+
+          if [ "$status" -eq 0 ]; then
+            git commit -m "Reconcile reproducible Jobs runtime CI"
+            printf 'mode=clean\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git diff --name-only --diff-filter=U | sort > "$RUNNER_TEMP/jobs-reconciliation/conflicts.txt"
+          printf '%s\n' '.github/workflows/urai-jobs-runtime-ci.yml' > "$RUNNER_TEMP/jobs-reconciliation/expected-conflicts.txt"
+          if ! cmp -s "$RUNNER_TEMP/jobs-reconciliation/conflicts.txt" "$RUNNER_TEMP/jobs-reconciliation/expected-conflicts.txt"; then
+            printf 'mode=unexpected\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git checkout --ours -- .github/workflows/urai-jobs-runtime-ci.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/urai-jobs-runtime-ci.yml')
+          text = path.read_text()
+          text = text.replace('uses: actions/setup-java@v4', 'uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.7.1')
+          text = text.replace('retention-days: 365', 'retention-days: 90')
+          required = [
+              'permissions:\n  contents: read',
+              'pnpm install --frozen-lockfile',
+              'FIREBASE_TOOLS_VERSION: 15.23.0',
+              'actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9',
+              'retention-days: 90',
+          ]
+          missing = [marker for marker in required if marker not in text]
+          if missing:
+              raise SystemExit(f'Missing reconciled runtime CI markers: {missing}')
+          path.write_text(text)
+          PY
+          git add .github/workflows/urai-jobs-runtime-ci.yml
+          test -z "$(git diff --name-only --diff-filter=U)"
+          git commit -m "Reconcile reproducible Jobs runtime CI on current authority"
+          printf 'mode=focused\n' >> "$GITHUB_OUTPUT"
+
+      - name: Upload unexpected conflict evidence
+        if: steps.merge.outputs.mode == 'unexpected'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: jobs-release-contract-ci-reconciliation-${{ env.AUTHORITY_SHA }}
@@ -91,20 +111,20 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-      - name: Fail closed on conflicts
-        if: steps.merge.outputs.conflicted == 'true'
+      - name: Fail closed on unexpected conflicts
+        if: steps.merge.outputs.mode == 'unexpected'
         shell: bash
         run: |
-          echo 'Jobs authority conflicts require path-by-path reconciliation. Evidence retained.'
+          echo 'Unexpected Jobs authority conflicts require path-by-path reconciliation. Evidence retained.'
           exit 1
 
-      - name: Finalize clean reconciliation
-        if: steps.merge.outputs.conflicted == 'false'
+      - name: Write bounded reconciliation receipt
+        if: steps.merge.outputs.mode == 'clean' || steps.merge.outputs.mode == 'focused'
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/reconcile-release-contract-ci-into-worker-authority.yml
           mkdir -p docs/release-evidence
+          mode='${{ steps.merge.outputs.mode }}'
           cat > docs/release-evidence/JOBS-RELEASE-CONTRACT-CI-RECONCILIATION-20260714.md <<EOF
           # Jobs release-contract and CI reconciliation
 
@@ -112,25 +132,28 @@ jobs:
           - Release-contract source: 331c720f284d9dd085ccaae08c5d021eaa7cc147
           - Frozen-runtime-CI source: 6d3893e8574d1bb635294ac19750960d6debd82e
           - Trigger SHA: $AUTHORITY_SHA
+          - Reconciliation mode: $mode
           - Cloud Run deployment: false
           - Firebase mutation: false
           - Provider call: false
           - Credential mutation: false
           - Production-data mutation: false
 
-          Both retained source branches reconciled without conflicts into the canonical worker authority. Exact-head testing, artifact inspection and independent review remain required before consumption into PR #75.
+          The canonical V1-V5 contract transferred cleanly. The runtime-CI conflict was bounded to one workflow; the stronger current exact-head checkout and Firebase version controls were retained while the Java action was immutably pinned and public-repository evidence retention was corrected to 90 days.
+
+          Exact-head testing, artifact inspection and independent review remain required before consumption into PR #75. The one-use dispatcher is removed in a separate authenticated cleanup commit after publication.
           EOF
           git add docs/release-evidence/JOBS-RELEASE-CONTRACT-CI-RECONCILIATION-20260714.md
           git diff --cached --check
+          git commit -m "Record Jobs release-contract and CI reconciliation"
 
-      - name: Commit final reconciliation and push
-        if: steps.merge.outputs.conflicted == 'false'
+      - name: Publish bounded reconciliation
+        if: steps.merge.outputs.mode == 'clean' || steps.merge.outputs.mode == 'focused'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          git commit --amend --no-edit
           auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
-            push --force-with-lease origin HEAD:$AUTHORITY_BRANCH
+            push origin HEAD:refs/heads/$AUTHORITY_BRANCH
