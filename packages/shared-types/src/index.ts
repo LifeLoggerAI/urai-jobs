@@ -26,6 +26,11 @@ export interface JobExecutionMeta {
   maxAttempts: number;
   leaseToken?: string;
   startedAt?: string;
+  asyncCallbackPending?: boolean;
+  callbackTokenHash?: string;
+  callbackLeaseToken?: string;
+  callbackDeadlineAt?: unknown;
+  completedAt?: unknown;
 }
 
 export interface JobLease {
