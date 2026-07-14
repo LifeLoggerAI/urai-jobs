@@ -55,7 +55,7 @@ function parseRevisionEnvironment(revision) {
   for (const entry of entries) {
     if (!nonEmptyString(entry?.name)) continue;
     const secretRef = entry?.valueSource?.secretKeyRef ?? entry?.valueFrom?.secretKeyRef;
-    if (secretRef?.version != null) secretVersions[entry.name] = String(secretRef.version);
+    if (secretRef?.key != null) secretVersions[entry.name] = String(secretRef.key);
     else if (Object.prototype.hasOwnProperty.call(entry, 'value')) plainEnv[entry.name] = String(entry.value);
   }
   return { plainEnv, secretVersions };

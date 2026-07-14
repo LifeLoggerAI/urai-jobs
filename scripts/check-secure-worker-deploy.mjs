@@ -63,6 +63,11 @@ for (const [text, description] of [
   ['authorized auth probe returned', 'authorized probe must be verified'],
 ]) requireText('scripts/deploy-workers.sh', text, description);
 
+requireText('scripts/verify-rollback-revision.mjs', 'secretRef?.key != null', 'rollback verifier must read Cloud Run secret versions from secretKeyRef.key');
+rejectText('scripts/verify-rollback-revision.mjs', 'secretRef?.version', 'rollback verifier must not read the nonexistent secretKeyRef.version field');
+requireText('scripts/deploy-workers.sh', 'if (entry?.name && ref?.key)', 'deployed revision verifier must read Cloud Run secret versions from secretKeyRef.key');
+rejectText('scripts/deploy-workers.sh', 'ref?.version', 'deployed revision verifier must not read the nonexistent secretKeyRef.version field');
+
 const deployWorkersSource = read('scripts/deploy-workers.sh');
 for (const line of deployWorkersSource.split('\n')) {
   if (/^\s*(?:local\s+)?secret_vars=.*:latest(?:[",]|$)/.test(line)) {

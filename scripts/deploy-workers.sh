@@ -248,7 +248,7 @@ const observedSecrets = {};
 const observedValues = {};
 for (const entry of env) {
   const ref = entry?.valueSource?.secretKeyRef || entry?.valueFrom?.secretKeyRef;
-  if (entry?.name && ref?.version) observedSecrets[entry.name] = String(ref.version);
+  if (entry?.name && ref?.key) observedSecrets[entry.name] = String(ref.key);
   if (entry?.name && Object.prototype.hasOwnProperty.call(entry, 'value')) observedValues[entry.name] = String(entry.value);
 }
 const normalizeDigest = (value) => String(value || '').replace(/^@/, '');
