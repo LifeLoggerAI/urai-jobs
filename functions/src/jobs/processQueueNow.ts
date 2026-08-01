@@ -3,7 +3,6 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { PubSub } from '@google-cloud/pubsub';
 import { ulid } from 'ulid';
 import type { JobQueueEntry, JobLease } from '@urai-jobs/shared-types';
-import { returnLeaseAfterPublishFailure } from '../core/dispatchRecovery.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 const JOB_EXECUTION_TOPIC = 'job-execution';
@@ -77,7 +76,6 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
   const leased: string[] = [];
   const skipped: string[] = [];
   const published: string[] = [];
-  const failed: string[] = [];
 
   for (const doc of pendingJobsSnapshot.docs) {
     const { jobId } = doc.data() as JobQueueEntry;
@@ -108,16 +106,10 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
 
     if (lease?.leaseToken) {
       leased.push(jobId);
-      try {
-        await pubsub.topic(JOB_EXECUTION_TOPIC).publishMessage({
-          json: { jobId, leaseToken: lease.leaseToken },
-        });
-        published.push(jobId);
-      } catch (error) {
-        await returnLeaseAfterPublishFailure(jobId, lease.leaseToken, error);
-        failed.push(jobId);
-        console.error(`Operator dispatch failed for ${jobId}; lease returned to pending.`, error);
-      }
+      await pubsub.topic(JOB_EXECUTION_TOPIC).publishMessage({
+        json: { jobId, leaseToken: lease.leaseToken },
+      });
+      published.push(jobId);
     }
   }
 
@@ -127,7 +119,6 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
     found: pendingJobsSnapshot.size,
     leased,
     published,
-    failed,
     skipped,
   };
 });
