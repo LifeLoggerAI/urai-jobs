@@ -46,7 +46,7 @@
     "prod:career-smoke": "node scripts/prod-career-smoke.mjs",
     "prod:career-evidence:validate": "node scripts/validate-career-smoke-evidence.mjs",
     "prod:career-evidence:report": "node scripts/render-career-smoke-report.mjs",
-    "prod:release-evidence": "node scripts/career-release-evidence.mjs",
+    "prod:career-release-evidence": "node scripts/career-release-evidence.mjs",
     "prod:smoke-token": "node scripts/prod-smoke-token.mjs",
     "prod:verify-workers": "node scripts/verify-worker-health.mjs",
     "prod:stamp": "node scripts/stamp-deployment-artifact.mjs",
