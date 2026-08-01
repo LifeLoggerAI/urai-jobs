@@ -8,7 +8,6 @@ export { retryExpiredLeases } from "./jobs/retryExpiredLeases.js";
 export { cleanupTerminalJobs } from "./jobs/cleanupTerminalJobs.js";
 export { systemReconcile } from "./jobs/systemReconcile.js";
 export { onJobTerminalEvent } from "./events/onJobTerminalEvent.js";
-export { publishJobTerminalEvents } from "./events/publishJobTerminalEvents.js";
 
 export { createJob } from "./jobs/createJob.js";
 export { getJob } from "./jobs/getJob.js";
