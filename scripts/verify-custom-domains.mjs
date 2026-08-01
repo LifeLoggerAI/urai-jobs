@@ -1,6 +1,8 @@
 import dns from "dns/promises";
 import fs from "fs";
 
+const SHA_PATTERN = /^[0-9a-f]{40}$/;
+
 function readJson(file) {
   try {
     if (!fs.existsSync(file)) return null;
@@ -54,7 +56,16 @@ function printDnsGuidance(hostname, records, hostingSite) {
 const firebaseJson = readJson("firebase.json");
 const firebaserc = readJson(".firebaserc");
 const hostingSite = typeof firebaseJson?.hosting?.site === "string" ? firebaseJson.hosting.site : "";
-const projectId = firebaserc?.projects?.default || firebaserc?.projects?.prod || "";
+const projectId = process.env.FIREBASE_PROJECT_ID || firebaserc?.projects?.default || firebaserc?.projects?.prod || "";
+const expectedSha = String(process.env.TARGET_SHA || process.env.DEPLOY_SOURCE_SHA || "").trim();
+const expectedEnvironment = String(process.env.INPUT_TARGET || process.env.URAI_ENV || "").trim();
+
+if (!SHA_PATTERN.test(expectedSha)) {
+  throw new Error("Public verification requires TARGET_SHA or DEPLOY_SOURCE_SHA as an exact lowercase 40-character SHA.");
+}
+if (!projectId) throw new Error("Public verification requires FIREBASE_PROJECT_ID or a configured Firebase project.");
+if (!expectedEnvironment) throw new Error("Public verification requires INPUT_TARGET or URAI_ENV.");
+
 const domains = process.argv
   .slice(2)
   .filter((arg) => arg && arg !== "--")
@@ -69,28 +80,55 @@ const expected = domains.length ? domains : [...new Set(defaultDomains)];
 
 async function check(url) {
   const started = Date.now();
+  const base = url.replace(/\/$/, "");
   try {
-    const response = await fetch(url, { method: "GET", redirect: "follow" });
-    const text = await response.text();
+    const [appResponse, buildResponse] = await Promise.all([
+      fetch(base, { method: "GET", redirect: "follow", cache: "no-store" }),
+      fetch(`${base}/api/buildinfo`, {
+        method: "GET",
+        redirect: "follow",
+        cache: "no-store",
+        headers: { accept: "application/json" },
+      }),
+    ]);
+    const text = await appResponse.text();
+    const buildText = await buildResponse.text();
+    let buildInfo = null;
+    try {
+      buildInfo = JSON.parse(buildText);
+    } catch {}
     const assetMatch = text.match(/index-[A-Za-z0-9_-]+\.js/);
+    const identityMatches =
+      buildResponse.ok &&
+      buildInfo?.schemaVersion === "urai-jobs-build-info-1" &&
+      buildInfo?.status === "ok" &&
+      buildInfo?.sourceSha === expectedSha &&
+      buildInfo?.environment === expectedEnvironment &&
+      buildInfo?.projectId === projectId;
     return {
-      url,
-      hostname: hostnameFromUrl(url),
-      ok: response.ok,
-      status: response.status,
+      url: base,
+      hostname: hostnameFromUrl(base),
+      ok: appResponse.ok,
+      status: appResponse.status,
       ms: Date.now() - started,
       asset: assetMatch?.[0] || null,
-      hasAppShell: text.includes("/assets/") || text.includes("URAI Jobs")
+      hasAppShell: text.includes("/assets/") || text.includes("URAI Jobs"),
+      buildStatus: buildResponse.status,
+      buildInfo,
+      identityMatches,
     };
   } catch (error) {
     return {
-      url,
-      hostname: hostnameFromUrl(url),
+      url: base,
+      hostname: hostnameFromUrl(base),
       ok: false,
       status: 0,
       ms: Date.now() - started,
       asset: null,
       hasAppShell: false,
+      buildStatus: 0,
+      buildInfo: null,
+      identityMatches: false,
       error: error instanceof Error ? error.message : String(error)
     };
   }
@@ -101,12 +139,17 @@ let failed = false;
 const failedCustomHosts = new Set();
 
 for (const result of results) {
-  const prefix = result.ok && result.hasAppShell ? "[PASS]" : "[FAIL]";
-  console.log(`${prefix} ${result.url} status=${result.status} ms=${result.ms} asset=${result.asset || "none"}`);
+  const passed = result.ok && result.hasAppShell && result.identityMatches;
+  const prefix = passed ? "[PASS]" : "[FAIL]";
+  console.log(`${prefix} ${result.url} status=${result.status} ms=${result.ms} asset=${result.asset || "none"} buildStatus=${result.buildStatus} runtimeSha=${result.buildInfo?.sourceSha || "none"}`);
   if (result.error) console.log(`  error=${result.error}`);
-  if (!result.ok || !result.hasAppShell) {
+  if (!passed) {
     failed = true;
     if (isCustomUraiDomain(result.hostname)) failedCustomHosts.add(result.hostname);
+    if (!result.identityMatches) {
+      console.log(`  expectedIdentity=${JSON.stringify({ sourceSha: expectedSha, environment: expectedEnvironment, projectId })}`);
+      console.log(`  observedIdentity=${JSON.stringify(result.buildInfo)}`);
+    }
   }
 }
 
@@ -118,12 +161,14 @@ if (failedCustomHosts.size) {
   }
 }
 
-const passingCanonical = results.filter((result) => result.ok && result.hasAppShell).map((result) => result.url);
-if (passingCanonical.length) console.log(`[INFO] Passing app-shell domain(s): ${passingCanonical.join(", ")}`);
+const passingCanonical = results
+  .filter((result) => result.ok && result.hasAppShell && result.identityMatches)
+  .map((result) => result.url);
+if (passingCanonical.length) console.log(`[INFO] Passing exact-runtime domain(s): ${passingCanonical.join(", ")}`);
 if (failed) {
-  console.error("[FAIL] One or more domains did not serve the expected URAI Jobs app shell.");
-  console.error("Check Firebase Hosting custom domain attachment, DNS records, SSL provisioning, and whether apex/www point to the hosting site in firebase.json.");
+  console.error("[FAIL] One or more domains did not serve the expected URAI Jobs app shell and exact Firebase runtime identity.");
+  console.error("Check Firebase Hosting attachment, DNS, SSL, buildInfo rewrite, deployed Functions environment, and exact source SHA.");
   console.error(`Expected Firebase Hosting site: ${hostingSite || "unknown"}`);
   process.exit(1);
 }
-console.log("[PASS] Domain verification complete.");
+console.log(`[PASS] Domain and Firebase runtime verification complete for ${expectedSha}.`);

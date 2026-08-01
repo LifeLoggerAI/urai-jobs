@@ -34,6 +34,7 @@ web/dist/
 functions/lib/
 functions/dist/
 packages/shared-types/dist/
+workers/lib/
 workers/*/dist/
 workers/**/dist/
 
@@ -65,6 +66,7 @@ web/dist/
 functions/lib/
 functions/dist/
 packages/shared-types/dist/
+workers/lib/
 workers/*/dist/
 workers/**/dist/
 

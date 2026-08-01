@@ -40,6 +40,19 @@ if (offenders.length) {
 }
 check("source does not contain repeated .js.js imports", offenders.length === 0);
 
+const webTsconfig = JSON.parse(read("web/tsconfig.json") || "{}");
+check("web TypeScript validation cannot emit into tracked source", webTsconfig.compilerOptions?.noEmit === true);
+
+const workersTsconfig = JSON.parse(read("workers/tsconfig.json") || "{}");
+check(
+  "aggregate worker TypeScript emits outside tracked source",
+  workersTsconfig.compilerOptions?.rootDir === ".." && workersTsconfig.compilerOptions?.outDir === "lib",
+);
+check(
+  "aggregate worker build output is ignored",
+  read(".gitignore").split(/\r?\n/).some((line) => line.trim() === "workers/lib/"),
+);
+
 const adminPage = read("web/src/pages/AdminPage.tsx");
 check("AdminPage exists", adminPage.length > 0);
 check("AdminPage has no mockData identifier", !adminPage.includes("mockData"));
@@ -60,11 +73,13 @@ const adminFns = read("functions/src/jobs/admin.ts");
 const adminFnsV2 = read("functions/src/jobs/admin-v2.ts");
 const cancelFn = read("functions/src/jobs/cancelJob.ts");
 const createJob = read("functions/src/jobs/createJob.ts");
+const getJobStatus = read("functions/src/jobs/getJobStatus.ts");
 const executeJob = read("functions/src/jobs/executeJob.ts");
 const workerHandler = read("workers/narrator-worker/src/handlers/index.ts");
 const narratorTts = read("workers/narrator-worker/src/handlers/narrator-tts.ts");
 const createJobPage = read("web/src/pages/CreateJobPage.tsx");
 const index = read("functions/src/index.ts");
+const firestoreRules = read("firestore.rules");
 
 check("backend listJobs exists", adminFns.includes("listJobs") || index.includes("listJobs"));
 check("backend retryJob exists", adminFns.includes("retryJob") || index.includes("retryJob"));
@@ -73,6 +88,10 @@ check("backend cancelJob exists", cancelFn.includes("cancelJob") || adminFns.inc
 
 check("createJob writes canonical type", createJob.includes("type: jobType"));
 check("createJob writes compatibility jobType", createJob.includes("jobType: jobType") || createJob.includes("jobType,"));
+check("getJobStatus binds owner reads to Firebase Auth UID", getJobStatus.includes("const authenticatedUid = context.auth?.uid"));
+check("getJobStatus compares owner to authenticated UID", getJobStatus.includes("job.ownerUid !== authenticatedUid"));
+check("getJobStatus does not trust mutable profile UID", !getJobStatus.includes("job.ownerUid !== user.uid"));
+check("Firestore profile updates cannot mutate embedded uid", firestoreRules.includes("request.resource.data.get('uid', null) == resource.data.get('uid', null)"));
 check("executeJob posts to narrator /execute-job", executeJob.includes("/execute-job"));
 check("executeJob does not post to stale /execute route", !executeJob.includes("${NARRATOR_WORKER_URL}/execute`"));
 check("worker handler resolves type or jobType", workerHandler.includes("job.type") && workerHandler.includes("job.jobType"));
@@ -119,8 +138,8 @@ const e2e = read("scripts/urai-jobs-e2e.mjs");
 check("E2E calls createJob callable", e2e.includes("callCallable('createJob'") || e2e.includes('callCallable("createJob"'));
 check("E2E calls listJobsV2 callable", e2e.includes("callCallable('listJobsV2'") || e2e.includes('callCallable("listJobsV2"'));
 check("E2E calls cancelJob callable", e2e.includes("callCallable('cancelJob'") || e2e.includes('callCallable("cancelJob"'));
-check("E2E does not create jobs directly in Firestore", !/collection\(['"]jobs['"]\)\.doc\([^)]*\)\.set\(/.test(e2e));
-check("E2E does not create queue entries directly in Firestore", !/collection\(['"]jobQueue['"]\)\.doc\([^)]*\)\.set\(/.test(e2e));
+check("E2E does not create jobs directly in Firestore", !/collection\(['\"]jobs['\"]\)\.doc\([^)]*\)\.set\(/.test(e2e));
+check("E2E does not create queue entries directly in Firestore", !/collection\(['\"]jobQueue['\"]\)\.doc\([^)]*\)\.set\(/.test(e2e));
 check("E2E signs in through Auth emulator", e2e.includes("accounts:signInWithPassword"));
 
 const contracts = read("docs/URAI_JOBS_INTEGRATION_CONTRACTS.md");
@@ -152,8 +171,9 @@ const systemReconcile = read("functions/src/jobs/systemReconcile.ts");
 const indexes = read("firestore.indexes.json");
 
 check("processQueueTick writes lease.expiresAt", processQueueTick.includes("expiresAt"));
-check("retryExpiredLeases queries lease.expiresAt", retryExpiredLeases.includes("lease.expiresAt"));
-check("systemReconcile queries lease.expiresAt", systemReconcile.includes("lease.expiresAt"));
+check("retryExpiredLeases solely queries lease.expiresAt", retryExpiredLeases.includes("lease.expiresAt"));
+check("systemReconcile does not duplicate LEASED expiry recovery", !systemReconcile.includes("lease.expiresAt"));
+check("systemReconcile revalidates stale RUNNING heartbeats", systemReconcile.includes("lease.heartbeatAt"));
 check("firestore index covers lease.expiresAt", indexes.includes("lease.expiresAt"));
 check("firestore index covers stale heartbeat reconciliation", indexes.includes("lease.heartbeatAt"));
 

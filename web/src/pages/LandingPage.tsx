@@ -146,6 +146,9 @@ export function LandingPage() {
           <div className="hero-actions">
             <a href="/create" className="cta-button">Create job</a>
             <a href="/admin" className="secondary-button">View admin</a>
+            <a href="/privacy" className="secondary-button">Privacy</a>
+            <a href="/terms" className="secondary-button">Terms</a>
+            <a href="/trust" className="secondary-button">Trust &amp; Safety</a>
           </div>
         </section>
       </main>

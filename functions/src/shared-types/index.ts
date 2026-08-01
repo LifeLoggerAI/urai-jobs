@@ -58,6 +58,7 @@ export interface JobQueueEntry {
   leaseId?: string;
   availableAt?: unknown;
   attemptCount?: number;
+  retryCount?: number;
 }
 
 export interface JobLog {
