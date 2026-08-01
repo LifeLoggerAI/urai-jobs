@@ -47,7 +47,7 @@ if (build.status !== 0) process.exit(build.status ?? 1);
 
 const tests = spawnSync(process.execPath, [
   '--test',
-  'functions/lib/functions/src/core/jobsReliability.test.js',
+  'functions/lib/functions/core/jobsReliability.test.js',
 ], {
   stdio: 'inherit',
   shell: process.platform === 'win32',
