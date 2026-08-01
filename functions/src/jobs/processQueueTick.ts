@@ -3,6 +3,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { PubSub } from '@google-cloud/pubsub';
 import { ulid } from 'ulid';
 import { JobQueueEntry, JobLease } from '@urai-jobs/shared-types';
+import { returnLeaseAfterPublishFailure } from '../core/dispatchRecovery.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
@@ -24,7 +25,7 @@ function createLease(workerId: string): JobLease {
   };
 }
 
-export const processQueueTick = onSchedule('every 1 minutes', async (context) => {
+export const processQueueTick = onSchedule('every 1 minutes', async () => {
   const db = getFirestore();
   const tickWorkerId = `tick-${ulid()}`;
 
@@ -47,9 +48,10 @@ export const processQueueTick = onSchedule('every 1 minutes', async (context) =>
 
   const leasePromises = pendingJobsSnapshot.docs.map(async (doc) => {
     const { jobId } = doc.data() as JobQueueEntry;
+    let lease: JobLease | null = null;
 
     try {
-      const lease = await db.runTransaction(async (transaction) => {
+      lease = await db.runTransaction(async (transaction) => {
         const queueRef = jobQueueEntryDoc(jobId);
         const masterJobRef = jobDoc(jobId);
 
@@ -83,7 +85,10 @@ export const processQueueTick = onSchedule('every 1 minutes', async (context) =>
         console.log(`[${tickWorkerId}] Published execution message for job ${jobId}`);
       }
     } catch (error) {
-      console.error(`[${tickWorkerId}] Critical error leasing job ${jobId}.`, error);
+      if (lease?.leaseToken) {
+        await returnLeaseAfterPublishFailure(jobId, lease.leaseToken, error);
+      }
+      console.error(`[${tickWorkerId}] Critical error leasing or dispatching job ${jobId}.`, error);
     }
   });
 
