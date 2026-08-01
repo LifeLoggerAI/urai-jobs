@@ -1,14 +1,14 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { PubSub } from '@google-cloud/pubsub';
 import { ulid } from 'ulid';
 import { JobQueueEntry, JobLease } from '@urai-jobs/shared-types';
+import { returnLeaseAfterPublishFailure } from '../core/dispatchRecovery.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
 const JOB_EXECUTION_TOPIC = 'job-execution';
 const LEASE_DURATION_MS = 60 * 1000; // 1 minute
-const DISPATCH_RETRY_DELAY_MS = 5_000;
 
 const pubsub = new PubSub();
 
@@ -23,36 +23,6 @@ function createLease(workerId: string): JobLease {
     workerId,
     expiresAt,
   };
-}
-
-async function returnLeaseAfterPublishFailure(jobId: string, leaseToken: string, error: unknown) {
-  const db = getFirestore();
-  const queueRef = jobQueueEntryDoc(jobId);
-  const masterJobRef = jobDoc(jobId);
-  const errorMessage = error instanceof Error ? error.message : String(error);
-
-  await db.runTransaction(async (transaction) => {
-    const queueDoc = await transaction.get(queueRef);
-    if (!queueDoc.exists) return;
-
-    const queue = queueDoc.data() as JobQueueEntry;
-    if (queue.status !== 'LEASED' || queue.lease?.leaseToken !== leaseToken) return;
-
-    const retryUpdate = {
-      status: 'PENDING',
-      lease: FieldValue.delete(),
-      availableAt: Timestamp.fromMillis(Date.now() + DISPATCH_RETRY_DELAY_MS),
-      lastDispatchError: errorMessage.slice(0, 1000),
-      updatedAt: FieldValue.serverTimestamp(),
-    };
-    transaction.update(queueRef, retryUpdate);
-    transaction.update(masterJobRef, {
-      status: 'PENDING',
-      lease: FieldValue.delete(),
-      lastDispatchError: errorMessage.slice(0, 1000),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-  });
 }
 
 export const processQueueTick = onSchedule('every 1 minutes', async () => {
