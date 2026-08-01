@@ -49,16 +49,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Server-only reliability controls. These records contain ownership hashes,
-    // delivery state, retry metadata, and provider message identifiers.
-    match /jobIdempotencyBindings/{bindingId} {
-      allow read, write: if false;
-    }
-
-    match /jobTerminalEventOutbox/{eventId} {
-      allow read, write: if false;
-    }
-
     match /{document=**} {
       allow read, write: if false;
     }
