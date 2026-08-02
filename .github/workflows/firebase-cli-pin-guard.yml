@@ -17,11 +17,18 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Checkout exact candidate
+      - name: Checkout exact candidate with read-only token
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
+          submodules: false
+
+      - name: Scrub checkout authentication without traversing legacy gitlinks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          test -z "$(git config --local --get-all http.https://github.com/.extraheader || true)"
 
       - name: Verify exact clean checkout
         shell: bash
