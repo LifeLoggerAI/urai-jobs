@@ -46,6 +46,7 @@ jobs:
           mkdir -p evidence/uraiprod-removal
           git ls-tree HEAD UrAiProd > evidence/uraiprod-removal/before-tree.txt
           git rm --cached UrAiProd
+          rm -rf UrAiProd
           cat > scripts/verify-defined-gitlinks.sh <<'EOF'
           #!/usr/bin/env bash
           set -euo pipefail
