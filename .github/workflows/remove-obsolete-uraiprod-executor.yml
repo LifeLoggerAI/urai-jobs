@@ -43,6 +43,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p evidence/uraiprod-removal
+          git ls-tree HEAD UrAiProd > evidence/uraiprod-removal/before-tree.txt
           git rm --cached UrAiProd
           cat > scripts/verify-defined-gitlinks.sh <<'EOF'
           #!/usr/bin/env bash
@@ -100,8 +102,6 @@ jobs:
                   run: scripts/verify-defined-gitlinks.sh HEAD
           EOF
 
-          mkdir -p evidence/uraiprod-removal
-          git ls-tree "$EXPECTED_BASE" UrAiProd > evidence/uraiprod-removal/before-tree.txt
           git ls-files --stage UrAiProd > evidence/uraiprod-removal/after-index.txt
           cat > evidence/uraiprod-removal/authority.txt <<EOF
           owner_decision=REMOVE URAIPROD GITLINK AS OBSOLETE
