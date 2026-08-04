@@ -1,0 +1,66 @@
+name: Firebase CLI Pin Guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify immutable Firebase CLI authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout exact candidate with read-only token
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: false
+
+      - name: Scrub checkout authentication without traversing legacy gitlinks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          test -z "$(git config --local --get-all http.https://github.com/.extraheader || true)"
+
+      - name: Verify exact clean checkout
+        shell: bash
+        env:
+          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Enforce reviewed Firebase CLI version
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='15.24.0'
+          files=(
+            .github/workflows/urai-jobs-ci.yml
+            .github/workflows/urai-jobs-runtime-ci.yml
+            .github/workflows/career-production-release.yml
+          )
+
+          for file in "${files[@]}"; do
+            test -f "$file"
+            if grep -nE 'firebase-tools@(latest|next|canary|preview|rc)' "$file"; then
+              echo "Mutable or prerelease Firebase CLI authority found in $file" >&2
+              exit 1
+            fi
+            grep -q "firebase-tools@${expected}" "$file"
+          done
+
+          test "$(grep -Rho "firebase-tools@${expected}" .github/workflows | wc -l | tr -d ' ')" -ge 3
+          echo "Firebase CLI authority is pinned to ${expected} across Jobs CI, Runtime CI, and protected Career release."
+
+      - name: Preserve non-deployment boundary
+        run: echo 'This guard performs no deployment, provider call, credential validation, IAM action, billing action, or production-data mutation.'
