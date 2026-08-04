@@ -1,0 +1,50 @@
+name: UrAiProd Gitlink Diagnostic
+
+on:
+  push:
+    branches:
+      - diagnostic/uraiprod-gitlink-20260804
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-gitlink:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact diagnostic head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Capture authoritative tree evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p gitlink-evidence
+          git rev-parse HEAD > gitlink-evidence/head.txt
+          git ls-tree HEAD UrAiProd | tee gitlink-evidence/ls-tree.txt
+          test -s gitlink-evidence/ls-tree.txt
+          awk '$1=="160000" {print $3}' gitlink-evidence/ls-tree.txt > gitlink-evidence/gitlink-object.txt
+          test "$(wc -l < gitlink-evidence/gitlink-object.txt)" -eq 1
+          object="$(cat gitlink-evidence/gitlink-object.txt)"
+          git log --all --format='%H%x09%an%x09%ae%x09%aI%x09%s' -- UrAiProd > gitlink-evidence/path-history.tsv
+          git log --all --diff-filter=A --format='%H%x09%an%x09%ae%x09%aI%x09%s' -- UrAiProd > gitlink-evidence/introduction.tsv
+          git grep -n -I -E 'UrAiProd|gitlink|submodule' HEAD -- . ':!UrAiProd' > gitlink-evidence/references.txt || true
+          find . -maxdepth 3 -type f \( -name '.gitmodules' -o -name 'firebase.json' -o -name 'package.json' -o -name '*.yml' -o -name '*.yaml' \) -print | sort > gitlink-evidence/control-files.txt
+          printf 'gitlink_object=%s\n' "$object" > gitlink-evidence/summary.txt
+          printf 'gitmodules_present=%s\n' "$(test -f .gitmodules && echo yes || echo no)" >> gitlink-evidence/summary.txt
+          printf 'reference_count=%s\n' "$(wc -l < gitlink-evidence/references.txt)" >> gitlink-evidence/summary.txt
+          printf 'history_count=%s\n' "$(wc -l < gitlink-evidence/path-history.tsv)" >> gitlink-evidence/summary.txt
+          git status --porcelain=v1 > gitlink-evidence/clean-tree.txt
+          test ! -s gitlink-evidence/clean-tree.txt
+
+      - name: Upload gitlink evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: uraiprod-gitlink-${{ github.sha }}
+          path: gitlink-evidence
+          if-no-files-found: error
+          retention-days: 90
