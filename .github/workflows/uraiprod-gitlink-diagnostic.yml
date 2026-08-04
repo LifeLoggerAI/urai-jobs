@@ -18,13 +18,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout exact diagnostic head
+      - name: Checkout exact diagnostic head with read-only token
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-          persist-credentials: false
+          persist-credentials: true
           submodules: false
+
+      - name: Scrub checkout authentication without traversing legacy gitlinks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          test -z "$(git config --local --get-all http.https://github.com/.extraheader || true)"
 
       - name: Prove exact clean diagnostic head
         shell: bash
