@@ -39,7 +39,7 @@ jobs:
           test ! -e .gitmodules
           test -z "$(git status --porcelain --untracked-files=all)"
 
-      - name: Remove orphan and add permanent undefined-gitlink guard
+      - name: Remove orphan and add permanent verifier
         shell: bash
         run: |
           set -euo pipefail
@@ -69,29 +69,6 @@ jobs:
           done
           EOF
           chmod +x scripts/verify-defined-gitlinks.sh
-          cat > .github/workflows/defined-gitlink-guard.yml <<'EOF'
-          name: Defined Gitlink Guard
-          on:
-            pull_request:
-            push:
-              branches: [main]
-            workflow_dispatch:
-          permissions:
-            contents: read
-          jobs:
-            verify:
-              runs-on: ubuntu-24.04
-              timeout-minutes: 5
-              steps:
-                - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-                  with:
-                    fetch-depth: 1
-                    persist-credentials: false
-                    submodules: false
-                    show-progress: false
-                - name: Reject undefined or branch-following gitlinks
-                  run: scripts/verify-defined-gitlinks.sh HEAD
-          EOF
           git ls-files --stage UrAiProd > evidence/uraiprod-removal/after-index.txt
           cat > evidence/uraiprod-removal/authority.txt <<EOF
           owner_decision=REMOVE URAIPROD GITLINK AS OBSOLETE
@@ -104,6 +81,7 @@ jobs:
           removed_path=UrAiProd
           removed_object=$EXPECTED_OBJECT
           repository_untouched=LifeLoggerAI/UrAiProd
+          guard_workflow_publication=separate_connector_commit_required
           EOF
 
       - name: Verify staged bounded repair
@@ -124,7 +102,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit -m 'Remove obsolete UrAiProd gitlink and guard tree integrity'
+          git commit -m 'Remove obsolete UrAiProd gitlink and retain authority evidence'
           scripts/verify-defined-gitlinks.sh HEAD
           test -z "$(git ls-tree HEAD UrAiProd)"
           test -z "$(git status --porcelain --untracked-files=all)"
