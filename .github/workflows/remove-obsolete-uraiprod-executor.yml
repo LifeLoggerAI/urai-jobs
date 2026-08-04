@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 4
+          fetch-depth: 0
           persist-credentials: true
           submodules: false
           show-progress: false
@@ -49,19 +49,13 @@ jobs:
           cat > scripts/verify-defined-gitlinks.sh <<'EOF'
           #!/usr/bin/env bash
           set -euo pipefail
-
           treeish=${1:-HEAD}
           mapfile -t gitlinks < <(git ls-tree -r "$treeish" | awk '$1 == "160000" { print $4 }')
           if ((${#gitlinks[@]} == 0)); then
             echo "No gitlinks present in $treeish."
             exit 0
           fi
-
-          test -f .gitmodules || {
-            printf 'Undefined gitlinks require .gitmodules: %s\n' "${gitlinks[*]}" >&2
-            exit 1
-          }
-
+          test -f .gitmodules || { printf 'Undefined gitlinks require .gitmodules: %s\n' "${gitlinks[*]}" >&2; exit 1; }
           for path in "${gitlinks[@]}"; do
             name=$(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk -v path="$path" '$2 == path { sub(/^submodule\./, "", $1); sub(/\.path$/, "", $1); print $1 }')
             test -n "$name" || { echo "No .gitmodules entry for $path" >&2; exit 1; }
@@ -74,25 +68,21 @@ jobs:
           done
           EOF
           chmod +x scripts/verify-defined-gitlinks.sh
-
           cat > .github/workflows/defined-gitlink-guard.yml <<'EOF'
           name: Defined Gitlink Guard
-
           on:
             pull_request:
             push:
               branches: [main]
             workflow_dispatch:
-
           permissions:
             contents: read
-
           jobs:
             verify:
               runs-on: ubuntu-24.04
               timeout-minutes: 5
               steps:
-                - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+                - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
                   with:
                     fetch-depth: 1
                     persist-credentials: false
@@ -101,7 +91,6 @@ jobs:
                 - name: Reject undefined or branch-following gitlinks
                   run: scripts/verify-defined-gitlinks.sh HEAD
           EOF
-
           git ls-files --stage UrAiProd > evidence/uraiprod-removal/after-index.txt
           cat > evidence/uraiprod-removal/authority.txt <<EOF
           owner_decision=REMOVE URAIPROD GITLINK AS OBSOLETE
