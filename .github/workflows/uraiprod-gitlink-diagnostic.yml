@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - diagnostic/uraiprod-gitlink-20260804
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -12,39 +15,75 @@ permissions:
 jobs:
   inspect-gitlink:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout exact diagnostic head
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+          submodules: false
 
-      - name: Capture authoritative tree evidence
+      - name: Prove exact clean diagnostic head
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p gitlink-evidence
-          git rev-parse HEAD > gitlink-evidence/head.txt
-          git ls-tree HEAD UrAiProd | tee gitlink-evidence/ls-tree.txt
-          test -s gitlink-evidence/ls-tree.txt
-          awk '$1=="160000" {print $3}' gitlink-evidence/ls-tree.txt > gitlink-evidence/gitlink-object.txt
-          test "$(wc -l < gitlink-evidence/gitlink-object.txt)" -eq 1
-          object="$(cat gitlink-evidence/gitlink-object.txt)"
-          git log --all --format='%H%x09%an%x09%ae%x09%aI%x09%s' -- UrAiProd > gitlink-evidence/path-history.tsv
-          git log --all --diff-filter=A --format='%H%x09%an%x09%ae%x09%aI%x09%s' -- UrAiProd > gitlink-evidence/introduction.tsv
-          git grep -n -I -E 'UrAiProd|gitlink|submodule' HEAD -- . ':!UrAiProd' > gitlink-evidence/references.txt || true
-          find . -maxdepth 3 -type f \( -name '.gitmodules' -o -name 'firebase.json' -o -name 'package.json' -o -name '*.yml' -o -name '*.yaml' \) -print | sort > gitlink-evidence/control-files.txt
-          printf 'gitlink_object=%s\n' "$object" > gitlink-evidence/summary.txt
-          printf 'gitmodules_present=%s\n' "$(test -f .gitmodules && echo yes || echo no)" >> gitlink-evidence/summary.txt
-          printf 'reference_count=%s\n' "$(wc -l < gitlink-evidence/references.txt)" >> gitlink-evidence/summary.txt
-          printf 'history_count=%s\n' "$(wc -l < gitlink-evidence/path-history.tsv)" >> gitlink-evidence/summary.txt
-          git status --porcelain=v1 > gitlink-evidence/clean-tree.txt
-          test ! -s gitlink-evidence/clean-tree.txt
+          expected="${{ github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Capture authoritative tree evidence outside checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/gitlink-evidence"
+          rm -rf "$evidence"
+          mkdir -p "$evidence"
+          head="$(git rev-parse HEAD)"
+          printf '%s\n' "$head" > "$evidence/head.txt"
+          git rev-parse 'HEAD^{tree}' > "$evidence/head-tree.txt"
+          git ls-tree HEAD UrAiProd | tee "$evidence/ls-tree.txt"
+          test -s "$evidence/ls-tree.txt"
+          awk '$1=="160000" {print $3}' "$evidence/ls-tree.txt" > "$evidence/gitlink-object.txt"
+          test "$(wc -l < "$evidence/gitlink-object.txt")" -eq 1
+          object="$(cat "$evidence/gitlink-object.txt")"
+
+          git log --all --format='%H%x09%an%x09%ae%x09%aI%x09%s' -- UrAiProd > "$evidence/path-history.tsv"
+          git log --all --diff-filter=A --format='%H%x09%an%x09%ae%x09%aI%x09%s' -- UrAiProd > "$evidence/introduction.tsv"
+          git log --all --raw --format='%H%x09%an%x09%ae%x09%aI%x09%s' -- UrAiProd > "$evidence/raw-path-history.txt"
+          git grep -n -I -E 'UrAiProd|gitlink|submodule' HEAD -- . ':!UrAiProd' > "$evidence/all-references.txt" || true
+          git grep -n -I -E 'UrAiProd|gitlink|submodule' HEAD -- '.github/workflows/**' 'package.json' 'firebase.json' 'scripts/**' 'docs/**' ':!UrAiProd' > "$evidence/control-references.txt" || true
+          find . -maxdepth 4 -type f \( -name '.gitmodules' -o -name 'firebase.json' -o -name 'package.json' -o -name '*.yml' -o -name '*.yaml' -o -iname '*rollback*' -o -iname '*deploy*' \) -print | LC_ALL=C sort > "$evidence/control-files.txt"
+          if test -f .gitmodules; then cp .gitmodules "$evidence/gitmodules.txt"; else printf 'ABSENT\n' > "$evidence/gitmodules.txt"; fi
+
+          {
+            echo "diagnostic_head=$head"
+            echo "diagnostic_tree=$(cat "$evidence/head-tree.txt")"
+            echo "gitlink_mode=$(awk '{print $1}' "$evidence/ls-tree.txt")"
+            echo "gitlink_type=$(awk '{print $2}' "$evidence/ls-tree.txt")"
+            echo "gitlink_object=$object"
+            echo "gitlink_path=$(awk '{print $4}' "$evidence/ls-tree.txt")"
+            echo "gitmodules_present=$(test -f .gitmodules && echo yes || echo no)"
+            echo "reference_count=$(wc -l < "$evidence/all-references.txt")"
+            echo "control_reference_count=$(wc -l < "$evidence/control-references.txt")"
+            echo "history_count=$(wc -l < "$evidence/path-history.tsv")"
+            echo "introduction_count=$(wc -l < "$evidence/introduction.tsv")"
+          } | tee "$evidence/summary.txt"
+
+          git status --porcelain=v1 --untracked-files=all > "$evidence/repository-status-after-evidence.txt"
+          test ! -s "$evidence/repository-status-after-evidence.txt"
+          (
+            cd "$evidence"
+            sha256sum head.txt head-tree.txt ls-tree.txt gitlink-object.txt path-history.tsv introduction.tsv raw-path-history.txt all-references.txt control-references.txt control-files.txt gitmodules.txt summary.txt repository-status-after-evidence.txt > sha256sums.txt
+          )
 
       - name: Upload gitlink evidence
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: uraiprod-gitlink-${{ github.sha }}
-          path: gitlink-evidence
+          name: uraiprod-gitlink-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/gitlink-evidence
           if-no-files-found: error
           retention-days: 90
