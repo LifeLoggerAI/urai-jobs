@@ -1,0 +1,137 @@
+name: Remove Obsolete UrAiProd Executor
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/remove-obsolete-uraiprod-executor.yml'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  EXPECTED_BASE: 7cbfcb3d5e0ba5e14a6d7f60f69757f5278f7652
+  EXPECTED_BRANCH: repair/remove-obsolete-uraiprod-gitlink-20260804
+  EXPECTED_OBJECT: ea4704699b14666758df49758b0fbcd8aa99bc38
+
+jobs:
+  repair:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'repair/remove-obsolete-uraiprod-gitlink-20260804'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact repair branch without submodules
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+          persist-credentials: true
+          submodules: false
+          show-progress: false
+
+      - name: Prove executor-only trigger and exact orphan
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_BASE"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/remove-obsolete-uraiprod-executor.yml"
+          test "$(git ls-tree HEAD UrAiProd)" = "160000 commit $EXPECTED_OBJECT	UrAiProd"
+          test ! -e .gitmodules
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Remove orphan and add permanent undefined-gitlink guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm --cached UrAiProd
+          cat > scripts/verify-defined-gitlinks.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          mapfile -t gitlinks < <(git ls-tree -r HEAD | awk '$1 == "160000" { print $4 }')
+          if ((${#gitlinks[@]} == 0)); then
+            echo 'No gitlinks present.'
+            exit 0
+          fi
+
+          test -f .gitmodules || {
+            printf 'Undefined gitlinks require .gitmodules: %s\n' "${gitlinks[*]}" >&2
+            exit 1
+          }
+
+          for path in "${gitlinks[@]}"; do
+            name=$(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk -v path="$path" '$2 == path { sub(/^submodule\./, "", $1); sub(/\.path$/, "", $1); print $1 }')
+            test -n "$name" || { echo "No .gitmodules entry for $path" >&2; exit 1; }
+            url=$(git config -f .gitmodules --get "submodule.$name.url")
+            branch=$(git config -f .gitmodules --get "submodule.$name.branch" || true)
+            test -n "$url" || { echo "No URL for $path" >&2; exit 1; }
+            test -z "$branch" || { echo "Branch-following submodule forbidden for $path" >&2; exit 1; }
+            object=$(git ls-tree HEAD "$path" | awk '{print $3}')
+            [[ "$object" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid immutable object for $path" >&2; exit 1; }
+          done
+          EOF
+          chmod +x scripts/verify-defined-gitlinks.sh
+
+          cat > .github/workflows/defined-gitlink-guard.yml <<'EOF'
+          name: Defined Gitlink Guard
+
+          on:
+            pull_request:
+            push:
+              branches: [main]
+            workflow_dispatch:
+
+          permissions:
+            contents: read
+
+          jobs:
+            verify:
+              runs-on: ubuntu-24.04
+              timeout-minutes: 5
+              steps:
+                - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+                  with:
+                    fetch-depth: 1
+                    persist-credentials: false
+                    submodules: false
+                    show-progress: false
+                - name: Reject undefined or branch-following gitlinks
+                  run: scripts/verify-defined-gitlinks.sh
+          EOF
+
+          mkdir -p evidence/uraiprod-removal
+          git ls-tree HEAD^ UrAiProd > evidence/uraiprod-removal/before-tree.txt
+          git ls-tree HEAD UrAiProd > evidence/uraiprod-removal/after-tree.txt
+          cat > evidence/uraiprod-removal/authority.txt <<EOF
+          owner_decision=REMOVE URAIPROD GITLINK AS OBSOLETE
+          diagnostic_head=c780f431fc2c536ddb9e7e3b8e8d5930cf8fbf30
+          diagnostic_run=30955513760
+          diagnostic_job=92147481486
+          diagnostic_artifact=8910841433
+          diagnostic_digest=sha256:ec828a419a082538ca13993b01b7ef177c13cef7acd3c628378622386634aed1
+          removed_path=UrAiProd
+          removed_object=$EXPECTED_OBJECT
+          repository_untouched=LifeLoggerAI/UrAiProd
+          EOF
+
+      - name: Verify bounded repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/verify-defined-gitlinks.sh
+          test ! -e UrAiProd
+          test ! -e .gitmodules
+          test ! -s evidence/uraiprod-removal/after-tree.txt
+          grep -Fx "160000 commit $EXPECTED_OBJECT	UrAiProd" evidence/uraiprod-removal/before-tree.txt
+
+      - name: Remove one-time executor and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/remove-obsolete-uraiprod-executor.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Remove obsolete UrAiProd gitlink and guard tree integrity'
+          git push origin "HEAD:$EXPECTED_BRANCH"
