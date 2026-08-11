@@ -4,45 +4,27 @@ This runbook captures the final steps required to publish the standalone URAI Jo
 
 ## Current repo status
 
-The repository now includes:
+The repository includes local verification, smoke verification, build/typecheck gates, system audit, production deploy/publish workflows, worker deployment and URL export, GCS bootstrap, Firebase deploy automation, worker/domain verification, and deployment artifact stamping.
 
-- Local runtime verification: `pnpm urai-jobs:verify`
-- Smoke verification: `pnpm urai-jobs:smoke`
-- Build and typecheck gates
-- System audit: `pnpm audit:systems`
-- Production deploy/publish workflow: `.github/workflows/production-deploy-publish.yml`
-- Worker deployment automation
-- Worker URL export automation
-- GCS bucket bootstrap automation
-- Firebase deploy automation
-- Worker verification
-- Custom domain verification
-- Deployment artifact stamping
+## Required GitHub deploy identity
 
-## Required GitHub secret
+GitHub Actions deployment is WIF-only. Do not create or upload a service-account JSON key and do not use a Firebase CLI token as deployment authentication.
 
-At least one Google Cloud credential secret must exist before the deploy workflow can authenticate:
+Configure these non-secret GitHub variables:
 
-- `FIREBASE_SERVICE_ACCOUNT_URAI_JOBS`
+```text
+GCP_WIF_PROVIDER
+GCP_DEPLOY_SERVICE_ACCOUNT
+URAI_JOBS_FIREBASE_PROJECT_ID
+```
 
-or:
+Google Cloud must separately trust the `LifeLoggerAI/urai-jobs` GitHub OIDC subject through the configured Workload Identity Provider, and the deploy service account must have only the permissions required for the governed deploy operations. The repository cannot prove those provider-side bindings by itself.
 
-- `GCP_SERVICE_ACCOUNT_JSON`
-
-A stable webhook secret is recommended but no longer required for the first deploy attempt because the workflow can generate a per-run fallback:
-
-- `WEBHOOK_SIGNING_SECRET`
-
-Recommended optional secrets:
-
-- `PROD_SMOKE_ID_TOKEN`
-- `WORKER_SERVICE_ACCOUNT_EMAIL`
-- `MAILGUN_KEY`
-- `MAILGUN_DOMAIN`
+Required provider/application secrets remain separate from deploy identity. In particular, configure a stable `WEBHOOK_SIGNING_SECRET` before relying on external webhook verification. Optional runtime secrets include `PROD_SMOKE_ID_TOKEN`, `WORKER_SERVICE_ACCOUNT_EMAIL`, `MAILGUN_KEY`, and `MAILGUN_DOMAIN` where actually used.
 
 ## Deploy workflow
 
-Run this GitHub Actions workflow:
+Run:
 
 - `URAI Jobs Deploy Publish`
 
@@ -50,73 +32,54 @@ Inputs:
 
 - `confirm_launch_unlock`: `LAUNCH-UNLOCK`
 - `deploy_workers`: `true`
-- `run_smoke`: `false` for first deploy
+- `run_smoke`: `false` for first controlled deploy
 
-After `PROD_SMOKE_ID_TOKEN` exists, rerun with:
-
-- `run_smoke`: `true`
+After a short-lived `PROD_SMOKE_ID_TOKEN` is available, rerun with `run_smoke: true`.
 
 ## Expected workflow order
 
 1. Require launch unlock.
-2. Resolve or generate webhook signing secret.
-3. Install Node 22 and pnpm 8.15.9.
-4. Authenticate to Google Cloud.
-5. Install dependencies.
-6. Run local verification gates.
-7. Create or verify the artifact bucket.
-8. Deploy Cloud Run workers.
-9. Export live worker URLs.
-10. Run production env precheck.
-11. Run system audit.
-12. Deploy Firebase runtime.
-13. Verify custom domains.
-14. Verify workers.
-15. Optionally run callable production smoke.
-16. Stamp deployment artifact.
+2. Require WIF provider and deploy service-account variables.
+3. Authenticate through GitHub OIDC + Google Workload Identity Federation.
+4. Resolve application/provider secrets without treating them as deploy identity.
+5. Install dependencies and run local verification gates.
+6. Create or verify the artifact bucket.
+7. Deploy Cloud Run workers.
+8. Export live worker URLs.
+9. Run production environment precheck and system audit.
+10. Deploy Firebase runtime.
+11. Verify Hosting/custom domains and workers.
+12. Optionally run callable production smoke.
+13. Stamp deployment evidence.
 
 ## Known custom domain issue
 
-The current verifier has shown:
-
-- `https://urai-jobs-563121397472.web.app` serves the expected app shell.
-- `https://urai-jobs.web.app` serves the expected app shell.
-- `https://uraijobs.com` returns HTTP 200 but does not serve the expected app shell.
-- `https://www.uraijobs.com` returns HTTP 200 but does not serve the expected app shell.
-
-This means Firebase Hosting is live, but apex and www are not routed to the correct Firebase Hosting site.
-
-## Domain acceptance criteria
-
-`pnpm domains:verify` must pass for all default URLs:
-
-- `https://uraijobs.com`
-- `https://www.uraijobs.com`
-- `https://urai-jobs-563121397472.web.app`
-- `https://urai-jobs.web.app`
+Historical verification showed the Firebase Hosting URLs serving the expected app shell while the apex/www custom domains were not yet proven attached to the intended Hosting site. Revalidate current DNS/Hosting state before changing that conclusion.
 
 ## Firebase Hosting target
 
-The configured hosting site is:
+Expected configured Hosting site:
 
 - `urai-jobs-563121397472`
 
-Attach both custom domains to this Firebase Hosting site:
+Custom domains intended for that site:
 
 - `uraijobs.com`
 - `www.uraijobs.com`
 
-Then update DNS records using the values Firebase Hosting provides.
+Use the DNS values Firebase Hosting currently provides; do not rely on stale copied records.
 
 ## Final acceptance criteria
 
 URAI Jobs Runtime is live only when:
 
-- `pnpm prod:precheck` passes in the deploy workflow.
-- Cloud Run workers are deployed.
-- Worker URLs are exported.
+- WIF exchange succeeds for the exact repository and intended deploy service account.
+- No long-lived JSON/token deploy credential is required.
+- `pnpm prod:precheck` passes in the governed deploy workflow.
+- Cloud Run workers deploy and verify healthy.
 - Firebase deploy completes.
-- `pnpm domains:verify` passes.
-- `pnpm prod:verify-workers` passes.
-- Deployment artifact is stamped.
-- Optional callable smoke passes after `PROD_SMOKE_ID_TOKEN` is configured.
+- Hosting/custom-domain verification passes for the intended release scope.
+- Deployment artifact is stamped and retained.
+- Callable smoke passes when enabled.
+
+Until those provider/runtime receipts exist, production remains **NO-GO**.
