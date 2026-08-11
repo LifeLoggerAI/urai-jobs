@@ -1,66 +1,60 @@
 # URAI Jobs Live Deployment Blockers and Final Release Actions
 
-Status: repository implementation and release automation prepared
+Status: repository implementation and release automation prepared; production remains fail-closed
 Default branch: `main`
-Repository permissions observed: admin/maintain/push available through GitHub connector
 
 This document records what remains before anyone can truthfully mark URAI-Jobs V1-V5 as live in production.
 
 ## What is complete in the repo
 
-- V1 Career Mirror page, model, local persistence, profile/fit runtime hooks.
-- V2 Marketplace page, candidate/employer/opportunity/document/packet models, document/packet runtime hooks.
-- V3 Automation page, bounded rules, pause controls, review ledger, follow-up runtime hook.
-- V4 Decision page, interview prep, offer comparison, spatial portal runtime hooks.
-- V5 Passport page, profile packets, economic path graph, skill gaps, Passport export runtime hook.
-- Top navigation links V1-V5.
-- Landing page links V1-V5.
-- Version Console links V1-V5.
-- Career worker package exists under `workers/career-worker`.
-- Career worker build/typecheck is included in root scripts.
-- Career surface verifier exists.
-- Career runtime smoke verifier exists.
-- Production career smoke script exists.
-- Production career smoke evidence validator exists.
-- Career smoke Markdown report generator exists.
-- Bundled career release evidence command exists.
-- Manual Career Production Release GitHub Actions workflow exists.
-- Release evidence template requires V1-V5 smoke evidence.
-- Career production release runbook exists.
-- Firebase Hosting already rewrites all direct SPA routes to `/index.html`.
+- V1-V5 career surfaces, worker/runtime hooks, local verification, smoke and release-evidence tooling exist.
+- Firebase Hosting direct-route rewrites exist.
+- Production deploy/verify workflows use GitHub OIDC + Google Workload Identity Federation rather than long-lived service-account JSON or Firebase CLI tokens.
+- `pnpm urai-jobs:verify` includes a static WIF deploy-auth contract that rejects legacy JSON/token auth in governed deploy workflows.
 
 ## What is not yet proven live
 
-These items require external runtime execution, secrets, or cloud environment access beyond repository file writes.
+These items require external runtime execution, protected variables/secrets, or cloud control-plane evidence.
 
 | Blocker | Why it matters | Required action |
 | --- | --- | --- |
-| GitHub Actions has no status attached to latest commits | No CI pass/fail evidence is visible yet | Manually dispatch `Career Production Release`, `Career Surfaces CI`, or `URAI Jobs Runtime CI` |
-| `GCP_SERVICE_ACCOUNT_JSON` secret not verified | Production workflow needs Google auth | Add/verify GitHub environment or repository secret `GCP_SERVICE_ACCOUNT_JSON` |
-| Production environment approval not verified | Workflow uses `environment: production` | Ensure GitHub `production` environment exists and approvals are configured as desired |
-| Firebase/GCP project not executed | Deployment/smoke needs real project | Dispatch workflow with correct `firebase_project_id` and `gcp_region` |
-| `CAREER_WORKER_URL` not proven configured in production | Career runtime jobs need deployed worker route | Configure production Functions/worker env with deployed career worker URL |
-| Career worker health not proven | Need deployed worker health response | Run `pnpm prod:verify-workers` or inspect workflow output |
-| Production smoke job IDs not generated yet | Need evidence that all ten career job types work live | Run `pnpm prod:career-smoke` or the production workflow |
-| Career smoke JSON/report not generated yet | Required release artifact | Run `pnpm prod:career-release-evidence` after smoke |
-| Terminal states/artifacts not verified | Created job IDs alone are not terminal success | Confirm `SUCCESS` jobs, `DONE` queue states, and output artifacts |
-| Public domain/live URL not verified | User-facing live status depends on hosting/domain | Confirm Firebase Hosting URL/custom domain after deploy |
+| WIF provider/trust binding not verified | GitHub Actions must exchange OIDC for short-lived Google credentials | Configure and validate `GCP_WIF_PROVIDER` for `LifeLoggerAI/urai-jobs` |
+| Deploy service account binding not verified | Workflows require an explicitly impersonated least-privilege deploy identity | Configure and validate `GCP_DEPLOY_SERVICE_ACCOUNT` and required IAM only |
+| Production project variable not verified | Deploy workflows must target the intended project | Configure `URAI_JOBS_FIREBASE_PROJECT_ID` or `FIREBASE_PROJECT_ID` |
+| Production environment approval not verified | Workflows use protected GitHub environments | Ensure `production` / `prod` environment protection is configured as intended |
+| Firebase/GCP deployment not executed | Repository readiness is not live-runtime proof | Dispatch the governed release workflow after WIF is validated |
+| `CAREER_WORKER_URL` not proven configured | Career jobs need the deployed worker endpoint | Configure runtime environment with the verified worker URL |
+| Worker health and terminal artifacts not proven | Release evidence requires real terminal processing | Run worker verification and career production smoke |
+| Public domain/live URL not verified | User-facing live status depends on correct Hosting/DNS | Verify Firebase Hosting and custom domains after deploy |
+
+## WIF-only authentication boundary
+
+Do **not** create, download, upload, or restore a service-account JSON key for GitHub Actions. Do not use `FIREBASE_TOKEN`, `GCP_SERVICE_ACCOUNT_JSON`, `FIREBASE_SERVICE_ACCOUNT_URAI_JOBS`, or `GCP_SA_KEY` as deploy credentials.
+
+The governed GitHub Actions path requires non-secret variables:
+
+```text
+GCP_WIF_PROVIDER
+GCP_DEPLOY_SERVICE_ACCOUNT
+URAI_JOBS_FIREBASE_PROJECT_ID
+```
+
+Provider-side workload identity trust and IAM bindings must be established in Google Cloud and validated before any production dispatch. Repository configuration alone does not prove those bindings exist.
 
 ## Final release sequence
 
-Use the manual GitHub workflow if secrets and environment are configured:
+1. Configure the Google Workload Identity Provider trust for `LifeLoggerAI/urai-jobs`.
+2. Bind the dedicated deploy service account with least privilege.
+3. Set `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT`, and the production project variable in GitHub.
+4. Confirm protected production environment rules.
+5. Run `pnpm urai-jobs:verify` and required CI on the exact release head.
+6. Dispatch `Career Production Release` or the governed production deploy workflow with its exact confirmation string.
+7. Download and retain the release evidence artifact.
+8. Verify worker health, terminal job states, artifacts, Hosting URLs, and rollback path.
 
-1. Open GitHub Actions.
-2. Run `Career Production Release`.
-3. Inputs:
-   - `firebase_project_id`: production Firebase project ID
-   - `gcp_region`: `us-central1` unless changed
-   - `confirm_release`: `CAREER-RELEASE`
-4. Download the `career-production-release-evidence` artifact.
-5. Copy `docs/RELEASE_EVIDENCE_TEMPLATE.md` to `docs/PRODUCTION_VALIDATION_<YYYY-MM-DD>.md`.
-6. Fill the release evidence with workflow URLs, smoke job IDs, worker health, terminal statuses, artifacts, and rollback path.
+## Equivalent authenticated command sequence
 
-## Equivalent command sequence
+For an operator already authenticated through short-lived Google credentials / ADC:
 
 ```bash
 pnpm install --no-frozen-lockfile
@@ -84,24 +78,15 @@ pnpm prod:career-release-evidence
 
 URAI-Jobs V1-V5 can be marked live only when all are true:
 
-- GitHub CI/workflow run passed and URL is recorded.
-- Firebase Hosting deploy completed and URL is reachable.
-- Direct routes work:
-  - `/career-mirror`
-  - `/career-marketplace`
-  - `/career-automation`
-  - `/career-decision`
-  - `/career-passport`
-  - `/career-versions`
-- Career worker is deployed and healthy.
-- `CAREER_WORKER_URL` is configured in production.
-- Generic production smoke passes.
-- V1-V5 career production smoke creates all ten job IDs.
-- Career smoke evidence JSON validates.
-- Career smoke Markdown report renders.
-- Each career job reaches expected terminal status and artifacts are verified.
-- Rollback path is documented.
+- Exact-head CI/workflow evidence is green and recorded.
+- WIF exchange succeeds for the intended repository and deploy service account.
+- No long-lived GitHub deploy credential is required.
+- Firebase Hosting deploy completed and intended URLs are reachable.
+- Career worker is deployed, healthy, and correctly configured.
+- Generic and V1-V5 production smoke passes.
+- Career evidence validates and terminal states/artifacts are verified.
+- Rollback path and protected environment ownership are documented.
 
 ## Current verdict
 
-The repository is prepared for live release execution. The remaining work is operational execution and proof collection in GitHub Actions/Firebase/GCP, not additional product scaffolding.
+Repository-side deployment authentication is being hardened to WIF-only. Production remains **NO-GO** until provider-side WIF/IAM configuration and live deployment evidence are independently verified.
