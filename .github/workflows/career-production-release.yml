@@ -33,6 +33,10 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   release-evidence:
     name: Deploy, smoke, and produce career release evidence
@@ -51,6 +55,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Require WIF deploy identity
+        shell: bash
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          if [ -z "$WIF_PROVIDER" ] || [ -z "$DEPLOY_SERVICE_ACCOUNT" ]; then
+            echo "::error::Configure GCP_WIF_PROVIDER and GCP_DEPLOY_SERVICE_ACCOUNT. Long-lived deploy keys are prohibited."
+            exit 1
+          fi
+
       - name: Enable pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -62,13 +78,19 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Authenticate to Google Cloud
+      - name: Authenticate to Google Cloud with WIF
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+          project_id: ${{ inputs.firebase_project_id }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ inputs.firebase_project_id }}
 
       - name: Install Firebase CLI
         run: npm install --global firebase-tools@latest
@@ -105,7 +127,6 @@ jobs:
           GCLOUD_PROJECT: ${{ inputs.firebase_project_id }}
           GCP_REGION: ${{ inputs.gcp_region }}
           CAREER_WORKER_URL: ${{ inputs.career_worker_url }}
-          GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
         run: pnpm prod:career-preflight
 
       - name: Deploy Firebase production runtime
