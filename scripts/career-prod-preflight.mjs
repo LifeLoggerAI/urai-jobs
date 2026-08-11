@@ -30,21 +30,19 @@ requiredEnv.forEach((name) => ok(`required env ${name}`, hasValue(name)));
 
 ok('GCP_REGION defaults are explicit', process.env.GCP_REGION === 'us-central1' || hasValue('GCP_REGION'));
 ok('CAREER_WORKER_URL looks like URL', hasValue('CAREER_WORKER_URL') && /^https?:\/\//.test(process.env.CAREER_WORKER_URL));
-ok('at least one smoke auth strategy is available', optionalAuthEnv.some(hasValue) || hasValue('GOOGLE_APPLICATION_CREDENTIALS') || hasValue('GCLOUD_PROJECT'));
+ok(
+  'at least one smoke or workload auth strategy is available',
+  optionalAuthEnv.some(hasValue) || hasValue('GOOGLE_APPLICATION_CREDENTIALS') || hasValue('GCLOUD_PROJECT')
+);
 
 if (hasValue('PROD_SMOKE_ID_TOKEN')) {
   ok('PROD_SMOKE_ID_TOKEN is not placeholder', !process.env.PROD_SMOKE_ID_TOKEN.includes('PASTE_') && process.env.PROD_SMOKE_ID_TOKEN.length > 100);
 }
 
 if (hasValue('GCP_SERVICE_ACCOUNT_JSON')) {
-  try {
-    const parsed = JSON.parse(process.env.GCP_SERVICE_ACCOUNT_JSON);
-    ok('GCP_SERVICE_ACCOUNT_JSON parses', Boolean(parsed.client_email && parsed.private_key));
-  } catch (error) {
-    ok('GCP_SERVICE_ACCOUNT_JSON parses', false, error instanceof Error ? error.message : String(error));
-  }
+  ok('raw service-account JSON is prohibited', false, 'Use GitHub OIDC + Workload Identity Federation instead.');
 } else {
-  console.log('[INFO] GCP_SERVICE_ACCOUNT_JSON not present in shell; GitHub Actions auth may still provide credentials through workload environment.');
+  console.log('[PASS] raw service-account JSON is absent; workload credentials may be supplied through ADC/WIF.');
 }
 
 if (failed) {
