@@ -14,12 +14,16 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: read
+  id-token: write
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  DEPLOY_PROJECT_ID: ${{ secrets.URAI_JOBS_FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID || secrets.GCLOUD_PROJECT || secrets.GOOGLE_CLOUD_PROJECT || 'urai-jobs' }}
-  GCP_REGION: ${{ secrets.GCP_REGION || 'us-central1' }}
-  API_ALLOWED_ORIGINS: ${{ secrets.API_ALLOWED_ORIGINS || 'https://uraijobs.com,https://www.uraijobs.com,https://urai-jobs-563121397472.web.app,https://urai-jobs.web.app' }}
-  FIREBASE_HOSTING_SITE: ${{ secrets.FIREBASE_HOSTING_SITE || 'urai-jobs-563121397472' }}
+  DEPLOY_PROJECT_ID: ${{ vars.URAI_JOBS_FIREBASE_PROJECT_ID || vars.FIREBASE_PROJECT_ID || 'urai-jobs' }}
+  GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+  API_ALLOWED_ORIGINS: ${{ vars.API_ALLOWED_ORIGINS || 'https://uraijobs.com,https://www.uraijobs.com,https://urai-jobs-563121397472.web.app,https://urai-jobs.web.app' }}
+  FIREBASE_HOSTING_SITE: ${{ vars.FIREBASE_HOSTING_SITE || 'urai-jobs-563121397472' }}
   GCS_BUCKET_NAME: urai-jobs-urai-jobs-artifacts
 
 jobs:
@@ -33,6 +37,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Require WIF verification identity
+        shell: bash
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          if [ -z "$WIF_PROVIDER" ] || [ -z "$DEPLOY_SERVICE_ACCOUNT" ]; then
+            echo "::error::Configure GCP_WIF_PROVIDER and GCP_DEPLOY_SERVICE_ACCOUNT. Long-lived verification keys are prohibited."
+            exit 1
+          fi
+
       - name: Enable pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -44,10 +60,14 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Authenticate to Google Cloud
+      - name: Authenticate to Google Cloud with WIF
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_URAI_JOBS || secrets.GCP_SERVICE_ACCOUNT_JSON }}
+          project_id: ${{ env.DEPLOY_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
