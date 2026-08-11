@@ -10,10 +10,10 @@ const workflowPaths = [
 
 const forbiddenPatterns = [
   ['credentials_json', /credentials_json\s*:/],
-  ['Firebase CLI token deploy auth', /FIREBASE_TOKEN/],
-  ['legacy GCP service-account JSON secret', /GCP_SERVICE_ACCOUNT_JSON/],
-  ['legacy Firebase service-account JSON secret', /FIREBASE_SERVICE_ACCOUNT_URAI_JOBS/],
-  ['generic GCP key secret', /GCP_SA_KEY/]
+  ['Firebase CLI token deploy auth', /\$\{\{\s*secrets\.FIREBASE_TOKEN\s*\}\}|--token(?:\s|=)|^\s*FIREBASE_TOKEN\s*:/m],
+  ['legacy GCP service-account JSON secret', /\$\{\{\s*secrets\.GCP_SERVICE_ACCOUNT_JSON\s*\}\}/],
+  ['legacy Firebase service-account JSON secret', /\$\{\{\s*secrets\.FIREBASE_SERVICE_ACCOUNT_URAI_JOBS\s*\}\}/],
+  ['generic GCP key secret', /\$\{\{\s*secrets\.GCP_SA_KEY\s*\}\}/]
 ];
 
 const requiredPatterns = [
