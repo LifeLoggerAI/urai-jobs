@@ -33,12 +33,6 @@ jobs:
           test "$GITHUB_REPOSITORY" = 'LifeLoggerAI/urai-jobs'
           test "$GITHUB_REF" = 'refs/heads/ops/urai-spatial-wif-audit-20260811'
 
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          persist-credentials: false
-          fetch-depth: 1
-
       - name: Verify WIF secret configuration exists
         id: wif_config
         shell: bash
@@ -104,7 +98,7 @@ jobs:
           node - <<'NODE'
           const fs = require('fs')
           const receipt = {
-            schemaVersion: 'urai-spatial-wif-readonly-audit-1',
+            schemaVersion: 'urai-spatial-wif-readonly-audit-2',
             recordedAt: new Date().toISOString(),
             repository: process.env.GITHUB_REPOSITORY,
             runId: process.env.GITHUB_RUN_ID,
