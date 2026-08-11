@@ -1,0 +1,180 @@
+name: Audit URAI Spatial WIF Once 2026-08-11
+
+on:
+  push:
+    branches:
+      - ops/urai-spatial-wif-audit-20260811
+    paths:
+      - '.github/workflows/audit-urai-spatial-wif-once-20260811.yml'
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
+concurrency:
+  group: urai-spatial-wif-audit-20260811
+  cancel-in-progress: false
+
+env:
+  TARGET_PROJECT: urai-4dc1d
+  TARGET_DEPLOY_SA: urai-spatial-github-deployer@urai-4dc1d.iam.gserviceaccount.com
+
+jobs:
+  audit:
+    name: Read-only WIF and IAM audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Guard trusted repository and branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'LifeLoggerAI/urai-jobs'
+          test "$GITHUB_REF" = 'refs/heads/ops/urai-spatial-wif-audit-20260811'
+
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify WIF secret configuration exists
+        id: wif_config
+        shell: bash
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          WIF_SERVICE_ACCOUNT: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$WIF_PROVIDER"
+          test -n "$WIF_SERVICE_ACCOUNT"
+          echo 'configured=true' >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate existing URAI WIF identity
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          project_id: ${{ env.TARGET_PROJECT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+        with:
+          project_id: ${{ env.TARGET_PROJECT }}
+          version: '>= 500.0.0'
+
+      - name: Run read-only project, secret, and service-account audit
+        id: audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit-receipt
+          project_access=false
+          elevenlabs_metadata=false
+          openai_metadata=false
+          elevenlabs_iam_read=false
+          deploy_sa_exists=false
+          deploy_sa_iam_read=false
+          deploy_sa_keys_list=false
+          user_managed_key_count=-1
+
+          if gcloud projects describe "$TARGET_PROJECT" --format='value(projectId)' >/dev/null 2>&1; then project_access=true; fi
+          if gcloud secrets describe ELEVENLABS_API_KEY --project "$TARGET_PROJECT" --format='value(name)' >/dev/null 2>&1; then elevenlabs_metadata=true; fi
+          if gcloud secrets describe OPENAI_API_KEY --project "$TARGET_PROJECT" --format='value(name)' >/dev/null 2>&1; then openai_metadata=true; fi
+          if gcloud secrets get-iam-policy ELEVENLABS_API_KEY --project "$TARGET_PROJECT" --format=json >/dev/null 2>&1; then elevenlabs_iam_read=true; fi
+          if gcloud iam service-accounts describe "$TARGET_DEPLOY_SA" --project "$TARGET_PROJECT" --format='value(email)' >/dev/null 2>&1; then deploy_sa_exists=true; fi
+          if gcloud iam service-accounts get-iam-policy "$TARGET_DEPLOY_SA" --project "$TARGET_PROJECT" --format=json >/dev/null 2>&1; then deploy_sa_iam_read=true; fi
+          if key_types="$(gcloud iam service-accounts keys list --iam-account "$TARGET_DEPLOY_SA" --project "$TARGET_PROJECT" --format='value(keyType)' 2>/dev/null)"; then
+            deploy_sa_keys_list=true
+            user_managed_key_count="$(printf '%s\n' "$key_types" | grep -c '^USER_MANAGED$' || true)"
+          fi
+
+          PROJECT_ACCESS="$project_access" \
+          ELEVENLABS_METADATA="$elevenlabs_metadata" \
+          OPENAI_METADATA="$openai_metadata" \
+          ELEVENLABS_IAM_READ="$elevenlabs_iam_read" \
+          DEPLOY_SA_EXISTS="$deploy_sa_exists" \
+          DEPLOY_SA_IAM_READ="$deploy_sa_iam_read" \
+          DEPLOY_SA_KEYS_LIST="$deploy_sa_keys_list" \
+          USER_MANAGED_KEY_COUNT="$user_managed_key_count" \
+          node - <<'NODE'
+          const fs = require('fs')
+          const receipt = {
+            schemaVersion: 'urai-spatial-wif-readonly-audit-1',
+            recordedAt: new Date().toISOString(),
+            repository: process.env.GITHUB_REPOSITORY,
+            runId: process.env.GITHUB_RUN_ID,
+            targetProject: process.env.TARGET_PROJECT,
+            targetDeployServiceAccount: process.env.TARGET_DEPLOY_SA,
+            mutationPerformed: false,
+            secretValueRead: false,
+            checks: {
+              projectAccess: process.env.PROJECT_ACCESS === 'true',
+              elevenLabsSecretMetadata: process.env.ELEVENLABS_METADATA === 'true',
+              openAiSecretMetadata: process.env.OPENAI_METADATA === 'true',
+              elevenLabsIamPolicyReadable: process.env.ELEVENLABS_IAM_READ === 'true',
+              deployServiceAccountExists: process.env.DEPLOY_SA_EXISTS === 'true',
+              deployServiceAccountIamPolicyReadable: process.env.DEPLOY_SA_IAM_READ === 'true',
+              deployServiceAccountKeysListable: process.env.DEPLOY_SA_KEYS_LIST === 'true',
+              userManagedKeyCount: Number(process.env.USER_MANAGED_KEY_COUNT),
+            }
+          }
+          fs.writeFileSync('audit-receipt/wif-audit.json', JSON.stringify(receipt, null, 2) + '\n')
+          NODE
+
+      - name: Upload read-only audit receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: urai-spatial-wif-readonly-audit-20260811
+          path: audit-receipt/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Report sanitized audit result
+        if: always()
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        env:
+          AUTH_OUTCOME: ${{ steps.auth.outcome }}
+          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+        with:
+          script: |
+            const fs = require('fs')
+            let details = 'No receipt was produced.'
+            if (fs.existsSync('audit-receipt/wif-audit.json')) {
+              const r = JSON.parse(fs.readFileSync('audit-receipt/wif-audit.json', 'utf8'))
+              const c = r.checks
+              details = [
+                `- Project access: **${c.projectAccess}**`,
+                `- ELEVENLABS_API_KEY metadata visible: **${c.elevenLabsSecretMetadata}**`,
+                `- OPENAI_API_KEY metadata visible: **${c.openAiSecretMetadata}**`,
+                `- ElevenLabs IAM policy readable: **${c.elevenLabsIamPolicyReadable}**`,
+                `- urai-spatial deploy service account exists: **${c.deployServiceAccountExists}**`,
+                `- deploy service-account IAM policy readable: **${c.deployServiceAccountIamPolicyReadable}**`,
+                `- deploy service-account keys listable: **${c.deployServiceAccountKeysListable}**`,
+                `- user-managed deploy key count: **${c.userManagedKeyCount}**`,
+              ].join('\n')
+            }
+            const body = [
+              '## Read-only URAI Spatial WIF audit',
+              '',
+              `- Target project: \`${process.env.TARGET_PROJECT}\``,
+              `- Authentication step: **${process.env.AUTH_OUTCOME || 'unknown'}**`,
+              `- Audit step: **${process.env.AUDIT_OUTCOME || 'unknown'}**`,
+              '',
+              details,
+              '',
+              `- Workflow run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              '- Mutation performed: **false**',
+              '- Secret values read or printed: **false**',
+            ].join('\n')
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `URAI Spatial WIF read-only audit — ${process.env.AUTH_OUTCOME || 'unknown'}`,
+              body,
+            })
