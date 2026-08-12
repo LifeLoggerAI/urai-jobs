@@ -48,7 +48,7 @@ ok("landing links V2", landing.includes("/career-marketplace"));
 ok("landing links V3", landing.includes("/career-automation"));
 ok("landing links V4", landing.includes("/career-decision"));
 ok("landing links V5", landing.includes("/career-passport"));
-ok("landing links versions", landing.includes("/career-versions"));
+ok("landing keeps internal version console out of the public entry", !landing.includes("/career-versions"));
 
 ok("version model links V1", versionPlan.includes("/career-mirror"));
 ok("version model links V2", versionPlan.includes("/career-marketplace"));
