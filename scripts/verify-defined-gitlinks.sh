@@ -2,7 +2,15 @@
 set -euo pipefail
 
 treeish=${1:-HEAD}
-mapfile -t gitlinks < <(git ls-tree -r "$treeish" | awk '$1 == "160000" { print $4 }')
+gitlinks=()
+
+while IFS= read -r -d '' record; do
+  metadata=${record%%$'\t'*}
+  path=${record#*$'\t'}
+  if [[ ${metadata%% *} == "160000" ]]; then
+    gitlinks+=("$path")
+  fi
+done < <(git ls-tree -r -z "$treeish")
 
 if ((${#gitlinks[@]} == 0)); then
   echo "No gitlinks present in $treeish."
@@ -15,8 +23,15 @@ test -f .gitmodules || {
 }
 
 for path in "${gitlinks[@]}"; do
-  name=$(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' |
-    awk -v path="$path" '$2 == path { sub(/^submodule\./, "", $1); sub(/\.path$/, "", $1); print $1 }')
+  name=""
+  while IFS= read -r key; do
+    if [[ "$(git config -f .gitmodules --get "$key")" == "$path" ]]; then
+      name=${key#submodule.}
+      name=${name%.path}
+      break
+    fi
+  done < <(git config -f .gitmodules --name-only --get-regexp '^submodule\..*\.path$' || true)
+
   test -n "$name" || { echo "No .gitmodules entry for $path" >&2; exit 1; }
   url=$(git config -f .gitmodules --get "submodule.$name.url")
   branch_name=$(git config -f .gitmodules --get "submodule.$name.branch" || true)
