@@ -1,0 +1,10 @@
+owner_decision=REMOVE URAIPROD GITLINK AS OBSOLETE
+canonical_base=07c0dc076a072dcb72f3cf3e83ca49fcabbf6d8d
+supersedes_stale_pull_request=84
+stale_candidate_head=78abf65b444f51d5a99bee6ffbe1a25077ceabae
+removed_path=UrAiProd
+removed_object=ea4704699b14666758df49758b0fbcd8aa99bc38
+repository_untouched=LifeLoggerAI/UrAiProd
+expected_postcondition=no undefined gitlinks on candidate tree
+provider_mutation=none
+deployment_mutation=none
