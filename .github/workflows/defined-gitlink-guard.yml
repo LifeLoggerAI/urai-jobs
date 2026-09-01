@@ -20,5 +20,8 @@ jobs:
           persist-credentials: false
           submodules: false
           show-progress: false
+      - name: Regression-test complete gitlink paths
+        run: bash scripts/test-verify-defined-gitlinks.sh
+
       - name: Reject undefined or branch-following gitlinks
         run: bash scripts/verify-defined-gitlinks.sh HEAD
