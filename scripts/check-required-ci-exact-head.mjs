@@ -48,6 +48,8 @@ for (const path of requiredWorkflows) {
   requireText(path, source, 'git status --porcelain --untracked-files=all', 'workflow must prove a clean source tree');
   rejectText(path, source, 'pnpm install --no-frozen-lockfile', 'mutable pnpm installation is forbidden');
   rejectText(path, source, 'pnpm install --frozen-lockfile=false', 'mutable pnpm installation is forbidden');
+  rejectText(path, source, 'cache: pnpm', 'untrusted pull-request source must not share a dependency cache with privileged workflow runs');
+  rejectText(path, source, 'uses: actions/cache@', 'untrusted pull-request source must not write a reusable workflow cache');
   rejectText(path, source, 'corepack prepare pnpm@latest', 'mutable pnpm tool version is forbidden');
   rejectText(path, source, 'firebase-tools@latest', 'mutable Firebase CLI version is forbidden');
 
@@ -131,5 +133,6 @@ if (failures.length > 0) {
 console.log(`[PASS] exact-head CI evidence contract: ${requiredWorkflows.length} workflows`);
 console.log('[PASS] isolated temporary credential configuration, shallow exact-SHA fetch, detached checkout, clean tree, and frozen dependencies');
 console.log('[PASS] reusable checkout action excluded from required Jobs evidence lanes after repository-specific checkout failures');
+console.log('[PASS] pull-request evidence lanes cannot write reusable dependency caches');
 console.log('[PASS] PR/ref and exact-SHA concurrency cancel superseded runs without mixing evidence');
 console.log('[PASS] emulator CLI version pinned: firebase-tools 15.24.0');

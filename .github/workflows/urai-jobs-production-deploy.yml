@@ -64,7 +64,7 @@ jobs:
       - name: Checkout exact candidate with rollback history
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -74,6 +74,8 @@ jobs:
           set -euo pipefail
           [[ "$INPUT_EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$INPUT_ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$INPUT_EXPECTED_SHA" = "$GITHUB_SHA"
           case "$INPUT_TARGET" in
             staging) EXPECTED_CONFIRMATION='DEPLOY-URAI-JOBS-STAGING' ;;
             prod) EXPECTED_CONFIRMATION='DEPLOY-URAI-JOBS-PRODUCTION' ;;
@@ -167,7 +169,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: urai-jobs-preflight-${{ inputs.target }}-${{ inputs.expected_sha }}
+          name: urai-jobs-preflight-${{ inputs.target }}-${{ github.sha }}
           path: docs/release-evidence/canonical-preflight.json
           if-no-files-found: error
           retention-days: 90
@@ -175,7 +177,7 @@ jobs:
       - name: Upload exact Firebase prebuilt artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: urai-jobs-firebase-prebuilt-${{ inputs.target }}-${{ inputs.expected_sha }}
+          name: urai-jobs-firebase-prebuilt-${{ inputs.target }}-${{ github.sha }}
           path: |
             packages/shared-types/dist/
             functions/lib/
@@ -195,7 +197,7 @@ jobs:
       id-token: write
     env:
       INPUT_TARGET: ${{ inputs.target }}
-      TARGET_SHA: ${{ inputs.expected_sha }}
+      TARGET_SHA: ${{ github.sha }}
       ROLLBACK_SHA: ${{ inputs.rollback_sha }}
       DEPLOY_ROLLBACK_CONFIG_FINGERPRINTS_JSON: ${{ inputs.rollback_config_fingerprints_json }}
       DEPLOY_TARGET_SECRET_VERSIONS_JSON: ${{ inputs.target_secret_versions_json }}
@@ -209,7 +211,7 @@ jobs:
       - name: Checkout exact clean mutation authority
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -238,7 +240,7 @@ jobs:
       - name: Download exact Firebase prebuilt artifact outside repository
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: urai-jobs-firebase-prebuilt-${{ inputs.target }}-${{ inputs.expected_sha }}
+          name: urai-jobs-firebase-prebuilt-${{ inputs.target }}-${{ github.sha }}
           path: ${{ env.FIREBASE_PREBUILT_ROOT }}
 
       - name: Verify external Firebase artifact before cloud authentication
@@ -429,7 +431,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: urai-jobs-mutation-${{ inputs.target }}-${{ inputs.expected_sha }}
+          name: urai-jobs-mutation-${{ inputs.target }}-${{ github.sha }}
           path: docs/release-evidence/
           if-no-files-found: error
           retention-days: 365
@@ -442,7 +444,7 @@ jobs:
     permissions:
       contents: read
     env:
-      TARGET_SHA: ${{ inputs.expected_sha }}
+      TARGET_SHA: ${{ github.sha }}
       ROLLBACK_SHA: ${{ inputs.rollback_sha }}
       INPUT_TARGET: ${{ inputs.target }}
       REQUIRE_CUSTOM_DOMAINS: ${{ inputs.require_custom_domains }}
@@ -450,7 +452,7 @@ jobs:
       - name: Checkout exact verified source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -469,7 +471,7 @@ jobs:
       - name: Download mutation evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: urai-jobs-mutation-${{ inputs.target }}-${{ inputs.expected_sha }}
+          name: urai-jobs-mutation-${{ inputs.target }}-${{ github.sha }}
           path: mutation-evidence
 
       - name: Bind public verification to mutation receipts
@@ -565,7 +567,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: urai-jobs-public-verification-${{ inputs.target }}-${{ inputs.expected_sha }}
+          name: urai-jobs-public-verification-${{ inputs.target }}-${{ github.sha }}
           path: docs/release-evidence/
           if-no-files-found: error
           retention-days: 365

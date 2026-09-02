@@ -185,6 +185,10 @@ if (!publicVerify) failures.push('missing public verification job');
 
 for (const [text, description] of [
   ['target_secret_versions_json:', 'workflow must require exact target secret versions'],
+  ["test \"$GITHUB_REF\" = 'refs/heads/main'", 'workflow dispatch must be bound to the protected main ref'],
+  ['test "$INPUT_EXPECTED_SHA" = "$GITHUB_SHA"', 'operator confirmation SHA must equal the trusted dispatch SHA'],
+  ['ref: ${{ github.sha }}', 'all deployment jobs must check out the trusted dispatch SHA'],
+  ['TARGET_SHA: ${{ github.sha }}', 'mutation and verification must bind the trusted dispatch SHA'],
   ['name: Verify and build exact candidate without cloud authority', 'preflight must build without cloud authority'],
   ['Create source-bound Firebase prebuilt manifest', 'preflight must attest Firebase bytes'],
   ['Upload exact Firebase prebuilt artifact', 'preflight must upload exact Firebase artifact'],
@@ -234,6 +238,10 @@ for (const [text, description] of [
   ['google-github-actions/setup-gcloud@v2', 'gcloud tag must not be mutable'],
   ['pnpm/action-setup@', 'pnpm action must not expand authority'],
   ['actions/setup-java@', 'unused Java action must not expand authority'],
+  ['ref: ${{ inputs.expected_sha }}', 'operator input must not select executable deployment source'],
+  ['TARGET_SHA: ${{ inputs.expected_sha }}', 'operator input must not become deployment authority'],
+  ['cache: pnpm', 'deployment workflow must not restore a dependency cache'],
+  ['actions/cache@', 'deployment workflow must not restore a reusable workflow cache'],
   ['publicWorkerHealthChecked: true', 'public worker result must not be hard-coded'],
   ['publicHostingChecked: true', 'public domain result must not be hard-coded'],
 ]) rejectText(canonicalWorkflow, text, description);
