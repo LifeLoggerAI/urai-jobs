@@ -28,11 +28,11 @@ DEFAULT_BUCKET="$(sanitize_bucket_name "${GCLOUD_PROJECT}-artifacts")"
 CANDIDATE_BUCKET="$(sanitize_bucket_name "${GCS_BUCKET_NAME:-}")"
 
 if ! valid_bucket_name "$CANDIDATE_BUCKET"; then
-  echo "[WARN] GCS_BUCKET_NAME was missing or invalid after sanitization. Falling back to ${DEFAULT_BUCKET}."
-  GCS_BUCKET_NAME="$DEFAULT_BUCKET"
-else
-  GCS_BUCKET_NAME="$CANDIDATE_BUCKET"
+  echo "[FAIL] GCS_BUCKET_NAME is required and must be a valid explicit bucket name." >&2
+  echo "[FAIL] Refusing to guess an infrastructure target during deployment." >&2
+  exit 1
 fi
+GCS_BUCKET_NAME="$CANDIDATE_BUCKET"
 
 if [ -n "${GITHUB_ENV:-}" ]; then
   echo "GCS_BUCKET_NAME=${GCS_BUCKET_NAME}" >> "$GITHUB_ENV"
@@ -43,10 +43,24 @@ if gcloud storage buckets describe "gs://${GCS_BUCKET_NAME}" --project "${GCLOUD
   exit 0
 fi
 
-echo "[INFO] Creating GCS artifact bucket: gs://${GCS_BUCKET_NAME} in ${GCP_REGION}"
+if [ "${ALLOW_CREATE_GCS_BUCKET:-false}" != "true" ] || [ "${GCS_BUCKET_CREATION_APPROVAL:-}" != "CREATE-URAI-JOBS-GCS-BUCKET" ]; then
+  echo "[FAIL] Required GCS bucket does not exist: gs://${GCS_BUCKET_NAME}" >&2
+  echo "[FAIL] Deployment scripts may not create billable infrastructure implicitly." >&2
+  echo "[FAIL] Create it separately under approved infrastructure change control, or explicitly set both ALLOW_CREATE_GCS_BUCKET=true and GCS_BUCKET_CREATION_APPROVAL=CREATE-URAI-JOBS-GCS-BUCKET." >&2
+  exit 1
+fi
+
+if [ "${URAI_ENV:-}" = "prod" ] || [ "${URAI_ENV:-}" = "production" ]; then
+  if [ "${PRODUCTION_INFRASTRUCTURE_APPROVAL:-}" != "APPROVE-URAI-JOBS-PRODUCTION-INFRASTRUCTURE" ]; then
+    echo "[FAIL] Production bucket creation requires PRODUCTION_INFRASTRUCTURE_APPROVAL=APPROVE-URAI-JOBS-PRODUCTION-INFRASTRUCTURE" >&2
+    exit 1
+  fi
+fi
+
+echo "[WARN] Explicitly authorized GCS bucket creation: gs://${GCS_BUCKET_NAME} in ${GCP_REGION}"
 gcloud storage buckets create "gs://${GCS_BUCKET_NAME}" \
   --project "${GCLOUD_PROJECT}" \
   --location "${GCP_REGION}" \
   --uniform-bucket-level-access
 
-echo "[PASS] Created GCS bucket: gs://${GCS_BUCKET_NAME}"
+echo "[PASS] Created explicitly approved GCS bucket: gs://${GCS_BUCKET_NAME}"

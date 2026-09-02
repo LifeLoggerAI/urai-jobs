@@ -7,6 +7,8 @@ export type JobStatus =
   | 'DEAD'
   | 'CANCELLED';
 
+export type JobQueueStatus = 'PENDING' | 'LEASED' | 'RUNNING' | 'DONE' | 'DEAD' | 'CANCELLED';
+
 export interface NarratorTtsPayload {
   text: string;
   locale?: string;
@@ -24,6 +26,11 @@ export interface JobExecutionMeta {
   maxAttempts: number;
   leaseToken?: string;
   startedAt?: string;
+  asyncCallbackPending?: boolean;
+  callbackTokenHash?: string;
+  callbackLeaseToken?: string;
+  callbackDeadlineAt?: unknown;
+  completedAt?: unknown;
 }
 
 export interface JobLease {
@@ -67,10 +74,11 @@ export interface Job {
 export interface JobQueueEntry {
   jobId: string;
   jobType?: string;
-  status: JobStatus;
+  status: JobQueueStatus;
   lease?: JobLease;
   availableAt?: unknown;
   attemptCount?: number;
+  retryCount?: number;
   priority?: number;
   leaseOwner?: string | null;
   createdAt?: unknown;
@@ -94,6 +102,6 @@ export interface User {
   uid: string;
   email?: string | null;
   displayName?: string | null;
-  role?: "user" | "admin" | "operator" | string;
+  role?: 'user' | 'admin' | 'operator' | string;
   roles?: string[];
 }

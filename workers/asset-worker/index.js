@@ -9,10 +9,15 @@ app.set('trust proxy', true);
 app.use(express.json({ limit: '1mb' }));
 
 const db = admin.firestore();
+const workerToken = process.env.URAI_JOBS_WORKER_TOKEN || '';
 const githubToken = process.env.URAI_WHEEL_GITHUB_TOKEN || '';
 const callbackSecret = process.env.URAI_JOBS_CALLBACK_SECRET || '';
 const assetFactoryRepo = process.env.ASSET_FACTORY_REPO || 'LifeLoggerAI/asset-factory';
 const configuredPublicBaseUrl = (process.env.ASSET_WORKER_PUBLIC_URL || '').replace(/\/$/, '');
+const runtimeEnv = String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
+const productionRuntime = ['prod', 'production', 'staging'].includes(runtimeEnv);
+const configuredCallbackTimeoutMs = Number(process.env.ASSET_CALLBACK_TIMEOUT_MS || 6 * 60 * 60 * 1000);
+const callbackTimeoutMs = Math.max(15 * 60 * 1000, Math.min(24 * 60 * 60 * 1000, configuredCallbackTimeoutMs));
 const allowedTypes = new Set([
   'asset.generate',
   'asset.validate',
@@ -20,6 +25,13 @@ const allowedTypes = new Set([
   'asset.publish',
   'asset.forge.v1',
 ]);
+
+class CallbackRejected extends Error {
+  constructor(statusCode, message) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
 
 function serverTimestamp() {
   return admin.firestore.FieldValue.serverTimestamp();
@@ -35,6 +47,42 @@ function timingSafeEqual(left, right) {
   const a = Buffer.from(left);
   const b = Buffer.from(right);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
+
+function timestampMillis(value) {
+  if (value instanceof Date) return value.getTime();
+  if (value && typeof value.toMillis === 'function') return value.toMillis();
+  const millis = new Date(value).getTime();
+  return Number.isFinite(millis) ? millis : 0;
+}
+
+function requireWorkerAuth(req, res, next) {
+  const localBypass = runtimeEnv === 'local' || runtimeEnv === 'test' || process.env.FUNCTIONS_EMULATOR === 'true';
+  if (!workerToken && localBypass) return next();
+  if (!workerToken) return res.status(503).send({ ok: false, error: 'worker auth is not configured' });
+  if (!timingSafeEqual(bearer(req), workerToken)) {
+    return res.status(401).send({ ok: false, error: 'unauthorized' });
+  }
+  return next();
+}
+
+function validateProductionConfiguration() {
+  if (!productionRuntime) return;
+  const required = {
+    URAI_JOBS_WORKER_TOKEN: workerToken,
+    URAI_WHEEL_GITHUB_TOKEN: githubToken,
+    URAI_JOBS_CALLBACK_SECRET: callbackSecret,
+  };
+  const missing = Object.entries(required)
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+  if (missing.length > 0) {
+    throw new Error(`Missing required production environment variables: ${missing.join(', ')}`);
+  }
 }
 
 function publicBaseUrl(req) {
@@ -66,6 +114,8 @@ async function githubRequest(path, init = {}) {
   return response;
 }
 
+validateProductionConfiguration();
+
 app.get('/', (_req, res) => {
   res.status(200).send({
     service: 'asset-worker',
@@ -76,49 +126,80 @@ app.get('/', (_req, res) => {
 
 app.get('/healthz', (_req, res) => {
   const configured = {
+    workerToken: Boolean(workerToken),
     githubToken: Boolean(githubToken),
     callbackSecret: Boolean(callbackSecret),
   };
-  const ok = Object.values(configured).every(Boolean);
+  const ok = productionRuntime ? Object.values(configured).every(Boolean) : true;
   res.status(ok ? 200 : 503).send({
     ok,
     configured,
+    runtimeEnv,
     assetFactoryRepo,
     callbackUrlMode: configuredPublicBaseUrl ? 'configured' : 'request-derived',
+    callbackTimeoutMs,
   });
 });
 
-app.post('/', async (req, res) => {
+app.get('/authz', requireWorkerAuth, (_req, res) => {
+  res.status(200).send({ ok: true, service: 'asset-worker', authorized: true });
+});
+
+app.post('/', requireWorkerAuth, async (req, res) => {
   const { jobId, leaseToken } = req.body || {};
   if (!jobId || !leaseToken) {
     return res.status(400).send({ error: 'jobId and leaseToken are required' });
   }
 
   const jobRef = db.collection('jobs').doc(jobId);
+  const queueRef = db.collection('jobQueue').doc(jobId);
+  const callbackToken = crypto.randomBytes(32).toString('hex');
+  const callbackTokenHash = sha256(callbackToken);
+  const callbackDeadlineAt = admin.firestore.Timestamp.fromMillis(Date.now() + callbackTimeoutMs);
+  const callbackUrl = `${publicBaseUrl(req)}/callback?callbackToken=${encodeURIComponent(callbackToken)}`;
+
   try {
-    const snapshot = await jobRef.get();
-    const job = snapshot.exists ? snapshot.data() : null;
-    if (!job || job.execution?.leaseToken !== leaseToken) {
-      return res.status(403).send({ error: 'Invalid job ID or lease token' });
-    }
-    if (!allowedTypes.has(job.type)) {
-      return res.status(422).send({ error: `Unsupported asset job type: ${job.type}` });
-    }
+    const job = await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(jobRef);
+      const current = snapshot.exists ? snapshot.data() : null;
+      if (!current || current.execution?.leaseToken !== leaseToken) {
+        throw new CallbackRejected(403, 'Invalid job ID or lease token');
+      }
+      if (current.status !== 'RUNNING') {
+        throw new CallbackRejected(409, 'Job is not in the active RUNNING state');
+      }
+      if (!allowedTypes.has(current.type)) {
+        throw new CallbackRejected(422, `Unsupported asset job type: ${current.type}`);
+      }
 
-    const rounds = Math.max(1, Math.min(5, Number(job.payloadInline?.rounds || 3)));
-    const callbackUrl = `${publicBaseUrl(req)}/callback`;
-    const correlationId = job.correlationId || jobId;
-
-    await jobRef.update({
-      status: 'RUNNING',
-      'progress.percent': 10,
-      'progress.stage': 'ASSET_FORGE_DISPATCH',
-      'progress.message': 'Provider-backed V1 asset forge dispatched',
-      'execution.startedAt': serverTimestamp(),
-      'execution.heartbeatAt': serverTimestamp(),
-      'timestamps.updatedAt': serverTimestamp(),
-      'result.summary': 'Awaiting Asset Factory callback',
+      transaction.update(jobRef, {
+        'progress.percent': 10,
+        'progress.stage': 'ASSET_FORGE_DISPATCH',
+        'progress.message': 'Provider-backed V1 asset forge dispatched',
+        'execution.startedAt': current.execution?.startedAt || serverTimestamp(),
+        'execution.heartbeatAt': serverTimestamp(),
+        'execution.asyncCallbackPending': true,
+        'execution.callbackTokenHash': callbackTokenHash,
+        'execution.callbackLeaseToken': leaseToken,
+        'execution.callbackDeadlineAt': callbackDeadlineAt,
+        'lease.heartbeatAt': serverTimestamp(),
+        'timestamps.updatedAt': serverTimestamp(),
+        'result.summary': 'Awaiting Asset Factory callback',
+      });
+      transaction.set(queueRef, {
+        jobId,
+        status: 'RUNNING',
+        'lease.heartbeatAt': serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      return current;
     });
+
+    const payload = job.payload && typeof job.payload === 'object'
+      ? job.payload
+      : (job.payloadInline && typeof job.payloadInline === 'object' ? job.payloadInline : {});
+    const rounds = Math.max(1, Math.min(5, Number(payload.rounds || 3)));
+    const correlationId = job.correlationId || jobId;
 
     await githubRequest(`/repos/${assetFactoryRepo}/dispatches`, {
       method: 'POST',
@@ -143,7 +224,12 @@ app.post('/', async (req, res) => {
       source: 'WORKER',
       event: 'ASSET_FORGE_DISPATCHED',
       message: `Dispatched ${job.type} to ${assetFactoryRepo}`,
-      context: { rounds, callbackUrl, assetFactoryRepo },
+      context: {
+        rounds,
+        assetFactoryRepo,
+        callbackDeadlineAt: callbackDeadlineAt.toDate().toISOString(),
+        callbackLeaseBound: true,
+      },
       timestamp: serverTimestamp(),
     });
 
@@ -153,22 +239,47 @@ app.post('/', async (req, res) => {
       status: 'RUNNING',
       rounds,
       assetFactoryRepo,
+      callbackDeadlineAt: callbackDeadlineAt.toDate().toISOString(),
     });
   } catch (error) {
+    if (error instanceof CallbackRejected) {
+      return res.status(error.statusCode).send({ error: error.message });
+    }
+
     console.error('asset-worker dispatch failed', error);
-    await jobRef.set({
-      status: 'FAILED',
-      error: {
-        code: 'ASSET_FORGE_DISPATCH_FAILED',
-        category: 'DEPENDENCY',
-        message: String(error?.message || error),
-        lastFailedAt: serverTimestamp(),
-        lastFailedBy: 'asset-worker',
-      },
-      'progress.stage': 'FAILED',
-      'progress.message': 'Asset forge dispatch failed',
-      'timestamps.updatedAt': serverTimestamp(),
-    }, { merge: true });
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(jobRef);
+      if (!snapshot.exists) return;
+      const current = snapshot.data();
+      if (
+        current.execution?.leaseToken !== leaseToken ||
+        current.execution?.callbackTokenHash !== callbackTokenHash
+      ) return;
+      transaction.update(jobRef, {
+        status: 'FAILED',
+        error: {
+          code: 'ASSET_FORGE_DISPATCH_FAILED',
+          category: 'DEPENDENCY',
+          message: String(error?.message || error),
+          lastFailedAt: serverTimestamp(),
+          lastFailedBy: 'asset-worker',
+        },
+        'progress.stage': 'FAILED',
+        'progress.message': 'Asset forge dispatch failed',
+        'execution.asyncCallbackPending': false,
+        'execution.callbackTokenHash': admin.firestore.FieldValue.delete(),
+        'execution.callbackLeaseToken': admin.firestore.FieldValue.delete(),
+        'execution.callbackDeadlineAt': admin.firestore.FieldValue.delete(),
+        'execution.completedAt': serverTimestamp(),
+        'timestamps.updatedAt': serverTimestamp(),
+      });
+      transaction.set(queueRef, {
+        jobId,
+        status: 'DONE',
+        lease: admin.firestore.FieldValue.delete(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    });
     return res.status(502).send({ error: String(error?.message || error) });
   }
 });
@@ -178,73 +289,124 @@ app.post('/callback', async (req, res) => {
     return res.status(403).send({ error: 'Invalid callback authorization' });
   }
 
+  const callbackToken = typeof req.query.callbackToken === 'string' ? req.query.callbackToken : '';
+  if (!callbackToken) {
+    return res.status(400).send({ error: 'callbackToken is required' });
+  }
+
   const { jobId, status, summary, spatialSha, assetFactoryRun } = req.body || {};
   if (!jobId || !['SUCCESS', 'FAILED'].includes(status)) {
     return res.status(400).send({ error: 'jobId and SUCCESS|FAILED status are required' });
   }
 
   const jobRef = db.collection('jobs').doc(jobId);
-  const snapshot = await jobRef.get();
-  if (!snapshot.exists) {
-    return res.status(404).send({ error: 'Job not found' });
-  }
-  const job = snapshot.data();
-  const producedAt = admin.firestore.Timestamp.now();
+  const queueRef = db.collection('jobQueue').doc(jobId);
   const resultRef = db.collection('jobResults').doc();
+  const producedAt = admin.firestore.Timestamp.now();
   const success = status === 'SUCCESS';
-  const outputs = [];
-  if (spatialSha) {
-    outputs.push({
-      kind: 'GIT_COMMIT',
-      ref: `https://github.com/LifeLoggerAI/urai-spatial/commit/${spatialSha}`,
+
+  try {
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(jobRef);
+      if (!snapshot.exists) throw new CallbackRejected(404, 'Job not found');
+      const job = snapshot.data();
+      const execution = job.execution || {};
+      const expectedTokenHash = String(execution.callbackTokenHash || '');
+      const callbackLeaseToken = String(execution.callbackLeaseToken || '');
+      const activeLeaseToken = String(execution.leaseToken || '');
+      const callbackDeadlineMillis = timestampMillis(execution.callbackDeadlineAt);
+
+      if (!timingSafeEqual(sha256(callbackToken), expectedTokenHash)) {
+        throw new CallbackRejected(403, 'Invalid callback token');
+      }
+      if (
+        job.status !== 'RUNNING' ||
+        execution.asyncCallbackPending !== true ||
+        !callbackLeaseToken ||
+        callbackLeaseToken !== activeLeaseToken
+      ) {
+        throw new CallbackRejected(409, 'Callback no longer owns the active job attempt');
+      }
+      if (!callbackDeadlineMillis || callbackDeadlineMillis <= Date.now()) {
+        throw new CallbackRejected(409, 'Callback deadline expired');
+      }
+
+      const outputs = [];
+      if (spatialSha) {
+        outputs.push({
+          kind: 'GIT_COMMIT',
+          ref: `https://github.com/LifeLoggerAI/urai-spatial/commit/${spatialSha}`,
+        });
+      }
+      if (assetFactoryRun) {
+        outputs.push({
+          kind: 'GITHUB_ACTIONS_RUN',
+          ref: `https://github.com/${assetFactoryRepo}/actions/runs/${assetFactoryRun}`,
+        });
+      }
+
+      transaction.set(resultRef, {
+        jobId,
+        rootJobId: job.rootJobId || jobId,
+        correlationId: job.correlationId || jobId,
+        tenantId: job.tenantId,
+        type: job.type,
+        status: success ? 'SUCCESS' : 'FAILED',
+        producedAt,
+        durationMs: job.execution?.startedAt?.toMillis
+          ? Math.max(0, producedAt.toMillis() - job.execution.startedAt.toMillis())
+          : 0,
+        outputs,
+        summary: summary || `V1 asset forge ${status.toLowerCase()}`,
+        callbackLeaseTokenHash: sha256(callbackLeaseToken),
+      });
+
+      const update = {
+        status: success ? 'SUCCESS' : 'FAILED',
+        lease: admin.firestore.FieldValue.delete(),
+        'progress.percent': 100,
+        'progress.stage': success ? 'PROMOTED' : 'FAILED',
+        'progress.message': summary || `V1 asset forge ${status.toLowerCase()}`,
+        'execution.completedAt': serverTimestamp(),
+        'execution.heartbeatAt': serverTimestamp(),
+        'execution.asyncCallbackPending': false,
+        'execution.callbackTokenHash': admin.firestore.FieldValue.delete(),
+        'execution.callbackLeaseToken': admin.firestore.FieldValue.delete(),
+        'execution.callbackDeadlineAt': admin.firestore.FieldValue.delete(),
+        'timestamps.updatedAt': serverTimestamp(),
+        'result.resultId': resultRef.id,
+        'result.outputRefs': outputs.map((output) => output.ref),
+        'result.summary': summary || `V1 asset forge ${status.toLowerCase()}`,
+      };
+      if (!success) {
+        update.error = {
+          code: 'ASSET_FORGE_FAILED',
+          category: 'INTERNAL',
+          message: summary || 'Asset Factory workflow failed',
+          lastFailedAt: serverTimestamp(),
+          lastFailedBy: 'asset-factory-workflow',
+        };
+      } else {
+        update.error = admin.firestore.FieldValue.delete();
+      }
+
+      transaction.update(jobRef, update);
+      transaction.set(queueRef, {
+        jobId,
+        status: 'DONE',
+        lease: admin.firestore.FieldValue.delete(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
     });
-  }
-  if (assetFactoryRun) {
-    outputs.push({
-      kind: 'GITHUB_ACTIONS_RUN',
-      ref: `https://github.com/${assetFactoryRepo}/actions/runs/${assetFactoryRun}`,
-    });
-  }
 
-  await resultRef.set({
-    jobId,
-    rootJobId: job.rootJobId || jobId,
-    correlationId: job.correlationId || jobId,
-    tenantId: job.tenantId,
-    type: job.type,
-    status: success ? 'SUCCESS' : 'FAILED',
-    producedAt,
-    durationMs: job.execution?.startedAt?.toMillis
-      ? Math.max(0, producedAt.toMillis() - job.execution.startedAt.toMillis())
-      : 0,
-    outputs,
-    summary: summary || `V1 asset forge ${status.toLowerCase()}`,
-  });
-
-  const update = {
-    status: success ? 'SUCCESS' : 'FAILED',
-    'progress.percent': 100,
-    'progress.stage': success ? 'PROMOTED' : 'FAILED',
-    'progress.message': summary || `V1 asset forge ${status.toLowerCase()}`,
-    'execution.completedAt': serverTimestamp(),
-    'execution.heartbeatAt': serverTimestamp(),
-    'timestamps.updatedAt': serverTimestamp(),
-    'result.resultId': resultRef.id,
-    'result.outputRefs': outputs.map((output) => output.ref),
-    'result.summary': summary || `V1 asset forge ${status.toLowerCase()}`,
-  };
-  if (!success) {
-    update.error = {
-      code: 'ASSET_FORGE_FAILED',
-      category: 'INTERNAL',
-      message: summary || 'Asset Factory workflow failed',
-      lastFailedAt: serverTimestamp(),
-      lastFailedBy: 'asset-factory-workflow',
-    };
+    return res.status(200).send({ success: true, jobId, resultId: resultRef.id });
+  } catch (error) {
+    if (error instanceof CallbackRejected) {
+      return res.status(error.statusCode).send({ error: error.message });
+    }
+    console.error('asset-worker callback failed', error);
+    return res.status(500).send({ error: 'Callback processing failed' });
   }
-  await jobRef.update(update);
-
-  res.status(200).send({ success: true, jobId, resultId: resultRef.id });
 });
 
 const port = Number(process.env.PORT) || 8080;
