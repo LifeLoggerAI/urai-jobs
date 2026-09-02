@@ -69,6 +69,18 @@ for (const path of requiredWorkflows) {
   }
 }
 
+const pullRequestCodeExecutionWorkflows = [
+  '.github/workflows/career-surfaces-ci.yml',
+  '.github/workflows/production-verification.yml',
+  '.github/workflows/urai-jobs-runtime-ci.yml',
+  '.github/workflows/urai-jobs-typecheck-diagnostics.yml',
+  '.github/workflows/urai-production-verify.yml',
+];
+for (const path of pullRequestCodeExecutionWorkflows) {
+  const source = fs.readFileSync(path, 'utf8');
+  rejectText(path, source, 'workflow_dispatch:', 'a workflow that executes pull-request code must not also receive default-branch cache write authority');
+}
+
 const jobsCi = fs.readFileSync('.github/workflows/urai-jobs-ci.yml', 'utf8');
 const runtimeCi = fs.readFileSync('.github/workflows/urai-jobs-runtime-ci.yml', 'utf8');
 for (const [path, source] of [
@@ -134,5 +146,6 @@ console.log(`[PASS] exact-head CI evidence contract: ${requiredWorkflows.length}
 console.log('[PASS] isolated temporary credential configuration, shallow exact-SHA fetch, detached checkout, clean tree, and frozen dependencies');
 console.log('[PASS] reusable checkout action excluded from required Jobs evidence lanes after repository-specific checkout failures');
 console.log('[PASS] pull-request evidence lanes cannot write reusable dependency caches');
+console.log('[PASS] pull-request code execution is isolated from workflow-dispatch cache authority');
 console.log('[PASS] PR/ref and exact-SHA concurrency cancel superseded runs without mixing evidence');
 console.log('[PASS] emulator CLI version pinned: firebase-tools 15.24.0');
