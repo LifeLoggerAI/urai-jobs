@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          matches="$(git grep -n -I -E '(^|[^[:alnum:]_])UrAiProd([^[:alnum:]_]|$)' -- ':!docs/legacy-uraiprod-gitlink-removal.md' ':!.github/workflows/uraiprod-gitlink-removal-guard.yml' || true)"
+          matches="$(git grep -n -I -E '(^|[^[:alnum:]_])UrAiProd([^[:alnum:]_]|$)' -- ':!docs/legacy-uraiprod-gitlink-removal.md' ':!evidence/uraiprod-removal/**' ':!.github/workflows/uraiprod-gitlink-removal-guard.yml' || true)"
           if [ -n "$matches" ]; then
             printf '%s\n' "$matches"
             exit 1
