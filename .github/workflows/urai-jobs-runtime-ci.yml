@@ -157,8 +157,12 @@ jobs:
         shell: bash
         run: |
           set +e
-          npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
+          printf 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT=%s\n' "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" > functions/.env.local
+          trap 'rm -f functions/.env.local' EXIT
+          timeout 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
           status=$?
+          rm -f functions/.env.local
+          trap - EXIT
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
 
