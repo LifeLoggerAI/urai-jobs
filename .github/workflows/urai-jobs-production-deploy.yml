@@ -333,19 +333,22 @@ jobs:
           gcloud storage buckets describe "gs://${GCS_BUCKET_NAME}" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud pubsub topics describe "$URAI_JOBS_TERMINAL_EVENT_TOPIC" --project "$DEPLOY_PROJECT_ID" >/dev/null
           member="serviceAccount:${URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT}"
-          topic_publishers="$(gcloud pubsub topics get-iam-policy "$URAI_JOBS_TERMINAL_EVENT_TOPIC" \
+          topic_policy="$(gcloud pubsub topics get-iam-policy "$URAI_JOBS_TERMINAL_EVENT_TOPIC" \
             --project "$DEPLOY_PROJECT_ID" \
-            --flatten='bindings[].members' \
-            --filter="bindings.role=roles/pubsub.publisher AND bindings.members=${member}" \
-            --format='value(bindings.members)')"
-          project_publishers="$(gcloud projects get-iam-policy "$DEPLOY_PROJECT_ID" \
-            --flatten='bindings[].members' \
-            --filter="bindings.role=roles/pubsub.publisher AND bindings.members=${member}" \
-            --format='value(bindings.members)')"
-          if ! { grep -Fxq "$member" <<<"$topic_publishers" || grep -Fxq "$member" <<<"$project_publishers"; }; then
-            echo "Functions runtime service account lacks roles/pubsub.publisher for ${URAI_JOBS_TERMINAL_EVENT_TOPIC}: ${member}" >&2
-            exit 1
-          fi
+            --format=json)"
+          POLICY_JSON="$topic_policy" EXPECTED_MEMBER="$member" node <<'NODE'
+          const policy = JSON.parse(process.env.POLICY_JSON || '{}');
+          const expectedMember = process.env.EXPECTED_MEMBER;
+          const binding = (policy.bindings || []).find((entry) =>
+            entry?.role === 'roles/pubsub.publisher'
+            && !entry.condition
+            && Array.isArray(entry.members)
+            && entry.members.includes(expectedMember));
+          if (!binding) {
+            console.error(`Functions runtime service account lacks an unconditional topic-level roles/pubsub.publisher grant: ${expectedMember}`);
+            process.exit(1);
+          }
+          NODE
 
       - name: Verify existing artifact bucket without creating infrastructure
         env:
