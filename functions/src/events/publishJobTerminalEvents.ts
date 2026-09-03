@@ -52,13 +52,35 @@ export const publishJobTerminalEvents = onSchedule({
 }, async () => {
   const db = getFirestore();
   const nowMs = Date.now();
-  const candidates = await db
-    .collection(OUTBOX_COLLECTION)
-    .where('status', 'in', ['PENDING', 'PUBLISHING'])
-    .limit(BATCH_SIZE * 2)
-    .get();
+  const dueAt = Timestamp.fromMillis(nowMs);
+  const [pending, expiredLeases] = await Promise.all([
+    db.collection(OUTBOX_COLLECTION)
+      .where('status', '==', 'PENDING')
+      .where('nextAttemptAt', '<=', dueAt)
+      .orderBy('nextAttemptAt', 'asc')
+      .limit(BATCH_SIZE)
+      .get(),
+    db.collection(OUTBOX_COLLECTION)
+      .where('status', '==', 'PUBLISHING')
+      .where('leaseExpiresAt', '<=', dueAt)
+      .orderBy('leaseExpiresAt', 'asc')
+      .limit(BATCH_SIZE)
+      .get(),
+  ]);
 
-  const due = candidates.docs.filter((doc) => isDue(doc.data() as OutboxRecord, nowMs)).slice(0, BATCH_SIZE);
+  const due = [...pending.docs, ...expiredLeases.docs]
+    .sort((left, right) => {
+      const leftRecord = left.data() as OutboxRecord;
+      const rightRecord = right.data() as OutboxRecord;
+      const leftDue = leftRecord.status === 'PENDING'
+        ? timestampMillis(leftRecord.nextAttemptAt)
+        : timestampMillis(leftRecord.leaseExpiresAt);
+      const rightDue = rightRecord.status === 'PENDING'
+        ? timestampMillis(rightRecord.nextAttemptAt)
+        : timestampMillis(rightRecord.leaseExpiresAt);
+      return (leftDue ?? 0) - (rightDue ?? 0);
+    })
+    .slice(0, BATCH_SIZE);
 
   await Promise.all(due.map(async (doc) => {
     const leaseToken = ulid();
