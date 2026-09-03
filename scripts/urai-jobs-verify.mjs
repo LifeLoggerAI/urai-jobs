@@ -150,7 +150,6 @@ const leaseFiles = [
   "functions/src/jobs/processQueueTick.ts",
   "functions/src/jobs/retryExpiredLeases.ts",
   "functions/src/jobs/systemReconcile.ts",
-  "firestore.indexes.json",
 ];
 
 const legacyLeaseExpiryOffenders = leaseFiles.filter((file) => {
