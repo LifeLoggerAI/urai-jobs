@@ -50,10 +50,25 @@ jobs:
             exit 1
           }
 
-      - name: Checkout exact deployed source
-        uses: actions/checkout@v4
+      - name: Checkout trusted main history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ env.TARGET_SHA }}
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Bind target to trusted main history before executing repository code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${TARGET_SHA}^{commit}"
+          git merge-base --is-ancestor "$TARGET_SHA" refs/remotes/origin/main || {
+            echo "::error::target_sha is not part of trusted main history"
+            exit 1
+          }
+          git checkout --detach "$TARGET_SHA"
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Require WIF verification identity
         shell: bash
