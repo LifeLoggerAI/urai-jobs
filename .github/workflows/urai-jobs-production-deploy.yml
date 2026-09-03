@@ -207,7 +207,6 @@ jobs:
       URAI_WHEEL_GITHUB_TOKEN_SECRET: urai-wheel-github-token
       URAI_JOBS_CALLBACK_SECRET_NAME: urai-jobs-callback-secret
       URAI_JOBS_TERMINAL_EVENT_TOPIC: job-terminal-events
-      FIREBASE_PREBUILT_ROOT: ${{ runner.temp }}/urai-jobs-firebase-prebuilt
     steps:
       - name: Checkout exact clean mutation authority
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -242,12 +241,12 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: urai-jobs-firebase-prebuilt-${{ inputs.target }}-${{ github.sha }}
-          path: ${{ env.FIREBASE_PREBUILT_ROOT }}
+          path: ${{ runner.temp }}/urai-jobs-firebase-prebuilt
 
       - name: Verify external Firebase artifact before cloud authentication
         env:
           DEPLOY_SOURCE_SHA: ${{ env.TARGET_SHA }}
-          URAI_FIREBASE_PREBUILT_ROOT: ${{ env.FIREBASE_PREBUILT_ROOT }}
+          URAI_FIREBASE_PREBUILT_ROOT: ${{ runner.temp }}/urai-jobs-firebase-prebuilt
         run: |
           node scripts/firebase-prebuilt-manifest.mjs --verify
           test -z "$(git status --porcelain --untracked-files=all)"
@@ -369,7 +368,7 @@ jobs:
       - name: Materialize verified Firebase bytes after worker mutation
         env:
           DEPLOY_SOURCE_SHA: ${{ env.TARGET_SHA }}
-          URAI_FIREBASE_PREBUILT_ROOT: ${{ env.FIREBASE_PREBUILT_ROOT }}
+          URAI_FIREBASE_PREBUILT_ROOT: ${{ runner.temp }}/urai-jobs-firebase-prebuilt
         run: node scripts/firebase-prebuilt-manifest.mjs --materialize
 
       - name: Deploy verified prebuilt Firebase runtime
