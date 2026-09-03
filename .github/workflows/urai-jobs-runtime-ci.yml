@@ -159,7 +159,7 @@ jobs:
           set +e
           printf 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT=%s\n' "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" > functions/.env.local
           trap 'rm -f functions/.env.local' EXIT
-          timeout 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
+          timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
           status=$?
           rm -f functions/.env.local
           trap - EXIT
