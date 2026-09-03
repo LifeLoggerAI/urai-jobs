@@ -333,17 +333,33 @@ app.post('/callback', async (req, res) => {
   const success = status === 'SUCCESS';
 
   try {
-    await db.runTransaction(async (transaction) => {
+    const callbackResult = await db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(jobRef);
       if (!snapshot.exists) throw new CallbackRejected(404, 'Job not found');
       const job = snapshot.data();
       const execution = job.execution || {};
+      const presentedCallbackTokenHash = sha256(callbackToken);
       const expectedTokenHash = String(execution.callbackTokenHash || '');
+      const completedCallbackTokenHash = String(execution.completedCallbackTokenHash || '');
       const callbackLeaseToken = String(execution.callbackLeaseToken || '');
       const activeLeaseToken = String(execution.leaseToken || '');
       const callbackDeadlineMillis = timestampMillis(execution.callbackDeadlineAt);
 
-      if (!timingSafeEqual(sha256(callbackToken), expectedTokenHash)) {
+      // A provider can retry after Firestore commits but before it receives the
+      // HTTP response. Retain one bounded consumed-attempt receipt on the job so
+      // the same token deterministically returns the original result.
+      if (
+        completedCallbackTokenHash &&
+        timingSafeEqual(presentedCallbackTokenHash, completedCallbackTokenHash)
+      ) {
+        return {
+          duplicate: true,
+          resultId: String(execution.completedCallbackResultId || ''),
+          status: String(execution.completedCallbackStatus || ''),
+        };
+      }
+
+      if (!timingSafeEqual(presentedCallbackTokenHash, expectedTokenHash)) {
         throw new CallbackRejected(403, 'Invalid callback token');
       }
       if (
@@ -400,6 +416,10 @@ app.post('/callback', async (req, res) => {
         'execution.callbackTokenHash': admin.firestore.FieldValue.delete(),
         'execution.callbackLeaseToken': admin.firestore.FieldValue.delete(),
         'execution.callbackDeadlineAt': admin.firestore.FieldValue.delete(),
+        'execution.completedCallbackTokenHash': presentedCallbackTokenHash,
+        'execution.completedCallbackResultId': resultRef.id,
+        'execution.completedCallbackStatus': success ? 'SUCCESS' : 'FAILED',
+        'execution.completedCallbackAt': serverTimestamp(),
         'timestamps.updatedAt': serverTimestamp(),
         'result.resultId': resultRef.id,
         'result.outputRefs': outputs.map((output) => output.ref),
@@ -424,9 +444,16 @@ app.post('/callback', async (req, res) => {
         lease: admin.firestore.FieldValue.delete(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
+      return { duplicate: false, resultId: resultRef.id, status };
     });
 
-    return res.status(200).send({ success: true, jobId, resultId: resultRef.id });
+    return res.status(200).send({
+      success: true,
+      jobId,
+      resultId: callbackResult.resultId,
+      status: callbackResult.status,
+      duplicate: callbackResult.duplicate,
+    });
   } catch (error) {
     if (error instanceof CallbackRejected) {
       return res.status(error.statusCode).send({ error: error.message });
