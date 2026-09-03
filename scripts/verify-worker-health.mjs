@@ -1,3 +1,10 @@
+const expectedSha = String(process.env.TARGET_SHA || '');
+const shaPattern = /^[0-9a-f]{40}$/;
+if (!shaPattern.test(expectedSha)) {
+  console.error('[FAIL] TARGET_SHA must be a full lowercase 40-character source SHA');
+  process.exit(1);
+}
+
 const requiredWorkers = [
   ['narrator-worker', process.env.NARRATOR_WORKER_URL],
   ['asset-worker', process.env.ASSET_WORKER_URL],
@@ -18,28 +25,32 @@ async function fetchEndpoint(name, url, options = {}) {
       headers: { 'x-request-id': `worker-health-${Date.now()}` },
     });
     const text = await response.text();
-    if (response.ok) {
-      console.log(`[PASS] ${name} ${url} ${response.status} ${text.slice(0, 120)}`);
-      return { reachable: true, healthy: true };
+    let payload = null;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      // A health endpoint must return a structured payload; retain the body for diagnostics only.
+    }
+
+    const healthy = response.ok && payload?.ok === true;
+    if (healthy) {
+      console.log(`[PASS] ${name} ${url} ${response.status} source=${payload.sourceSha || '<missing>'}`);
+      return { reachable: true, healthy: true, payload };
     }
     if (optional && response.status === 404) {
       console.log(`[WARN] ${name} optional endpoint ${url} is not exposed (${response.status})`);
-      return { reachable: true, healthy: false };
-    }
-    if (response.status === 404 && /Cannot GET/.test(text)) {
-      console.log(`[WARN] ${name} ${url} reachable but route is not exposed (${response.status})`);
-      return { reachable: true, healthy: false };
+      return { reachable: true, healthy: false, payload };
     }
     console.error(`[FAIL] ${name} ${url} returned ${response.status}: ${text.slice(0, 120)}`);
-    return { reachable: false, healthy: false };
+    return { reachable: response.status > 0, healthy: false, payload };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (optional) {
       console.log(`[WARN] ${name} optional endpoint ${url} was not reachable: ${message}`);
-      return { reachable: false, healthy: false };
+      return { reachable: false, healthy: false, payload: null };
     }
     console.error(`[FAIL] ${name} ${url} ${message}`);
-    return { reachable: false, healthy: false };
+    return { reachable: false, healthy: false, payload: null };
   }
 }
 
@@ -50,6 +61,7 @@ async function checkWorker(name, baseUrl, optional = false) {
     failed = true;
     return;
   }
+
   let parsed;
   try {
     parsed = new URL(baseUrl);
@@ -63,14 +75,29 @@ async function checkWorker(name, baseUrl, optional = false) {
     failed = true;
     return;
   }
+
   const rootUrl = baseUrl.replace(/\/$/, '');
-  const root = await fetchEndpoint(name, rootUrl, { optional });
-  const health = await fetchEndpoint(name, `${rootUrl}/healthz`, { optional: true });
-  if (!root.reachable && !health.reachable) {
-    console.error(`[FAIL] ${name} is not reachable on root or /healthz`);
+  const health = await fetchEndpoint(name, `${rootUrl}/healthz`, { optional });
+  const sourceSha = health.payload?.sourceSha;
+
+  if (!health.healthy) {
+    if (optional) {
+      console.log(`[WARN] ${name} does not expose a successful structured health payload`);
+      return;
+    }
+    console.error(`[FAIL] ${name} must expose HTTP 2xx /healthz with { ok: true }`);
     failed = true;
-  } else if (!root.healthy && !health.healthy) {
-    console.log(`[WARN] ${name} is reachable but does not expose a healthy root or health route yet`);
+    return;
+  }
+
+  if (sourceSha !== expectedSha) {
+    const message = `${name} runtime source SHA ${sourceSha || '<missing>'} does not match TARGET_SHA ${expectedSha}`;
+    if (optional) {
+      console.log(`[WARN] ${message}`);
+      return;
+    }
+    console.error(`[FAIL] ${message}`);
+    failed = true;
   }
 }
 
@@ -78,4 +105,4 @@ for (const [name, url] of requiredWorkers) await checkWorker(name, url, false);
 for (const [name, url] of optionalWorkers) await checkWorker(name, url, true);
 
 if (failed) process.exit(1);
-console.log('[PASS] Canonical worker reachability verification complete');
+console.log(`[PASS] Canonical required workers are healthy and bound to ${expectedSha}`);

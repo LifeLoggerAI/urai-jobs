@@ -108,6 +108,13 @@ requireText('scripts/verify-worker-health.mjs', "['narrator-worker', process.env
 requireText('scripts/verify-worker-health.mjs', "['asset-worker', process.env.ASSET_WORKER_URL]", 'Asset health must be required');
 requireText('scripts/verify-worker-health.mjs', 'optionalWorkers', 'Undeployed workers must be optional');
 requireText('scripts/verify-worker-health.mjs', "parsed.protocol !== 'https:'", 'Worker health must require credential-free HTTPS');
+requireText('scripts/verify-worker-health.mjs', "TARGET_SHA must be a full lowercase 40-character source SHA", 'Worker health must require an exact target SHA');
+requireText('scripts/verify-worker-health.mjs', "payload?.ok === true", 'Worker health must require a structured healthy payload');
+requireText('scripts/verify-worker-health.mjs', "sourceSha !== expectedSha", 'Worker health must reject stale required workers');
+requireText('workers/narrator-worker/src/index.ts', "sourceSha = String(process.env.URAI_SOURCE_SHA", 'Narrator health must expose revision source identity');
+requireText('workers/asset-worker/index.js', "sourceSha = String(process.env.URAI_SOURCE_SHA", 'Asset health must expose revision source identity');
+requireText('workers/asset-worker/index.js', 'if (dispatchAccepted)', 'Asset dispatch must preserve callback authority after remote acceptance');
+requireText('workers/asset-worker/index.js', 'callback authority preserved', 'Asset post-dispatch failures must not terminalize accepted work');
 
 requireText('package.json', 'bash scripts/deploy-workers-approved.sh', 'package deployment must use approved wrapper');
 requireText('package.json', '"deploy:firebase:prod": "bash scripts/deploy-firebase.sh"', 'Firebase target must not be hard-coded');

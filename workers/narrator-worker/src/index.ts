@@ -18,6 +18,7 @@ import {
 } from './runtime.js';
 
 const runtimeEnv = String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
+const sourceSha = String(process.env.URAI_SOURCE_SHA || '');
 const productionRuntime = ['prod', 'production', 'staging'].includes(runtimeEnv);
 validateRequiredEnv(productionRuntime ? ['URAI_JOBS_WORKER_TOKEN', 'GCS_BUCKET_NAME'] : []);
 
@@ -31,7 +32,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use(requestIdMiddleware);
 
 app.get('/', (_req: any, res: any) => {
-  res.status(200).send({ service: 'narrator-worker', ok: true });
+  res.status(200).send({ service: 'narrator-worker', ok: true, sourceSha });
 });
 
 app.get('/healthz', (_req: any, res: any) => {
@@ -42,6 +43,7 @@ app.get('/healthz', (_req: any, res: any) => {
   const ok = productionRuntime ? Object.values(configured).every(Boolean) : true;
   res.status(ok ? 200 : 503).send({
     ok,
+    sourceSha,
     runtimeEnv,
     configured,
     governor: governor.getStats(),

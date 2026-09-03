@@ -15,6 +15,7 @@ const callbackSecret = process.env.URAI_JOBS_CALLBACK_SECRET || '';
 const assetFactoryRepo = process.env.ASSET_FACTORY_REPO || 'LifeLoggerAI/asset-factory';
 const configuredPublicBaseUrl = (process.env.ASSET_WORKER_PUBLIC_URL || '').replace(/\/$/, '');
 const runtimeEnv = String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
+const sourceSha = String(process.env.URAI_SOURCE_SHA || '');
 const productionRuntime = ['prod', 'production', 'staging'].includes(runtimeEnv);
 const configuredCallbackTimeoutMs = Number(process.env.ASSET_CALLBACK_TIMEOUT_MS || 6 * 60 * 60 * 1000);
 const callbackTimeoutMs = Math.max(15 * 60 * 1000, Math.min(24 * 60 * 60 * 1000, configuredCallbackTimeoutMs));
@@ -121,6 +122,7 @@ app.get('/', (_req, res) => {
     service: 'asset-worker',
     ok: true,
     mode: 'github-production-wheel',
+    sourceSha,
   });
 });
 
@@ -133,6 +135,7 @@ app.get('/healthz', (_req, res) => {
   const ok = productionRuntime ? Object.values(configured).every(Boolean) : true;
   res.status(ok ? 200 : 503).send({
     ok,
+    sourceSha,
     configured,
     runtimeEnv,
     assetFactoryRepo,
@@ -157,6 +160,7 @@ app.post('/', requireWorkerAuth, async (req, res) => {
   const callbackTokenHash = sha256(callbackToken);
   const callbackDeadlineAt = admin.firestore.Timestamp.fromMillis(Date.now() + callbackTimeoutMs);
   const callbackUrl = `${publicBaseUrl(req)}/callback?callbackToken=${encodeURIComponent(callbackToken)}`;
+  let dispatchAccepted = false;
 
   try {
     const job = await db.runTransaction(async (transaction) => {
@@ -214,6 +218,7 @@ app.post('/', requireWorkerAuth, async (req, res) => {
         },
       }),
     });
+    dispatchAccepted = true;
 
     await db.collection('logs').add({
       jobId,
@@ -244,6 +249,18 @@ app.post('/', requireWorkerAuth, async (req, res) => {
   } catch (error) {
     if (error instanceof CallbackRejected) {
       return res.status(error.statusCode).send({ error: error.message });
+    }
+
+    if (dispatchAccepted) {
+      console.error('asset-worker post-dispatch processing failed; callback authority preserved', error);
+      return res.status(202).send({
+        accepted: true,
+        jobId,
+        status: 'RUNNING',
+        callbackPending: true,
+        callbackDeadlineAt: callbackDeadlineAt.toDate().toISOString(),
+        warning: 'Asset Factory accepted the dispatch; callback authority remains active.',
+      });
     }
 
     console.error('asset-worker dispatch failed', error);
