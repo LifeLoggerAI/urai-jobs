@@ -187,6 +187,15 @@ for (const [path, text, description] of [
   ['scripts/ensure-gcs-bucket.sh', 'GCS_BUCKET_CREATION_APPROVAL', 'bucket creation must need separate approval'],
 ]) requireText(path, text, description);
 
+const postDeployWorkflow = '.github/workflows/post-deploy-verify.yml';
+for (const [text, description] of [
+  ['target_sha:', 'post-deploy verification must require exact deployed source identity'],
+  ['TARGET_SHA: ${{ inputs.target_sha }}', 'post-deploy verification must bind exact deployed SHA'],
+  ['INPUT_TARGET: prod', 'post-deploy domain verification must bind production environment'],
+  ['URAI_ENV: prod', 'post-deploy worker verification must bind production environment'],
+  ['ref: ${{ env.TARGET_SHA }}', 'post-deploy verification must inspect the exact deployed source'],
+]) requireText(postDeployWorkflow, text, description);
+
 const canonicalWorkflow = '.github/workflows/urai-jobs-production-deploy.yml';
 const workflow = read(canonicalWorkflow);
 const preflight = jobSection(workflow, 'preflight');
@@ -221,6 +230,12 @@ for (const [text, description] of [
   ['Download exact Firebase prebuilt artifact outside repository', 'mutation must download artifact outside checkout'],
   ['FIREBASE_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT', 'workflow must require the protected Functions runtime identity'],
   ['roles/pubsub.publisher', 'workflow must verify publisher IAM before deployment'],
+  ['gcloud projects get-iam-policy', 'workflow must read project IAM for worker data-plane authority'],
+  ['roles/datastore.user', 'workflow must verify Firestore data-plane authority'],
+  ['gcloud storage buckets get-iam-policy', 'workflow must read bucket IAM for worker data-plane authority'],
+  ['roles/storage.objectAdmin', 'workflow must verify bucket data-plane authority'],
+  ['Worker runtime service account lacks an unconditional project-level', 'workflow must fail closed on missing Firestore IAM'],
+  ['Worker runtime service account lacks an unconditional bucket-level', 'workflow must fail closed on missing bucket IAM'],
   ['!entry.condition', 'workflow must reject conditional publisher grants rather than over-certify them'],
   ['unconditional topic-level roles/pubsub.publisher grant', 'workflow must require a topic-scoped unconditional publisher grant'],
   ['Verify external Firebase artifact before cloud authentication', 'artifact must verify before authentication'],
