@@ -12,6 +12,9 @@ const assetWorker = await readFile(new URL('../workers/asset-worker/index.js', i
 const legacyFirebaseWorkflow = await readFile(new URL('../.github/workflows/firebase-deploy.yml', import.meta.url), 'utf8');
 const firebaseDeploy = await readFile(new URL('../scripts/deploy-firebase.sh', import.meta.url), 'utf8');
 const workspace = await readFile(new URL('../pnpm-workspace.yaml', import.meta.url), 'utf8');
+const firestoreIndexes = JSON.parse(
+  await readFile(new URL('../firestore.indexes.json', import.meta.url), 'utf8'),
+);
 
 assert.ok(createJob.includes('db.runTransaction'), 'createJob must use a Firestore transaction');
 assert.match(createJob, /transaction\.create\(jobRef, \{[\s\S]*?\.\.\.newJob,[\s\S]*?createdAt: now,[\s\S]*?updatedAt: now,[\s\S]*?\}\);/);
@@ -127,6 +130,18 @@ for (const marker of [
 assert.match(workspace, /^\s*-\s*["']?workers["']?\s*$/m, 'root workers package must participate in pnpm installation');
 assert.match(workspace, /^\s*-\s*["']?workers\/\*["']?\s*$/m, 'individual worker packages must participate in pnpm installation');
 
+const terminalOutboxIndexes = firestoreIndexes.indexes
+  .filter((index) => index.collectionGroup === 'jobTerminalEventOutbox')
+  .map((index) => index.fields.map((field) => `${field.fieldPath}:${field.order}`).join(','));
+assert.ok(
+  terminalOutboxIndexes.includes('status:ASCENDING,nextAttemptAt:ASCENDING'),
+  'terminal outbox PENDING due-time query must have a composite index',
+);
+assert.ok(
+  terminalOutboxIndexes.includes('status:ASCENDING,leaseExpiresAt:ASCENDING'),
+  'terminal outbox expired PUBLISHING query must have a composite index',
+);
+
 console.log('[PASS] transactional creation precedes publication');
 console.log('[PASS] scheduled and manual dispatch preserve master state');
 console.log('[PASS] retryExpiredLeases is the sole LEASED recovery owner');
@@ -134,3 +149,4 @@ console.log('[PASS] stale RUNNING recovery revalidates exact lease and heartbeat
 console.log('[PASS] ambiguous failures preserve active callbacks and terminal attempts clear authority');
 console.log('[PASS] legacy Firebase authority is blocked and one approved worker-token version binds Workers and Functions');
 console.log('[PASS] root and individual worker dependencies are installed by pnpm workspace authority');
+console.log('[PASS] terminal outbox due-time queries have their required composite indexes');
