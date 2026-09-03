@@ -3,6 +3,10 @@ name: URAI Jobs Post Deploy Verify
 on:
   workflow_dispatch:
     inputs:
+      target_sha:
+        description: Exact deployed source SHA to verify
+        required: true
+        type: string
       require_custom_domains:
         description: Fail if uraijobs.com and www do not serve the app shell
         required: true
@@ -20,6 +24,9 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  TARGET_SHA: ${{ inputs.target_sha }}
+  INPUT_TARGET: prod
+  URAI_ENV: prod
   DEPLOY_PROJECT_ID: ${{ vars.URAI_JOBS_FIREBASE_PROJECT_ID || vars.FIREBASE_PROJECT_ID || 'urai-jobs' }}
   GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
   API_ALLOWED_ORIGINS: ${{ vars.API_ALLOWED_ORIGINS || 'https://uraijobs.com,https://www.uraijobs.com,https://urai-jobs-563121397472.web.app,https://urai-jobs.web.app' }}
@@ -34,8 +41,19 @@ jobs:
     environment: prod
 
     steps:
-      - name: Checkout
+      - name: Validate exact deployed identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::target_sha must be a full lowercase 40-character SHA"
+            exit 1
+          }
+
+      - name: Checkout exact deployed source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
 
       - name: Require WIF verification identity
         shell: bash
