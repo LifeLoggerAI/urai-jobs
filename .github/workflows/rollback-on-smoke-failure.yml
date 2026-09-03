@@ -1,0 +1,17 @@
+name: rollback-on-smoke-failure
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rollback placeholder
+        run: |
+          echo '[INFO] Rollback orchestration initialized'
+          echo '[INFO] Previous stable revision would be restored here'

@@ -1,0 +1,25 @@
+{
+  "name": "urai-jobs",
+  "private": true,
+  "workspaces": [
+    "functions",
+    "packages/shared-types",
+    "web",
+    "workers/*"
+  ],
+  "scripts": {
+    "postinstall": "npm run build -w @urai-jobs/shared-types",
+    "build": "npm run build -ws",
+    "deploy:dev": "firebase use dev && firebase deploy",
+    "deploy:staging": "firebase use staging && firebase deploy",
+    "deploy:prod": "firebase use prod && firebase deploy",
+    "worker:run": "node scripts/run-worker.mjs",
+    "job:queue": "node scripts/queue-job.mjs"
+  },
+  "devDependencies": {
+    "@types/uuid": "^10.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.15.0"
+  }
+}

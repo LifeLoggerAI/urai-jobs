@@ -1,0 +1,19 @@
+name: Legacy Firebase Deploy (Blocked)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  blocked:
+    name: Legacy deployment authority is blocked
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse legacy deployment
+        shell: bash
+        run: |
+          echo '[BLOCKED] This workflow is not an authorized Firebase deployment path.' >&2
+          echo 'Use .github/workflows/urai-jobs-production-deploy.yml with protected exact-head approvals and prebuilt evidence.' >&2
+          exit 1

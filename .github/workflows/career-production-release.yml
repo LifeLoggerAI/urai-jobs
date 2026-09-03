@@ -1,0 +1,16 @@
+name: Deprecated — Career Production Release Disabled
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  blocked:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Career release boundary
+        run: |
+          echo "[BLOCKED] Career V1-V5 surfaces and worker are scaffold-only and cannot be production released from urai-jobs."
+          echo "Complete issues #70 and #71, move the public Career product to its separated boundary, and obtain independent security/privacy/release evidence before reintroducing a release workflow."

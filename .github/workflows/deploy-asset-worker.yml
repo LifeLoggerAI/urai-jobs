@@ -1,0 +1,16 @@
+name: Deprecated — Asset Worker Deploy Is Canonical-Fleet Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  redirect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deployment authority notice
+        run: |
+          echo "[BLOCKED] Standalone Asset Worker deployment is disabled."
+          echo "Use .github/workflows/urai-jobs-production-deploy.yml so worker and Firebase token bindings, rollback metadata, auth probes, and receipts stay synchronized."

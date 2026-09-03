@@ -1,0 +1,25 @@
+# URAI Jobs managed worker container.
+# Build from the repository root:
+# docker build -f Dockerfile.worker -t us-central1-docker.pkg.dev/urai-jobs/urai-jobs/worker:latest .
+
+FROM node:22-slim AS base
+
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+
+WORKDIR /app
+
+RUN corepack enable
+
+# Copy the full workspace before dependency installation because the root
+# postinstall builds @urai-jobs/shared-types and needs its tsconfig/source files.
+COPY . .
+
+ENV NODE_ENV=development
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @urai-jobs/shared-types build
+RUN pnpm prune --prod
+
+ENV NODE_ENV=production
+
+CMD ["pnpm", "run", "worker:run"]

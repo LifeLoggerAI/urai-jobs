@@ -1,0 +1,33 @@
+displayName: URAI Jobs Saturation Alerts
+combiner: OR
+conditions:
+  - displayName: Cloud Run CPU saturation
+    conditionThreshold:
+      filter: resource.type="cloud_run_revision"
+      comparison: COMPARISON_GT
+      thresholdValue: 0.8
+      duration: 300s
+
+  - displayName: Worker memory pressure
+    conditionThreshold:
+      filter: resource.type="cloud_run_revision"
+      comparison: COMPARISON_GT
+      thresholdValue: 0.85
+      duration: 300s
+
+  - displayName: Retry storm detection
+    conditionThreshold:
+      filter: metric.type="logging.googleapis.com/user/retry_attempts_total"
+      comparison: COMPARISON_GT
+      thresholdValue: 50
+      duration: 300s
+
+  - displayName: Dead letter queue growth
+    conditionThreshold:
+      filter: metric.type="logging.googleapis.com/user/dlq_growth_total"
+      comparison: COMPARISON_GT
+      thresholdValue: 10
+      duration: 600s
+
+notificationChannels: []
+severity: WARNING

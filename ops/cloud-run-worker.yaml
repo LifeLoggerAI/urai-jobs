@@ -1,0 +1,58 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: urai-jobs-worker
+  labels:
+    app: urai-jobs-worker
+    component: worker
+    environment: production
+  annotations:
+    run.googleapis.com/ingress: internal
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "2"
+        run.googleapis.com/cpu-throttling: "false"
+    spec:
+      serviceAccountName: urai-jobs-worker@urai-jobs.iam.gserviceaccount.com
+      containerConcurrency: 1
+      timeoutSeconds: 3600
+      containers:
+        - image: us-central1-docker.pkg.dev/urai-jobs/urai-jobs/worker:latest
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          env:
+            - name: URAI_ENV
+              value: prod
+            - name: FIREBASE_PROJECT_ID
+              value: urai-jobs
+            - name: GCLOUD_PROJECT
+              value: urai-jobs
+            - name: GOOGLE_CLOUD_PROJECT
+              value: urai-jobs
+            - name: GCP_REGION
+              value: us-central1
+            - name: URAI_WORKER_NAME
+              value: cloud-run-worker
+            - name: URAI_JOB_TYPE
+              value: narrator.tts
+            - name: URAI_WORKER_POLL_MS
+              value: "2000"
+            - name: URAI_LEASE_MS
+              value: "60000"
+            - name: URAI_MAX_ATTEMPTS
+              value: "3"
+            - name: GCS_BUCKET_NAME
+              value: urai-jobs-artifacts
+            - name: NARRATOR_WORKER_URL
+              value: https://narrator-worker.example.invalid
+            - name: ASSET_WORKER_URL
+              value: https://asset-worker.example.invalid
+            - name: SPATIAL_WORKER_URL
+              value: https://spatial-worker.example.invalid
+            - name: STUDIO_WORKER_URL
+              value: https://studio-worker.example.invalid
