@@ -176,6 +176,18 @@ check("systemReconcile revalidates stale RUNNING heartbeats", systemReconcile.in
 check("firestore index covers lease.expiresAt", indexes.includes("lease.expiresAt"));
 check("firestore index covers stale heartbeat reconciliation", indexes.includes("lease.heartbeatAt"));
 
+const emulatorWorkflowPaths = [
+  ".github/workflows/urai-jobs-runtime-ci.yml",
+  ".github/workflows/urai-jobs-ci.yml",
+];
+
+for (const workflowPath of emulatorWorkflowPaths) {
+  const workflow = read(workflowPath);
+  check(`${workflowPath} pins the isolated Firebase demo project`, workflow.includes("--project demo-urai-jobs emulators:exec"));
+  check(`${workflowPath} supplies Firebase parameter input noninteractively`, workflow.includes("functions/.env.demo-urai-jobs"));
+  check(`${workflowPath} does not rely on the runtime-only local env file`, !workflow.includes("functions/.env.local"));
+}
+
 const pkg = JSON.parse(read("package.json") || "{}");
 check("urai-jobs:verify script exists", Boolean(pkg.scripts?.["urai-jobs:verify"]));
 check("urai-jobs:smoke script exists", Boolean(pkg.scripts?.["urai-jobs:smoke"]));
