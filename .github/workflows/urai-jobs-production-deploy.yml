@@ -332,6 +332,31 @@ jobs:
           gcloud iam service-accounts describe "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud storage buckets describe "gs://${GCS_BUCKET_NAME}" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud pubsub topics describe "$URAI_JOBS_TERMINAL_EVENT_TOPIC" --project "$DEPLOY_PROJECT_ID" >/dev/null
+
+          worker_member="serviceAccount:${WORKER_RUNTIME_SERVICE_ACCOUNT}"
+          project_policy="$(gcloud projects get-iam-policy "$DEPLOY_PROJECT_ID" --format=json)"
+          bucket_policy="$(gcloud storage buckets get-iam-policy "gs://${GCS_BUCKET_NAME}" --format=json)"
+          PROJECT_POLICY_JSON="$project_policy" BUCKET_POLICY_JSON="$bucket_policy" EXPECTED_MEMBER="$worker_member" node <<'NODE'
+          const projectPolicy = JSON.parse(process.env.PROJECT_POLICY_JSON || '{}');
+          const bucketPolicy = JSON.parse(process.env.BUCKET_POLICY_JSON || '{}');
+          const expectedMember = process.env.EXPECTED_MEMBER;
+          function hasUnconditionalRole(policy, role) {
+            return (policy.bindings || []).some((entry) =>
+              entry?.role === role &&
+              !entry.condition &&
+              Array.isArray(entry.members) &&
+              entry.members.includes(expectedMember));
+          }
+          if (!hasUnconditionalRole(projectPolicy, 'roles/datastore.user')) {
+            console.error(`Worker runtime service account lacks an unconditional project-level roles/datastore.user grant: ${expectedMember}`);
+            process.exit(1);
+          }
+          if (!hasUnconditionalRole(bucketPolicy, 'roles/storage.objectAdmin')) {
+            console.error(`Worker runtime service account lacks an unconditional bucket-level roles/storage.objectAdmin grant: ${expectedMember}`);
+            process.exit(1);
+          }
+          NODE
+
           member="serviceAccount:${URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT}"
           topic_policy="$(gcloud pubsub topics get-iam-policy "$URAI_JOBS_TERMINAL_EVENT_TOPIC" \
             --project "$DEPLOY_PROJECT_ID" \
