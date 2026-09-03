@@ -41,6 +41,9 @@ for (const [path, text, description] of [
   ['functions/src/jobs/executeJob.ts', 'secrets: [workerTokenSecret]', 'PubSub function must bind the worker secret'],
 ]) requireText(path, text, description);
 
+requireText('functions/src/events/publishJobTerminalEvents.ts', "defineString('URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT')", 'terminal publisher must bind an explicit runtime identity');
+requireText('functions/src/events/publishJobTerminalEvents.ts', 'serviceAccount: functionsRuntimeServiceAccount', 'terminal publisher must deploy under the bound runtime identity');
+
 for (const [text, description] of [
   [': "${GITHUB_SHA:?GITHUB_SHA must contain the verified deployment source SHA}"', 'worker deploy must require exact source SHA'],
   [': "${DEPLOY_ROLLBACK_SHA:?DEPLOY_ROLLBACK_SHA must contain the approved rollback source SHA}"', 'worker deploy must require rollback SHA'],
@@ -215,6 +218,9 @@ for (const [text, description] of [
   ['FIREBASE_CLI_VERSION: ${{ vars.FIREBASE_CLI_VERSION }}', 'Firebase CLI must use exact protected version'],
   ['GCLOUD_CLI_VERSION: ${{ vars.GCLOUD_CLI_VERSION }}', 'gcloud must use exact protected version'],
   ['Download exact Firebase prebuilt artifact outside repository', 'mutation must download artifact outside checkout'],
+  ['FIREBASE_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT', 'workflow must require the protected Functions runtime identity'],
+  ['roles/pubsub.publisher', 'workflow must verify publisher IAM before deployment'],
+  ['Functions runtime service account lacks roles/pubsub.publisher', 'workflow must fail closed when terminal publisher IAM is absent'],
   ['Verify external Firebase artifact before cloud authentication', 'artifact must verify before authentication'],
   ['Install exact Firebase CLI outside repository before cloud authentication', 'CLI install must stay outside checkout and before auth'],
   ['Prove exact clean mutation source and authority', 'worker authority must be clean and exact'],

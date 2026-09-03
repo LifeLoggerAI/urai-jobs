@@ -1,10 +1,12 @@
 import { PubSub } from '@google-cloud/pubsub';
 import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
+import { defineString } from 'firebase-functions/params';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { ulid } from 'ulid';
 import { nextOutboxRetryDelayMs } from '../core/jobsReliability.js';
 
 const OUTBOX_COLLECTION = 'jobTerminalEventOutbox';
+const functionsRuntimeServiceAccount = defineString('URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT');
 const TERMINAL_EVENT_TOPIC = process.env.URAI_JOBS_TERMINAL_EVENT_TOPIC || 'job-terminal-events';
 const MAX_ATTEMPTS = Math.max(1, parseInt(process.env.URAI_JOBS_TERMINAL_EVENT_MAX_ATTEMPTS || '', 10) || 8);
 const BATCH_SIZE = Math.max(1, Math.min(100, parseInt(process.env.URAI_JOBS_TERMINAL_EVENT_BATCH_SIZE || '', 10) || 25));
@@ -44,7 +46,10 @@ function isDue(record: OutboxRecord, nowMs: number): boolean {
   return false;
 }
 
-export const publishJobTerminalEvents = onSchedule('every 1 minutes', async () => {
+export const publishJobTerminalEvents = onSchedule({
+  schedule: 'every 1 minutes',
+  serviceAccount: functionsRuntimeServiceAccount,
+}, async () => {
   const db = getFirestore();
   const nowMs = Date.now();
   const candidates = await db

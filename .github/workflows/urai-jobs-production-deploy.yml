@@ -291,6 +291,7 @@ jobs:
           CONFIG_HOSTING_SITE: ${{ secrets.FIREBASE_HOSTING_SITE }}
           CONFIG_FALLBACK_SITE: ${{ secrets.FIREBASE_FALLBACK_HOSTING_SITE }}
           CONFIG_RUNTIME_SERVICE_ACCOUNT: ${{ secrets.WORKER_RUNTIME_SERVICE_ACCOUNT }}
+          CONFIG_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT: ${{ vars.FIREBASE_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT }}
         run: |
           set -euo pipefail
           node - <<'NODE'
@@ -303,6 +304,7 @@ jobs:
             FIREBASE_HOSTING_SITE: process.env.CONFIG_HOSTING_SITE,
             FIREBASE_FALLBACK_HOSTING_SITE: process.env.CONFIG_FALLBACK_SITE || '',
             WORKER_RUNTIME_SERVICE_ACCOUNT: process.env.CONFIG_RUNTIME_SERVICE_ACCOUNT,
+            URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT: process.env.CONFIG_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT,
           };
           for (const [key, value] of Object.entries(values)) {
             if (key !== 'FIREBASE_FALLBACK_HOSTING_SITE' && !value) throw new Error(`${key} is required`);
@@ -320,14 +322,30 @@ jobs:
           test -n "$API_ALLOWED_ORIGINS"
           test -n "$FIREBASE_HOSTING_SITE"
           test -n "$WORKER_RUNTIME_SERVICE_ACCOUNT"
+          test -n "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT"
           test -n "$DEPLOY_ROLLBACK_CONFIG_FINGERPRINTS_JSON"
           test -n "$DEPLOY_TARGET_SECRET_VERSIONS_JSON"
           gcloud secrets describe "$URAI_JOBS_WORKER_TOKEN_SECRET" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud secrets describe "$URAI_WHEEL_GITHUB_TOKEN_SECRET" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud secrets describe "$URAI_JOBS_CALLBACK_SECRET_NAME" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud iam service-accounts describe "$WORKER_RUNTIME_SERVICE_ACCOUNT" --project "$DEPLOY_PROJECT_ID" >/dev/null
+          gcloud iam service-accounts describe "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud storage buckets describe "gs://${GCS_BUCKET_NAME}" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud pubsub topics describe "$URAI_JOBS_TERMINAL_EVENT_TOPIC" --project "$DEPLOY_PROJECT_ID" >/dev/null
+          member="serviceAccount:${URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT}"
+          topic_publishers="$(gcloud pubsub topics get-iam-policy "$URAI_JOBS_TERMINAL_EVENT_TOPIC" \
+            --project "$DEPLOY_PROJECT_ID" \
+            --flatten='bindings[].members' \
+            --filter="bindings.role=roles/pubsub.publisher AND bindings.members=${member}" \
+            --format='value(bindings.members)')"
+          project_publishers="$(gcloud projects get-iam-policy "$DEPLOY_PROJECT_ID" \
+            --flatten='bindings[].members' \
+            --filter="bindings.role=roles/pubsub.publisher AND bindings.members=${member}" \
+            --format='value(bindings.members)')"
+          if ! { grep -Fxq "$member" <<<"$topic_publishers" || grep -Fxq "$member" <<<"$project_publishers"; }; then
+            echo "Functions runtime service account lacks roles/pubsub.publisher for ${URAI_JOBS_TERMINAL_EVENT_TOPIC}: ${member}" >&2
+            exit 1
+          fi
 
       - name: Verify existing artifact bucket without creating infrastructure
         env:
