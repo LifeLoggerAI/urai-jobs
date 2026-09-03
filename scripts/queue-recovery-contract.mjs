@@ -90,6 +90,9 @@ for (const marker of [
 for (const marker of [
   'crypto.randomBytes(32)',
   'callbackTokenHash',
+  'completedCallbackTokenHash',
+  'completedCallbackResultId',
+  'completedCallbackStatus',
   'callbackLeaseToken',
   'callbackDeadlineAt',
   'callbackLeaseToken !== activeLeaseToken',
@@ -98,7 +101,9 @@ for (const marker of [
   'db.runTransaction',
 ]) assert.ok(assetWorker.includes(marker), `asset worker callback boundary missing ${marker}`);
 assert.match(assetWorker, /callbackToken=\$\{encodeURIComponent\(callbackToken\)\}/);
-assert.match(assetWorker, /timingSafeEqual\(sha256\(callbackToken\), expectedTokenHash\)/);
+assert.match(assetWorker, /timingSafeEqual\(presentedCallbackTokenHash, expectedTokenHash\)/);
+assert.match(assetWorker, /timingSafeEqual\(presentedCallbackTokenHash, completedCallbackTokenHash\)/);
+assert.match(assetWorker, /duplicate: true,[\s\S]*resultId: String\(execution\.completedCallbackResultId/);
 assert.match(assetWorker, /execution\.asyncCallbackPending !== true/);
 assert.match(assetWorker, /callbackDeadlineMillis <= Date\.now\(\)/);
 assert.doesNotMatch(assetWorker, /await jobRef\.update\(update\)/);
