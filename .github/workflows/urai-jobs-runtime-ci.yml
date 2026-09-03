@@ -17,6 +17,9 @@ concurrency:
 env:
   TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
   FIREBASE_TOOLS_VERSION: 15.24.0
+  # Prevent firebase-functions params from opening an interactive prompt in CI.
+  # This is an emulator-only identity; protected deploys supply the real account.
+  URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT: urai-jobs-emulator@demo-urai-jobs.iam.gserviceaccount.com
 
 jobs:
   validate:
