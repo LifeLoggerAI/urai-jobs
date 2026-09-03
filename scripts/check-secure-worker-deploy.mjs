@@ -193,7 +193,9 @@ for (const [text, description] of [
   ['TARGET_SHA: ${{ inputs.target_sha }}', 'post-deploy verification must bind exact deployed SHA'],
   ['INPUT_TARGET: prod', 'post-deploy domain verification must bind production environment'],
   ['URAI_ENV: prod', 'post-deploy worker verification must bind production environment'],
-  ['ref: ${{ env.TARGET_SHA }}', 'post-deploy verification must inspect the exact deployed source'],
+  ['ref: main', 'post-deploy verification must begin from trusted main history'],
+  ['git merge-base --is-ancestor "$TARGET_SHA" refs/remotes/origin/main', 'post-deploy target must be an ancestor of trusted main'],
+  ['git checkout --detach "$TARGET_SHA"', 'post-deploy verification must detach at the exact deployed source'],
 ]) requireText(postDeployWorkflow, text, description);
 
 const canonicalWorkflow = '.github/workflows/urai-jobs-production-deploy.yml';
