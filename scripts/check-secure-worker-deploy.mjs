@@ -115,6 +115,7 @@ requireText('workers/narrator-worker/src/index.ts', "sourceSha = String(process.
 requireText('workers/asset-worker/index.js', "sourceSha = String(process.env.URAI_SOURCE_SHA", 'Asset health must expose revision source identity');
 requireText('workers/asset-worker/index.js', 'dispatchAcceptanceIsAmbiguous', 'Asset transport ambiguity must preserve callback authority');
 requireText('workers/asset-worker/index.js', 'GithubDispatchRejected', 'Definitive GitHub rejection must be distinguished from response loss');
+requireText('workers/asset-worker/index.js', "detail = '<response body unavailable>'", 'HTTP status must classify definitive rejection even when the body is unreadable');
 requireText('workers/asset-worker/index.js', 'callback authority preserved', 'Asset post-dispatch failures must not terminalize accepted or ambiguous work');
 
 requireText('package.json', 'bash scripts/deploy-workers-approved.sh', 'package deployment must use approved wrapper');

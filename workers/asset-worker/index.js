@@ -111,7 +111,12 @@ async function githubRequest(path, init = {}) {
     },
   });
   if (!response.ok) {
-    const detail = await response.text();
+    let detail = '<response body unavailable>';
+    try {
+      detail = await response.text();
+    } catch (error) {
+      console.warn('Could not read definitive GitHub rejection body', error);
+    }
     throw new GithubDispatchRejected(`GitHub ${response.status}: ${detail.slice(0, 800)}`);
   }
   return response;
