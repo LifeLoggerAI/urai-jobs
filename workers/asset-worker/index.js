@@ -34,6 +34,8 @@ class CallbackRejected extends Error {
   }
 }
 
+class GithubDispatchRejected extends Error {}
+
 function serverTimestamp() {
   return admin.firestore.FieldValue.serverTimestamp();
 }
@@ -96,7 +98,7 @@ function publicBaseUrl(req) {
 }
 
 async function githubRequest(path, init = {}) {
-  if (!githubToken) throw new Error('URAI_WHEEL_GITHUB_TOKEN is not configured');
+  if (!githubToken) throw new GithubDispatchRejected('URAI_WHEEL_GITHUB_TOKEN is not configured');
   const response = await fetch(`https://api.github.com${path}`, {
     ...init,
     headers: {
@@ -110,7 +112,7 @@ async function githubRequest(path, init = {}) {
   });
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`GitHub ${response.status}: ${detail.slice(0, 800)}`);
+    throw new GithubDispatchRejected(`GitHub ${response.status}: ${detail.slice(0, 800)}`);
   }
   return response;
 }
@@ -160,6 +162,7 @@ app.post('/', requireWorkerAuth, async (req, res) => {
   const callbackTokenHash = sha256(callbackToken);
   const callbackDeadlineAt = admin.firestore.Timestamp.fromMillis(Date.now() + callbackTimeoutMs);
   const callbackUrl = `${publicBaseUrl(req)}/callback?callbackToken=${encodeURIComponent(callbackToken)}`;
+  let dispatchAttempted = false;
   let dispatchAccepted = false;
 
   try {
@@ -205,6 +208,7 @@ app.post('/', requireWorkerAuth, async (req, res) => {
     const rounds = Math.max(1, Math.min(5, Number(payload.rounds || 3)));
     const correlationId = job.correlationId || jobId;
 
+    dispatchAttempted = true;
     await githubRequest(`/repos/${assetFactoryRepo}/dispatches`, {
       method: 'POST',
       body: JSON.stringify({
@@ -251,8 +255,9 @@ app.post('/', requireWorkerAuth, async (req, res) => {
       return res.status(error.statusCode).send({ error: error.message });
     }
 
-    if (dispatchAccepted) {
-      console.error('asset-worker post-dispatch processing failed; callback authority preserved', error);
+    const dispatchAcceptanceIsAmbiguous = dispatchAttempted && !(error instanceof GithubDispatchRejected);
+    if (dispatchAccepted || dispatchAcceptanceIsAmbiguous) {
+      console.error('asset-worker dispatch may have been accepted; callback authority preserved', error);
       return res.status(202).send({
         accepted: true,
         jobId,
