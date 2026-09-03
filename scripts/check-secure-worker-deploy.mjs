@@ -42,6 +42,7 @@ for (const [path, text, description] of [
 ]) requireText(path, text, description);
 
 requireText('functions/src/events/publishJobTerminalEvents.ts', "defineString('URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT')", 'terminal publisher must bind an explicit runtime identity');
+requireText('.github/workflows/urai-jobs-runtime-ci.yml', 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT: urai-jobs-emulator@demo-urai-jobs.iam.gserviceaccount.com', 'runtime CI must provide a noninteractive emulator-only function identity');
 requireText('functions/src/events/publishJobTerminalEvents.ts', 'serviceAccount: functionsRuntimeServiceAccount', 'terminal publisher must deploy under the bound runtime identity');
 
 for (const [text, description] of [
