@@ -53,6 +53,8 @@ export function nextOutboxRetryDelayMs(attemptCount: number): number {
   return Math.min(15 * 60_000, 5_000 * 2 ** (boundedAttempt - 1));
 }
 
-export function terminalEventId(jobId: string, status: string): string {
-  return createHash('sha256').update(`${jobId}:${status}`).digest('hex');
+export function terminalEventId(jobId: string, status: string, transitionId: string): string {
+  return createHash('sha256')
+    .update(stableStringify({ jobId, status, transitionId }))
+    .digest('hex');
 }

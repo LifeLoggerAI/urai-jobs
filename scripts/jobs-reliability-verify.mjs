@@ -16,6 +16,8 @@ const requiredSourceTokens = new Map([
     "eventType: 'job.terminal'",
     "status: 'PENDING'",
     'terminalEventId',
+    'context.eventId',
+    'transitionId',
   ]],
   ['functions/src/events/publishJobTerminalEvents.ts', [
     'job-terminal-events',
@@ -30,6 +32,14 @@ const requiredSourceTokens = new Map([
     'allow read, write: if false;',
   ]],
   ['functions/src/index.ts', ['publishJobTerminalEvents']],
+  ['scripts/deploy-firebase.sh', [
+    'URAI_JOBS_TERMINAL_EVENT_TOPIC',
+    'terminalEventTopic',
+  ]],
+  ['.github/workflows/urai-jobs-production-deploy.yml', [
+    'URAI_JOBS_TERMINAL_EVENT_TOPIC: job-terminal-events',
+    'gcloud pubsub topics describe "$URAI_JOBS_TERMINAL_EVENT_TOPIC"',
+  ]],
 ]);
 
 for (const [file, tokens] of requiredSourceTokens) {

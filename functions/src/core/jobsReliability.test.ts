@@ -40,6 +40,16 @@ test('outbox retry and event identity are bounded and deterministic', () => {
   assert.equal(normalizeIdempotencyKey('  request-1  '), 'request-1');
   assert.equal(nextOutboxRetryDelayMs(1), 5_000);
   assert.equal(nextOutboxRetryDelayMs(20), 15 * 60_000);
-  assert.equal(terminalEventId('job-1', 'SUCCESS'), terminalEventId('job-1', 'SUCCESS'));
-  assert.notEqual(terminalEventId('job-1', 'SUCCESS'), terminalEventId('job-1', 'FAILED'));
+  assert.equal(
+    terminalEventId('job-1', 'SUCCESS', 'transition-1'),
+    terminalEventId('job-1', 'SUCCESS', 'transition-1')
+  );
+  assert.notEqual(
+    terminalEventId('job-1', 'SUCCESS', 'transition-1'),
+    terminalEventId('job-1', 'FAILED', 'transition-1')
+  );
+  assert.notEqual(
+    terminalEventId('job-1', 'FAILED', 'transition-1'),
+    terminalEventId('job-1', 'FAILED', 'transition-2')
+  );
 });

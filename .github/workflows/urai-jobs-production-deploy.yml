@@ -206,6 +206,7 @@ jobs:
       URAI_JOBS_WORKER_TOKEN_SECRET: URAI_JOBS_WORKER_TOKEN
       URAI_WHEEL_GITHUB_TOKEN_SECRET: urai-wheel-github-token
       URAI_JOBS_CALLBACK_SECRET_NAME: urai-jobs-callback-secret
+      URAI_JOBS_TERMINAL_EVENT_TOPIC: job-terminal-events
       FIREBASE_PREBUILT_ROOT: ${{ runner.temp }}/urai-jobs-firebase-prebuilt
     steps:
       - name: Checkout exact clean mutation authority
@@ -327,6 +328,7 @@ jobs:
           gcloud secrets describe "$URAI_JOBS_CALLBACK_SECRET_NAME" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud iam service-accounts describe "$WORKER_RUNTIME_SERVICE_ACCOUNT" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud storage buckets describe "gs://${GCS_BUCKET_NAME}" --project "$DEPLOY_PROJECT_ID" >/dev/null
+          gcloud pubsub topics describe "$URAI_JOBS_TERMINAL_EVENT_TOPIC" --project "$DEPLOY_PROJECT_ID" >/dev/null
 
       - name: Verify existing artifact bucket without creating infrastructure
         env:

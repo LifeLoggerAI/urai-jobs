@@ -19,9 +19,15 @@ export const onJobTerminalEvent = functions.firestore
     if (TERMINAL_STATES.has(before.status) || !TERMINAL_STATES.has(after.status)) return;
 
     const jobId = String(after.id ?? context.params.jobId);
-    const eventId = terminalEventId(jobId, String(after.status));
+    // Firestore reuses context.eventId when it retries this trigger, while a
+    // later FAILED -> PENDING -> FAILED transition receives a new event ID.
+    // Binding the outbox identity to that transition preserves trigger
+    // idempotency without suppressing later terminal transitions.
+    const transitionId = context.eventId;
+    const eventId = terminalEventId(jobId, String(after.status), transitionId);
     const eventPayload = definedEntries({
       eventId,
+      transitionId,
       eventType: 'job.terminal',
       jobId,
       rootJobId: after.rootJobId,
@@ -47,6 +53,7 @@ export const onJobTerminalEvent = functions.firestore
 
       transaction.create(outboxRef, {
         eventId,
+        transitionId,
         jobId,
         eventType: 'job.terminal',
         payload: eventPayload,

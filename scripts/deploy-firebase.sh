@@ -125,7 +125,7 @@ verify_worker_secret() {
 }
 
 write_functions_env() {
-  for key in NARRATOR_WORKER_URL ASSET_WORKER_URL GCS_BUCKET_NAME API_ALLOWED_ORIGINS URAI_ENV GCP_REGION GCLOUD_PROJECT GOOGLE_CLOUD_PROJECT FIREBASE_PROJECT_ID DEPLOY_SOURCE_SHA; do
+  for key in NARRATOR_WORKER_URL ASSET_WORKER_URL GCS_BUCKET_NAME API_ALLOWED_ORIGINS URAI_ENV GCP_REGION GCLOUD_PROJECT GOOGLE_CLOUD_PROJECT FIREBASE_PROJECT_ID DEPLOY_SOURCE_SHA URAI_JOBS_TERMINAL_EVENT_TOPIC; do
     if [ -z "${!key:-}" ] || [[ "${!key}" == *$'\n'* ]] || [[ "${!key}" == *$'\r'* ]]; then
       echo "[FAIL] $key is missing or contains a newline" >&2
       exit 1
@@ -142,6 +142,7 @@ API_ALLOWED_ORIGINS=$API_ALLOWED_ORIGINS
 GCS_BUCKET_NAME=$GCS_BUCKET_NAME
 NARRATOR_WORKER_URL=$NARRATOR_WORKER_URL
 ASSET_WORKER_URL=$ASSET_WORKER_URL
+URAI_JOBS_TERMINAL_EVENT_TOPIC=$URAI_JOBS_TERMINAL_EVENT_TOPIC
 EOF
   for key in SPATIAL_WORKER_URL STUDIO_WORKER_URL CAREER_WORKER_URL CONTENT_WORKER_URL STORYTIME_WORKER_URL ANALYTICS_WORKER_URL COMMUNICATIONS_WORKER_URL PUBSUB_JOB_EXECUTION_TOPIC URAI_JOBS_WORKER_TIMEOUT_MS; do
     if [ -n "${!key:-}" ]; then
@@ -192,6 +193,7 @@ const receipt = {
   allowedOrigins: String(process.env.API_ALLOWED_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean).sort(),
   narratorWorkerUrl: process.env.NARRATOR_WORKER_URL,
   assetWorkerUrl: process.env.ASSET_WORKER_URL,
+  terminalEventTopic: process.env.URAI_JOBS_TERMINAL_EVENT_TOPIC,
   firebaseCliVersion: process.env.FIREBASE_CLI_VERSION || null,
   firebaseConfigSha256: hashFile(process.env.FIREBASE_DEPLOY_CONFIG_PATH),
   functionsEnvSha256: hashFile(process.env.FUNCTIONS_ENV_FILE),
