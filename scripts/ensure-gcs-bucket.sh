@@ -9,6 +9,11 @@ command -v gcloud >/dev/null 2>&1 || {
   exit 1
 }
 
+# This step is the first authenticated pre-mutation boundary in the canonical
+# workflow. Prove the scheduled Functions terminal-event publisher can read and
+# write Firestore before any worker, bucket, or Firebase mutation is allowed.
+bash scripts/verify-functions-runtime-firestore-iam.sh
+
 sanitize_bucket_name() {
   local value="$1"
   echo "$value" \
