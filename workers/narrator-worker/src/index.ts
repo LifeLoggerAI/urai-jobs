@@ -17,7 +17,10 @@ import {
   validateRequiredEnv,
 } from './runtime.js';
 
-validateRequiredEnv([]);
+const runtimeEnv = String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
+const sourceSha = String(process.env.URAI_SOURCE_SHA || '');
+const productionRuntime = ['prod', 'production', 'staging'].includes(runtimeEnv);
+validateRequiredEnv(productionRuntime ? ['URAI_JOBS_WORKER_TOKEN', 'GCS_BUCKET_NAME'] : []);
 
 const app = express();
 const governor = new ConcurrencyGovernor({
@@ -29,11 +32,26 @@ app.use(express.json({ limit: '1mb' }));
 app.use(requestIdMiddleware);
 
 app.get('/', (_req: any, res: any) => {
-  res.status(200).send({ service: 'narrator-worker', ok: true });
+  res.status(200).send({ service: 'narrator-worker', ok: true, sourceSha });
 });
 
 app.get('/healthz', (_req: any, res: any) => {
-  res.status(200).send({ ok: true, governor: governor.getStats() });
+  const configured = {
+    workerToken: Boolean(process.env.URAI_JOBS_WORKER_TOKEN),
+    gcsBucket: Boolean(process.env.GCS_BUCKET_NAME),
+  };
+  const ok = productionRuntime ? Object.values(configured).every(Boolean) : true;
+  res.status(ok ? 200 : 503).send({
+    ok,
+    sourceSha,
+    runtimeEnv,
+    configured,
+    governor: governor.getStats(),
+  });
+});
+
+app.get('/authz', requireWorkerAuth, (_req: RuntimeRequest, res: any) => {
+  res.status(200).send({ ok: true, service: 'narrator-worker', authorized: true });
 });
 
 app.post('/execute-job', requireWorkerAuth, asyncHandler(async (req: RuntimeRequest, res: any) => {
@@ -149,6 +167,7 @@ app.listen(port, host, () => {
     metadata: {
       host,
       port,
+      runtimeEnv,
       governor: governor.getStats(),
     },
   });

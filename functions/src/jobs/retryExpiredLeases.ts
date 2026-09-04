@@ -1,98 +1,167 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { ulid } from 'ulid';
-import { Job, JobQueueEntry } from '@urai-jobs/shared-types';
+import type { Job, JobQueueEntry, JobQueueStatus } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
+import { canRequeueUnstartedLease, isTerminalJobStatus } from './executionGuards.js';
 
 const MAX_RETRIES = 3;
+const MAX_EXPIRED_LEASES_PER_TICK = 20;
 const RETRY_BACKOFF_MS = 5 * 1000;
 
-export const retryExpiredLeases = onSchedule('every 1 minutes', async (context) => {
-    const db = getFirestore();
-    const tickWorkerId = `retry-${ulid()}`;
+function terminalQueueStatus(status: unknown): JobQueueStatus {
+  if (status === 'CANCELLED') return 'CANCELLED';
+  if (status === 'DEAD') return 'DEAD';
+  return 'DONE';
+}
 
-    console.log(`[${tickWorkerId}] Starting expired lease check...`);
+function leaseExpiryMillis(value: unknown): number {
+  if (value instanceof Date) return value.getTime();
+  if (value && typeof value === 'object' && 'toMillis' in value && typeof value.toMillis === 'function') {
+    return value.toMillis();
+  }
+  return Number.NaN;
+}
 
-    const now = new Date();
+export const retryExpiredLeases = onSchedule('every 1 minutes', async () => {
+  const db = getFirestore();
+  const tickWorkerId = `retry-${ulid()}`;
+  const observedAt = new Date();
 
-    // Query the queue for items that are leased and expired.
-    // processQueueTick writes lease.expiresAt as a Date, which Firestore stores as a Timestamp.
-    const expiredLeaseQuery = db.collection('jobQueue')
-        .where('status', '==', 'LEASED')
-        .where('lease.expiresAt', '<', now);
+  console.log(`[${tickWorkerId}] Starting expired unstarted lease check.`);
 
-    const snapshot = await expiredLeaseQuery.get();
+  const snapshot = await db.collection('jobQueue')
+    .where('status', '==', 'LEASED')
+    .where('lease.expiresAt', '<=', observedAt)
+    .orderBy('lease.expiresAt')
+    .limit(MAX_EXPIRED_LEASES_PER_TICK)
+    .get();
 
-    if (snapshot.empty) {
-        console.log(`[${tickWorkerId}] No expired leases found.`);
-        return;
-    }
+  if (snapshot.empty) {
+    console.log(`[${tickWorkerId}] No expired unstarted leases found.`);
+    return;
+  }
 
-    console.log(`[${tickWorkerId}] Found ${snapshot.size} expired lease(s).`);
+  console.log(`[${tickWorkerId}] Found ${snapshot.size} expired lease candidate(s).`);
 
-    const retryPromises = snapshot.docs.map(async (queueDoc) => {
-        const queueEntry = queueDoc.data() as JobQueueEntry;
-        const jobId = queueEntry.jobId;
+  for (const candidate of snapshot.docs) {
+    const candidateData = candidate.data() as JobQueueEntry;
+    const jobId = String(candidateData.jobId || candidate.id);
 
-        try {
-            await db.runTransaction(async (transaction) => {
-                const jobRef = jobDoc(jobId);
-                const queueRef = jobQueueEntryDoc(jobId);
+    try {
+      const outcome = await db.runTransaction(async (transaction) => {
+        const jobRef = jobDoc(jobId);
+        const queueRef = jobQueueEntryDoc(jobId);
+        const [queueSnapshot, jobSnapshot] = await Promise.all([
+          transaction.get(queueRef),
+          transaction.get(jobRef),
+        ]);
 
-                const jobSnapshot = await transaction.get(jobRef);
-                if (!jobSnapshot.exists) {
-                    console.error(`[${tickWorkerId}] Job ${jobId} not found for expired queue entry. Cleaning up queue.`);
-                    transaction.update(queueRef, { status: 'DONE', updatedAt: FieldValue.serverTimestamp() });
-                    return;
-                }
-                const job = jobSnapshot.data() as Job;
-
-                if (['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].includes(job.status)) {
-                    console.log(`[${tickWorkerId}] Job ${jobId} is already in terminal state '${job.status}'. Cleaning up queue entry.`);
-                    transaction.update(queueRef, { status: 'DONE', updatedAt: FieldValue.serverTimestamp() });
-                    return;
-                }
-
-                const currentRetryCount = job.retryCount || 0;
-                const maxRetries = job.execution?.maxAttempts ?? MAX_RETRIES;
-
-                console.warn(`[${tickWorkerId}] Expired lease detected for job ${jobId}. Retry attempt ${currentRetryCount + 1}.`);
-
-                if (currentRetryCount >= maxRetries) {
-                    console.error(`[${tickWorkerId}] Job ${jobId} has exceeded max retries (${maxRetries}). Moving to FAILED.`);
-                    const failureUpdate = {
-                        status: 'FAILED',
-                        lease: FieldValue.delete(),
-                        'execution.error': 'Job failed after exceeding max retry count due to expired leases.',
-                        updatedAt: FieldValue.serverTimestamp(),
-                    };
-                    transaction.update(jobRef, failureUpdate);
-                    transaction.update(queueRef, { status: 'DONE', updatedAt: FieldValue.serverTimestamp() });
-                } else {
-                    console.log(`[${tickWorkerId}] Re-queueing job ${jobId}.`);
-                    const newAvailableAt = new Date(Date.now() + RETRY_BACKOFF_MS * (currentRetryCount + 1));
-
-                    const requeueJobUpdate = {
-                        status: 'PENDING',
-                        retryCount: FieldValue.increment(1),
-                        lease: FieldValue.delete(),
-                        updatedAt: FieldValue.serverTimestamp(),
-                    };
-                    const requeueQueueUpdate = {
-                        status: 'PENDING',
-                        availableAt: newAvailableAt,
-                        lease: FieldValue.delete(),
-                        updatedAt: FieldValue.serverTimestamp(),
-                    };
-                    transaction.update(jobRef, requeueJobUpdate);
-                    transaction.update(queueRef, requeueQueueUpdate);
-                }
-            });
-        } catch (error) {
-            console.error(`[${tickWorkerId}] CRITICAL: Failed to process expired lease for job ${jobId}:`, error);
+        if (!queueSnapshot.exists) return 'missing-queue' as const;
+        const queueEntry = queueSnapshot.data() as JobQueueEntry;
+        const leaseToken = String(queueEntry.lease?.leaseToken || '');
+        const expiresAtMs = leaseExpiryMillis(queueEntry.lease?.expiresAt);
+        if (
+          queueEntry.status !== 'LEASED'
+          || !leaseToken
+          || !Number.isFinite(expiresAtMs)
+          || expiresAtMs > Date.now()
+        ) {
+          return 'no-longer-expired' as const;
         }
-    });
 
-    await Promise.all(retryPromises);
-    console.log(`[${tickWorkerId}] Finished expired lease check.`);
+        const now = FieldValue.serverTimestamp();
+        if (!jobSnapshot.exists) {
+          transaction.update(queueRef, {
+            status: 'DEAD',
+            lease: FieldValue.delete(),
+            updatedAt: now,
+            'dispatch.lastError': 'Master job document is missing during expired-lease recovery.',
+            'dispatch.recoveredAt': now,
+          });
+          return 'dead-missing-job' as const;
+        }
+
+        const job = jobSnapshot.data() as Job;
+        if (isTerminalJobStatus(job.status)) {
+          transaction.update(queueRef, {
+            status: terminalQueueStatus(job.status),
+            lease: FieldValue.delete(),
+            updatedAt: now,
+            'dispatch.recoveredAt': now,
+          });
+          return 'reconciled-terminal' as const;
+        }
+
+        if (!canRequeueUnstartedLease(job, queueEntry, leaseToken)) {
+          return 'unsafe-to-requeue' as const;
+        }
+
+        const currentRetryCount = Number(job.retryCount || 0);
+        const maxRetries = Number(job.execution?.maxAttempts || job.maxAttempts || MAX_RETRIES);
+        if (!Number.isInteger(maxRetries) || maxRetries < 1) {
+          transaction.update(jobRef, {
+            status: 'DEAD',
+            lease: FieldValue.delete(),
+            error: { message: 'Invalid max-attempt policy during expired-lease recovery.' },
+            updatedAt: now,
+            completedAt: now,
+          });
+          transaction.update(queueRef, {
+            status: 'DEAD',
+            lease: FieldValue.delete(),
+            updatedAt: now,
+          });
+          return 'dead-invalid-policy' as const;
+        }
+
+        if (currentRetryCount >= maxRetries) {
+          transaction.update(jobRef, {
+            status: 'DEAD',
+            lease: FieldValue.delete(),
+            error: { message: `Job exceeded ${maxRetries} expired-lease recoveries before execution started.` },
+            updatedAt: now,
+            completedAt: now,
+            'dispatch.recoveredAt': now,
+          });
+          transaction.update(queueRef, {
+            status: 'DEAD',
+            lease: FieldValue.delete(),
+            updatedAt: now,
+            'dispatch.recoveredAt': now,
+          });
+          return 'dead-max-retries' as const;
+        }
+
+        const nextRetryCount = currentRetryCount + 1;
+        const nextAvailableAt = new Date(Date.now() + RETRY_BACKOFF_MS * nextRetryCount);
+        transaction.update(jobRef, {
+          status: 'PENDING',
+          retryCount: nextRetryCount,
+          lease: FieldValue.delete(),
+          updatedAt: now,
+          'dispatch.recoveryCount': FieldValue.increment(1),
+          'dispatch.recoveredAt': now,
+          'dispatch.lastError': 'Lease expired before execution entered RUNNING.',
+        });
+        transaction.update(queueRef, {
+          status: 'PENDING',
+          availableAt: nextAvailableAt,
+          retryCount: nextRetryCount,
+          lease: FieldValue.delete(),
+          updatedAt: now,
+          'dispatch.recoveryCount': FieldValue.increment(1),
+          'dispatch.recoveredAt': now,
+          'dispatch.lastError': 'Lease expired before execution entered RUNNING.',
+        });
+        return 'requeued' as const;
+      });
+
+      console.log(`[${tickWorkerId}] ${jobId}: ${outcome}`);
+    } catch (error) {
+      console.error(`[${tickWorkerId}] Failed expired-lease recovery for ${jobId}:`, error);
+    }
+  }
+
+  console.log(`[${tickWorkerId}] Finished expired unstarted lease check.`);
 });

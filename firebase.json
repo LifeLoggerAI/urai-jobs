@@ -5,8 +5,7 @@
       "runtime": "nodejs22",
       "codebase": "default",
       "predeploy": [
-        "npx --yes pnpm@8.15.9 --filter @urai-jobs/shared-types build",
-        "npx --yes pnpm@8.15.9 --filter urai-jobs-functions build"
+        "node scripts/firebase-prebuilt-manifest.mjs --verify"
       ]
     }
   ],

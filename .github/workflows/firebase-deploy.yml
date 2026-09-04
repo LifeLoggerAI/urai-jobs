@@ -1,64 +1,19 @@
-name: Deploy to Firebase
+name: Legacy Firebase Deploy (Blocked)
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
-
-env:
-  DEPLOY_PROJECT_ID: ${{ vars.URAI_JOBS_FIREBASE_PROJECT_ID || vars.FIREBASE_PROJECT_ID || 'urai-jobs' }}
 
 jobs:
-  firebase_deploy:
-    name: Firebase deploy
+  blocked:
+    name: Legacy deployment authority is blocked
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Require WIF deploy identity
+      - name: Refuse legacy deployment
         shell: bash
-        env:
-          WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
-          DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
         run: |
-          set -euo pipefail
-          if [ -z "$WIF_PROVIDER" ] || [ -z "$DEPLOY_SERVICE_ACCOUNT" ]; then
-            echo "::error::Configure GCP_WIF_PROVIDER and GCP_DEPLOY_SERVICE_ACCOUNT. Legacy FIREBASE_TOKEN/service-account-key deploy auth is prohibited."
-            exit 1
-          fi
-
-      - name: Authenticate to Google Cloud with WIF
-        uses: google-github-actions/auth@v2
-        with:
-          project_id: ${{ env.DEPLOY_PROJECT_ID }}
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
-          create_credentials_file: true
-          export_environment_variables: true
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 8.15.9
-          run_install: false
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile=false
-
-      - name: Build
-        run: pnpm build
-
-      - name: Deploy hosting and functions
-        run: npx firebase-tools deploy --only hosting,functions --project "$DEPLOY_PROJECT_ID"
+          echo '[BLOCKED] This workflow is not an authorized Firebase deployment path.' >&2
+          echo 'Use .github/workflows/urai-jobs-production-deploy.yml with protected exact-head approvals and prebuilt evidence.' >&2
+          exit 1
