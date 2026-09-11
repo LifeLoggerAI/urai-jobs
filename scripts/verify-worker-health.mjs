@@ -16,42 +16,55 @@ const optionalWorkers = [
 
 let failed = false;
 
-async function fetchEndpoint(name, url, options = {}) {
+async function fetchEndpoint(name, url, endpoint, options = {}) {
   const { optional = false } = options;
   try {
     const response = await fetch(url, {
       redirect: 'manual',
       cache: 'no-store',
-      headers: { 'x-request-id': `worker-health-${Date.now()}` },
+      headers: { 'x-request-id': `worker-${endpoint}-${Date.now()}` },
     });
     const text = await response.text();
     let payload = null;
     try {
       payload = JSON.parse(text);
     } catch {
-      // A health endpoint must return a structured payload; retain the body for diagnostics only.
+      // Runtime verification requires structured JSON; body is retained only for diagnostics.
     }
 
     const healthy = response.ok && payload?.ok === true;
     if (healthy) {
-      console.log(`[PASS] ${name} ${url} ${response.status} source=${payload.sourceSha || '<missing>'}`);
+      console.log(`[PASS] ${name} ${endpoint} ${url} ${response.status} source=${payload.sourceSha || '<missing>'}`);
       return { reachable: true, healthy: true, payload };
     }
     if (optional && response.status === 404) {
-      console.log(`[WARN] ${name} optional endpoint ${url} is not exposed (${response.status})`);
+      console.log(`[WARN] ${name} optional ${endpoint} ${url} is not exposed (${response.status})`);
       return { reachable: true, healthy: false, payload };
     }
-    console.error(`[FAIL] ${name} ${url} returned ${response.status}: ${text.slice(0, 120)}`);
+    console.error(`[FAIL] ${name} ${endpoint} ${url} returned ${response.status}: ${text.slice(0, 160)}`);
     return { reachable: response.status > 0, healthy: false, payload };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (optional) {
-      console.log(`[WARN] ${name} optional endpoint ${url} was not reachable: ${message}`);
+      console.log(`[WARN] ${name} optional ${endpoint} ${url} was not reachable: ${message}`);
       return { reachable: false, healthy: false, payload: null };
     }
-    console.error(`[FAIL] ${name} ${url} ${message}`);
+    console.error(`[FAIL] ${name} ${endpoint} ${url} ${message}`);
     return { reachable: false, healthy: false, payload: null };
   }
+}
+
+function exactShaOrFail(name, endpoint, payload, optional) {
+  const sourceSha = payload?.sourceSha;
+  if (sourceSha === expectedSha) return true;
+  const message = `${name} ${endpoint} runtime source SHA ${sourceSha || '<missing>'} does not match TARGET_SHA ${expectedSha}`;
+  if (optional) {
+    console.log(`[WARN] ${message}`);
+    return false;
+  }
+  console.error(`[FAIL] ${message}`);
+  failed = true;
+  return false;
 }
 
 async function checkWorker(name, baseUrl, optional = false) {
@@ -77,9 +90,7 @@ async function checkWorker(name, baseUrl, optional = false) {
   }
 
   const rootUrl = baseUrl.replace(/\/$/, '');
-  const health = await fetchEndpoint(name, `${rootUrl}/healthz`, { optional });
-  const sourceSha = health.payload?.sourceSha;
-
+  const health = await fetchEndpoint(name, `${rootUrl}/healthz`, 'health', { optional });
   if (!health.healthy) {
     if (optional) {
       console.log(`[WARN] ${name} does not expose a successful structured health payload`);
@@ -89,20 +100,23 @@ async function checkWorker(name, baseUrl, optional = false) {
     failed = true;
     return;
   }
+  if (!exactShaOrFail(name, 'health', health.payload, optional) && optional) return;
 
-  if (sourceSha !== expectedSha) {
-    const message = `${name} runtime source SHA ${sourceSha || '<missing>'} does not match TARGET_SHA ${expectedSha}`;
+  const readiness = await fetchEndpoint(name, `${rootUrl}/readyz`, 'readiness', { optional });
+  if (!readiness.healthy) {
     if (optional) {
-      console.log(`[WARN] ${message}`);
+      console.log(`[WARN] ${name} does not expose a successful structured readiness payload`);
       return;
     }
-    console.error(`[FAIL] ${message}`);
+    console.error(`[FAIL] ${name} must expose HTTP 2xx /readyz with { ok: true }`);
     failed = true;
+    return;
   }
+  exactShaOrFail(name, 'readiness', readiness.payload, optional);
 }
 
 for (const [name, url] of requiredWorkers) await checkWorker(name, url, false);
 for (const [name, url] of optionalWorkers) await checkWorker(name, url, true);
 
 if (failed) process.exit(1);
-console.log(`[PASS] Canonical required workers are healthy and bound to ${expectedSha}`);
+console.log(`[PASS] Canonical required workers are healthy, ready, and bound to ${expectedSha}`);
