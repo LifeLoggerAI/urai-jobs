@@ -56,15 +56,17 @@ async function fetchEndpoint(name, url, endpoint, options = {}) {
 
 function exactShaOrFail(name, endpoint, payload, optional) {
   const sourceSha = payload?.sourceSha;
-  if (sourceSha === expectedSha) return true;
-  const message = `${name} ${endpoint} runtime source SHA ${sourceSha || '<missing>'} does not match TARGET_SHA ${expectedSha}`;
-  if (optional) {
-    console.log(`[WARN] ${message}`);
+  if (sourceSha !== expectedSha) {
+    const message = `${name} ${endpoint} runtime source SHA ${sourceSha || '<missing>'} does not match TARGET_SHA ${expectedSha}`;
+    if (optional) {
+      console.log(`[WARN] ${message}`);
+      return false;
+    }
+    console.error(`[FAIL] ${message}`);
+    failed = true;
     return false;
   }
-  console.error(`[FAIL] ${message}`);
-  failed = true;
-  return false;
+  return true;
 }
 
 async function checkWorker(name, baseUrl, optional = false) {
