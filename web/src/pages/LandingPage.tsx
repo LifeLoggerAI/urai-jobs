@@ -120,6 +120,9 @@ export function LandingPage() {
           </div>
           <div className="hero-actions">
             <a href="/career-mirror" className="cta-button">Open Career Mirror</a>
+            <a href="/privacy" className="secondary-button">Privacy</a>
+            <a href="/terms" className="secondary-button">Terms</a>
+            <a href="/trust" className="secondary-button">Trust &amp; Safety</a>
           </div>
         </section>
       </main>

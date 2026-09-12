@@ -1,7 +1,6 @@
 name: URAI Jobs Typecheck Diagnostics
 
 on:
-  workflow_dispatch:
   pull_request:
     paths:
       - 'functions/**'
@@ -9,48 +8,144 @@ on:
       - 'workers/**'
       - 'packages/**'
       - 'types/**'
+      - 'scripts/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
-      - '.github/workflows/urai-jobs-typecheck-diagnostics.yml'
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: urai-jobs-typecheck-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+env:
+  TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   diagnostics:
-    name: Capture typecheck output
+    name: Capture checkout, typecheck, and contract output
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Capture manual exact checkout diagnostics
+        id: checkout
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          set -o pipefail
+          checkout_log="$RUNNER_TEMP/urai-jobs-checkout-diagnostics.log"
+          checkout_home="$RUNNER_TEMP/urai-jobs-checkout-home"
+          rm -f -- "$checkout_log"
+          rm -rf -- "$checkout_home"
+          mkdir -m 700 -- "$checkout_home"
+          {
+            set -euo pipefail
+            export HOME="$checkout_home"
+            find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+            gh auth setup-git >/dev/null
+            git init .
+            git remote add origin "https://github.com/$GITHUB_REPOSITORY"
+            git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin "$TARGET_SHA"
+            git checkout --detach --force "$TARGET_SHA"
+            test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+            git remote set-url origin "https://github.com/$GITHUB_REPOSITORY"
+            rm -rf -- "$checkout_home"
+            test -z "$(git status --porcelain --untracked-files=all)"
+          } 2>&1 | tee "$checkout_log"
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload checkout diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: urai-jobs-checkout-diagnostics-${{ env.TARGET_SHA }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/urai-jobs-checkout-diagnostics.log
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Enforce exact checkout result
+        shell: bash
+        run: test "${{ steps.checkout.outputs.status }}" = "0"
+
+      - name: Prove exact clean head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Enable pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.0.0
         with:
           version: 8.15.9
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-          cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+      - name: Install exact dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove install preserved exact source
+        shell: bash
+        run: test -z "$(git status --porcelain --untracked-files=all)"
 
       - name: Capture typecheck log
+        id: typecheck
         shell: bash
         run: |
           set +e
-          pnpm typecheck > typecheck-diagnostics.log 2>&1
-          status=$?
-          tail -n 120 typecheck-diagnostics.log
-          echo "$status" > typecheck-diagnostics.exit
-          exit "$status"
+          set -o pipefail
+          mkdir -p artifacts/ci-diagnostics
+          pnpm typecheck 2>&1 | tee artifacts/ci-diagnostics/typecheck-diagnostics.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > artifacts/ci-diagnostics/typecheck-exit-code.txt
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
 
-      - name: Upload typecheck diagnostics
+      - name: Capture exact-head contract verification
+        id: contracts
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          pnpm urai-jobs:verify 2>&1 | tee artifacts/ci-diagnostics/contract-verification.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > artifacts/ci-diagnostics/contract-verification-exit-code.txt
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload verification diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: urai-jobs-typecheck-diagnostics
-          path: |
-            typecheck-diagnostics.log
-            typecheck-diagnostics.exit
+          name: urai-jobs-verification-diagnostics-${{ env.TARGET_SHA }}-${{ github.run_id }}
+          path: artifacts/ci-diagnostics
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Enforce typecheck and contracts
+        shell: bash
+        run: |
+          test "${{ steps.typecheck.outputs.status }}" = "0"
+          test "${{ steps.contracts.outputs.status }}" = "0"
+
+      - name: Restore and prove clean tree
+        if: always()
+        shell: bash
+        run: |
+          rm -rf artifacts
+          if git rev-parse --git-dir >/dev/null 2>&1; then
+            test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+            git diff --exit-code
+            git diff --cached --exit-code
+            git clean -fdx
+            test -z "$(git status --porcelain --untracked-files=all)"
+          fi

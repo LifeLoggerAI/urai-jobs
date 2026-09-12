@@ -8,6 +8,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node ../scripts/execution-guards-smoke.mjs",
     "seed": "npm run build && npm run seed:compiled",
     "seed:compiled": "node lib/functions/src/seed.js"
   },

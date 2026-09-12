@@ -1,93 +1,290 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { PubSub } from '@google-cloud/pubsub';
 import { ulid } from 'ulid';
-import { JobQueueEntry, JobLease } from '@urai-jobs/shared-types';
+import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
+import { canRequeueUnstartedLease, isTerminalJobStatus } from './executionGuards.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
-const JOB_EXECUTION_TOPIC = 'job-execution';
-const LEASE_DURATION_MS = 60 * 1000; // 1 minute
+const MAX_DISPATCH_RETRIES = 3;
+const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
+const LEASE_DURATION_MS = 60 * 1000;
+const PUBLISH_RETRY_BACKOFF_MS = 5 * 1000;
 
 const pubsub = new PubSub();
 
 function createLease(workerId: string): JobLease {
-  const leaseId = ulid();
-  const leaseToken = ulid();
-  const expiresAt = new Date(Date.now() + LEASE_DURATION_MS);
-
+  const now = new Date();
   return {
-    leaseId,
-    leaseToken,
+    leaseId: ulid(),
+    leaseToken: ulid(),
     workerId,
-    expiresAt,
+    expiresAt: new Date(now.getTime() + LEASE_DURATION_MS),
+    heartbeatAt: now,
   };
 }
 
-export const processQueueTick = onSchedule('every 1 minutes', async (context) => {
+function terminalQueueStatus(status: unknown): JobQueueStatus {
+  if (status === 'CANCELLED') return 'CANCELLED';
+  if (status === 'DEAD') return 'DEAD';
+  return 'DONE';
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return String(error || 'Unknown Pub/Sub publish failure');
+}
+
+async function compensatePublishFailure(
+  db: ReturnType<typeof getFirestore>,
+  jobId: string,
+  leaseToken: string,
+  publishError: unknown,
+): Promise<string> {
+  const message = errorMessage(publishError);
+
+  return db.runTransaction(async (transaction) => {
+    const queueRef = jobQueueEntryDoc(jobId);
+    const jobRef = jobDoc(jobId);
+    const [queueSnapshot, jobSnapshot] = await Promise.all([
+      transaction.get(queueRef),
+      transaction.get(jobRef),
+    ]);
+
+    if (!queueSnapshot.exists) return 'missing-queue';
+
+    const queueEntry = queueSnapshot.data() as JobQueueEntry;
+    const queueLeaseToken = String(queueEntry.lease?.leaseToken || '');
+    const now = FieldValue.serverTimestamp();
+
+    if (!jobSnapshot.exists) {
+      if (queueEntry.status === 'LEASED' && queueLeaseToken === leaseToken) {
+        transaction.update(queueRef, {
+          status: 'DEAD',
+          lease: FieldValue.delete(),
+          updatedAt: now,
+          'dispatch.lastError': `Pub/Sub publish failed and the master job is missing: ${message}`,
+          'dispatch.recoveredAt': now,
+        });
+        return 'dead-missing-job';
+      }
+      return 'missing-job-unsafe-to-change';
+    }
+
+    const job = jobSnapshot.data() as Job;
+    if (isTerminalJobStatus(job.status)) {
+      if (queueEntry.status === 'LEASED' && queueLeaseToken === leaseToken) {
+        transaction.update(queueRef, {
+          status: terminalQueueStatus(job.status),
+          lease: FieldValue.delete(),
+          updatedAt: now,
+          'dispatch.recoveredAt': now,
+        });
+      }
+      return 'reconciled-terminal';
+    }
+
+    if (!canRequeueUnstartedLease(job, queueEntry, leaseToken)) {
+      return 'unsafe-to-requeue';
+    }
+
+    const currentRetryCount = Number(job.retryCount ?? queueEntry.retryCount ?? 0);
+    const normalizedRetryCount = Number.isInteger(currentRetryCount) && currentRetryCount >= 0
+      ? currentRetryCount
+      : 0;
+
+    if (normalizedRetryCount >= MAX_DISPATCH_RETRIES) {
+      const terminalError = `Pub/Sub publish failed after ${MAX_DISPATCH_RETRIES + 1} dispatch attempts: ${message}`;
+      transaction.update(jobRef, {
+        status: 'DEAD',
+        retryCount: normalizedRetryCount,
+        lease: FieldValue.delete(),
+        updatedAt: now,
+        completedAt: now,
+        result: {
+          status: 'DEAD',
+          error: { message: terminalError },
+          finishedAt: Timestamp.now(),
+        },
+        'dispatch.recoveryCount': FieldValue.increment(1),
+        'dispatch.recoveredAt': now,
+        'dispatch.lastError': terminalError,
+      });
+      transaction.update(queueRef, {
+        status: 'DEAD',
+        retryCount: normalizedRetryCount,
+        lease: FieldValue.delete(),
+        updatedAt: now,
+        'dispatch.recoveryCount': FieldValue.increment(1),
+        'dispatch.recoveredAt': now,
+        'dispatch.lastError': terminalError,
+      });
+      return 'dead-retries-exhausted';
+    }
+
+    const nextRetryCount = normalizedRetryCount + 1;
+    const availableAt = new Date(
+      Date.now() + PUBLISH_RETRY_BACKOFF_MS * Math.min(nextRetryCount, 12),
+    );
+
+    transaction.update(jobRef, {
+      status: 'PENDING',
+      retryCount: nextRetryCount,
+      lease: FieldValue.delete(),
+      updatedAt: now,
+      'dispatch.recoveryCount': FieldValue.increment(1),
+      'dispatch.recoveredAt': now,
+      'dispatch.lastError': `Pub/Sub publish failed before execution started: ${message}`,
+    });
+    transaction.update(queueRef, {
+      status: 'PENDING',
+      availableAt,
+      retryCount: nextRetryCount,
+      lease: FieldValue.delete(),
+      updatedAt: now,
+      'dispatch.recoveryCount': FieldValue.increment(1),
+      'dispatch.recoveredAt': now,
+      'dispatch.lastError': `Pub/Sub publish failed before execution started: ${message}`,
+    });
+
+    return 'requeued';
+  });
+}
+
+async function recordDispatchPublished(
+  db: ReturnType<typeof getFirestore>,
+  jobId: string,
+  leaseToken: string,
+): Promise<string> {
+  return db.runTransaction(async (transaction) => {
+    const queueRef = jobQueueEntryDoc(jobId);
+    const jobRef = jobDoc(jobId);
+    const [queueSnapshot, jobSnapshot] = await Promise.all([
+      transaction.get(queueRef),
+      transaction.get(jobRef),
+    ]);
+
+    if (!queueSnapshot.exists || !jobSnapshot.exists) return 'missing-state';
+
+    const current = jobSnapshot.data() as Job;
+    const queueEntry = queueSnapshot.data() as JobQueueEntry;
+    if (current.status === 'RUNNING') {
+      return 'already-running';
+    }
+    if (
+      current.lease?.leaseToken !== leaseToken ||
+      queueEntry.lease?.leaseToken !== leaseToken
+    ) {
+      return 'superseded-lease';
+    }
+    if (current.status !== 'LEASED' || queueEntry.status !== 'LEASED') {
+      return 'state-changed';
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const receipt = {
+      'dispatch.publishedAt': now,
+      'dispatch.topic': JOB_EXECUTION_TOPIC,
+      'dispatch.leaseToken': leaseToken,
+      updatedAt: now,
+    };
+    transaction.update(jobRef, receipt);
+    transaction.update(queueRef, receipt);
+    return 'recorded';
+  });
+}
+
+export const processQueueTick = onSchedule('every 1 minutes', async () => {
   const db = getFirestore();
   const tickWorkerId = `tick-${ulid()}`;
 
-  console.log(`Starting queue processing tick with worker ID: ${tickWorkerId}`);
+  console.log(`[${tickWorkerId}] Starting queue processing tick.`);
 
-  const pendingJobsQuery = db.collection('jobQueue')
+  const pendingJobsSnapshot = await db
+    .collection('jobQueue')
     .where('status', '==', 'PENDING')
     .where('availableAt', '<=', new Date())
     .orderBy('availableAt')
-    .limit(MAX_JOBS_TO_LEASE_PER_TICK);
-
-  const pendingJobsSnapshot = await pendingJobsQuery.get();
+    .limit(MAX_JOBS_TO_LEASE_PER_TICK)
+    .get();
 
   if (pendingJobsSnapshot.empty) {
-    console.log('No pending jobs found for this tick.');
+    console.log(`[${tickWorkerId}] No pending jobs found.`);
     return;
   }
 
-  console.log(`Found ${pendingJobsSnapshot.size} pending job(s). Attempting to lease.`);
+  console.log(`[${tickWorkerId}] Found ${pendingJobsSnapshot.size} pending job(s).`);
 
-  const leasePromises = pendingJobsSnapshot.docs.map(async (doc) => {
-    const { jobId } = doc.data() as JobQueueEntry;
+  await Promise.all(pendingJobsSnapshot.docs.map(async (candidate) => {
+    const candidateData = candidate.data() as JobQueueEntry;
+    const jobId = String(candidateData.jobId || candidate.id);
+
+    const lease = await db.runTransaction(async (transaction) => {
+      const queueRef = jobQueueEntryDoc(jobId);
+      const masterJobRef = jobDoc(jobId);
+      const [queueSnapshot, jobSnapshot] = await Promise.all([
+        transaction.get(queueRef),
+        transaction.get(masterJobRef),
+      ]);
+
+      if (!queueSnapshot.exists || queueSnapshot.data()?.status !== 'PENDING') {
+        return null;
+      }
+
+      const now = FieldValue.serverTimestamp();
+      if (!jobSnapshot.exists) {
+        transaction.update(queueRef, {
+          status: 'DEAD',
+          updatedAt: now,
+          'dispatch.lastError': 'Master job document is missing during queue leasing.',
+        });
+        return null;
+      }
+
+      const job = jobSnapshot.data() as Job;
+      if (isTerminalJobStatus(job.status)) {
+        transaction.update(queueRef, {
+          status: terminalQueueStatus(job.status),
+          lease: FieldValue.delete(),
+          updatedAt: now,
+        });
+        return null;
+      }
+      if (job.status !== 'PENDING') return null;
+
+      const newLease = createLease(tickWorkerId);
+      const leaseUpdate = {
+        status: 'LEASED' as const,
+        lease: newLease,
+        updatedAt: now,
+      };
+
+      transaction.update(queueRef, leaseUpdate);
+      transaction.update(masterJobRef, leaseUpdate);
+      return newLease;
+    });
+
+    const leaseToken = String(lease?.leaseToken || '');
+    if (!leaseToken) return;
 
     try {
-      const lease = await db.runTransaction(async (transaction) => {
-        const queueRef = jobQueueEntryDoc(jobId);
-        const masterJobRef = jobDoc(jobId);
-
-        const queueDoc = await transaction.get(queueRef);
-        if (!queueDoc.exists || queueDoc.data()?.status !== 'PENDING') {
-          return null;
-        }
-
-        const newLease = createLease(tickWorkerId);
-        const now = FieldValue.serverTimestamp();
-
-        const leaseUpdate = {
-          status: 'LEASED',
-          lease: newLease,
-          updatedAt: now,
-        };
-
-        transaction.update(queueRef, leaseUpdate);
-        transaction.update(masterJobRef, leaseUpdate);
-
-        console.log(`[${tickWorkerId}] Successfully leased job ${jobId}`);
-        return newLease;
+      await pubsub.topic(JOB_EXECUTION_TOPIC).publishMessage({
+        json: { jobId, leaseToken },
       });
-
-      if (lease?.leaseToken) {
-        const message = {
-          jobId,
-          leaseToken: lease.leaseToken,
-        };
-        await pubsub.topic(JOB_EXECUTION_TOPIC).publishMessage({ json: message });
-        console.log(`[${tickWorkerId}] Published execution message for job ${jobId}`);
-      }
+      const receiptOutcome = await recordDispatchPublished(db, jobId, leaseToken);
+      console.log(
+        `[${tickWorkerId}] Published execution message for job ${jobId}; receipt outcome: ${receiptOutcome}.`,
+      );
     } catch (error) {
-      console.error(`[${tickWorkerId}] Critical error leasing job ${jobId}.`, error);
+      const outcome = await compensatePublishFailure(db, jobId, leaseToken, error);
+      console.error(
+        `[${tickWorkerId}] Pub/Sub publish failed for ${jobId}; compensation outcome: ${outcome}.`,
+        error,
+      );
+      throw error;
     }
-  });
+  }));
 
-  await Promise.all(leasePromises);
-
-  console.log(`Finished queue processing tick: ${tickWorkerId}`);
+  console.log(`[${tickWorkerId}] Finished queue processing tick.`);
 });

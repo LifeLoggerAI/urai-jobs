@@ -56,6 +56,30 @@ gcloud services enable \
   storage.googleapis.com \
   --project "$PROJECT_ID"
 
+# The protected deploy gate verifies the worker runtime's project-level
+# data-plane grant. Give the deploy identity only the single policy-read
+# permission needed for that fail-closed check instead of a broad viewer role.
+POLICY_VERIFIER_ROLE_ID="uraiJobsPolicyVerifier"
+POLICY_VERIFIER_ROLE="projects/${PROJECT_ID}/roles/${POLICY_VERIFIER_ROLE_ID}"
+POLICY_VERIFIER_PERMISSIONS="resourcemanager.projects.getIamPolicy"
+if gcloud iam roles describe "$POLICY_VERIFIER_ROLE_ID" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  gcloud iam roles update "$POLICY_VERIFIER_ROLE_ID" \
+    --project "$PROJECT_ID" \
+    --title="URAI Jobs policy verifier" \
+    --description="Read project IAM policy solely for protected worker data-plane preflight" \
+    --permissions="$POLICY_VERIFIER_PERMISSIONS" \
+    --stage=GA \
+    --quiet >/dev/null
+else
+  gcloud iam roles create "$POLICY_VERIFIER_ROLE_ID" \
+    --project "$PROJECT_ID" \
+    --title="URAI Jobs policy verifier" \
+    --description="Read project IAM policy solely for protected worker data-plane preflight" \
+    --permissions="$POLICY_VERIFIER_PERMISSIONS" \
+    --stage=GA \
+    --quiet >/dev/null
+fi
+
 ROLES=(
   roles/artifactregistry.writer
   roles/cloudbuild.builds.editor
@@ -71,6 +95,7 @@ ROLES=(
   roles/run.admin
   roles/serviceusage.serviceUsageAdmin
   roles/storage.admin
+  "$POLICY_VERIFIER_ROLE"
 )
 
 for role in "${ROLES[@]}"; do

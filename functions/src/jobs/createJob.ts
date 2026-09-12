@@ -1,14 +1,21 @@
 import { ulid } from 'ulid';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
-import type { CallableContext } from 'firebase-functions/v1/https';
+import { HttpsError, type CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
 import { Job, JobQueueEntry } from '@urai-jobs/shared-types';
 import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
+import {
+  bindingMatches,
+  buildIdempotencyBindingId,
+  buildRequestFingerprint,
+  type IdempotencyBinding,
+} from '../core/jobsReliability.js';
 
 const MAX_PAYLOAD_BYTES = parseInt(process.env.URAI_JOBS_MAX_PAYLOAD_BYTES || '', 10) || 32768;
 const MAX_CREATE_PER_MINUTE = parseInt(process.env.URAI_JOBS_CREATE_RATE_LIMIT_PER_MINUTE || '', 10) || 10;
+const IDEMPOTENCY_COLLECTION = 'jobIdempotencyBindings';
 
 const ALLOWED_JOB_TYPE_PATTERNS = [
   /^narrator\.tts$/,
@@ -28,7 +35,7 @@ const ALLOWED_JOB_TYPE_PATTERNS = [
 const CreateJobSchema = z.object({
   jobType: z.string().min(3, 'Job type must be at least 3 characters').max(80),
   payload: z.record(z.any()),
-  idempotencyKey: z.string().max(160).optional(),
+  idempotencyKey: z.string().trim().min(1).max(160).optional(),
 });
 
 function payloadSizeBytes(payload: unknown): number {
@@ -70,6 +77,19 @@ async function assertCreateRateLimit(uid: string) {
   }
 }
 
+function resolveExistingBinding(
+  binding: Partial<IdempotencyBinding>,
+  expected: Omit<IdempotencyBinding, 'jobId'>
+): { jobId: string; deduplicated: true } {
+  if (!bindingMatches(binding, expected) || typeof binding.jobId !== 'string' || !binding.jobId) {
+    throw httpsError(
+      'already-exists',
+      'The idempotency key is already bound to a different job request.'
+    );
+  }
+  return { jobId: binding.jobId, deduplicated: true };
+}
+
 const handler = async (data: any, context: CallableContext, user: unknown) => {
   const uid = context.auth?.uid;
   if (!uid) {
@@ -95,9 +115,22 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     throw httpsError('invalid-argument', `Payload is too large. Max bytes: ${MAX_PAYLOAD_BYTES}`);
   }
 
+  const db = getFirestore();
+  const requestFingerprint = buildRequestFingerprint(jobType, payload);
+  const expectedBinding = { ownerUid: uid, jobType, requestFingerprint };
+  const bindingRef = idempotencyKey
+    ? db.collection(IDEMPOTENCY_COLLECTION).doc(buildIdempotencyBindingId(uid, jobType, idempotencyKey))
+    : null;
+
+  if (bindingRef) {
+    const existing = await bindingRef.get();
+    if (existing.exists) {
+      return resolveExistingBinding(existing.data() as Partial<IdempotencyBinding>, expectedBinding);
+    }
+  }
+
   await assertCreateRateLimit(uid);
 
-  const db = getFirestore();
   const jobId = ulid();
   const now = FieldValue.serverTimestamp();
   const orgId = userOrgId(user);
@@ -125,9 +158,17 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   };
 
   try {
-    await db.runTransaction(async (transaction) => {
+    return await db.runTransaction(async (transaction) => {
+      if (bindingRef) {
+        const existing = await transaction.get(bindingRef);
+        if (existing.exists) {
+          return resolveExistingBinding(existing.data() as Partial<IdempotencyBinding>, expectedBinding);
+        }
+      }
+
       const jobRef = jobDoc(jobId);
       const queueRef = jobQueueEntryDoc(jobId);
+      const logRef = jobRef.collection('logs').doc('created');
 
       transaction.create(jobRef, {
         ...newJob,
@@ -140,27 +181,36 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
         availableAt: now,
         createdAt: now,
       });
-    });
 
-    await jobDoc(jobId).collection('logs').add({
-      level: 'info',
-      source: 'createJob',
-      message: 'Job created and queued by authorized caller.',
-      metadata: {
-        jobType,
-        ownerUid: uid,
-        orgId,
-        payloadBytes,
-        idempotencyKey: idempotencyKey || null,
-      },
-      createdAt: now,
+      transaction.create(logRef, {
+        level: 'info',
+        source: 'createJob',
+        message: 'Job created and queued by authorized caller.',
+        metadata: {
+          jobType,
+          ownerUid: uid,
+          orgId,
+          payloadBytes,
+          idempotencyBound: Boolean(bindingRef),
+        },
+        createdAt: now,
+      });
+
+      if (bindingRef) {
+        transaction.create(bindingRef, {
+          ...expectedBinding,
+          jobId,
+          createdAt: now,
+        });
+      }
+
+      return { jobId, deduplicated: false };
     });
-  } catch (error: any) {
-    console.error('Error creating job in transaction:', error);
-    throw httpsError('internal', 'Failed to create job.', error?.message);
+  } catch (error: unknown) {
+    if (error instanceof HttpsError) throw error;
+    console.error('Error creating idempotent job transaction:', error);
+    throw httpsError('internal', 'Failed to create job.');
   }
-
-  return { jobId };
 };
 
 export const createJob = withAuthenticatedRole(['admin', 'operator', 'user'], handler);

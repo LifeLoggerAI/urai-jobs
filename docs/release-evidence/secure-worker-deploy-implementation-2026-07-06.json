@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "urai-material-change-receipt-2",
+  "receiptId": "UJ-SECURE-DEPLOY-20260711-002",
+  "recordedAt": "2026-07-11T14:30:00Z",
+  "status": "IMPLEMENTED BUT NOT DEPLOYED",
+  "repository": "LifeLoggerAI/urai-jobs",
+  "branch": "secure-worker-deploy-20260706",
+  "implementationSha": null,
+  "implementationShaAuthority": "Use the exact current PR #75 head from GitHub. A mutable branch receipt must not embed an earlier head as current evidence.",
+  "pullRequests": [75],
+  "supersedesPullRequests": [63, 74],
+  "issues": [53, 64, 65, 66, 67, 68, 69, 70, 71],
+  "changedAreas": [
+    "Firebase executeJob Secret Manager binding",
+    "Narrator worker startup and authorization probes",
+    "Asset worker startup, authorization probes, and canonical payload compatibility",
+    "canonical Cloud Run worker fleet deployment",
+    "clean exact-SHA and ancestor rollback authority",
+    "environment-specific staging and production confirmations",
+    "Firebase deployment project and source-SHA binding",
+    "separately approved GCS and Hosting infrastructure creation",
+    "legacy and scaffold deployment workflow disablement",
+    "CI secure-deployment contract"
+  ],
+  "verification": {
+    "staticContractCommand": "pnpm security:worker-deploy",
+    "exactHeadWorkflowStatus": "PENDING",
+    "providerCallsExecuted": 0,
+    "deploymentExecuted": false,
+    "infrastructureCreated": false,
+    "secretsReadOrChanged": false
+  },
+  "deployment": {
+    "target": null,
+    "deployedSha": null,
+    "rollbackSha": null,
+    "workerRevisions": [],
+    "imageDigests": [],
+    "publicUrls": [],
+    "reason": "No staging or production deployment was authorized or performed. Exact-head CI, protected environment approval, existing infrastructure, service accounts, secret bindings, lifecycle smoke, and rollback rehearsal remain external gates."
+  },
+  "requiredLiveEvidence": [
+    "all exact-head PR workflows terminal green",
+    "independent security and deployment review",
+    "protected staging environment approval",
+    "Workload Identity provider and deploy service account",
+    "worker runtime service account",
+    "existing Artifact Registry repository, GCS bucket, and Firebase Hosting site",
+    "URAI_JOBS_WORKER_TOKEN secret",
+    "urai-wheel-github-token secret",
+    "urai-jobs-callback-secret secret",
+    "exact staging target SHA and distinct ancestor rollback SHA",
+    "unauthorized and authorized live worker probes",
+    "create, lease, execute, success, failure, and recovery lifecycle smoke",
+    "worker revision and Firebase rollback rehearsal",
+    "exact deployed SHA and immutable artifact receipt"
+  ]
+}

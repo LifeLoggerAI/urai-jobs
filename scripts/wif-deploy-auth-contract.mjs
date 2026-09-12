@@ -1,9 +1,12 @@
 import {readFileSync} from 'node:fs';
 
-const workflowPaths = [
-  '.github/workflows/firebase-deploy.yml',
+const activeWorkflowPaths = [
   '.github/workflows/urai-jobs-production-deploy.yml',
-  '.github/workflows/post-deploy-verify.yml',
+  '.github/workflows/post-deploy-verify.yml'
+];
+
+const retiredWorkflowPaths = [
+  '.github/workflows/firebase-deploy.yml',
   '.github/workflows/career-production-release.yml',
   '.github/workflows/production-deploy-publish.yml'
 ];
@@ -30,13 +33,24 @@ function fail(message) {
   console.error(`[FAIL] ${message}`);
 }
 
-for (const path of workflowPaths) {
+for (const path of activeWorkflowPaths) {
   const source = readFileSync(path, 'utf8');
   for (const [label, pattern] of forbiddenPatterns) {
     if (pattern.test(source)) fail(`${path} contains forbidden ${label}`);
   }
   for (const [label, pattern] of requiredPatterns) {
     if (!pattern.test(source)) fail(`${path} is missing ${label}`);
+  }
+}
+
+for (const path of retiredWorkflowPaths) {
+  const source = readFileSync(path, 'utf8');
+  for (const [label, pattern] of forbiddenPatterns) {
+    if (pattern.test(source)) fail(`${path} contains forbidden ${label}`);
+  }
+  if (!source.includes('[BLOCKED]')) fail(`${path} does not declare its blocked authority`);
+  if (/google-github-actions\/auth|firebase-tools\s+deploy|firebase\s+deploy|gcloud\s+run\s+deploy/.test(source)) {
+    fail(`${path} retains deployment or cloud-authentication execution`);
   }
 }
 
