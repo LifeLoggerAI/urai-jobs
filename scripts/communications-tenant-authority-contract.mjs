@@ -21,8 +21,14 @@ check(
     createJob.includes('const raw = userRecord(user).tenantId;')
 );
 check(
+  'canonical Communications tenant id pattern is enforced server-side',
+  createJob.includes("const COMMUNICATIONS_TENANT_ID_PATTERN = /^tenant_[a-zA-Z0-9_-]{6,64}$/;") &&
+    createJob.includes('!COMMUNICATIONS_TENANT_ID_PATTERN.test(tenantId)') &&
+    createJob.includes('Communications jobs require a canonical server-owned tenantId matching the Communications tenant contract.')
+);
+check(
   'communications jobs fail closed when authenticated user has no tenantId',
-  createJob.includes('isCommunicationsJobType(jobType) && !tenantId') &&
+  createJob.includes('communicationsJob && !tenantId') &&
     createJob.includes('Communications jobs require a server-owned tenantId on the authenticated user record.')
 );
 check(
@@ -36,7 +42,7 @@ check(
 );
 check(
   'communications idempotency fingerprint is tenant-bound',
-  createJob.includes("const fingerprintPayload = isCommunicationsJobType(jobType)") &&
+  createJob.includes('const fingerprintPayload = communicationsJob') &&
     createJob.includes('{ payload, tenantId }') &&
     createJob.includes('buildRequestFingerprint(jobType, fingerprintPayload)')
 );
