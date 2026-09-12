@@ -16,6 +16,7 @@ import {
 const MAX_PAYLOAD_BYTES = parseInt(process.env.URAI_JOBS_MAX_PAYLOAD_BYTES || '', 10) || 32768;
 const MAX_CREATE_PER_MINUTE = parseInt(process.env.URAI_JOBS_CREATE_RATE_LIMIT_PER_MINUTE || '', 10) || 10;
 const IDEMPOTENCY_COLLECTION = 'jobIdempotencyBindings';
+const COMMUNICATIONS_TENANT_ID_PATTERN = /^tenant_[a-zA-Z0-9_-]{6,64}$/;
 
 const ALLOWED_JOB_TYPE_PATTERNS = [
   /^narrator\.tts$/,
@@ -126,15 +127,22 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
 
   const orgId = userOrgId(user);
   const tenantId = userTenantId(user);
-  if (isCommunicationsJobType(jobType) && !tenantId) {
+  const communicationsJob = isCommunicationsJobType(jobType);
+  if (communicationsJob && !tenantId) {
     throw httpsError(
       'failed-precondition',
       'Communications jobs require a server-owned tenantId on the authenticated user record.'
     );
   }
+  if (communicationsJob && tenantId && !COMMUNICATIONS_TENANT_ID_PATTERN.test(tenantId)) {
+    throw httpsError(
+      'failed-precondition',
+      'Communications jobs require a canonical server-owned tenantId matching the Communications tenant contract.'
+    );
+  }
 
   const db = getFirestore();
-  const fingerprintPayload = isCommunicationsJobType(jobType)
+  const fingerprintPayload = communicationsJob
     ? { payload, tenantId }
     : payload;
   const requestFingerprint = buildRequestFingerprint(jobType, fingerprintPayload);
