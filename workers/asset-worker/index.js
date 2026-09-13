@@ -97,6 +97,14 @@ function publicBaseUrl(req) {
   return `${protocol}://${host}`.replace(/\/$/, '');
 }
 
+function configuredPublicBaseUrlIsHttps() {
+  try {
+    return Boolean(configuredPublicBaseUrl && new URL(configuredPublicBaseUrl).protocol === 'https:');
+  } catch {
+    return false;
+  }
+}
+
 async function githubRequest(path, init = {}) {
   if (!githubToken) throw new GithubDispatchRejected('URAI_WHEEL_GITHUB_TOKEN is not configured');
   const response = await fetch(`https://api.github.com${path}`, {
@@ -133,13 +141,18 @@ app.get('/', (_req, res) => {
   });
 });
 
-app.get('/healthz', (_req, res) => {
-  const configured = {
+function assetWorkerConfiguration() {
+  return {
     workerToken: Boolean(workerToken),
     githubToken: Boolean(githubToken),
     callbackSecret: Boolean(callbackSecret),
   };
+}
+
+app.get('/healthz', (_req, res) => {
+  const configured = assetWorkerConfiguration();
   const ok = productionRuntime ? Object.values(configured).every(Boolean) : true;
+  res.set('Cache-Control', 'no-store');
   res.status(ok ? 200 : 503).send({
     ok,
     sourceSha,
@@ -148,6 +161,28 @@ app.get('/healthz', (_req, res) => {
     assetFactoryRepo,
     callbackUrlMode: configuredPublicBaseUrl ? 'configured' : 'request-derived',
     callbackTimeoutMs,
+  });
+});
+
+app.get('/readyz', (_req, res) => {
+  const configured = assetWorkerConfiguration();
+  const checks = {
+    configuration: productionRuntime ? Object.values(configured).every(Boolean) : true,
+    sourceShaExact: productionRuntime ? /^[0-9a-f]{40}$/.test(sourceSha) : true,
+    runtimeRevision: productionRuntime ? Boolean(process.env.K_REVISION) : true,
+    callbackUrlConfiguredHttps: productionRuntime ? configuredPublicBaseUrlIsHttps() : true,
+    canonicalAssetFactoryRepo: assetFactoryRepo === 'LifeLoggerAI/asset-factory',
+  };
+  const ok = Object.values(checks).every(Boolean);
+  res.set('Cache-Control', 'no-store');
+  res.status(ok ? 200 : 503).send({
+    ok,
+    sourceSha,
+    runtimeEnv,
+    configured,
+    checks,
+    assetFactoryRepo,
+    callbackUrlMode: configuredPublicBaseUrl ? 'configured' : 'request-derived',
   });
 });
 
@@ -345,9 +380,6 @@ app.post('/callback', async (req, res) => {
       const activeLeaseToken = String(execution.leaseToken || '');
       const callbackDeadlineMillis = timestampMillis(execution.callbackDeadlineAt);
 
-      // A provider can retry after Firestore commits but before it receives the
-      // HTTP response. Retain one bounded consumed-attempt receipt on the job so
-      // the same token deterministically returns the original result.
       if (
         completedCallbackTokenHash &&
         timingSafeEqual(presentedCallbackTokenHash, completedCallbackTokenHash)
