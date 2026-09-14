@@ -16,6 +16,7 @@ import {
 const MAX_PAYLOAD_BYTES = parseInt(process.env.URAI_JOBS_MAX_PAYLOAD_BYTES || '', 10) || 32768;
 const MAX_CREATE_PER_MINUTE = parseInt(process.env.URAI_JOBS_CREATE_RATE_LIMIT_PER_MINUTE || '', 10) || 10;
 const IDEMPOTENCY_COLLECTION = 'jobIdempotencyBindings';
+const COMMUNICATIONS_TENANT_ID_PATTERN = /^tenant_[a-zA-Z0-9_-]{6,64}$/;
 
 const ALLOWED_JOB_TYPE_PATTERNS = [
   /^narrator\.tts$/,
@@ -46,13 +47,22 @@ function isAllowedJobType(jobType: string): boolean {
   return ALLOWED_JOB_TYPE_PATTERNS.some((pattern) => pattern.test(jobType));
 }
 
+function isCommunicationsJobType(jobType: string): boolean {
+  return jobType.startsWith('communications.');
+}
+
 function userRecord(user: unknown): Record<string, unknown> {
   return user && typeof user === 'object' ? (user as Record<string, unknown>) : {};
 }
 
 function userOrgId(user: unknown): string | null {
   const raw = userRecord(user).orgId;
-  return typeof raw === 'string' && raw.trim() ? raw : null;
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
+function userTenantId(user: unknown): string | null {
+  const raw = userRecord(user).tenantId;
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
 }
 
 function hasJobCreatePermission(user: unknown): boolean {
@@ -115,8 +125,27 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     throw httpsError('invalid-argument', `Payload is too large. Max bytes: ${MAX_PAYLOAD_BYTES}`);
   }
 
+  const orgId = userOrgId(user);
+  const tenantId = userTenantId(user);
+  const communicationsJob = isCommunicationsJobType(jobType);
+  if (communicationsJob && !tenantId) {
+    throw httpsError(
+      'failed-precondition',
+      'Communications jobs require a server-owned tenantId on the authenticated user record.'
+    );
+  }
+  if (communicationsJob && tenantId && !COMMUNICATIONS_TENANT_ID_PATTERN.test(tenantId)) {
+    throw httpsError(
+      'failed-precondition',
+      'Communications jobs require a canonical server-owned tenantId matching the Communications tenant contract.'
+    );
+  }
+
   const db = getFirestore();
-  const requestFingerprint = buildRequestFingerprint(jobType, payload);
+  const fingerprintPayload = communicationsJob
+    ? { payload, tenantId }
+    : payload;
+  const requestFingerprint = buildRequestFingerprint(jobType, fingerprintPayload);
   const expectedBinding = { ownerUid: uid, jobType, requestFingerprint };
   const bindingRef = idempotencyKey
     ? db.collection(IDEMPOTENCY_COLLECTION).doc(buildIdempotencyBindingId(uid, jobType, idempotencyKey))
@@ -133,7 +162,6 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
 
   const jobId = ulid();
   const now = FieldValue.serverTimestamp();
-  const orgId = userOrgId(user);
 
   const newJob: Job = {
     jobId,
@@ -143,6 +171,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     payload,
     ownerUid: uid,
     ...(orgId ? { orgId } : {}),
+    ...(tenantId ? { tenantId } : {}),
     retryCount: 0,
     execution: {
       attemptCount: 0,
@@ -190,6 +219,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
           jobType,
           ownerUid: uid,
           orgId,
+          tenantId,
           payloadBytes,
           idempotencyBound: Boolean(bindingRef),
         },
