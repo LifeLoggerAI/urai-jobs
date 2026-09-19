@@ -31,6 +31,7 @@ const ALLOWED_JOB_TYPE_PATTERNS = [
   /^admin\./,
   /^deployment\./,
   /^proof\./,
+  /^memory\.private-source\.transcribe$/,
 ];
 
 const PrivateSourcePayloadSchema = z.object({
