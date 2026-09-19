@@ -33,6 +33,17 @@ const ALLOWED_JOB_TYPE_PATTERNS = [
   /^proof\./,
 ];
 
+const PrivateSourcePayloadSchema = z.object({
+  sourceReceiptRef: z.string().trim().regex(/^psr_[A-Za-z0-9_-]{16,128}$/),
+  requestedPurpose: z.enum(['transcribe', 'memory-index']),
+  locale: z.string().trim().min(2).max(35).regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/).optional(),
+  requestReceipt: z.string().trim().regex(/^req_[A-Za-z0-9_-]{12,128}$/).optional(),
+}).strict();
+
+function isPrivateSourceJobType(jobType: string): boolean {
+  return jobType === 'memory.private-source.transcribe';
+}
+
 const CreateJobSchema = z.object({
   jobType: z.string().min(3, 'Job type must be at least 3 characters').max(80),
   payload: z.record(z.any()),
@@ -118,6 +129,17 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   const { jobType, payload, idempotencyKey } = validationResult.data;
   if (!isAllowedJobType(jobType)) {
     throw httpsError('invalid-argument', `Unsupported job type: ${jobType}`);
+  }
+
+  if (isPrivateSourceJobType(jobType)) {
+    const privateSource = PrivateSourcePayloadSchema.safeParse(payload);
+    if (!privateSource.success) {
+      throw httpsError(
+        'invalid-argument',
+        'Private-source jobs require an opaque sourceReceiptRef and purpose-only payload; raw media URLs, transcript text, identities, addresses, and arbitrary fields are rejected.',
+        privateSource.error.flatten()
+      );
+    }
   }
 
   const payloadBytes = payloadSizeBytes(payload);
