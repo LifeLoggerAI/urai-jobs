@@ -97,11 +97,12 @@ PENDING/LEASED/RUNNING -> CANCELLED
 ### `communications.message.send`
 - **Owner:** `communications`
 - **Authority:** `tenantId` and `ownerUid` come only from the authenticated server-side Jobs user record. Callers cannot choose the tenant.
-- **Payload Shape:** `{ "templateId": "template_...", "recipientUid": string, "recipientAddressHash": "<sha256>", "vars": object, "urgency"?: "normal" | "urgent" }`
-- **Forbidden Payload Fields:** raw recipient addresses, phone numbers, email addresses, tenant IDs, delivery-channel overrides, provider credentials, provider IDs.
-- **Template / channel authority:** Communications resolves the active tenant-owned template and its channel. Jobs does not choose or synthesize the channel.
-- **Current Output Shape:** `{ "messageId": string, "deliveryStatus": "blocked" | "deferred" | "queued", "testMode": true, "providerSubmitted": false }`
-- **Current provider boundary:** the Jobs worker adapter is simulation-only and passes `realDeliveryEnabled: false`. Real provider sends require a separately reviewed provider-live release and are not authorized by this contract.
+- **Payload Shape:** `{ "channel": "email", "templateId": "template_...", "recipientUid": string, "vars": object, "urgency"?: "normal" | "urgent" }`
+- **Forbidden Payload Fields:** raw recipient addresses, phone numbers, email addresses, recipient hashes supplied as destination authority, tenant IDs, provider credentials, provider IDs.
+- **Destination / channel authority:** current Jobs integration admits only email. Communications resolves the tenant-owned recipient record and hashes the server-owned email internally; the active tenant-owned template must also resolve to email or the worker fails closed.
+- **Worker route:** `COMMUNICATIONS_WORKER_URL + /executeJob` (Firebase HTTPS function export).
+- **Output Shape after real provider submission:** `{ "messageId": string, "deliveryId": string, "deliveryStatus": "submitted" | later provider-terminal state, "testMode": false }`
+- **Current provider boundary:** Communications itself requires `ENABLE_REAL_DELIVERY=true`, configured reviewed provider secrets, and a valid shared Jobs bearer secret before it will attempt a provider send. Otherwise it fails closed; Jobs must not treat a simulated/no-provider outcome as success.
 - **Status States:** canonical runtime statuses only.
 - **Retry Behavior:** 3 retries at the Jobs layer; idempotency binds owner + tenant + job type + payload fingerprint.
 - **Failure Behavior:** invalid tenant/template/recipient/consent state fails closed and the Jobs execution records `FAILED`; Communications owns the delivery log/audit receipt.
