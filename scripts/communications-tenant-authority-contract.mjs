@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 
 const createJob = fs.readFileSync('functions/src/jobs/createJob.ts', 'utf8');
+const executeJob = fs.readFileSync('functions/src/jobs/executeJob.ts', 'utf8');
 let failed = 0;
 
 function check(name, condition) {
@@ -57,17 +58,23 @@ check(
     !createJob.includes('/^communications\\./,')
 );
 check(
-  'communications payload is strict and excludes raw recipients and channel overrides',
+  'communications payload is strict, email-only, and excludes caller-owned destinations',
   createJob.includes('const CommunicationsMessagePayloadSchema = z.object({') &&
-    createJob.includes('recipientAddressHash: z.string().trim().regex(/^[A-Fa-f0-9]{64}$/)') &&
+    createJob.includes("channel: z.literal('email').default('email')") &&
     createJob.includes("urgency: z.enum(['normal', 'urgent']).default('normal')") &&
     createJob.includes('}).strict();') &&
-    createJob.includes('raw recipient addresses and channel overrides are rejected.')
+    !createJob.includes('recipientAddressHash: z.string()') &&
+    createJob.includes('raw recipient addresses and caller-owned destinations are rejected.')
 );
 check(
   'communications payload validation runs before job persistence',
   createJob.includes("if (jobType === 'communications.message.send')") &&
     createJob.includes('CommunicationsMessagePayloadSchema.safeParse(payload)')
+);
+
+check(
+  'communications dispatch uses the actual Firebase executeJob route',
+  executeJob.includes("if (jobType === 'communications.message.send') return '/executeJob';")
 );
 
 if (failed > 0) {
