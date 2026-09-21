@@ -96,11 +96,15 @@ PENDING/LEASED/RUNNING -> CANCELLED
 
 ### `communications.message.send`
 - **Owner:** `communications`
-- **Payload Shape:** `{ "channel": "email" | "sms", "recipient": string, "templateId": string, "vars": object }`
-- **Output Shape:** `{ "messageId": string, "deliveryStatus": "sent" }`
+- **Authority:** `tenantId` and `ownerUid` come only from the authenticated server-side Jobs user record. Callers cannot choose the tenant.
+- **Payload Shape:** `{ "templateId": "template_...", "recipientUid": string, "recipientAddressHash": "<sha256>", "vars": object, "urgency"?: "normal" | "urgent" }`
+- **Forbidden Payload Fields:** raw recipient addresses, phone numbers, email addresses, tenant IDs, delivery-channel overrides, provider credentials, provider IDs.
+- **Template / channel authority:** Communications resolves the active tenant-owned template and its channel. Jobs does not choose or synthesize the channel.
+- **Current Output Shape:** `{ "messageId": string, "deliveryStatus": "blocked" | "deferred" | "queued", "testMode": true, "providerSubmitted": false }`
+- **Current provider boundary:** the Jobs worker adapter is simulation-only and passes `realDeliveryEnabled: false`. Real provider sends require a separately reviewed provider-live release and are not authorized by this contract.
 - **Status States:** canonical runtime statuses only.
-- **Retry Behavior:** 3 retries.
-- **Failure Behavior:** Marks job as `FAILED`; alerts are owned by the communications subsystem.
+- **Retry Behavior:** 3 retries at the Jobs layer; idempotency binds owner + tenant + job type + payload fingerprint.
+- **Failure Behavior:** invalid tenant/template/recipient/consent state fails closed and the Jobs execution records `FAILED`; Communications owns the delivery log/audit receipt.
 
 ## 6. Privacy subsystem
 
