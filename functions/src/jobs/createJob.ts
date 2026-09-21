@@ -42,9 +42,9 @@ const PrivateSourcePayloadSchema = z.object({
 }).strict();
 
 const CommunicationsMessagePayloadSchema = z.object({
+  channel: z.literal('email').default('email'),
   templateId: z.string().trim().min(6).max(128).regex(/^template_[A-Za-z0-9_-]+$/),
   recipientUid: z.string().trim().min(6).max(128),
-  recipientAddressHash: z.string().trim().regex(/^[A-Fa-f0-9]{64}$/),
   vars: z.record(z.unknown()).default({}),
   urgency: z.enum(['normal', 'urgent']).default('normal'),
 }).strict();
@@ -156,7 +156,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     if (!communicationsMessage.success) {
       throw httpsError(
         'invalid-argument',
-        'Communications jobs require templateId, recipientUid, recipientAddressHash, vars, and optional urgency only; raw recipient addresses and channel overrides are rejected.',
+        'Communications jobs require the server-supported email channel, templateId, recipientUid, vars, and optional urgency only; raw recipient addresses and caller-owned destinations are rejected.',
         communicationsMessage.error.flatten()
       );
     }
