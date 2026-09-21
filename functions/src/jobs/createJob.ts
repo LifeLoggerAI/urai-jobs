@@ -27,7 +27,7 @@ const ALLOWED_JOB_TYPE_PATTERNS = [
   /^content[.-]/,
   /^storytime\./,
   /^analytics\./,
-  /^communications\./,
+  /^communications\.message\.send$/,
   /^admin\./,
   /^deployment\./,
   /^proof\./,
@@ -39,6 +39,14 @@ const PrivateSourcePayloadSchema = z.object({
   requestedPurpose: z.enum(['transcribe', 'memory-index']),
   locale: z.string().trim().min(2).max(35).regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/).optional(),
   requestReceipt: z.string().trim().regex(/^req_[A-Za-z0-9_-]{12,128}$/).optional(),
+}).strict();
+
+const CommunicationsMessagePayloadSchema = z.object({
+  templateId: z.string().trim().min(6).max(128).regex(/^template_[A-Za-z0-9_-]+$/),
+  recipientUid: z.string().trim().min(6).max(128),
+  recipientAddressHash: z.string().trim().regex(/^[A-Fa-f0-9]{64}$/),
+  vars: z.record(z.unknown()).default({}),
+  urgency: z.enum(['normal', 'urgent']).default('normal'),
 }).strict();
 
 function isPrivateSourceJobType(jobType: string): boolean {
@@ -139,6 +147,17 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
         'invalid-argument',
         'Private-source jobs require an opaque sourceReceiptRef and purpose-only payload; raw media URLs, transcript text, identities, addresses, and arbitrary fields are rejected.',
         privateSource.error.flatten()
+      );
+    }
+  }
+
+  if (jobType === 'communications.message.send') {
+    const communicationsMessage = CommunicationsMessagePayloadSchema.safeParse(payload);
+    if (!communicationsMessage.success) {
+      throw httpsError(
+        'invalid-argument',
+        'Communications jobs require templateId, recipientUid, recipientAddressHash, vars, and optional urgency only; raw recipient addresses and channel overrides are rejected.',
+        communicationsMessage.error.flatten()
       );
     }
   }
