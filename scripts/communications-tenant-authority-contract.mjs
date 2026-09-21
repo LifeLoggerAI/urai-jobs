@@ -51,6 +51,25 @@ check(
   /metadata:\s*\{[\s\S]*?tenantId,[\s\S]*?payloadBytes/.test(createJob)
 );
 
+check(
+  'only the governed communications.message.send job type is admitted',
+  createJob.includes('/^communications\\.message\\.send$/') &&
+    !createJob.includes('/^communications\\./,')
+);
+check(
+  'communications payload is strict and excludes raw recipients and channel overrides',
+  createJob.includes('const CommunicationsMessagePayloadSchema = z.object({') &&
+    createJob.includes('recipientAddressHash: z.string().trim().regex(/^[A-Fa-f0-9]{64}$/)') &&
+    createJob.includes("urgency: z.enum(['normal', 'urgent']).default('normal')") &&
+    createJob.includes('}).strict();') &&
+    createJob.includes('raw recipient addresses and channel overrides are rejected.')
+);
+check(
+  'communications payload validation runs before job persistence',
+  createJob.includes("if (jobType === 'communications.message.send')") &&
+    createJob.includes('CommunicationsMessagePayloadSchema.safeParse(payload)')
+);
+
 if (failed > 0) {
   console.error(`[FAIL] COMMUNICATIONS_TENANT_AUTHORITY_CONTRACT ${failed} checks failed`);
   process.exit(1);
