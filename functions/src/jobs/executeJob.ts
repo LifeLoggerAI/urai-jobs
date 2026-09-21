@@ -60,6 +60,7 @@ function getWorkerRoute(jobType: string): string {
   if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) return '/';
   if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) return '/';
   if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) return '/';
+  if (jobType === 'communications.message.send') return '/executeJob';
   return '/execute-job';
 }
 
