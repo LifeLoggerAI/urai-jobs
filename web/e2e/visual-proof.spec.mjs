@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const routes = ['/', '/career-mirror', '/career-marketplace', '/career-automation', '/career-decision', '/career-passport'];
 const output = process.env.URAI_JOBS_VISUAL_DIR || 'artifacts/jobs-visual';
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 
 test.beforeAll(async () => { await fs.mkdir(output, { recursive: true }); });
 
@@ -11,7 +12,7 @@ for (const route of routes) {
   test(`retain public pixels ${route}`, async ({ page }, testInfo) => {
     const pageErrors = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
-    const response = await page.goto(route, { waitUntil: 'networkidle' });
+    const response = await page.goto(`${baseURL}${route}`, { waitUntil: 'networkidle' });
     expect(response && response.ok()).toBeTruthy();
     await expect(page.locator('body')).toBeVisible();
     const width = testInfo.project.use.viewport?.width || 2000;
