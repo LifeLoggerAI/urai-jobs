@@ -81,6 +81,7 @@ export function LandingPage() {
             <a href="/login" className="cta-button">Sign in</a>
             <a href="/privacy" className="secondary-button">Privacy</a>
             <a href="/trust" className="secondary-button">Trust &amp; Safety</a>
+            <a href="/terms" className="secondary-button">Terms</a>
           </div>
         </section>
       </main>
