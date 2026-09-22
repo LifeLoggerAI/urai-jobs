@@ -1,0 +1,74 @@
+name: URAI Jobs Visual Proof
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      URAI_JOBS_VISUAL_DIR: artifacts/jobs-visual
+      VITE_FIREBASE_API_KEY: visual-proof-not-production
+      VITE_FIREBASE_AUTH_DOMAIN: visual-proof.invalid
+      VITE_FIREBASE_PROJECT_ID: urai-jobs-visual-proof
+      VITE_FIREBASE_APP_ID: visual-proof
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          persist-credentials: false
+      - name: Prove exact head
+        run: test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install web
+        run: npm ci --prefix web
+      - name: Install proof-only Playwright
+        run: npm install --prefix web --no-save --package-lock=false @playwright/test@1.57.0
+      - name: Install Chromium
+        run: npx --prefix web playwright install --with-deps chromium
+      - name: Build exact-head web
+        run: npm run build --prefix web
+      - name: Start Vite preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --prefix web vite preview --host 127.0.0.1 --port 4173 > jobs-visual-server.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat jobs-visual-server.log
+          exit 1
+      - name: Capture desktop and mobile career pixels
+        working-directory: web
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+        run: |
+          npx playwright test e2e/visual-proof.spec.mjs --config /dev/null             --project=chromium
+      - name: Write exact-head receipt
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p web/artifacts/jobs-visual
+          printf '{"exactHead":"%s","proof":"jobs-career-responsive-pixels","providerData":"none"}\n' "$EXACT_HEAD" > web/artifacts/jobs-visual/receipt.json
+      - name: Upload exact-head visual proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-jobs-visual-${{ env.EXACT_HEAD }}
+          path: |
+            web/artifacts/jobs-visual
+            jobs-visual-server.log
+          if-no-files-found: error
