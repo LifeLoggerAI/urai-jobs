@@ -1,44 +1,19 @@
-const careerSurfaces = [
-  {
-    title: "Career Mirror",
-    href: "/career-mirror",
-    body: "Bring your work preferences, saved opportunities, and fit signals into one private view you can adjust over time."
-  },
-  {
-    title: "Opportunity Marketplace",
-    href: "/career-marketplace",
-    body: "Review opportunities and supporting material with clear fit context instead of opaque ranking."
-  },
-  {
-    title: "Automation Controls",
-    href: "/career-automation",
-    body: "Choose what URAI may watch or prepare for you, pause individual rules, and review activity before it becomes noise."
-  },
-  {
-    title: "Decision Layer",
-    href: "/career-decision",
-    body: "Prepare for interviews, compare offers, and weigh tradeoffs while keeping uncertainty visible."
-  },
-  {
-    title: "Career Passport",
-    href: "/career-passport",
-    body: "Keep a user-controlled career profile, skills record, preferences, and portable career packet in one place."
-  }
+const lifecycle = [
+  { title: "PENDING", body: "Authorized work has been accepted and is waiting for a lease." },
+  { title: "LEASED", body: "A worker lease has been issued and is bounded by runtime authority." },
+  { title: "RUNNING", body: "The configured worker is executing the job." },
+  { title: "SUCCESS", body: "The job completed with a persisted result or artifact." },
+  { title: "FAILED / DEAD", body: "Failure remains explicit; retry or dead-letter state is inspectable." },
+  { title: "CANCELLED", body: "Execution was stopped and remains visible in the record." }
 ];
 
-const principles = [
-  {
-    title: "Explain the fit",
-    body: "Recommendations should show the signals that contributed to a match rather than hiding behind a single score."
-  },
-  {
-    title: "Keep the person in control",
-    body: "Saved opportunities, preferences, automation rules, and shared career information remain reviewable and changeable."
-  },
-  {
-    title: "Separate signal from fact",
-    body: "Fit, burnout risk, and future-path guidance are presented as estimates and observations—not unquestionable conclusions."
-  }
+const operatorQuestions = [
+  "What work is running right now?",
+  "Which worker owns it?",
+  "What dependencies and permissions apply?",
+  "What attempts have occurred?",
+  "What artifact or result was produced?",
+  "If it failed, why and what is safe to do next?"
 ];
 
 export function LandingPage() {
@@ -47,81 +22,64 @@ export function LandingPage() {
       <main className="page-shell">
         <section className="hero hero-grid" aria-labelledby="jobs-title">
           <div>
-            <div className="eyebrow">URAI Career</div>
-            <h1 id="jobs-title">A career space that helps you see where your work life could go next.</h1>
+            <div className="eyebrow">Internal execution fabric</div>
+            <h1 id="jobs-title">See what URAI is doing, why it is doing it, and what happened.</h1>
             <p>
-              URAI Career brings preferences, opportunities, preparation, decisions, and a portable career profile into one connected experience—without turning your working life into another dashboard you have to constantly maintain.
+              URAI Jobs is the internal asynchronous runtime for controlled work across URAI systems. It exposes queue state, worker execution, retries, cancellation, artifacts, failures, and receipts to authorized operators without presenting simulated activity as live production.
             </p>
-
             <div className="hero-actions">
-              <a href="/career-mirror" className="cta-button">Open Career Mirror</a>
-              <a href="/career-marketplace" className="secondary-button">Explore opportunities</a>
+              <a href="/login" className="cta-button">Operator sign in</a>
+              <a href="/trust" className="secondary-button">Runtime boundaries</a>
             </div>
           </div>
 
-          <aside className="hero-card" aria-label="Career experience">
-            <div className="eyebrow">Your path</div>
+          <aside className="hero-card" aria-label="Operator questions">
+            <div className="eyebrow">Operator view</div>
             <ul className="check-list">
-              <li>Review work preferences and fit signals</li>
-              <li>Save and compare opportunities</li>
-              <li>Prepare for interviews and decisions</li>
-              <li>Control career automations</li>
-              <li>Keep a portable Career Passport</li>
+              {operatorQuestions.map((question) => <li key={question}>{question}</li>)}
             </ul>
           </aside>
         </section>
 
-        <section className="section-block" aria-labelledby="career-surfaces-title">
+        <section className="section-block" aria-labelledby="lifecycle-title">
           <div className="section-heading">
-            <div className="eyebrow">One connected career experience</div>
-            <h2 id="career-surfaces-title">Move from reflection to opportunity to decision.</h2>
+            <div className="eyebrow">Canonical lifecycle</div>
+            <h2 id="lifecycle-title">Request → queue → execute → result → receipt.</h2>
             <p>
-              Each part of URAI Career has a distinct job: understand what fits, find possibilities, prepare carefully, and keep the final choice with you.
+              Runtime state is explicit. Jobs do not become successful because a request was accepted, and fallback or simulated output does not count as worker proof.
             </p>
           </div>
-
           <div className="features-grid">
-            {careerSurfaces.map((surface) => (
-              <article className="feature-item" key={surface.title}>
-                <h3>{surface.title}</h3>
-                <p>{surface.body}</p>
-                <div className="hero-actions compact">
-                  <a href={surface.href} className="secondary-button">Open {surface.title}</a>
-                </div>
+            {lifecycle.map((state) => (
+              <article className="feature-item" key={state.title}>
+                <h3>{state.title}</h3>
+                <p>{state.body}</p>
               </article>
             ))}
           </div>
         </section>
 
-        <section className="section-block" aria-labelledby="career-principles-title">
+        <section className="section-block" aria-labelledby="boundaries-title">
           <div className="section-heading">
-            <div className="eyebrow">Built around agency</div>
-            <h2 id="career-principles-title">Useful guidance without pretending to know your future.</h2>
+            <div className="eyebrow">Runtime boundaries</div>
+            <h2 id="boundaries-title">Internal infrastructure, not a public careers marketplace.</h2>
             <p>
-              Career intelligence should make tradeoffs easier to see while preserving uncertainty, privacy, and the right to ignore a recommendation.
+              Public career-facing concepts are not canonical URAI Jobs product surfaces. This runtime remains focused on governed execution for Spatial, Studio, Asset Factory, Analytics, Communications, Privacy, Storytime, Admin, and related URAI systems.
             </p>
-          </div>
-
-          <div className="features-grid">
-            {principles.map((principle) => (
-              <article className="feature-item" key={principle.title}>
-                <h3>{principle.title}</h3>
-                <p>{principle.body}</p>
-              </article>
-            ))}
           </div>
         </section>
 
-        <section className="call-to-action" aria-labelledby="career-cta-title">
+        <section className="call-to-action" aria-labelledby="operator-cta-title">
           <div>
-            <div className="eyebrow">Start with your work life</div>
-            <h2 id="career-cta-title">See your current career picture before changing it.</h2>
-            <p>Career Mirror is the quietest place to begin: review what matters to you, then decide whether to explore opportunities or turn on any automation.</p>
+            <div className="eyebrow">Authorized operation</div>
+            <h2 id="operator-cta-title">Observe first. Act only with authority. Preserve the evidence.</h2>
+            <p>
+              Job creation and operator actions remain permission-gated. Retry, cancellation, and reconciliation should leave the job history understandable after the action completes.
+            </p>
           </div>
           <div className="hero-actions">
-            <a href="/career-mirror" className="cta-button">Open Career Mirror</a>
+            <a href="/login" className="cta-button">Sign in</a>
             <a href="/privacy" className="secondary-button">Privacy</a>
-            <a href="/terms" className="secondary-button">Terms</a>
             <a href="/trust" className="secondary-button">Trust &amp; Safety</a>
           </div>
         </section>
