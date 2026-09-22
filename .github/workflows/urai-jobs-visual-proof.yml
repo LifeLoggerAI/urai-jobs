@@ -60,7 +60,7 @@ jobs:
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
         run: |
-          pnpm exec playwright test e2e/visual-proof.spec.mjs --config /dev/null
+          pnpm exec playwright test --config playwright.visual.config.mjs e2e/visual-proof.spec.mjs
       - name: Write exact-head receipt
         if: always()
         shell: bash
