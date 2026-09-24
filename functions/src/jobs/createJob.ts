@@ -89,7 +89,24 @@ const StudioLifeMovieRenderPayloadSchema = z.object({
   spatialRequired: z.literal(false),
   publicReleaseAuthorized: z.literal(false),
   providerGenerationAuthorized: z.literal(false),
-}).strict();
+}).strict().superRefine((value, context) => {
+  const sourceIds = new Set(value.sources.map((source) => source.id));
+  for (const [index, item] of value.timeline.entries()) {
+    if (!sourceIds.has(item.sourceId)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index, 'sourceId'], message: 'Timeline source must exist in sources.' });
+    }
+  }
+  const ordered = [...value.timeline].sort((left, right) => left.startMs - right.startMs);
+  for (let index = 1; index < ordered.length; index += 1) {
+    if (ordered[index].startMs < ordered[index - 1].endMs) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index], message: 'Overlapping timeline items are not supported.' });
+    }
+  }
+  const totalTimelineMs = ordered.reduce((max, item) => Math.max(max, item.endMs), 0);
+  if (totalTimelineMs > 45 * 60 * 1000) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline'], message: 'Launch Life Movies are limited to 45 minutes on the synchronous Studio render worker.' });
+  }
+});
 
 function isPrivateSourceJobType(jobType: string): boolean {
   return jobType === 'memory.private-source.transcribe';
