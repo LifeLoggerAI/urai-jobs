@@ -5,6 +5,7 @@ import axios from 'axios';
 import { z } from 'zod';
 import type { Job } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
+import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
 
 // URAI Jobs worker routing audit markers.
@@ -312,6 +313,29 @@ export const executeJob = onMessagePublished({
       return decision;
     }
 
+    if (job.ownerUid && isConsentContext(job.consent)) {
+      const blockSnapshot = await transaction.get(consentBlockRef(job.ownerUid, job.consent.purpose));
+      const block = blockSnapshot.exists ? blockSnapshot.data() : null;
+      if (block?.active === true) {
+        const now = FieldValue.serverTimestamp();
+        transaction.update(jobRef, {
+          status: 'CANCELLED',
+          lease: FieldValue.delete(),
+          updatedAt: now,
+          completedAt: now,
+          'execution.leaseToken': FieldValue.delete(),
+          'execution.completedAt': now,
+        });
+        transaction.set(queueRef, {
+          jobId,
+          status: 'CANCELLED',
+          lease: FieldValue.delete(),
+          updatedAt: now,
+        }, { merge: true });
+        return { action: 'ignore' as const, reason: 'consent-revoked' as const };
+      }
+    }
+
     const now = FieldValue.serverTimestamp();
     transaction.update(jobRef, {
       status: 'RUNNING',
@@ -362,6 +386,40 @@ export const executeJob = onMessagePublished({
     let result: unknown;
 
     if (target) {
+      if (job.ownerUid && isConsentContext(job.consent)) {
+        const blockSnapshot = await consentBlockRef(job.ownerUid, job.consent.purpose).get();
+        if (blockSnapshot.exists && blockSnapshot.data()?.active === true) {
+          const now = FieldValue.serverTimestamp();
+          await db.runTransaction(async (transaction) => {
+            const currentSnapshot = await transaction.get(jobRef);
+            if (!currentSnapshot.exists) return;
+            const current = currentSnapshot.data() as Job;
+            if (current.status !== 'RUNNING' || current.execution?.leaseToken !== leaseToken) return;
+            transaction.update(jobRef, {
+              status: 'CANCELLED',
+              lease: FieldValue.delete(),
+              updatedAt: now,
+              completedAt: now,
+              'execution.leaseToken': FieldValue.delete(),
+              'execution.completedAt': now,
+            });
+            transaction.set(queueRef, {
+              jobId,
+              status: 'CANCELLED',
+              lease: FieldValue.delete(),
+              updatedAt: now,
+            }, { merge: true });
+          });
+          await appendJobLog(jobId, {
+            level: 'warn',
+            source: 'executeJob',
+            message: 'Worker dispatch blocked because consent was revoked.',
+            metadata: { jobType, consentPurpose: job.consent.purpose },
+          });
+          return;
+        }
+      }
+
       const workerUrl = target.url.replace(/\/$/, '');
       const route = target.route;
 
