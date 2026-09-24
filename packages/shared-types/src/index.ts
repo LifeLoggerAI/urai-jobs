@@ -59,6 +59,8 @@ export interface Job {
   execution?: JobExecutionMeta;
   lease?: JobLease;
   ownerSubsystem?: string;
+  sourceSystem?: string;
+  sourceProject?: string;
   createdBy?: string;
   output?: unknown;
   attempts?: number;
