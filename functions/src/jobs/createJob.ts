@@ -240,6 +240,25 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
 
   const orgId = userOrgId(user);
   const tenantId = userTenantId(user);
+
+  if (jobType === 'studio.render.video') {
+    if (!tenantId) {
+      throw httpsError(
+        'failed-precondition',
+        'Studio Life Movies render jobs require a server-owned tenantId on the authenticated user record.'
+      );
+    }
+    const renderPayload = StudioLifeMovieRenderPayloadSchema.parse(payload);
+    const requiredSourcePrefix = `tenants/${tenantId}/`;
+    const requiredOutputPrefix = `tenants/${tenantId}/life-movies/${renderPayload.projectId}/`;
+    if (!renderPayload.outputPrefix.startsWith(requiredOutputPrefix)) {
+      throw httpsError('permission-denied', 'Life Movies outputPrefix must remain inside the authenticated tenant and project boundary.');
+    }
+    if (renderPayload.sources.some((source) => !source.objectPath.startsWith(requiredSourcePrefix))) {
+      throw httpsError('permission-denied', 'Life Movies source objects must remain inside the authenticated tenant boundary.');
+    }
+  }
+
   const communicationsJob = isCommunicationsJobType(jobType);
   if (communicationsJob && !tenantId) {
     throw httpsError(
