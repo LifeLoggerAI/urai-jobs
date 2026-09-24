@@ -9,7 +9,7 @@ const HEX64_PATTERN = /^[0-9a-f]{64}$/;
 const IMAGE_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const NUMERIC_SECRET_VERSION_PATTERN = /^[1-9][0-9]*$/;
 const ALLOWED_ENVIRONMENTS = new Set(['staging', 'prod', 'production']);
-const APPROVED_WORKERS = new Set(['narrator-worker', 'asset-worker']);
+const APPROVED_WORKERS = new Set(['narrator-worker', 'asset-worker', 'studio-worker']);
 
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
