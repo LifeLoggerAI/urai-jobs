@@ -9,10 +9,15 @@ const requiredWorkers = [
   ['narrator-worker', process.env.NARRATOR_WORKER_URL],
   ['asset-worker', process.env.ASSET_WORKER_URL],
 ];
+const requireStudioWorker = String(process.env.REQUIRE_STUDIO_WORKER || '').toLowerCase() === 'true'
+  || process.env.REQUIRE_STUDIO_WORKER === '1';
 const optionalWorkers = [
   ['spatial-worker', process.env.SPATIAL_WORKER_URL],
-  ['studio-worker', process.env.STUDIO_WORKER_URL],
+  ...(!requireStudioWorker ? [['studio-worker', process.env.STUDIO_WORKER_URL]] : []),
 ].filter(([, url]) => Boolean(url));
+if (requireStudioWorker) {
+  requiredWorkers.push(['studio-worker', process.env.STUDIO_WORKER_URL]);
+}
 
 let failed = false;
 
