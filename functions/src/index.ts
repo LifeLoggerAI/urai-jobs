@@ -21,3 +21,5 @@ export { buildInfo } from "./system/buildInfo.js";
 export { studioLifeMovieBridge } from "./jobs/studioLifeMovieBridge.js";
 
 export { ingestConsentRevocation } from "./privacy/consentRevocation.js";
+
+export { submitDataRightsRequest, getDataRightsRequest, listDataRightsRequests } from "./privacy/dataRights.js";
