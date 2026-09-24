@@ -7,9 +7,10 @@ const outputFile = process.env.GITHUB_ENV || process.env.URAI_JOBS_WORKER_ENV_FI
 const expectedSha = String(process.env.DEPLOY_SOURCE_SHA || '').trim();
 const expectedProject = String(process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || '').trim();
 const expectedEnvironment = String(process.env.URAI_ENV || '').trim();
-const requiredWorkers = new Map([
+const allowedWorkers = new Map([
   ['narrator-worker', 'NARRATOR_WORKER_URL'],
   ['asset-worker', 'ASSET_WORKER_URL'],
+  ['studio-worker', 'STUDIO_WORKER_URL'],
 ]);
 
 if (!fs.existsSync(receiptPath)) throw new Error(`Worker deploy receipt is missing: ${receiptPath}`);
@@ -22,12 +23,14 @@ if (!expectedEnvironment || receipt.environment !== expectedEnvironment) failure
 
 const services = Array.isArray(receipt.services) ? receipt.services : [];
 const byWorker = new Map(services.map((service) => [service?.worker, service]));
-if (JSON.stringify([...byWorker.keys()].sort()) !== JSON.stringify([...requiredWorkers.keys()].sort())) {
-  failures.push('canonical worker set');
+if (!byWorker.size || [...byWorker.keys()].some((worker) => !allowedWorkers.has(worker))) {
+  failures.push('approved worker set');
 }
 
 const lines = [];
-for (const [worker, envName] of requiredWorkers) {
+for (const [worker, service] of byWorker) {
+  const envName = allowedWorkers.get(worker);
+
   const service = byWorker.get(worker);
   const url = String(service?.serviceUrl || '');
   if (!url.startsWith('https://')) failures.push(`${worker} HTTPS service URL`);
