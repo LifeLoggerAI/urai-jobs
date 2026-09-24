@@ -52,6 +52,7 @@ function getWorkerEnvKey(jobType: string): string | null {
   if (jobType.startsWith('storytime.')) return 'STORYTIME_WORKER_URL';
   if (jobType.startsWith('analytics.')) return 'ANALYTICS_WORKER_URL';
   if (jobType.startsWith('communications.')) return 'COMMUNICATIONS_WORKER_URL';
+  if (jobType === 'memory.private-source.transcribe') return 'PRIVATE_SOURCE_WORKER_URL';
   return null;
 }
 
@@ -59,6 +60,7 @@ function getWorkerRoute(jobType: string): string {
   if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) return '/';
   if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) return '/';
   if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) return '/';
+  if (jobType === 'communications.message.send') return '/executeJob';
   return '/execute-job';
 }
 
@@ -74,7 +76,8 @@ function normalizedEnv(): string {
   return String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
 }
 
-function inlineFallbackAllowed(): boolean {
+function inlineFallbackAllowed(jobType?: string): boolean {
+  if (jobType === 'memory.private-source.transcribe') return false;
   if (PRODUCTION_ENVS.has(normalizedEnv())) return false;
   return process.env.URAI_JOBS_ALLOW_INLINE_FALLBACK === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
 }
@@ -398,7 +401,7 @@ export const executeJob = onMessagePublished({
         throw new Error(`No worker mapping is registered for job type ${jobType}.`);
       }
 
-      if (!inlineFallbackAllowed()) {
+      if (!inlineFallbackAllowed(jobType)) {
         throw new Error(`Worker URL ${envKey} is required for ${normalizedEnv()} runtime; inline fallback is disabled.`);
       }
 
