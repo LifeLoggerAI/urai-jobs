@@ -20,6 +20,8 @@ import {
 const runtimeEnv = String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
 const sourceSha = String(process.env.URAI_SOURCE_SHA || '');
 const productionRuntime = ['prod', 'production', 'staging'].includes(runtimeEnv);
+const sourceShaExact = /^[0-9a-f]{40}$/.test(sourceSha);
+const runtimeRevisionPresent = Boolean(process.env.K_REVISION);
 validateRequiredEnv(productionRuntime ? ['URAI_JOBS_WORKER_TOKEN', 'GCS_BUCKET_NAME'] : []);
 
 const app = express();
@@ -35,17 +37,42 @@ app.get('/', (_req: any, res: any) => {
   res.status(200).send({ service: 'narrator-worker', ok: true, sourceSha });
 });
 
-app.get('/healthz', (_req: any, res: any) => {
-  const configured = {
+function narratorConfiguration() {
+  return {
     workerToken: Boolean(process.env.URAI_JOBS_WORKER_TOKEN),
     gcsBucket: Boolean(process.env.GCS_BUCKET_NAME),
   };
+}
+
+app.get('/healthz', (_req: any, res: any) => {
+  const configured = narratorConfiguration();
   const ok = productionRuntime ? Object.values(configured).every(Boolean) : true;
+  res.set('Cache-Control', 'no-store');
   res.status(ok ? 200 : 503).send({
     ok,
     sourceSha,
     runtimeEnv,
     configured,
+    governor: governor.getStats(),
+  });
+});
+
+app.get('/readyz', (_req: any, res: any) => {
+  const configured = narratorConfiguration();
+  const checks = {
+    configuration: productionRuntime ? Object.values(configured).every(Boolean) : true,
+    sourceShaExact: productionRuntime ? sourceShaExact : true,
+    runtimeRevision: productionRuntime ? runtimeRevisionPresent : true,
+    capacityAvailable: governor.canAcceptJob(),
+  };
+  const ok = Object.values(checks).every(Boolean);
+  res.set('Cache-Control', 'no-store');
+  res.status(ok ? 200 : 503).send({
+    ok,
+    sourceSha,
+    runtimeEnv,
+    configured,
+    checks,
     governor: governor.getStats(),
   });
 });
