@@ -1,12 +1,16 @@
 # PDR-001: Autonomous URAI-Jobs V1-V5
 
-Status: approved for separated implementation track
+Status: **HISTORICAL APPROVAL / RETAINED FUTURE TRACK / NOT CURRENT RUNTIME ACTIVATION AUTHORITY**
 Date: 2026-06-04
 Repository: LifeLoggerAI/urai-jobs
 
+## Current authority note
+
+This PDR preserves the approved long-range career/economic-navigation vision. It does **not** authorize the current `LifeLoggerAI/urai-jobs` runtime to expose those public career surfaces. Current convergence authority keeps this repository as the internal execution fabric and treats V1-V5 career implementation as a separated future/product track requiring fresh activation governance.
+
 ## Decision
 
-URAI-Jobs will expand into a full autonomous career and economic navigation product across V1 through V5.
+URAI-Jobs may expand into a full autonomous career and economic navigation product across V1 through V5 through a separately governed public product/module.
 
 The existing repository remains the internal runtime and execution backbone. Public candidate, employer, marketplace, passport, and application surfaces must be implemented as a separated product module or companion app surface. They must not be mixed into the operator runtime UI or runtime-only functions without their own security, privacy, and release gates.
 
