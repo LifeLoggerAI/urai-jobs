@@ -245,7 +245,9 @@ async function renderLifeMovie(job) {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'urai-life-movie-'));
   try {
     const localBySource = new Map();
+    const usedSourceIds = new Set(input.timeline.map((item) => item.sourceId));
     for (const source of input.sources) {
+      if (!usedSourceIds.has(source.id)) continue;
       const ext = path.extname(source.objectPath).slice(0, 10) || '.bin';
       const localPath = path.join(workDir, `source-${crypto.createHash('sha256').update(source.id).digest('hex').slice(0, 12)}${ext}`);
       await bucket.file(source.objectPath).download({ destination: localPath });
@@ -386,6 +388,12 @@ app.get('/authz', requireWorkerAuth, (_req, res) => {
   res.status(200).send({ ok: true, service: 'studio-worker', authorized: true });
 });
 
+function publicErrorCode(error) {
+  const message = error instanceof Error ? error.message : 'render_failed';
+  const code = message.split(':', 1)[0].replace(/[^A-Za-z0-9_.-]+/g, '_').slice(0, 120);
+  return code || 'render_failed';
+}
+
 app.post('/', requireWorkerAuth, async (req, res) => {
   const jobId = req.body?.jobId;
   const leaseToken = req.body?.leaseToken;
@@ -395,14 +403,12 @@ app.post('/', requireWorkerAuth, async (req, res) => {
     const result = await renderLifeMovie(req.body);
     return res.status(200).send(result);
   } catch (error) {
-    console.error('studio-worker render failed', {
-      jobId,
-      code: error instanceof Error ? error.message.split(':')[0] : 'unknown',
-    });
+    const errorCode = publicErrorCode(error);
+    console.error('studio-worker render failed', { jobId, code: errorCode });
     return res.status(422).send({
       ok: false,
       code: 'STUDIO_RENDER_REJECTED',
-      error: error instanceof Error ? error.message : 'render_failed',
+      errorCode,
       jobId,
     });
   }
