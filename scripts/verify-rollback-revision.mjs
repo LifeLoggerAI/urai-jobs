@@ -41,6 +41,11 @@ function expectedPlainEnvironment(worker, { rollbackSha, rollbackParentSha, envi
     URAI_SOURCE_SHA: rollbackSha,
   };
   if (worker === 'asset-worker') expected.ASSET_FACTORY_REPO = 'LifeLoggerAI/asset-factory';
+  if (worker === 'studio-worker') {
+    const sourceBuckets = String(process.env.URAI_STUDIO_SOURCE_BUCKETS || '').trim();
+    if (!sourceBuckets) throw new Error('URAI_STUDIO_SOURCE_BUCKETS is required to verify studio-worker rollback authority');
+    expected.URAI_STUDIO_SOURCE_BUCKETS = sourceBuckets;
+  }
   return expected;
 }
 
