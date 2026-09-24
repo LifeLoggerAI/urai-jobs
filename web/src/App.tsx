@@ -4,12 +4,6 @@ import { LoginPage } from "./pages/LoginPage";
 import { LandingPage } from "./pages/LandingPage";
 import { CreateJobPage } from "./pages/CreateJobPage";
 import { AdminPage } from "./pages/AdminPage";
-import { CareerMirrorPage } from "./pages/CareerMirrorPage";
-import { CareerVersionConsolePage } from "./pages/CareerVersionConsolePage";
-import { CareerMarketplacePage } from "./pages/CareerMarketplacePage";
-import { CareerAutomationPage } from "./pages/CareerAutomationPage";
-import { CareerDecisionPage } from "./pages/CareerDecisionPage";
-import { CareerPassportPage } from "./pages/CareerPassportPage";
 import { PrivacyPage, TermsPage, TrustSafetyPage } from "./pages/LegalPages";
 import { trackJobsEvent } from "./lib/analytics";
 import { auth } from "./lib/firebase";
@@ -27,7 +21,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
       return (
         <main className="page-shell">
           <section className="panel danger">
-            <div className="eyebrow">Runtime Error</div>
+            <div className="eyebrow">Runtime error</div>
             <h1>URAI Jobs UI failed to render.</h1>
             <pre>{this.state.error.message}</pre>
           </section>
@@ -43,11 +37,26 @@ function AccessDeniedPage({ required }: { required: string }) {
   return (
     <main className="page-shell">
       <section className="panel danger">
-        <div className="eyebrow">Access denied</div>
+        <div className="eyebrow">Permission required</div>
         <h1>URAI Jobs is an internal operator runtime.</h1>
         <p>{required}</p>
         <p>Sign in with an authorized account. Backend callable functions remain the source of truth for authorization.</p>
         <a className="secondary-button" href="/login">Go to login</a>
+      </section>
+    </main>
+  );
+}
+
+function LegacyCareerSurface() {
+  return (
+    <main className="page-shell">
+      <section className="panel">
+        <div className="eyebrow">Superseded surface</div>
+        <h1>This career-facing route is not part of the canonical URAI Jobs runtime.</h1>
+        <p>
+          URAI Jobs is internal execution infrastructure. Career-facing product concepts are not exposed from this runtime unless a future product decision explicitly re-authorizes them.
+        </p>
+        <a className="secondary-button" href="/">Return to runtime overview</a>
       </section>
     </main>
   );
@@ -67,12 +76,18 @@ function routeForPath(pathname: string, user: User | null, claims: AuthClaims, a
     if (!hasJobCreateAccess(user, claims)) return <AccessDeniedPage required="Job creation requires admin/operator or explicit job-create permission." />;
     return <CreateJobPage />;
   }
-  if (pathname.startsWith("/career-passport")) return <CareerPassportPage />;
-  if (pathname.startsWith("/career-decision")) return <CareerDecisionPage />;
-  if (pathname.startsWith("/career-automation")) return <CareerAutomationPage />;
-  if (pathname.startsWith("/career-marketplace")) return <CareerMarketplacePage />;
-  if (pathname.startsWith("/career-versions")) return <CareerVersionConsolePage />;
-  if (pathname.startsWith("/career-mirror")) return <CareerMirrorPage />;
+
+  if (
+    pathname.startsWith("/career-passport") ||
+    pathname.startsWith("/career-decision") ||
+    pathname.startsWith("/career-automation") ||
+    pathname.startsWith("/career-marketplace") ||
+    pathname.startsWith("/career-versions") ||
+    pathname.startsWith("/career-mirror")
+  ) {
+    return <LegacyCareerSurface />;
+  }
+
   if (pathname.startsWith("/privacy")) return <PrivacyPage />;
   if (pathname.startsWith("/terms")) return <TermsPage />;
   if (pathname.startsWith("/trust")) return <TrustSafetyPage />;
@@ -103,21 +118,16 @@ export default function App() {
   return (
     <AppErrorBoundary>
       <div className="app">
-        <nav className="top-nav">
+        <nav className="top-nav" aria-label="URAI Jobs navigation">
           <a className="brand" href="/">URAI Jobs</a>
           <div>
-            <a href="/career-mirror">Career Mirror</a>
-            <a href="/career-marketplace">Marketplace V2</a>
-            <a href="/career-automation">Automation V3</a>
-            <a href="/career-decision">Decision V4</a>
-            <a href="/career-passport">Passport V5</a>
-            <a href="/career-versions">Version Console</a>
+            <a href="/">Runtime</a>
             <a href="/login">Login</a>
-            {canCreate && <a href="/create">Create</a>}
-            {canOperate && <a href="/admin">Admin</a>}
+            {canCreate && <a href="/create">Create job</a>}
+            {canOperate && <a href="/admin">Operator console</a>}
             <a href="/privacy">Privacy</a>
-            <a href="/terms">Terms</a>
             <a href="/trust">Trust</a>
+            <a href="/terms">Terms</a>
           </div>
         </nav>
         {routeForPath(window.location.pathname, user, claims, authLoading)}
