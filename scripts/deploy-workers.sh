@@ -64,6 +64,17 @@ for worker in "${WORKERS[@]}"; do
   esac
 done
 
+if [[ ",$WORKERS_CSV," == *",studio-worker,"* ]]; then
+  : "${URAI_STUDIO_SOURCE_BUCKETS:?URAI_STUDIO_SOURCE_BUCKETS is required when deploying studio-worker}"
+  URAI_STUDIO_SOURCE_BUCKETS="$URAI_STUDIO_SOURCE_BUCKETS" node <<'NODE'
+const buckets = String(process.env.URAI_STUDIO_SOURCE_BUCKETS || '').split(',').map((value) => value.trim()).filter(Boolean);
+if (!buckets.length || new Set(buckets).size !== buckets.length) throw new Error('URAI_STUDIO_SOURCE_BUCKETS must contain unique bucket names.');
+for (const bucket of buckets) {
+  if (!/^[a-z0-9][a-z0-9._-]{1,253}[a-z0-9]$/.test(bucket)) throw new Error(`Invalid Studio source bucket: ${bucket}`);
+}
+NODE
+fi
+
 [ -f "$ROLLBACK_CONFIG_RECEIPT_PATH" ] || {
   echo "[FAIL] Approved rollback configuration receipt is missing: $ROLLBACK_CONFIG_RECEIPT_PATH" >&2
   exit 1
@@ -264,6 +275,7 @@ if (String(labels['urai-environment'] || '') !== process.env.EXPECTED_ENVIRONMEN
 if (String(revision?.spec?.serviceAccountName || '') !== process.env.EXPECTED_SERVICE_ACCOUNT) failures.push('revision service account mismatch');
 if (observedValues.URAI_ENV !== process.env.EXPECTED_ENVIRONMENT) failures.push('revision URAI_ENV mismatch');
 if (observedValues.GCS_BUCKET_NAME !== process.env.EXPECTED_BUCKET) failures.push('revision GCS_BUCKET_NAME mismatch');
+if (process.env.EXPECTED_STUDIO_SOURCE_BUCKETS && observedValues.URAI_STUDIO_SOURCE_BUCKETS !== process.env.EXPECTED_STUDIO_SOURCE_BUCKETS) failures.push('revision URAI_STUDIO_SOURCE_BUCKETS mismatch');
 if (normalizeDigest(revision?.status?.imageDigest) !== normalizeDigest(process.env.EXPECTED_IMAGE_DIGEST)) failures.push('revision image digest mismatch');
 if (failures.length) {
   console.error(`[FAIL] Deployed revision configuration mismatch:\n- ${failures.join('\n- ')}`);
@@ -292,7 +304,7 @@ append_receipt() {
   BUILD_IMAGE_DIGEST="$image_digest" IMAGE_DIGEST="$image_digest" \
   ROLLBACK_IMAGE_DIGEST="$rollback_image_digest" REVISION_LABELS_JSON="$revision_labels" \
   SECRET_VERSIONS_JSON="$secret_versions_json" URAI_ENV="$URAI_ENV" GCP_REGION="$GCP_REGION" \
-  GCS_BUCKET_NAME="$GCS_BUCKET_NAME" WORKER_RUNTIME_SERVICE_ACCOUNT="$WORKER_RUNTIME_SERVICE_ACCOUNT" \
+  GCS_BUCKET_NAME="$GCS_BUCKET_NAME" URAI_STUDIO_SOURCE_BUCKETS="${URAI_STUDIO_SOURCE_BUCKETS:-}" WORKER_RUNTIME_SERVICE_ACCOUNT="$WORKER_RUNTIME_SERVICE_ACCOUNT" \
   DEPLOY_ROLLBACK_SHA="$DEPLOY_ROLLBACK_SHA" RECEIPT_TMP="$receipt_tmp" node <<'NODE'
 const crypto = require('node:crypto');
 const fs = require('fs');
@@ -314,6 +326,7 @@ const configuration = {
   imageDigest: process.env.IMAGE_DIGEST,
   revisionLabels,
   secretVersions,
+  ...(process.env.WORKER === 'studio-worker' ? { sourceBuckets: String(process.env.URAI_STUDIO_SOURCE_BUCKETS || '') } : {}),
 };
 const configFingerprint = crypto.createHash('sha256').update(JSON.stringify(stable(configuration))).digest('hex');
 const path = process.env.RECEIPT_TMP;
@@ -434,6 +447,9 @@ deploy_worker() {
   local worker_token_version="${SECRET_VERSION_IDS[$URAI_JOBS_WORKER_TOKEN_SECRET]}"
   local env_vars="URAI_ENV=$URAI_ENV,GCS_BUCKET_NAME=$GCS_BUCKET_NAME,URAI_SOURCE_SHA=$GITHUB_SHA,URAI_ROLLBACK_SHA=$DEPLOY_ROLLBACK_SHA"
   local secret_vars="URAI_JOBS_WORKER_TOKEN=${URAI_JOBS_WORKER_TOKEN_SECRET}:${worker_token_version}"
+  if [ "$worker" = "studio-worker" ]; then
+    env_vars="$env_vars,URAI_STUDIO_SOURCE_BUCKETS=$URAI_STUDIO_SOURCE_BUCKETS"
+  fi
   if [ "$worker" = "asset-worker" ]; then
     env_vars="$env_vars,ASSET_FACTORY_REPO=LifeLoggerAI/asset-factory"
     secret_vars="$secret_vars,URAI_WHEEL_GITHUB_TOKEN=${URAI_WHEEL_GITHUB_TOKEN_SECRET}:${SECRET_VERSION_IDS[$URAI_WHEEL_GITHUB_TOKEN_SECRET]},URAI_JOBS_CALLBACK_SECRET=${URAI_JOBS_CALLBACK_SECRET_NAME}:${SECRET_VERSION_IDS[$URAI_JOBS_CALLBACK_SECRET_NAME]}"
@@ -495,6 +511,7 @@ deploy_worker() {
 
   secret_versions_json="$(build_secret_versions_json "$worker")"
   revision_json="$(gcloud run revisions describe "$revision" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format=json)"
+  EXPECTED_STUDIO_SOURCE_BUCKETS="$([ "$worker" = "studio-worker" ] && printf '%s' "$URAI_STUDIO_SOURCE_BUCKETS" || true)" \
   verify_revision_configuration "$revision_json" "$secret_versions_json" "$build_image_digest"
   labels_json="$(revision_labels_json "$revision_json")"
   worker_token="$(gcloud secrets versions access "$worker_token_version" --secret "$URAI_JOBS_WORKER_TOKEN_SECRET" --project "$GCLOUD_PROJECT")"
