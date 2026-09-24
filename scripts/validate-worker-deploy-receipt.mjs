@@ -66,7 +66,7 @@ export function validateWorkerDeployReceipt(receipt) {
       }
 
       if (!nonEmptyString(service.worker)) failures.push(`${prefix}.worker is required`);
-      if (!['narrator-worker', 'asset-worker'].includes(String(service.worker ?? ''))) failures.push(`${prefix}.worker is not approved`);
+      if (!['narrator-worker', 'asset-worker', 'studio-worker'].includes(String(service.worker ?? ''))) failures.push(`${prefix}.worker is not approved`);
       if (seenWorkers.has(service.worker)) failures.push(`${prefix}.worker duplicates ${service.worker}`);
       seenWorkers.add(service.worker);
       if (!nonEmptyString(service.buildId)) failures.push(`${prefix}.buildId is required`);
