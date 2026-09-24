@@ -537,7 +537,7 @@ NODE
           name: urai-jobs-mutation-${{ inputs.target }}-${{ github.sha }}
           path: docs/release-evidence/
           if-no-files-found: error
-          retention-days: 365
+          retention-days: 90
 
   public-verify:
     name: Public verification without cloud identity
@@ -684,4 +684,4 @@ NODE
           name: urai-jobs-public-verification-${{ inputs.target }}-${{ github.sha }}
           path: docs/release-evidence/
           if-no-files-found: error
-          retention-days: 365
+          retention-days: 90
