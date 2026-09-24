@@ -128,6 +128,8 @@ function parsePayload(job) {
       throw new Error('overlapping_timeline_not_supported');
     }
   }
+  const totalTimelineMs = normalizedTimeline.reduce((max, item) => Math.max(max, item.endMs), 0);
+  if (totalTimelineMs > 45 * 60 * 1000) throw new Error('life_movie_exceeds_launch_render_window');
 
   const subtitleText = typeof payload.subtitleText === 'string' ? payload.subtitleText : '';
   if (Buffer.byteLength(subtitleText, 'utf8') > 2 * 1024 * 1024) throw new Error('subtitles_too_large');
