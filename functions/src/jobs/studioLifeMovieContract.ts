@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const LifeMovieSourceSchema = z.object({
   id: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  bucket: z.string().trim().min(3).max(255).regex(/^[a-z0-9][a-z0-9._-]+[a-z0-9]$/),
   objectPath: z.string().trim().min(1).max(1024).refine((value) => !value.startsWith('/') && !value.includes('..') && !value.includes('\\\\'), 'Unsafe object path'),
   mimeType: z.enum([
     'image/jpeg', 'image/png', 'image/webp',
@@ -61,12 +62,12 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
 export type StudioLifeMovieRenderPayload = z.infer<typeof StudioLifeMovieRenderPayloadSchema>;
 
 export function assertLifeMovieTenantPaths(payload: StudioLifeMovieRenderPayload, tenantId: string) {
-  const requiredSourcePrefix = `tenants/${tenantId}/`;
+  const allowedSourcePrefixes = [`studios/${tenantId}/`, `tenants/${tenantId}/`];
   const requiredOutputPrefix = `tenants/${tenantId}/life-movies/${payload.projectId}/`;
   if (!payload.outputPrefix.startsWith(requiredOutputPrefix)) {
     throw new Error('life_movie_output_outside_tenant_project');
   }
-  if (payload.sources.some((source) => !source.objectPath.startsWith(requiredSourcePrefix))) {
+  if (payload.sources.some((source) => !allowedSourcePrefixes.some((prefix) => source.objectPath.startsWith(prefix)))) {
     throw new Error('life_movie_source_outside_tenant');
   }
   return payload;
