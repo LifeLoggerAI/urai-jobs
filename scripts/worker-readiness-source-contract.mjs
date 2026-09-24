@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [genericWorker, narratorWorker, assetWorker, runtimeVerifier] = await Promise.all([
+const [genericWorker, narratorWorker, assetWorker, studioWorker, runtimeVerifier] = await Promise.all([
   readFile(new URL('./run-worker.mjs', import.meta.url), 'utf8'),
   readFile(new URL('../workers/narrator-worker/src/index.ts', import.meta.url), 'utf8'),
   readFile(new URL('../workers/asset-worker/index.js', import.meta.url), 'utf8'),
+  readFile(new URL('../workers/studio-worker/index.js', import.meta.url), 'utf8'),
   readFile(new URL('./verify-worker-health.mjs', import.meta.url), 'utf8'),
 ]);
 
@@ -29,6 +30,12 @@ assert.match(assetWorker, /K_REVISION/, 'asset readiness must require deployed r
 assert.match(assetWorker, /\^\[0-9a-f\]\{40\}\$/, 'asset readiness must bind exact source identity');
 assert.match(assetWorker, /canonicalAssetFactoryRepo:\s*assetFactoryRepo === 'LifeLoggerAI\/asset-factory'/, 'asset readiness must remain bound to canonical Asset Factory authority');
 assert.match(assetWorker, /callbackUrlMode:\s*configuredPublicBaseUrl \? 'configured' : 'request-derived'/, 'asset runtime must retain callback provenance reporting');
+
+assert.match(studioWorker, /app\.get\('\/readyz'/, 'studio worker must expose readiness');
+assert.match(studioWorker, /K_REVISION/, 'studio readiness must require deployed revision identity');
+assert.match(studioWorker, /sourceShaExact/, 'studio readiness must bind exact source identity');
+assert.match(studioWorker, /GCS_BUCKET_NAME/, 'studio readiness must require artifact storage');
+assert.match(studioWorker, /ffmpeg/, 'studio readiness must require FFmpeg');
 
 assert.match(runtimeVerifier, /\$\{rootUrl\}\/healthz/, 'production verifier must check liveness');
 assert.match(runtimeVerifier, /\$\{rootUrl\}\/readyz/, 'production verifier must check readiness');
