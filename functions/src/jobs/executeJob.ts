@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { Job } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJobTypes.js';
 import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
 
 // URAI Jobs worker routing audit markers.
@@ -44,25 +45,11 @@ function getJobType(job: Job): string {
 }
 
 function getWorkerEnvKey(jobType: string): string | null {
-  if (jobType === 'narrator.tts') return 'NARRATOR_WORKER_URL';
-  if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) return 'ASSET_WORKER_URL';
-  if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) return 'SPATIAL_WORKER_URL';
-  if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) return 'STUDIO_WORKER_URL';
-  if (jobType.startsWith('career.')) return 'CAREER_WORKER_URL';
-  if (jobType.startsWith('content.') || jobType.startsWith('content-')) return 'CONTENT_WORKER_URL';
-  if (jobType.startsWith('storytime.')) return 'STORYTIME_WORKER_URL';
-  if (jobType.startsWith('analytics.')) return 'ANALYTICS_WORKER_URL';
-  if (jobType.startsWith('communications.')) return 'COMMUNICATIONS_WORKER_URL';
-  if (jobType === 'memory.private-source.transcribe') return 'PRIVATE_SOURCE_WORKER_URL';
-  return null;
+  return workerEnvKeyForJobType(jobType);
 }
 
 function getWorkerRoute(jobType: string): string {
-  if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) return '/';
-  if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) return '/';
-  if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) return '/';
-  if (jobType === 'communications.message.send') return '/executeJob';
-  return '/execute-job';
+  return workerRouteForJobType(jobType) || '/execute-job';
 }
 
 function getWorkerTarget(jobType: string): WorkerTarget | null {
