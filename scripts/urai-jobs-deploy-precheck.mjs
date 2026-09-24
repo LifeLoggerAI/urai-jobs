@@ -47,6 +47,10 @@ check(Boolean(firebaseJson.emulators), "firebase emulators configured");
 check(Boolean(firebaseJson.emulators?.storage), "firebase storage emulator configured");
 
 const storageRules = fs.readFileSync("storage.rules", "utf8");
+const firestoreRules = fs.readFileSync("firestore.rules", "utf8");
+const functionsIndex = fs.readFileSync("functions/src/index.ts", "utf8");
+const consentBlocks = fs.readFileSync("functions/src/privacy/consentBlocks.ts", "utf8");
+const consentRevocation = fs.readFileSync("functions/src/privacy/consentRevocation.ts", "utf8");
 
 check(
   !storageRules.includes("allow read, write: if request.auth != null"),
@@ -57,6 +61,29 @@ check(
   storageRules.includes("match /{allPaths=**}") &&
     storageRules.includes("allow read, write: if false"),
   "storage.rules has default deny"
+);
+
+check(
+  firestoreRules.includes("match /jobConsentBlocks/{blockId}") &&
+    firestoreRules.includes("match /jobConsentEventReceipts/{receiptId}"),
+  "Firestore explicitly protects consent control collections"
+);
+
+check(
+  functionsIndex.includes("ingestConsentRevocation"),
+  "consent revocation endpoint is exported"
+);
+
+check(
+  consentRevocation.includes("URAI_JOBS_PRIVACY_EVENT_TOKEN") &&
+    consentRevocation.includes("consent.revoked.v1"),
+  "consent revocation endpoint requires governed event contract and secret"
+);
+
+check(
+  consentBlocks.includes("jobConsentBlocks") &&
+    consentBlocks.includes("jobConsentEventReceipts"),
+  "consent block and replay receipt stores are canonical"
 );
 
 const packageJson = readJson("package.json");
