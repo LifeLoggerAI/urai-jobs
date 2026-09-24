@@ -30,8 +30,6 @@ if (!byWorker.size || [...byWorker.keys()].some((worker) => !allowedWorkers.has(
 const lines = [];
 for (const [worker, service] of byWorker) {
   const envName = allowedWorkers.get(worker);
-
-  const service = byWorker.get(worker);
   const url = String(service?.serviceUrl || '');
   if (!url.startsWith('https://')) failures.push(`${worker} HTTPS service URL`);
   if (!String(service?.revision || '').startsWith(`${worker}-`)) failures.push(`${worker} revision identity`);
