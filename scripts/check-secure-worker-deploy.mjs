@@ -144,6 +144,10 @@ rejectText('firebase.json', 'npx --yes', 'Firebase predeploy must not download o
 
 for (const [text, description] of [
   ['URAI_FIREBASE_PREBUILT_VERIFIED is required', 'Firebase deploy must require prebuilt authority'],
+  ['APPROVED_STUDIO_BRIDGE_TOKEN_VERSION is required', 'Firebase deploy must require approved Studio bridge secret version'],
+  ['verify_studio_bridge_secret', 'Firebase deploy must verify the Studio bridge secret before and after mutation'],
+  ['approvedStudioBridgeTokenVersion', 'Firebase receipt must record approved Studio bridge secret version'],
+  ['resolvedStudioBridgeTokenVersion', 'Firebase receipt must record observed Studio bridge secret version'],
   ['node scripts/firebase-prebuilt-manifest.mjs --verify', 'Firebase deploy must verify prebuilt bytes'],
   ['Canonical Firebase deployment target must be staging or prod', 'Firebase target must be bounded'],
   ['FIREBASE_PROJECT_ID and GCLOUD_PROJECT must match', 'Firebase and Google Cloud projects must agree'],
