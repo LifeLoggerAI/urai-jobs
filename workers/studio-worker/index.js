@@ -344,17 +344,39 @@ app.get('/', (_req, res) => {
   res.status(200).send({ service: 'studio-worker', ok: true, implementation: 'life-movie-ffmpeg-v1' });
 });
 
-app.get('/healthz', (_req, res) => {
+function readiness() {
   const ffmpeg = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' });
   const ffprobe = spawnSync('ffprobe', ['-version'], { encoding: 'utf8' });
-  const implementationReady = ffmpeg.status === 0 && ffprobe.status === 0 && Boolean(process.env.GCS_BUCKET_NAME);
-  res.status(implementationReady ? 200 : 503).send({
-    ok: implementationReady,
+  const sourceSha = String(process.env.URAI_SOURCE_SHA || '');
+  const checks = {
+    ffmpeg: ffmpeg.status === 0,
+    ffprobe: ffprobe.status === 0,
+    storageConfigured: Boolean(process.env.GCS_BUCKET_NAME),
+    sourceShaExact: /^[0-9a-f]{40}$/.test(sourceSha),
+    revisionPresent: Boolean(process.env.K_REVISION) || ['local', 'test'].includes(String(process.env.URAI_ENV || '').toLowerCase()),
+  };
+  return { ok: Object.values(checks).every(Boolean), checks, sourceSha };
+}
+
+app.get('/healthz', (_req, res) => {
+  const state = readiness();
+  res.status(state.ok ? 200 : 503).send({
+    ok: state.ok,
     service: 'studio-worker',
     implementation: 'life-movie-ffmpeg-v1',
-    implementationReady,
-    storageConfigured: Boolean(process.env.GCS_BUCKET_NAME),
-    authConfigured: Boolean(process.env.URAI_JOBS_WORKER_TOKEN),
+    sourceSha: state.sourceSha,
+  });
+});
+
+app.get('/readyz', (_req, res) => {
+  const state = readiness();
+  res.status(state.ok ? 200 : 503).send({
+    ok: state.ok,
+    service: 'studio-worker',
+    implementation: 'life-movie-ffmpeg-v1',
+    sourceSha: state.sourceSha,
+    revision: process.env.K_REVISION || null,
+    checks: state.checks,
   });
 });
 
