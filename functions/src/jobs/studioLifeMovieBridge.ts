@@ -68,7 +68,6 @@ function safeJobProjection(job: Job) {
     tenantId: job.tenantId,
     ownerUid: job.ownerUid,
     retryCount: job.retryCount,
-    result: job.result,
     output: job.output,
     error: job.error && typeof job.error === 'object'
       ? { message: typeof (job.error as { message?: unknown }).message === 'string' ? (job.error as { message: string }).message.slice(0, 500) : 'job_failed' }
@@ -108,6 +107,8 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
     tenantId: input.tenantId,
     retryCount: 0,
     execution: { attemptCount: 0, maxAttempts: 2 },
+    sourceSystem: 'urai-studio',
+    sourceProject: 'urai-studio',
   };
   const newQueueEntry: JobQueueEntry = {
     jobId,
@@ -130,8 +131,6 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
     const queueRef = jobQueueEntryDoc(jobId);
     transaction.create(jobRef, {
       ...newJob,
-      sourceSystem: 'urai-studio',
-      sourceProject: 'urai-studio',
       createdAt: now,
       updatedAt: now,
     });
