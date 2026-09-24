@@ -101,7 +101,7 @@ requireOrder('scripts/deploy-workers-approved.sh', [
 
 for (const [text, description] of [
   ["schemaVersion !== 'urai-jobs-worker-deploy-receipt-3'", 'URL exporter must require hardened receipt'],
-  ['requiredWorkers = new Map', 'URL exporter must use exact canonical workers'],
+  ['allowedWorkers = new Map', 'URL exporter must restrict output to approved workers'],
   ['receipt.commitSha !== expectedSha', 'URL exporter must bind source SHA'],
   ['receipt.project !== expectedProject', 'URL exporter must bind project'],
   ['receipt.environment !== expectedEnvironment', 'URL exporter must bind environment'],
@@ -111,6 +111,9 @@ for (const [text, description] of [
 requireText('scripts/verify-worker-health.mjs', "['narrator-worker', process.env.NARRATOR_WORKER_URL]", 'Narrator health must be required');
 requireText('scripts/verify-worker-health.mjs', "['asset-worker', process.env.ASSET_WORKER_URL]", 'Asset health must be required');
 requireText('scripts/verify-worker-health.mjs', 'optionalWorkers', 'Undeployed workers must be optional');
+requireText('workers/studio-worker/index.js', "app.get('/readyz'", 'Studio worker must expose readiness before it can be deployed');
+requireText('workers/studio-worker/index.js', "app.get('/authz', requireWorkerAuth", 'Studio worker auth probe must be protected');
+requireText('scripts/deploy-workers.sh', 'narrator-worker|asset-worker|studio-worker', 'Protected worker deploy must explicitly recognize Studio worker');
 requireText('scripts/verify-worker-health.mjs', "parsed.protocol !== 'https:'", 'Worker health must require credential-free HTTPS');
 requireText('scripts/verify-worker-health.mjs', "TARGET_SHA must be a full lowercase 40-character source SHA", 'Worker health must require an exact target SHA');
 requireText('scripts/verify-worker-health.mjs', "payload?.ok === true", 'Worker health must require a structured healthy payload');
@@ -141,6 +144,10 @@ rejectText('firebase.json', 'npx --yes', 'Firebase predeploy must not download o
 
 for (const [text, description] of [
   ['URAI_FIREBASE_PREBUILT_VERIFIED is required', 'Firebase deploy must require prebuilt authority'],
+  ['APPROVED_STUDIO_BRIDGE_TOKEN_VERSION is required', 'Firebase deploy must require approved Studio bridge secret version'],
+  ['verify_studio_bridge_secret', 'Firebase deploy must verify the Studio bridge secret before and after mutation'],
+  ['approvedStudioBridgeTokenVersion', 'Firebase receipt must record approved Studio bridge secret version'],
+  ['resolvedStudioBridgeTokenVersion', 'Firebase receipt must record observed Studio bridge secret version'],
   ['node scripts/firebase-prebuilt-manifest.mjs --verify', 'Firebase deploy must verify prebuilt bytes'],
   ['Canonical Firebase deployment target must be staging or prod', 'Firebase target must be bounded'],
   ['FIREBASE_PROJECT_ID and GCLOUD_PROJECT must match', 'Firebase and Google Cloud projects must agree'],
