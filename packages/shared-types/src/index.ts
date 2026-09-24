@@ -46,6 +46,12 @@ export interface JobLease {
   heartbeatAt?: unknown;
 }
 
+export interface JobConsentContext {
+  purpose: string;
+  policyVersion: string;
+  decisionReceiptId: string;
+}
+
 export interface Job {
   jobId: string;
   jobType?: string;
@@ -55,6 +61,7 @@ export interface Job {
   tenantId?: string;
   orgId?: string;
   ownerUid?: string;
+  consent?: JobConsentContext;
   retryCount?: number;
   execution?: JobExecutionMeta;
   lease?: JobLease;
