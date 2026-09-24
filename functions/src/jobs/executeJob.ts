@@ -6,7 +6,6 @@ import { z } from 'zod';
 import type { Job } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
-import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
 
 // URAI Jobs worker routing audit markers.
