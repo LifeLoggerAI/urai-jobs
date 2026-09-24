@@ -55,10 +55,17 @@ function isPrivateSourceJobType(jobType: string): boolean {
   return jobType === 'memory.private-source.transcribe';
 }
 
+const JobConsentSchema = z.object({
+  purpose: z.string().trim().min(1).max(160),
+  policyVersion: z.string().trim().min(1).max(80),
+  decisionReceiptId: z.string().trim().min(1).max(160),
+}).strict();
+
 const CreateJobSchema = z.object({
   jobType: z.string().min(3, 'Job type must be at least 3 characters').max(80),
   payload: z.record(z.any()),
   idempotencyKey: z.string().trim().min(1).max(160).optional(),
+  consent: JobConsentSchema.optional(),
 });
 
 function payloadSizeBytes(payload: unknown): number {
@@ -137,12 +144,18 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     throw httpsError('invalid-argument', 'Invalid job data.', validationResult.error.flatten());
   }
 
-  const { jobType, payload, idempotencyKey } = validationResult.data;
+  const { jobType, payload, idempotencyKey, consent } = validationResult.data;
   if (!isAllowedJobType(jobType)) {
     throw httpsError('invalid-argument', `Unsupported job type: ${jobType}`);
   }
 
   if (isPrivateSourceJobType(jobType)) {
+    if (!consent) {
+      throw httpsError(
+        'failed-precondition',
+        'Private-source jobs require canonical consent purpose, policy version, and decision receipt context.'
+      );
+    }
     const privateSource = PrivateSourcePayloadSchema.safeParse(payload);
     if (!privateSource.success) {
       throw httpsError(
@@ -242,6 +255,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     status: 'PENDING',
     payload,
     ownerUid: uid,
+    ...(consent ? { consent } : {}),
     ...(orgId ? { orgId } : {}),
     ...(tenantId ? { tenantId } : {}),
     retryCount: 0,
