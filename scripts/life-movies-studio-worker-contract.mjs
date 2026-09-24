@@ -39,7 +39,13 @@ assert.ok(bridge.includes("sourceSystem: 'urai-studio'"), 'Studio bridge jobs mu
 assert.ok(bridge.includes("'execution.leaseToken': FieldValue.delete()"), 'Studio bridge cancellation must revoke the active lease');
 assert.ok(functionsIndex.includes('studioLifeMovieBridge'), 'Life Movies bridge must be exported from Firebase Functions');
 assert.ok(createJob.includes("jobType === 'studio.render.video'"), 'studio.render.video must have a dedicated validator');
-assert.ok(createJob.includes("z.literal(false)"), 'Life Movies render admission must preserve hard-off booleans');
+for (const token of [
+  'spatialRequired: z.literal(false)',
+  'publicReleaseAuthorized: z.literal(false)',
+  'providerGenerationAuthorized: z.literal(false)',
+]) {
+  assert.ok(sharedContract.includes(token), `Life Movies render admission must preserve hard-off boolean: ${token}`);
+}
 assert.ok(deploy.includes('narrator-worker|asset-worker|studio-worker'), 'canonical deploy script must recognize completed studio-worker');
 assert.ok(approved.includes("new Set(['narrator-worker', 'asset-worker', 'studio-worker'])"), 'approved wrapper must admit studio-worker only through explicit approved worker selection');
 assert.ok(approved.includes('narrator-worker|asset-worker|studio-worker'), 'exact-source build wrapper must admit studio-worker');
