@@ -69,6 +69,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Server-only data-rights workflow. Access is mediated by authenticated callables.
+    match /dataRightsRequests/{requestId} {
+      allow read, write: if false;
+
+      match /audit/{auditId} {
+        allow read, write: if false;
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
