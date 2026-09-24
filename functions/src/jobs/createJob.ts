@@ -2,7 +2,7 @@ import { ulid } from 'ulid';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { HttpsError, type CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
-import { Job, JobQueueEntry } from '@urai-jobs/shared-types';
+import { Job, JobQueueEntry, type JobConsentContext } from '@urai-jobs/shared-types';
 import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
@@ -145,6 +145,11 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   }
 
   const { jobType, payload, idempotencyKey, consent } = validationResult.data;
+  const canonicalConsent: JobConsentContext | undefined = consent ? {
+    purpose: consent.purpose,
+    policyVersion: consent.policyVersion,
+    decisionReceiptId: consent.decisionReceiptId,
+  } : undefined;
   if (!isAllowedJobType(jobType)) {
     throw httpsError('invalid-argument', `Unsupported job type: ${jobType}`);
   }
@@ -153,7 +158,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     if (!consent) {
       throw httpsError(
         'failed-precondition',
-        'Private-source jobs require canonical consent purpose, policy version, and decision receipt context.'
+        'Private-source jobs require canonical consent context: purpose, policy version, and decision receipt.'
       );
     }
     const privateSource = PrivateSourcePayloadSchema.safeParse(payload);
@@ -255,7 +260,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     status: 'PENDING',
     payload,
     ownerUid: uid,
-    ...(consent ? { consent } : {}),
+    ...(canonicalConsent ? { consent: canonicalConsent } : {}),
     ...(orgId ? { orgId } : {}),
     ...(tenantId ? { tenantId } : {}),
     retryCount: 0,
