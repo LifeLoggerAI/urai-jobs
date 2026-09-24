@@ -95,13 +95,20 @@ function parsePayload(job) {
   const sourceById = new Map();
   for (const raw of sources) {
     const id = safeSegment(String(raw.id || ''), 'source_id');
+    const bucket = safeSegment(String(raw.bucket || ''), 'source_bucket');
     const objectPath = safeObjectPath(raw.objectPath, 'source_object_path');
     const mimeType = String(raw.mimeType || '');
     if (!ALLOWED_MIME.has(mimeType)) throw new Error(`unsupported_source_mime:${mimeType}`);
-    if (!objectPath.startsWith(`tenants/${tenantId}/`)) throw new Error('source_outside_tenant');
+    const allowedBuckets = new Set([
+      String(process.env.GCS_BUCKET_NAME || '').trim(),
+      ...String(process.env.URAI_STUDIO_SOURCE_BUCKETS || '').split(',').map((value) => value.trim()).filter(Boolean),
+    ].filter(Boolean));
+    if (!allowedBuckets.has(bucket)) throw new Error('source_bucket_not_allowed');
+    if (![ `studios/${tenantId}/`, `tenants/${tenantId}/` ].some((prefix) => objectPath.startsWith(prefix))) throw new Error('source_outside_tenant');
     if (sourceById.has(id)) throw new Error(`duplicate_source:${id}`);
     sourceById.set(id, {
       id,
+      bucket,
       objectPath,
       mimeType,
       provenance: String(raw.provenance || 'unknown'),
@@ -250,7 +257,7 @@ async function renderLifeMovie(job) {
       if (!usedSourceIds.has(source.id)) continue;
       const ext = path.extname(source.objectPath).slice(0, 10) || '.bin';
       const localPath = path.join(workDir, `source-${crypto.createHash('sha256').update(source.id).digest('hex').slice(0, 12)}${ext}`);
-      await bucket.file(source.objectPath).download({ destination: localPath });
+      await admin.storage().bucket(source.bucket).file(source.objectPath).download({ destination: localPath });
       localBySource.set(source.id, localPath);
     }
 
@@ -295,6 +302,7 @@ async function renderLifeMovie(job) {
       timelineItemCount: input.timeline.length,
       sources: input.sources.map((source) => ({
         id: source.id,
+        bucket: source.bucket,
         objectPath: source.objectPath,
         mimeType: source.mimeType,
         provenance: source.provenance,
@@ -356,6 +364,7 @@ function readiness() {
     ffmpeg: ffmpeg.status === 0,
     ffprobe: ffprobe.status === 0,
     storageConfigured: Boolean(process.env.GCS_BUCKET_NAME),
+    sourceBucketsConfigured: Boolean(process.env.URAI_STUDIO_SOURCE_BUCKETS || process.env.GCS_BUCKET_NAME),
     sourceShaExact: /^[0-9a-f]{40}$/.test(sourceSha),
     revisionPresent: Boolean(process.env.K_REVISION) || ['local', 'test'].includes(String(process.env.URAI_ENV || '').toLowerCase()),
   };
