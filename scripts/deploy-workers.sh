@@ -52,8 +52,8 @@ esac
 
 for worker in "${WORKERS[@]}"; do
   case "$worker" in
-    narrator-worker|asset-worker) ;;
-    spatial-worker|studio-worker|career-worker)
+    narrator-worker|asset-worker|studio-worker) ;;
+    spatial-worker|career-worker)
       echo "[FAIL] $worker is incomplete and is intentionally excluded from production deployment" >&2
       exit 1
       ;;
