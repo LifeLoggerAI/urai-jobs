@@ -266,9 +266,6 @@ fi
 
 verify_worker_secret
 verify_studio_bridge_secret
-# Queue-recovery authority requires worker-secret verification immediately before config receipt flow.
-# verify_worker_secret
-# write_config_receipt true
 write_functions_env
 write_temporary_config
 node scripts/firebase-prebuilt-manifest.mjs --verify
@@ -280,8 +277,8 @@ firebase deploy \
   --only functions,firestore,hosting \
   --project "$FIREBASE_PROJECT_ID" \
   --non-interactive
-verify_worker_secret
 verify_studio_bridge_secret
+verify_worker_secret
 write_config_receipt true
 
 cleanup
