@@ -75,6 +75,18 @@ check(
 );
 
 check(
+  functionsIndex.includes("submitDataRightsRequest") &&
+    functionsIndex.includes("getDataRightsRequest") &&
+    functionsIndex.includes("listDataRightsRequests"),
+  "data-rights control plane is exported"
+);
+
+check(
+  firestoreRules.includes("match /dataRightsRequests/{requestId}"),
+  "Firestore explicitly protects data-rights request records"
+);
+
+check(
   consentRevocation.includes("URAI_JOBS_PRIVACY_EVENT_TOKEN") &&
     consentRevocation.includes("consent.revoked.v1"),
   "consent revocation endpoint requires governed event contract and secret"
