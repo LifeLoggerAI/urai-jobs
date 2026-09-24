@@ -443,6 +443,15 @@ deploy_worker() {
     exit 1
   }
 
+  local worker_memory="512Mi"
+  local worker_concurrency="20"
+  local worker_timeout="300"
+  if [ "$worker" = "studio-worker" ]; then
+    worker_memory="2Gi"
+    worker_concurrency="2"
+    worker_timeout="3600"
+  fi
+
   echo "[INFO] [$worker] Deploying immutable digest with revision-bound source identity and exact Secret Manager versions"
   gcloud run deploy "$worker" \
     --project "$GCLOUD_PROJECT" \
@@ -451,12 +460,12 @@ deploy_worker() {
     --region "$GCP_REGION" \
     --service-account "$WORKER_RUNTIME_SERVICE_ACCOUNT" \
     --allow-unauthenticated \
-    --memory 512Mi \
+    --memory "$worker_memory" \
     --cpu 1 \
     --min-instances 0 \
     --max-instances 3 \
-    --concurrency 20 \
-    --timeout 300 \
+    --concurrency "$worker_concurrency" \
+    --timeout "$worker_timeout" \
     --labels "urai-source-sha=$GITHUB_SHA,urai-environment=$URAI_ENV" \
     --set-env-vars "$env_vars" \
     --set-secrets "$secret_vars" \
@@ -536,7 +545,8 @@ const receipt = {
   caveats: [
     'Cloud Run ingress is public because Asset Factory callbacks cannot present Cloud Run IAM credentials.',
     'Execution and callback routes are protected by exact Secret Manager version-backed bearer tokens.',
-    'Spatial, Studio, and Career workers are intentionally excluded until their implementations are production-capable.',
+    'Spatial and Career workers remain intentionally excluded until their implementations are production-capable.',
+    'Studio worker deployment is permitted only when explicitly selected through the protected exact-source approval path.',
   ],
 };
 fs.writeFileSync(process.env.RECEIPT_PATH, `${JSON.stringify(receipt, null, 2)}\n`);
