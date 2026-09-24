@@ -4,6 +4,9 @@ import fs from 'node:fs';
 const worker = fs.readFileSync(new URL('../workers/studio-worker/index.js', import.meta.url), 'utf8');
 const dockerfile = fs.readFileSync(new URL('../workers/studio-worker/Dockerfile', import.meta.url), 'utf8');
 const createJob = fs.readFileSync(new URL('../functions/src/jobs/createJob.ts', import.meta.url), 'utf8');
+const sharedContract = fs.readFileSync(new URL('../functions/src/jobs/studioLifeMovieContract.ts', import.meta.url), 'utf8');
+const bridge = fs.readFileSync(new URL('../functions/src/jobs/studioLifeMovieBridge.ts', import.meta.url), 'utf8');
+const functionsIndex = fs.readFileSync(new URL('../functions/src/index.ts', import.meta.url), 'utf8');
 const deploy = fs.readFileSync(new URL('./deploy-workers.sh', import.meta.url), 'utf8');
 const approved = fs.readFileSync(new URL('./deploy-workers-approved.sh', import.meta.url), 'utf8');
 
@@ -28,6 +31,13 @@ for (const token of [
 
 assert.ok(dockerfile.includes('apt-get install -y --no-install-recommends ffmpeg'), 'Studio worker image must include FFmpeg');
 assert.ok(createJob.includes('StudioLifeMovieRenderPayloadSchema'), 'createJob must validate Life Movies render payloads');
+assert.ok(sharedContract.includes('assertLifeMovieTenantPaths'), 'Life Movies contract must bind source/output paths to tenant authority');
+assert.ok(bridge.includes("defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN')"), 'Studio bridge must use a dedicated Secret Manager identity');
+assert.ok(bridge.includes("action: z.literal('create')"), 'Studio bridge must expose bounded create semantics');
+assert.ok(bridge.includes("action: z.enum(['status', 'cancel'])"), 'Studio bridge must expose bounded status/cancel semantics');
+assert.ok(bridge.includes("sourceSystem: 'urai-studio'"), 'Studio bridge jobs must retain source-system authority');
+assert.ok(bridge.includes("'execution.leaseToken': FieldValue.delete()"), 'Studio bridge cancellation must revoke the active lease');
+assert.ok(functionsIndex.includes('studioLifeMovieBridge'), 'Life Movies bridge must be exported from Firebase Functions');
 assert.ok(createJob.includes("jobType === 'studio.render.video'"), 'studio.render.video must have a dedicated validator');
 assert.ok(createJob.includes("z.literal(false)"), 'Life Movies render admission must preserve hard-off booleans');
 assert.ok(deploy.includes('narrator-worker|asset-worker|studio-worker'), 'canonical deploy script must recognize completed studio-worker');
