@@ -9,7 +9,7 @@
     "workers/*"
   ],
   "scripts": {
-    "urai-jobs:verify": "node scripts/wif-deploy-auth-contract.mjs && node scripts/private-source-worker-contract.mjs && node scripts/urai-jobs-verify.mjs && node scripts/communications-tenant-authority-contract.mjs && node scripts/queue-recovery-contract.mjs && node scripts/release-sequence-verify.mjs && node scripts/jobs-reliability-verify.mjs && node scripts/activation-readiness-verify.mjs && node scripts/worker-readiness-source-contract.mjs && node scripts/career-surfaces-verify.mjs && node scripts/career-runtime-smoke.mjs && node scripts/check-secure-worker-deploy.mjs && node scripts/check-worker-build-provenance.mjs && node scripts/check-firebase-runtime-identity.mjs && node scripts/functions-runtime-firestore-iam-contract.mjs && node scripts/check-rollback-provenance.mjs && node scripts/check-required-ci-exact-head.mjs",
+    "urai-jobs:verify": "node scripts/wif-deploy-auth-contract.mjs && node scripts/private-source-worker-contract.mjs && node scripts/life-movies-studio-worker-contract.mjs && node scripts/urai-jobs-verify.mjs && node scripts/communications-tenant-authority-contract.mjs && node scripts/queue-recovery-contract.mjs && node scripts/release-sequence-verify.mjs && node scripts/jobs-reliability-verify.mjs && node scripts/activation-readiness-verify.mjs && node scripts/worker-readiness-source-contract.mjs && node scripts/career-surfaces-verify.mjs && node scripts/career-runtime-smoke.mjs && node scripts/check-secure-worker-deploy.mjs && node scripts/check-worker-build-provenance.mjs && node scripts/check-firebase-runtime-identity.mjs && node scripts/functions-runtime-firestore-iam-contract.mjs && node scripts/check-rollback-provenance.mjs && node scripts/check-required-ci-exact-head.mjs",
     "ci:exact-head": "node scripts/check-required-ci-exact-head.mjs",
     "jobs:reliability:verify": "node scripts/jobs-reliability-verify.mjs",
     "activation:verify": "node scripts/activation-readiness-verify.mjs && node scripts/worker-readiness-source-contract.mjs && node scripts/career-surfaces-verify.mjs",
@@ -30,8 +30,8 @@
     "urai-jobs:e2e": "node scripts/urai-jobs-e2e.mjs",
     "postinstall": "npm run build --prefix packages/shared-types",
     "lint": "npm run lint --prefix packages/shared-types --if-present && npm run lint --prefix functions --if-present && npm run lint --prefix web --if-present && npm run lint --prefix workers --if-present",
-    "build": "npm run build --prefix packages/shared-types && npm run build --prefix functions && npm run build --prefix web --if-present && npm run build --prefix workers --if-present && npm run career-worker:build && npm run private-source-worker:build",
-    "typecheck": "npm run typecheck --prefix packages/shared-types --if-present && npm run typecheck --prefix functions && npm run typecheck --prefix web --if-present && npm run typecheck --prefix workers --if-present && npm run career-worker:typecheck && npm run private-source-worker:typecheck",
+    "build": "npm run build --prefix packages/shared-types && npm run build --prefix functions && npm run build --prefix web --if-present && npm run build --prefix workers --if-present && npm run career-worker:build && npm run private-source-worker:build && npm run studio-worker:build",
+    "typecheck": "npm run typecheck --prefix packages/shared-types --if-present && npm run typecheck --prefix functions && npm run typecheck --prefix web --if-present && npm run typecheck --prefix workers --if-present && npm run career-worker:typecheck && npm run private-source-worker:typecheck && npm run studio-worker:typecheck",
     "test": "npm run urai-jobs:verify && npm run urai-jobs:smoke && npm run build && node scripts/execution-guards-smoke.mjs && node scripts/queue-recovery-contract.mjs && npm run urai-jobs:deploy-precheck && npm run typecheck --prefix functions",
     "audit:systems": "node scripts/system-of-systems-audit.mjs",
     "deploy:dev": "firebase use dev && firebase deploy",
@@ -71,7 +71,10 @@
     "dev:all": "npm run dev --prefix web",
     "check:workspace": "npm ls --depth=0 --workspaces --include-workspace-root",
     "private-source-worker:build": "npm run build --prefix workers/private-source-worker",
-    "private-source-worker:typecheck": "npm run typecheck --prefix workers/private-source-worker"
+    "private-source-worker:typecheck": "npm run typecheck --prefix workers/private-source-worker",
+    "studio-worker:build": "npm run build --prefix workers/studio-worker",
+    "studio-worker:typecheck": "npm run typecheck --prefix workers/studio-worker",
+    "life-movies:worker:verify": "node scripts/life-movies-studio-worker-contract.mjs"
   },
   "devDependencies": {
     "@types/uuid": "^10.0.0",
