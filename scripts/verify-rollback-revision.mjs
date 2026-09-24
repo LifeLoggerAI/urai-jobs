@@ -9,7 +9,7 @@ const HEX64_PATTERN = /^[0-9a-f]{64}$/;
 const IMAGE_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const NUMERIC_SECRET_VERSION_PATTERN = /^[1-9][0-9]*$/;
 const ALLOWED_ENVIRONMENTS = new Set(['staging', 'prod', 'production']);
-const APPROVED_WORKERS = new Set(['narrator-worker', 'asset-worker']);
+const APPROVED_WORKERS = new Set(['narrator-worker', 'asset-worker', 'studio-worker']);
 
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
@@ -41,6 +41,11 @@ function expectedPlainEnvironment(worker, { rollbackSha, rollbackParentSha, envi
     URAI_SOURCE_SHA: rollbackSha,
   };
   if (worker === 'asset-worker') expected.ASSET_FACTORY_REPO = 'LifeLoggerAI/asset-factory';
+  if (worker === 'studio-worker') {
+    const sourceBuckets = String(process.env.URAI_STUDIO_SOURCE_BUCKETS || '').trim();
+    if (!sourceBuckets) throw new Error('URAI_STUDIO_SOURCE_BUCKETS is required to verify studio-worker rollback authority');
+    expected.URAI_STUDIO_SOURCE_BUCKETS = sourceBuckets;
+  }
   return expected;
 }
 
