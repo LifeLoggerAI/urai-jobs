@@ -13,27 +13,12 @@ import {
   type IdempotencyBinding,
 } from '../core/jobsReliability.js';
 import { StudioLifeMovieRenderPayloadSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
+import { isActiveRuntimeJobType } from '../core/runtimeJobTypes.js';
 
 const MAX_PAYLOAD_BYTES = parseInt(process.env.URAI_JOBS_MAX_PAYLOAD_BYTES || '', 10) || 32768;
 const MAX_CREATE_PER_MINUTE = parseInt(process.env.URAI_JOBS_CREATE_RATE_LIMIT_PER_MINUTE || '', 10) || 10;
 const IDEMPOTENCY_COLLECTION = 'jobIdempotencyBindings';
 const COMMUNICATIONS_TENANT_ID_PATTERN = /^tenant_[a-zA-Z0-9_-]{6,64}$/;
-
-const ALLOWED_JOB_TYPE_PATTERNS = [
-  /^narrator\.tts$/,
-  /^asset[.-]/,
-  /^spatial[.-]/,
-  /^studio[.-]/,
-  /^career\./,
-  /^content[.-]/,
-  /^storytime\./,
-  /^analytics\./,
-  /^communications\.message\.send$/,
-  /^admin\./,
-  /^deployment\./,
-  /^proof\./,
-  /^memory\.private-source\.transcribe$/,
-];
 
 const PrivateSourcePayloadSchema = z.object({
   sourceReceiptRef: z.string().trim().regex(/^psr_[A-Za-z0-9_-]{16,128}$/),
@@ -70,10 +55,6 @@ const CreateJobSchema = z.object({
 
 function payloadSizeBytes(payload: unknown): number {
   return Buffer.byteLength(JSON.stringify(payload ?? {}), 'utf8');
-}
-
-function isAllowedJobType(jobType: string): boolean {
-  return ALLOWED_JOB_TYPE_PATTERNS.some((pattern) => pattern.test(jobType));
 }
 
 function isCommunicationsJobType(jobType: string): boolean {
@@ -150,8 +131,8 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     policyVersion: consent.policyVersion,
     decisionReceiptId: consent.decisionReceiptId,
   } : undefined;
-  if (!isAllowedJobType(jobType)) {
-    throw httpsError('invalid-argument', `Unsupported job type: ${jobType}`);
+  if (!isActiveRuntimeJobType(jobType)) {
+    throw httpsError('invalid-argument', `Unsupported or inactive job type: ${jobType}`);
   }
 
   if (isPrivateSourceJobType(jobType)) {
