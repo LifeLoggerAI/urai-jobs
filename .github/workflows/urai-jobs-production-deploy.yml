@@ -442,7 +442,6 @@ NODE
           DEPLOY_RECEIPT_PATH: docs/release-evidence/worker-deploy-receipt.json
           GITHUB_SHA: ${{ env.TARGET_SHA }}
           URAI_JOBS_DEPLOY_WORKERS: ${{ inputs.include_studio_worker && 'narrator-worker,asset-worker,studio-worker' || 'narrator-worker,asset-worker' }}
-          URAI_STUDIO_SOURCE_BUCKETS: ${{ env.URAI_STUDIO_SOURCE_BUCKETS }}
         run: |
           node scripts/verify-rollback-revision.mjs
           bash scripts/deploy-workers-approved.sh
