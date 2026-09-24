@@ -49,6 +49,48 @@ const CommunicationsMessagePayloadSchema = z.object({
   urgency: z.enum(['normal', 'urgent']).default('normal'),
 }).strict();
 
+
+const LifeMovieSourceSchema = z.object({
+  id: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  objectPath: z.string().trim().min(1).max(1024).refine((value) => !value.startsWith('/') && !value.includes('..') && !value.includes('\\\\'), 'Unsafe object path'),
+  mimeType: z.enum([
+    'image/jpeg', 'image/png', 'image/webp',
+    'video/mp4', 'video/quicktime', 'video/webm',
+    'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav', 'audio/webm', 'audio/ogg',
+  ]),
+  provenance: z.enum([
+    'original-source', 'user-provided-fact', 'verified-metadata', 'user-recorded-memory',
+    'inferred', 'reconstructed', 'generated', 'artistic-interpretation', 'unknown',
+  ]),
+  sourceRefs: z.array(z.string().trim().min(1).max(512)).min(1).max(32),
+  consentRef: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  ownerOrRightsRef: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+}).strict();
+
+const LifeMovieTimelineItemSchema = z.object({
+  sourceId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  startMs: z.number().int().nonnegative(),
+  endMs: z.number().int().positive(),
+}).strict().refine((value) => value.endMs > value.startMs && value.endMs - value.startMs <= 30 * 60 * 1000, {
+  message: 'Each timeline item must have a positive duration no longer than 30 minutes.',
+});
+
+const StudioLifeMovieRenderPayloadSchema = z.object({
+  schemaVersion: z.literal('urai-life-movie-render-v1'),
+  projectId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  renderPlanDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  outputPrefix: z.string().trim().min(1).max(1024).refine((value) => !value.startsWith('/') && !value.includes('..') && !value.includes('\\\\'), 'Unsafe output prefix'),
+  width: z.number().int().min(320).max(3840).default(1920),
+  height: z.number().int().min(320).max(3840).default(1080),
+  fps: z.union([z.literal(24), z.literal(25), z.literal(30), z.literal(50), z.literal(60)]).default(30),
+  sources: z.array(LifeMovieSourceSchema).min(1).max(100),
+  timeline: z.array(LifeMovieTimelineItemSchema).min(1).max(250),
+  subtitleText: z.string().max(2 * 1024 * 1024).default(''),
+  spatialRequired: z.literal(false),
+  publicReleaseAuthorized: z.literal(false),
+  providerGenerationAuthorized: z.literal(false),
+}).strict();
+
 function isPrivateSourceJobType(jobType: string): boolean {
   return jobType === 'memory.private-source.transcribe';
 }
@@ -158,6 +200,18 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
         'invalid-argument',
         'Communications jobs require the server-supported email channel, templateId, recipientUid, vars, and optional urgency only; raw recipient addresses and caller-owned destinations are rejected.',
         communicationsMessage.error.flatten()
+      );
+    }
+  }
+
+
+  if (jobType === 'studio.render.video') {
+    const lifeMovieRender = StudioLifeMovieRenderPayloadSchema.safeParse(payload);
+    if (!lifeMovieRender.success) {
+      throw httpsError(
+        'invalid-argument',
+        'studio.render.video requires the provenance-bound URAI Life Movies render contract; arbitrary URLs, public release authorization, provider execution authorization, and Spatial-required jobs are rejected.',
+        lifeMovieRender.error.flatten()
       );
     }
   }
