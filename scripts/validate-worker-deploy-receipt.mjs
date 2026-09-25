@@ -25,9 +25,19 @@ function fingerprint(value) {
 }
 
 function requiredSecretNames(worker) {
-  return worker === 'asset-worker'
-    ? ['URAI_JOBS_WORKER_TOKEN', 'URAI_WHEEL_GITHUB_TOKEN', 'URAI_JOBS_CALLBACK_SECRET']
-    : ['URAI_JOBS_WORKER_TOKEN'];
+  if (worker === 'asset-worker') {
+    return ['URAI_JOBS_WORKER_TOKEN', 'URAI_WHEEL_GITHUB_TOKEN', 'URAI_JOBS_CALLBACK_SECRET'];
+  }
+  if (worker === 'private-source-worker') {
+    return [
+      'URAI_JOBS_WORKER_TOKEN',
+      'PRIVATE_SOURCE_AUTHORITY_TOKEN',
+      'PRIVATE_SOURCE_TRANSCRIBE_TOKEN',
+      'HISTORICAL_CONTEXT_AUTHORITY_TOKEN',
+      'HISTORICAL_CONTEXT_IMPORT_TOKEN',
+    ];
+  }
+  return ['URAI_JOBS_WORKER_TOKEN'];
 }
 
 export function validateWorkerDeployReceipt(receipt) {
@@ -66,7 +76,7 @@ export function validateWorkerDeployReceipt(receipt) {
       }
 
       if (!nonEmptyString(service.worker)) failures.push(`${prefix}.worker is required`);
-      if (!['narrator-worker', 'asset-worker', 'studio-worker'].includes(String(service.worker ?? ''))) failures.push(`${prefix}.worker is not approved`);
+      if (!['narrator-worker', 'asset-worker', 'studio-worker', 'private-source-worker'].includes(String(service.worker ?? ''))) failures.push(`${prefix}.worker is not approved`);
       if (seenWorkers.has(service.worker)) failures.push(`${prefix}.worker duplicates ${service.worker}`);
       seenWorkers.add(service.worker);
       if (!nonEmptyString(service.buildId)) failures.push(`${prefix}.buildId is required`);
@@ -125,12 +135,32 @@ export function validateWorkerDeployReceipt(receipt) {
         revisionLabels: expectedRevisionLabels,
         secretVersions: service.secretVersions,
         ...(service.worker === 'studio-worker' ? { sourceBuckets: String(service.configuration?.sourceBuckets || '') } : {}),
+        ...(service.worker === 'private-source-worker' ? {
+          providerUrls: {
+            privateSourceAuthority: String(service.configuration?.providerUrls?.privateSourceAuthority || ''),
+            privateSourceTranscribe: String(service.configuration?.providerUrls?.privateSourceTranscribe || ''),
+            historicalContextAuthority: String(service.configuration?.providerUrls?.historicalContextAuthority || ''),
+            historicalContextImport: String(service.configuration?.providerUrls?.historicalContextImport || ''),
+          },
+        } : {}),
       };
       if (!service.configuration || typeof service.configuration !== 'object' || Array.isArray(service.configuration)) {
         failures.push(`${prefix}.configuration is required`);
       } else {
         if (service.worker === 'studio-worker' && !nonEmptyString(service.configuration.sourceBuckets)) {
           failures.push(`${prefix}.configuration.sourceBuckets is required for studio-worker`);
+        }
+        if (service.worker === 'private-source-worker') {
+          const providerUrls = service.configuration.providerUrls;
+          for (const name of ['privateSourceAuthority', 'privateSourceTranscribe', 'historicalContextAuthority', 'historicalContextImport']) {
+            const value = String(providerUrls?.[name] || '');
+            try {
+              const url = new URL(value);
+              if (url.protocol !== 'https:' || url.username || url.password) failures.push(`${prefix}.configuration.providerUrls.${name} must be credential-free HTTPS`);
+            } catch {
+              failures.push(`${prefix}.configuration.providerUrls.${name} must be a valid HTTPS URL`);
+            }
+          }
         }
       }
       if (service.configuration && JSON.stringify(stable(service.configuration)) !== JSON.stringify(stable(expectedConfiguration))) {
