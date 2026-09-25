@@ -127,13 +127,15 @@ ok("Career Passport V5 links Decision", careerPassportPage.includes("/career-dec
 ok("Career Passport V5 links Version Console", careerPassportPage.includes("/career-versions"));
 
 const createJobPage = read("web/src/pages/CreateJobPage.tsx");
-careerJobTypes.forEach((type) => ok(`CreateJobPage includes preset for ${type}`, createJobPage.includes(type)));
-ok("CreateJobPage includes career profile smoke payload", createJobPage.includes("careerProfile"));
-ok("CreateJobPage includes career opportunity smoke payload", createJobPage.includes("careerOpportunity"));
+ok("CreateJobPage excludes inactive career presets", careerJobTypes.every((type) => !createJobPage.includes(type)));
+ok("CreateJobPage excludes inactive spatial preset", !createJobPage.includes("spatial.index"));
+ok("CreateJobPage retains active narrator preset", createJobPage.includes('"narrator.tts"'));
+ok("CreateJobPage retains active asset preset", createJobPage.includes('"asset.render"'));
 
 const careerPlan = read("web/src/lib/careerLaunchPlan.ts");
 const careerVersionConsole = read("web/src/pages/CareerVersionConsolePage.tsx");
 ok("Career version plan model exists", careerPlan.includes("careerLaunchPlan"));
+ok("Career V1 remains blocked pending a separate product charter", careerPlan.includes('status: "blocked"') && careerPlan.includes("Separate product charter"));
 ["V1", "V2", "V3", "V4", "V5"].forEach((version) => ok(`Career version plan includes ${version}`, careerPlan.includes(version)));
 ok("Career Version Console page exists", careerVersionConsole.includes("CareerVersionConsolePage"));
 ok("Career Version Console renders runtime jobs", careerVersionConsole.includes("runtimeJobs"));
