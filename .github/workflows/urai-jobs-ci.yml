@@ -104,7 +104,7 @@ jobs:
           printf 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT=%s\n' "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" > functions/.env.demo-urai-jobs
           trap 'rm -f functions/.env.demo-urai-jobs' EXIT
           if timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" --project demo-urai-jobs emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" >"$log_file" 2>&1; then
-            rm -f functions/.env.demo-urai-jobs
+            rm -f functions/.env.demo-urai-jobs functions/.secret.local
             trap - EXIT
             grep -E '\[STEP|\[PASS|URAI_JOBS_E2E_VALIDATION' "$log_file" || true
             exit 0
