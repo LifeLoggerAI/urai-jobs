@@ -4,7 +4,6 @@ const createJob = fs.readFileSync('functions/src/jobs/createJob.ts', 'utf8');
 const executeJob = fs.readFileSync('functions/src/jobs/executeJob.ts', 'utf8');
 const runtimeJobTypes = fs.readFileSync('functions/src/core/runtimeJobTypes.ts', 'utf8');
 const activeRuntimeBlock = runtimeJobTypes.match(/ACTIVE_RUNTIME_JOB_TYPES = \[([\s\S]*?)\] as const;/)?.[1] ?? '';
-const runtimeJobTypes = fs.readFileSync('functions/src/core/runtimeJobTypes.ts', 'utf8');
 let failed = 0;
 
 function check(name, condition) {
