@@ -55,10 +55,9 @@ for (const path of requiredWorkflows) {
 
   const concurrencyMatch = source.match(/\nconcurrency:\n([\s\S]*?)(?=\nenv:|\njobs:)/);
   if (!concurrencyMatch) {
-    failures.push(`${path}: workflow must define PR/ref-and-SHA-scoped concurrency`);
+    failures.push(`${path}: workflow must define exact-head-SHA-scoped concurrency`);
   } else {
     const concurrency = concurrencyMatch[0];
-    requireText(path, concurrency, 'github.event.pull_request.number || github.ref', 'concurrency must identify the PR or ref');
     requireText(path, concurrency, 'github.event.pull_request.head.sha || github.sha', 'concurrency must isolate evidence by exact reviewed SHA');
     requireText(path, concurrency, 'cancel-in-progress: true', 'superseded runs must be cancelled');
   }
@@ -153,5 +152,5 @@ console.log('[PASS] isolated temporary credential configuration, shallow exact-S
 console.log('[PASS] reusable checkout action excluded from required Jobs evidence lanes after repository-specific checkout failures');
 console.log('[PASS] pull-request evidence lanes cannot write reusable dependency caches');
 console.log('[PASS] pull-request code execution is isolated from workflow-dispatch cache authority');
-console.log('[PASS] PR/ref and exact-SHA concurrency cancel superseded runs without mixing evidence');
+console.log('[PASS] exact-SHA concurrency cancels superseded same-head workflow runs without mixing evidence across reviewed heads');
 console.log('[PASS] emulator CLI version pinned: firebase-tools 15.24.0');
