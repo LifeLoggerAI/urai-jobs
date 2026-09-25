@@ -201,14 +201,43 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
     }
 
     const now = FieldValue.serverTimestamp();
+    const attemptCount = Number(current.execution?.attemptCount || 0);
+    const maxAttempts = Number(current.execution?.maxAttempts || current.maxAttempts || 3);
+
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || attemptCount >= maxAttempts) {
+      transaction.update(jobRef, {
+        status: 'DEAD',
+        error: { message: errorMessage },
+        lease: FieldValue.delete(),
+        updatedAt: now,
+        completedAt: now,
+        'execution.leaseToken': FieldValue.delete(),
+        'execution.completedAt': now,
+        'execution.asyncCallbackPending': false,
+        'execution.callbackTokenHash': FieldValue.delete(),
+        'execution.callbackLeaseToken': FieldValue.delete(),
+        'execution.callbackDeadlineAt': FieldValue.delete(),
+      });
+      transaction.set(queueRef, {
+        jobId,
+        status: 'DEAD',
+        lease: FieldValue.delete(),
+        updatedAt: now,
+      }, { merge: true });
+      return 'failed';
+    }
+
+    const retryDelayMs = Math.min(60000, 1000 * Math.pow(2, Math.max(1, attemptCount)));
+    const nextAvailableAt = new Date(Date.now() + retryDelayMs);
     transaction.update(jobRef, {
-      status: 'FAILED',
+      status: 'PENDING',
+      retryCount: FieldValue.increment(1),
       error: { message: errorMessage },
       lease: FieldValue.delete(),
       updatedAt: now,
-      completedAt: now,
+      completedAt: FieldValue.delete(),
       'execution.leaseToken': FieldValue.delete(),
-      'execution.completedAt': now,
+      'execution.completedAt': FieldValue.delete(),
       'execution.asyncCallbackPending': false,
       'execution.callbackTokenHash': FieldValue.delete(),
       'execution.callbackLeaseToken': FieldValue.delete(),
@@ -216,7 +245,9 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
     });
     transaction.set(queueRef, {
       jobId,
-      status: 'DONE',
+      status: 'PENDING',
+      availableAt: nextAvailableAt,
+      retryCount: FieldValue.increment(1),
       lease: FieldValue.delete(),
       updatedAt: now,
     }, { merge: true });
@@ -242,7 +273,7 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
   await appendJobLog(jobId, {
     level: 'error',
     source: 'executeJob',
-    message: 'Job execution failed.',
+    message: 'Job execution failed; retry or DEAD transition applied by canonical failure policy.',
     metadata: { error: errorMessage },
   });
 
