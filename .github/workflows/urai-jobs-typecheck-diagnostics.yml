@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: urai-jobs-typecheck-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
+  group: urai-jobs-typecheck-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 env:
@@ -67,7 +67,7 @@ jobs:
           name: urai-jobs-checkout-diagnostics-${{ env.TARGET_SHA }}-${{ github.run_id }}
           path: ${{ runner.temp }}/urai-jobs-checkout-diagnostics.log
           if-no-files-found: error
-          retention-days: 365
+          retention-days: 90
 
       - name: Enforce exact checkout result
         shell: bash
@@ -129,7 +129,7 @@ jobs:
           name: urai-jobs-verification-diagnostics-${{ env.TARGET_SHA }}-${{ github.run_id }}
           path: artifacts/ci-diagnostics
           if-no-files-found: error
-          retention-days: 365
+          retention-days: 90
 
       - name: Enforce typecheck and contracts
         shell: bash

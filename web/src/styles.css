@@ -422,3 +422,91 @@ pre {
     margin: 0 0.75rem 0.5rem 0;
   }
 }
+
+
+/* 2026-09-21 internal-runtime visual authority reconciliation */
+:root {
+  color: #eef1f4;
+  background: #0a0c0f;
+}
+
+body {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(214,183,111,.07), transparent 28rem),
+    linear-gradient(180deg, #0a0c0f, #0d1116 54%, #080a0d);
+}
+
+.top-nav {
+  background: rgba(10,12,15,.94);
+  border-bottom-color: rgba(214,183,111,.15);
+  backdrop-filter: none;
+}
+
+.top-nav a { color: #b8c0c9; }
+.top-nav .brand { color: #f3f1ea; }
+
+.hero,
+.panel {
+  border-color: rgba(214,183,111,.16);
+  border-radius: 10px;
+  background: #11161b;
+  box-shadow: 0 22px 70px rgba(0,0,0,.26);
+}
+
+.eyebrow { color: #d6b76f; }
+
+.hero-actions a,
+button {
+  border-color: rgba(214,183,111,.28);
+  border-radius: 8px;
+  background: #171d23;
+  color: #eef1f4;
+}
+
+.cta-button {
+  background: #d6b76f !important;
+  color: #17130b !important;
+  border-color: #d6b76f !important;
+  font-weight: 800;
+}
+
+.status-grid article,
+.notice,
+.feature-item,
+.hero-card {
+  border-color: rgba(148,163,184,.18);
+  border-radius: 8px;
+  background: #11161b;
+}
+
+.call-to-action {
+  border-color: rgba(214,183,111,.2);
+  border-radius: 10px;
+  background: #101419;
+}
+
+.secondary-button {
+  border-radius: 8px;
+  background: #151a20;
+  color: #d8dde3;
+}
+
+input,
+textarea {
+  border-radius: 6px;
+  background: #0c1014;
+}
+
+:where(a,button,input,textarea):focus-visible {
+  outline: 2px solid rgba(246,223,165,.95);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

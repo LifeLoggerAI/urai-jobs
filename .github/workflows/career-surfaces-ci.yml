@@ -34,7 +34,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: urai-jobs-career-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
+  group: urai-jobs-career-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 env:

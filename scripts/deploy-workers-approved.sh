@@ -48,7 +48,7 @@ NODE
 
 required_bindings_json="$(WORKERS_CSV="$WORKERS_CSV" node <<'NODE'
 const workers = String(process.env.WORKERS_CSV || '').split(',').map((value) => value.trim()).filter(Boolean);
-const allowed = new Set(['narrator-worker', 'asset-worker']);
+const allowed = new Set(['narrator-worker', 'asset-worker', 'studio-worker']);
 if (!workers.length || workers.some((worker) => !allowed.has(worker)) || new Set(workers).size !== workers.length) {
   throw new Error('URAI_JOBS_DEPLOY_WORKERS must contain unique approved workers only.');
 }
@@ -121,7 +121,7 @@ prepare_worker_build_source() {
   local archive_path="$WORKER_BUILD_SOURCE_ROOT/$worker-$GITHUB_SHA.tgz"
 
   case "$worker" in
-    narrator-worker|asset-worker) ;;
+    narrator-worker|asset-worker|studio-worker) ;;
     *) echo "[FAIL] Unapproved worker source directory: $source_dir" >&2; return 1 ;;
   esac
   [ "$source_dir" = "$canonical_dir" ] || {

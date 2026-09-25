@@ -71,6 +71,14 @@ if (!preflight.includes('raw service-account JSON is prohibited')) {
   fail('career production preflight does not fail closed on raw service-account JSON');
 }
 
+const launchLock = readFileSync('verification/launch-lock.json', 'utf8');
+if (launchLock.includes('FIREBASE_SERVICE_ACCOUNT_URAI_JOBS')) {
+  fail('launch lock still requires forbidden long-lived Firebase service-account JSON');
+}
+for (const required of ['GCP_WIF_PROVIDER', 'GCP_DEPLOY_SERVICE_ACCOUNT', 'GitHub OIDC -> Google Workload Identity Federation']) {
+  if (!launchLock.includes(required)) fail(`launch lock is missing keyless authority marker ${required}`);
+}
+
 if (failed) {
   throw new Error(`WIF_DEPLOY_AUTH_CONTRACT ${failed} checks failed`);
 }

@@ -54,6 +54,7 @@ const prodEnvExample = read("ops/production.env.example");
 const readme = read("README.md");
 const deployReadiness = read("docs/URAI_JOBS_DEPLOYMENT_READINESS.md");
 const executeJob = read("functions/src/jobs/executeJob.ts");
+const runtimeJobTypes = read("functions/src/core/runtimeJobTypes.ts");
 const smoke = read("scripts/urai-jobs-smoke.mjs");
 
 for (const path of [
@@ -62,6 +63,8 @@ for (const path of [
   "packages/shared-types/package.json",
   "web/package.json",
   "workers/package.json",
+  "workers/captured-reality-worker/index.js",
+  "workers/captured-reality-worker/package.json",
   "scripts/prod-env-precheck.mjs",
   "scripts/managed-worker-precheck.mjs",
   "scripts/verify-custom-domains.mjs",
@@ -127,8 +130,15 @@ for (const envKey of [
   "GCS_BUCKET_NAME=",
   "NARRATOR_WORKER_URL=",
   "ASSET_WORKER_URL=",
-  "SPATIAL_WORKER_URL=",
-  "STUDIO_WORKER_URL="
+  "STUDIO_WORKER_URL=",
+  "COMMUNICATIONS_WORKER_URL=",
+  "PRIVATE_SOURCE_WORKER_URL=",
+  "CAPTURED_REALITY_WORKER_URL=",
+  "CAPTURED_REALITY_WORKER_PUBLIC_URL=",
+  "CAPTURED_REALITY_ENGINE_TOKEN=",
+  "CAPTURED_REALITY_ENGINE_URL=",
+  "PRIVATE_SOURCE_AUTHORITY_TOKEN=",
+  "PRIVATE_SOURCE_AUTHORITY_URL="
 ]) {
   requireIncludes("ops/production.env.example", prodEnvExample, envKey, `env key/origin ${envKey.split("=")[0]}`);
 }
@@ -142,24 +152,35 @@ for (const marker of ["URAI_JOBS_DEPLOY_PRECHECK", "Production", "Firebase", "Cl
 }
 
 for (const marker of [
-  "ASSET_WORKER_URL",
-  "SPATIAL_WORKER_URL",
-  "STUDIO_WORKER_URL",
-  "NARRATOR_WORKER_URL",
-  "asset-render",
-  "spatial-index",
-  "studio-render",
-  "route: '/'",
-  "route: '/execute-job'"
+  "workerEnvKeyForJobType(jobType)",
+  "workerRouteForJobType(jobType)"
 ]) {
-  requireIncludes("functions/src/jobs/executeJob.ts", executeJob, marker, `worker routing marker ${marker}`);
+  requireIncludes("functions/src/jobs/executeJob.ts", executeJob, marker, `canonical routing marker ${marker}`);
 }
 
 for (const marker of [
-  "asset-render routes to asset worker root",
-  "spatial-index routes to spatial worker root",
-  "studio-render routes to studio worker root",
-  "narrator.tts routes to narrator execute endpoint"
+  "NARRATOR_WORKER_URL",
+  "ASSET_WORKER_URL",
+  "STUDIO_WORKER_URL",
+  "COMMUNICATIONS_WORKER_URL",
+  "PRIVATE_SOURCE_WORKER_URL",
+  "'narrator.tts'",
+  "'asset.render'",
+  "'studio.render.video'",
+  "'communications.message.send'",
+  "'memory.private-source.transcribe'",
+  "'memory.private-source.reconstruct-place'",
+  "CAPTURED_REALITY_WORKER_URL"
+]) {
+  requireIncludes("functions/src/core/runtimeJobTypes.ts", runtimeJobTypes, marker, `active runtime registry marker ${marker}`);
+}
+
+for (const marker of [
+  "asset.render routes to asset worker root",
+  "studio.render.video routes to studio worker root",
+  "narrator.tts routes to narrator execute endpoint",
+  "communications.message.send routes to communications execute endpoint",
+  "memory.private-source.transcribe routes to private source execute endpoint"
 ]) {
   requireIncludes("scripts/urai-jobs-smoke.mjs", smoke, marker, `smoke route check ${marker}`);
 }

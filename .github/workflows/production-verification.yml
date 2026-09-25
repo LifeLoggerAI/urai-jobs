@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: urai-jobs-production-verification-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
+  group: urai-jobs-production-verification-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 env:
@@ -30,8 +30,9 @@ jobs:
       WEBHOOK_SIGNING_SECRET: ci-placeholder-webhook-signing-secret
       NARRATOR_WORKER_URL: https://narrator-worker-wkyojbnbiq-uc.a.run.app
       ASSET_WORKER_URL: https://asset-worker-wkyojbnbiq-uc.a.run.app
-      SPATIAL_WORKER_URL: https://spatial-worker-wkyojbnbiq-uc.a.run.app
       STUDIO_WORKER_URL: https://studio-worker-wkyojbnbiq-uc.a.run.app
+      COMMUNICATIONS_WORKER_URL: https://communications-worker.example.invalid
+      PRIVATE_SOURCE_WORKER_URL: https://private-source-worker.example.invalid
       FIREBASE_HOSTING_SITE: urai-jobs-563121397472
 
     steps:

@@ -137,6 +137,15 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  workers/captured-reality-worker:
+    dependencies:
+      express:
+        specifier: ^4.18.3
+        version: 4.22.1
+      firebase-admin:
+        specifier: ^12.1.0
+        version: 12.7.0
+
   workers/career-worker:
     dependencies:
       express:
@@ -154,6 +163,28 @@ importers:
         version: 5.0.10
       typescript:
         specifier: ^5.3.3
+        version: 5.9.3
+
+  workers/private-source-worker:
+    dependencies:
+      axios:
+        specifier: ^1.16.0
+        version: 1.16.0
+      express:
+        specifier: ^4.18.3
+        version: 4.22.1
+    devDependencies:
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      '@types/node':
+        specifier: ^22.19.8
+        version: 22.19.8
+      rimraf:
+        specifier: ^5.0.5
+        version: 5.0.10
+      typescript:
+        specifier: ^5.7.2
         version: 5.9.3
 
   workers/narrator-worker:

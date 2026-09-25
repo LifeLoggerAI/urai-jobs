@@ -22,11 +22,12 @@ Jobs retry until:
 
 ## 2. Dead-letter transition
 
-Move failed jobs into:
+Current runtime representation:
 
-- firestore collection: failedJobs
-- optional GCS archival
-- replay audit log
+- canonical job record remains in `jobs` with `status: DEAD`;
+- corresponding queue record may remain in `jobQueue` with `status: DEAD` until governed cleanup;
+- replay/audit history must be preserved;
+- no separate `failedJobs` collection is current authority.
 
 ## 3. Alerting
 
@@ -52,4 +53,5 @@ Recommended:
 
 - retain failed jobs for 30 days
 - archive artifacts after 7 days
-- auto-purge expired failures
+- scan and report expired DEAD candidates;
+- destructive purge remains governance-hard-off until retention/deletion policy, backup/restore evidence, and legal/privacy approval are certified.

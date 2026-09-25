@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: urai-jobs-runtime-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
+  group: urai-jobs-runtime-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 env:
@@ -20,6 +20,8 @@ env:
   # Prevent firebase-functions params from opening an interactive prompt in CI.
   # This is an emulator-only identity; protected deploys supply the real account.
   URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT: urai-jobs-emulator@demo-urai-jobs.iam.gserviceaccount.com
+  # Emulator-only token for the consent.revoked.v1 HTTP contract.
+  URAI_JOBS_PRIVACY_EVENT_TOKEN: e2e-privacy-event-token
 
 jobs:
   validate:
@@ -157,7 +159,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          printf 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT=%s\n' "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" > functions/.env.demo-urai-jobs
+          printf 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT=%s\nURAI_JOBS_PRIVACY_EVENT_TOKEN=%s\n' "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" "$URAI_JOBS_PRIVACY_EVENT_TOKEN" > functions/.env.demo-urai-jobs
           trap 'rm -f functions/.env.demo-urai-jobs' EXIT
           timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" --project demo-urai-jobs emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
           status=$?

@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: urai-jobs-production-verify-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
+  group: urai-jobs-production-verify-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 env:
@@ -79,7 +79,7 @@ jobs:
           name: urai-jobs-source-mutation-${{ env.TARGET_SHA }}-${{ github.run_id }}
           path: artifacts/source-mutation
           if-no-files-found: error
-          retention-days: 365
+          retention-days: 90
 
       - name: Reject tracked mutation and remove generated output
         if: always()

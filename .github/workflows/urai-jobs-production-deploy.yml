@@ -29,6 +29,15 @@ on:
         description: Exact numeric target versions for all canonical worker secret bindings
         required: true
         type: string
+      include_studio_worker:
+        description: Deploy and bind the provider-free Life Movies Studio render worker
+        required: true
+        default: false
+        type: boolean
+      studio_bridge_secret_version:
+        description: Exact numeric Secret Manager version for URAI_STUDIO_JOBS_BRIDGE_TOKEN
+        required: true
+        type: string
       require_custom_domains:
         description: Require uraijobs.com and www.uraijobs.com checks
         required: true
@@ -60,6 +69,8 @@ jobs:
       INPUT_ROLLBACK_SHA: ${{ inputs.rollback_sha }}
       INPUT_ROLLBACK_FINGERPRINTS: ${{ inputs.rollback_config_fingerprints_json }}
       INPUT_TARGET_SECRET_VERSIONS: ${{ inputs.target_secret_versions_json }}
+      INPUT_INCLUDE_STUDIO_WORKER: ${{ inputs.include_studio_worker }}
+      INPUT_STUDIO_BRIDGE_SECRET_VERSION: ${{ inputs.studio_bridge_secret_version }}
     steps:
       - name: Checkout exact candidate with rollback history
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -95,8 +106,13 @@ jobs:
             if (JSON.stringify(keys) !== JSON.stringify([...required].sort())) throw new Error(`${label} keys must equal ${required.join(', ')}`);
             for (const [key, item] of Object.entries(value)) if (!pattern.test(String(item))) throw new Error(`${label}.${key} is invalid`);
           }
-          exactObject(process.env.INPUT_ROLLBACK_FINGERPRINTS, ['asset-worker', 'narrator-worker'], 'rollback fingerprints', /^[0-9a-f]{64}$/);
+          const includeStudio = process.env.INPUT_INCLUDE_STUDIO_WORKER === 'true';
+          const workers = ['asset-worker', 'narrator-worker', ...(includeStudio ? ['studio-worker'] : [])];
+          exactObject(process.env.INPUT_ROLLBACK_FINGERPRINTS, workers, 'rollback fingerprints', /^[0-9a-f]{64}$/);
           exactObject(process.env.INPUT_TARGET_SECRET_VERSIONS, ['URAI_JOBS_CALLBACK_SECRET', 'URAI_JOBS_WORKER_TOKEN', 'URAI_WHEEL_GITHUB_TOKEN'], 'target secret versions', /^[1-9][0-9]*$/);
+          if (!/^[1-9][0-9]*$/.test(String(process.env.INPUT_STUDIO_BRIDGE_SECRET_VERSION || ''))) {
+            throw new Error('studio_bridge_secret_version must be an exact numeric Secret Manager version');
+          }
           NODE
 
       - name: Setup Node
@@ -207,6 +223,9 @@ jobs:
       URAI_WHEEL_GITHUB_TOKEN_SECRET: urai-wheel-github-token
       URAI_JOBS_CALLBACK_SECRET_NAME: urai-jobs-callback-secret
       URAI_JOBS_TERMINAL_EVENT_TOPIC: job-terminal-events
+      INCLUDE_STUDIO_WORKER: ${{ inputs.include_studio_worker }}
+      APPROVED_STUDIO_BRIDGE_TOKEN_VERSION: ${{ inputs.studio_bridge_secret_version }}
+      URAI_STUDIO_JOBS_BRIDGE_TOKEN_SECRET: URAI_STUDIO_JOBS_BRIDGE_TOKEN
     steps:
       - name: Checkout exact clean mutation authority
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -292,6 +311,9 @@ jobs:
           CONFIG_FALLBACK_SITE: ${{ secrets.FIREBASE_FALLBACK_HOSTING_SITE }}
           CONFIG_RUNTIME_SERVICE_ACCOUNT: ${{ secrets.WORKER_RUNTIME_SERVICE_ACCOUNT }}
           CONFIG_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT: ${{ vars.FIREBASE_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT }}
+          CONFIG_COMMUNICATIONS_WORKER_URL: ${{ vars.COMMUNICATIONS_WORKER_URL }}
+          CONFIG_PRIVATE_SOURCE_WORKER_URL: ${{ vars.PRIVATE_SOURCE_WORKER_URL }}
+          CONFIG_STUDIO_SOURCE_BUCKETS: ${{ vars.URAI_STUDIO_SOURCE_BUCKETS }}
         run: |
           set -euo pipefail
           node - <<'NODE'
@@ -305,9 +327,12 @@ jobs:
             FIREBASE_FALLBACK_HOSTING_SITE: process.env.CONFIG_FALLBACK_SITE || '',
             WORKER_RUNTIME_SERVICE_ACCOUNT: process.env.CONFIG_RUNTIME_SERVICE_ACCOUNT,
             URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT: process.env.CONFIG_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT,
+            COMMUNICATIONS_WORKER_URL: process.env.CONFIG_COMMUNICATIONS_WORKER_URL,
+            PRIVATE_SOURCE_WORKER_URL: process.env.CONFIG_PRIVATE_SOURCE_WORKER_URL,
+            URAI_STUDIO_SOURCE_BUCKETS: process.env.CONFIG_STUDIO_SOURCE_BUCKETS || '',
           };
           for (const [key, value] of Object.entries(values)) {
-            if (key !== 'FIREBASE_FALLBACK_HOSTING_SITE' && !value) throw new Error(`${key} is required`);
+            if (!['FIREBASE_FALLBACK_HOSTING_SITE', 'URAI_STUDIO_SOURCE_BUCKETS'].includes(key) && !value) throw new Error(`${key} is required`);
             if (String(value).includes('\n') || String(value).includes('\r')) throw new Error(`${key} contains a newline`);
           }
           fs.appendFileSync(process.env.GITHUB_ENV, Object.entries(values).map(([key, value]) => `${key}=${value}`).join('\n') + '\n');
@@ -323,11 +348,16 @@ jobs:
           test -n "$FIREBASE_HOSTING_SITE"
           test -n "$WORKER_RUNTIME_SERVICE_ACCOUNT"
           test -n "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT"
+          case "$COMMUNICATIONS_WORKER_URL" in https://*) ;; *) echo "COMMUNICATIONS_WORKER_URL must be credential-free HTTPS" >&2; exit 1 ;; esac
+          case "$PRIVATE_SOURCE_WORKER_URL" in https://*) ;; *) echo "PRIVATE_SOURCE_WORKER_URL must be credential-free HTTPS" >&2; exit 1 ;; esac
           test -n "$DEPLOY_ROLLBACK_CONFIG_FINGERPRINTS_JSON"
           test -n "$DEPLOY_TARGET_SECRET_VERSIONS_JSON"
           gcloud secrets describe "$URAI_JOBS_WORKER_TOKEN_SECRET" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud secrets describe "$URAI_WHEEL_GITHUB_TOKEN_SECRET" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud secrets describe "$URAI_JOBS_CALLBACK_SECRET_NAME" --project "$DEPLOY_PROJECT_ID" >/dev/null
+          gcloud secrets describe "$URAI_STUDIO_JOBS_BRIDGE_TOKEN_SECRET" --project "$DEPLOY_PROJECT_ID" >/dev/null
+          bridge_state="$(gcloud secrets versions describe "$APPROVED_STUDIO_BRIDGE_TOKEN_VERSION" --secret "$URAI_STUDIO_JOBS_BRIDGE_TOKEN_SECRET" --project "$DEPLOY_PROJECT_ID" --format='value(state)')"
+          test "$bridge_state" = "ENABLED"
           gcloud iam service-accounts describe "$WORKER_RUNTIME_SERVICE_ACCOUNT" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud iam service-accounts describe "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud storage buckets describe "gs://${GCS_BUCKET_NAME}" --project "$DEPLOY_PROJECT_ID" >/dev/null
@@ -356,6 +386,31 @@ jobs:
             process.exit(1);
           }
           NODE
+
+          if [ "$INCLUDE_STUDIO_WORKER" = "true" ]; then
+            test -n "$URAI_STUDIO_SOURCE_BUCKETS"
+            IFS=',' read -r -a studio_source_buckets <<< "$URAI_STUDIO_SOURCE_BUCKETS"
+            for source_bucket in "${studio_source_buckets[@]}"; do
+              source_bucket="$(printf '%s' "$source_bucket" | xargs)"
+              test -n "$source_bucket"
+              gcloud storage buckets describe "gs://${source_bucket}" >/dev/null
+              source_policy="$(gcloud storage buckets get-iam-policy "gs://${source_bucket}" --format=json)"
+              POLICY_JSON="$source_policy" EXPECTED_MEMBER="$worker_member" SOURCE_BUCKET="$source_bucket" node <<'NODE'
+              const policy = JSON.parse(process.env.POLICY_JSON || '{}');
+              const member = process.env.EXPECTED_MEMBER;
+              const allowed = new Set(['roles/storage.objectViewer', 'roles/storage.objectAdmin']);
+              const ok = (policy.bindings || []).some((entry) =>
+                allowed.has(entry?.role) &&
+                !entry.condition &&
+                Array.isArray(entry.members) &&
+                entry.members.includes(member));
+              if (!ok) {
+                console.error(`Studio worker runtime identity lacks unconditional read authority on source bucket ${process.env.SOURCE_BUCKET}: ${member}`);
+                process.exit(1);
+              }
+NODE
+            done
+          fi
 
           member="serviceAccount:${URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT}"
           topic_policy="$(gcloud pubsub topics get-iam-policy "$URAI_JOBS_TERMINAL_EVENT_TOPIC" \
@@ -392,6 +447,7 @@ jobs:
           ROLLBACK_CONFIG_RECEIPT_PATH: docs/release-evidence/worker-rollback-config-receipt.json
           DEPLOY_RECEIPT_PATH: docs/release-evidence/worker-deploy-receipt.json
           GITHUB_SHA: ${{ env.TARGET_SHA }}
+          URAI_JOBS_DEPLOY_WORKERS: ${{ inputs.include_studio_worker && 'narrator-worker,asset-worker,studio-worker' || 'narrator-worker,asset-worker' }}
         run: |
           node scripts/verify-rollback-revision.mjs
           bash scripts/deploy-workers-approved.sh
@@ -426,6 +482,8 @@ jobs:
           DEPLOY_SOURCE_SHA: ${{ env.TARGET_SHA }}
           URAI_FIREBASE_PREBUILT_VERIFIED: '1'
           ALLOW_CREATE_HOSTING_SITE: 'false'
+          APPROVED_STUDIO_BRIDGE_TOKEN_VERSION: ${{ env.APPROVED_STUDIO_BRIDGE_TOKEN_VERSION }}
+          URAI_STUDIO_JOBS_BRIDGE_TOKEN_SECRET: ${{ env.URAI_STUDIO_JOBS_BRIDGE_TOKEN_SECRET }}
         run: bash scripts/deploy-firebase.sh "$INPUT_TARGET"
 
       - name: Write mutation receipt before credential cleanup
@@ -444,6 +502,10 @@ jobs:
             rollbackSha: process.env.ROLLBACK_SHA,
             rollbackConfigFingerprints: JSON.parse(process.env.DEPLOY_ROLLBACK_CONFIG_FINGERPRINTS_JSON),
             targetSecretVersions: JSON.parse(process.env.DEPLOY_TARGET_SECRET_VERSIONS_JSON),
+            studioBridgeSecretVersion: process.env.APPROVED_STUDIO_BRIDGE_TOKEN_VERSION,
+            deployWorkers: process.env.INCLUDE_STUDIO_WORKER === 'true'
+              ? ['narrator-worker', 'asset-worker', 'studio-worker']
+              : ['narrator-worker', 'asset-worker'],
             environment: process.env.INPUT_TARGET,
             project: process.env.DEPLOY_PROJECT_ID,
             region: process.env.GCP_REGION,
@@ -481,7 +543,7 @@ jobs:
           name: urai-jobs-mutation-${{ inputs.target }}-${{ github.sha }}
           path: docs/release-evidence/
           if-no-files-found: error
-          retention-days: 365
+          retention-days: 90
 
   public-verify:
     name: Public verification without cloud identity
@@ -495,6 +557,7 @@ jobs:
       ROLLBACK_SHA: ${{ inputs.rollback_sha }}
       INPUT_TARGET: ${{ inputs.target }}
       REQUIRE_CUSTOM_DOMAINS: ${{ inputs.require_custom_domains }}
+      REQUIRE_STUDIO_WORKER: ${{ inputs.include_studio_worker }}
     steps:
       - name: Checkout exact verified source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -548,19 +611,31 @@ jobs:
           if (input.paidProviderSmokeAuthorized !== false || input.paidProviderCalls !== 0) failures.push('paid-provider boundary');
           if (input.mutationCompleted !== true || input.publicVerificationCompleted !== false) failures.push('phase state');
           const services = new Map((worker.services || []).map((service) => [service.worker, service]));
+          const expectedWorkers = process.env.REQUIRE_STUDIO_WORKER === 'true'
+            ? ['narrator-worker', 'asset-worker', 'studio-worker']
+            : ['narrator-worker', 'asset-worker'];
+          if (JSON.stringify([...services.keys()].sort()) !== JSON.stringify([...expectedWorkers].sort())) failures.push('canonical worker set');
           const narrator = services.get('narrator-worker');
           const asset = services.get('asset-worker');
-          if (services.size !== 2 || !narrator || !asset) failures.push('canonical worker set');
-          for (const service of [narrator, asset].filter(Boolean)) if (!String(service.serviceUrl || '').startsWith('https://')) failures.push(`${service.worker} URL`);
-          if (firebase.narratorWorkerUrl !== narrator?.serviceUrl || firebase.assetWorkerUrl !== asset?.serviceUrl) failures.push('Firebase worker URL binding');
+          const studio = services.get('studio-worker');
+          for (const name of expectedWorkers) {
+            const service = services.get(name);
+            if (!String(service?.serviceUrl || '').startsWith('https://')) failures.push(`${name} URL`);
+          }
+          if (firebase.narratorWorkerUrl !== narrator?.serviceUrl || firebase.assetWorkerUrl !== asset?.serviceUrl) failures.push('Firebase core worker URL binding');
+          if (!String(firebase.communicationsWorkerUrl || '').startsWith('https://')) failures.push('Firebase Communications worker URL binding');
+          if (!String(firebase.privateSourceWorkerUrl || '').startsWith('https://')) failures.push('Firebase private-source worker URL binding');
+          if (process.env.REQUIRE_STUDIO_WORKER === 'true' && firebase.studioWorkerUrl !== studio?.serviceUrl) failures.push('Firebase Studio worker URL binding');
           if (!input.hostingSite || firebase.hostingSite !== input.hostingSite) failures.push('hosting site');
           if (failures.length) throw new Error(`Mutation evidence mismatch: ${failures.join(', ')}`);
-          fs.appendFileSync(process.env.GITHUB_ENV, [
+          const envLines = [
             `NARRATOR_WORKER_URL=${narrator.serviceUrl}`,
             `ASSET_WORKER_URL=${asset.serviceUrl}`,
+            ...(studio ? [`STUDIO_WORKER_URL=${studio.serviceUrl}`] : []),
             `FIREBASE_HOSTING_SITE=${input.hostingSite}`,
             `FIREBASE_PROJECT_ID=${input.project}`,
-          ].join('\n') + '\n');
+          ];
+          fs.appendFileSync(process.env.GITHUB_ENV, envLines.join('\n') + '\n');
           NODE
 
       - name: Verify canonical worker health publicly
@@ -617,4 +692,4 @@ jobs:
           name: urai-jobs-public-verification-${{ inputs.target }}-${{ github.sha }}
           path: docs/release-evidence/
           if-no-files-found: error
-          retention-days: 365
+          retention-days: 90

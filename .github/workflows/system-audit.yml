@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: urai-jobs-system-audit-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
+  group: urai-jobs-system-audit-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 env:
@@ -88,7 +88,7 @@ jobs:
           name: urai-jobs-system-audit-${{ env.TARGET_SHA }}-${{ github.run_id }}
           path: artifacts/system-audit
           if-no-files-found: error
-          retention-days: 365
+          retention-days: 90
 
       - name: Enforce system audit
         shell: bash
