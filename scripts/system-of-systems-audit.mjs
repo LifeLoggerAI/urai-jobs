@@ -63,6 +63,8 @@ for (const path of [
   "packages/shared-types/package.json",
   "web/package.json",
   "workers/package.json",
+  "workers/captured-reality-worker/index.js",
+  "workers/captured-reality-worker/package.json",
   "scripts/prod-env-precheck.mjs",
   "scripts/managed-worker-precheck.mjs",
   "scripts/verify-custom-domains.mjs",
@@ -130,7 +132,13 @@ for (const envKey of [
   "ASSET_WORKER_URL=",
   "STUDIO_WORKER_URL=",
   "COMMUNICATIONS_WORKER_URL=",
-  "PRIVATE_SOURCE_WORKER_URL="
+  "PRIVATE_SOURCE_WORKER_URL=",
+  "CAPTURED_REALITY_WORKER_URL=",
+  "CAPTURED_REALITY_WORKER_PUBLIC_URL=",
+  "CAPTURED_REALITY_ENGINE_TOKEN=",
+  "CAPTURED_REALITY_ENGINE_URL=",
+  "PRIVATE_SOURCE_AUTHORITY_TOKEN=",
+  "PRIVATE_SOURCE_AUTHORITY_URL="
 ]) {
   requireIncludes("ops/production.env.example", prodEnvExample, envKey, `env key/origin ${envKey.split("=")[0]}`);
 }
@@ -160,7 +168,9 @@ for (const marker of [
   "'asset.render'",
   "'studio.render.video'",
   "'communications.message.send'",
-  "'memory.private-source.transcribe'"
+  "'memory.private-source.transcribe'",
+  "'memory.private-source.reconstruct-place'",
+  "CAPTURED_REALITY_WORKER_URL"
 ]) {
   requireIncludes("functions/src/core/runtimeJobTypes.ts", runtimeJobTypes, marker, `active runtime registry marker ${marker}`);
 }
