@@ -104,23 +104,49 @@ app.post('/execute-job',requireWorkerAuth,async(req,res)=>{
   const callbackToken=crypto.randomBytes(32).toString('hex');
   const callbackTokenHash=crypto.createHash('sha256').update(callbackToken).digest('hex');
   const deadline=admin.firestore.Timestamp.fromMillis(Date.now()+callbackTimeoutMs);
+  let callbackAuthorityRegistered=false;
   try{
-    await db.runTransaction(async tx=>{
-      const snap=await tx.get(jobRef); const current=snap.exists?snap.data():null;
-      if(!current||current.status!=='RUNNING'||current.execution?.leaseToken!==job.leaseToken) throw new Error('stale job or lease');
-      tx.update(jobRef,{'progress.percent':10,'progress.stage':'CAPTURED_REALITY_AUTHORIZE','execution.asyncCallbackPending':true,'execution.callbackTokenHash':callbackTokenHash,'execution.callbackLeaseToken':job.leaseToken,'execution.callbackDeadlineAt':deadline,'lease.heartbeatAt':admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
-      tx.set(queueRef,{jobId:job.jobId,status:'RUNNING','lease.heartbeatAt':admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
-    });
+    const initial=await jobRef.get();
+    const current=initial.exists?initial.data():null;
+    if(!current||current.status!=='RUNNING'||current.execution?.leaseToken!==job.leaseToken) throw new Error('stale job or lease');
+
+    // Source authorization happens before callback authority exists. A denial is
+    // therefore a definitive dispatch failure and can safely terminalize upstream.
     const sourceHandles=await authorizeSources(job);
     const engineUrl=safeHttps('CAPTURED_REALITY_ENGINE_URL');
     const callbackUrl=`${publicBaseUrl(req)}/engine-callback?callbackToken=${encodeURIComponent(callbackToken)}`;
-    const engine=await fetch(`${engineUrl}/reconstruct`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${process.env.CAPTURED_REALITY_ENGINE_TOKEN}`},body:JSON.stringify({jobId:job.jobId,sourceHandles,reconstructionMethod:job.payload.reconstructionMethod,spatialAuthorityHead:job.payload.spatialAuthorityHead,studioProjectRef:job.payload.studioProjectRef,assetFactoryGovernanceRef:job.payload.assetFactoryGovernanceRef,callbackUrl})});
+
+    await db.runTransaction(async tx=>{
+      const snap=await tx.get(jobRef); const active=snap.exists?snap.data():null;
+      if(!active||active.status!=='RUNNING'||active.execution?.leaseToken!==job.leaseToken) throw new Error('stale job or lease');
+      tx.update(jobRef,{'progress.percent':15,'progress.stage':'CAPTURED_REALITY_DISPATCH','execution.asyncCallbackPending':true,'execution.callbackTokenHash':callbackTokenHash,'execution.callbackLeaseToken':job.leaseToken,'execution.callbackDeadlineAt':deadline,'lease.heartbeatAt':admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
+      tx.set(queueRef,{jobId:job.jobId,status:'RUNNING','lease.heartbeatAt':admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+    });
+    callbackAuthorityRegistered=true;
+
+    let engine;
+    try{
+      engine=await fetch(`${engineUrl}/reconstruct`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${process.env.CAPTURED_REALITY_ENGINE_TOKEN}`},body:JSON.stringify({jobId:job.jobId,sourceHandles,reconstructionMethod:job.payload.reconstructionMethod,spatialAuthorityHead:job.payload.spatialAuthorityHead,studioProjectRef:job.payload.studioProjectRef,assetFactoryGovernanceRef:job.payload.assetFactoryGovernanceRef,callbackUrl})});
+    }catch(error){
+      // Transport loss after dispatch is ambiguous: the engine may have accepted
+      // the request. Preserve callback authority and let the callback/reconciler
+      // resolve the attempt instead of double-dispatching or false-failing it.
+      console.error(JSON.stringify({event:'captured-reality.dispatch.ambiguous',jobId:job.jobId,error:error instanceof Error?error.message:String(error)}));
+      return res.status(202).send({ok:true,accepted:true,callbackPending:true,jobId:job.jobId,status:'RUNNING',callbackDeadlineAt:deadline.toDate().toISOString(),warning:'Reconstruction dispatch response was ambiguous; callback authority remains active.'});
+    }
+
     const data=await engine.json().catch(()=>({}));
-    if(!engine.ok||data.accepted!==true) throw new Error(`reconstruction engine rejected dispatch status ${engine.status}`);
+    if(!engine.ok||data.accepted!==true){
+      // A concrete non-acceptance response is definitive. Remove callback
+      // authority so the Jobs executor can mark this attempt failed.
+      await jobRef.update({'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
+      callbackAuthorityRegistered=false;
+      throw new Error(`reconstruction engine rejected dispatch status ${engine.status}`);
+    }
     await jobRef.update({'progress.percent':20,'progress.stage':'CAPTURED_REALITY_RECONSTRUCT','progress.message':'Private reconstruction engine accepted opaque source handles',updatedAt:admin.firestore.FieldValue.serverTimestamp()});
     return res.status(202).send({ok:true,accepted:true,jobId:job.jobId,status:'RUNNING',callbackDeadlineAt:deadline.toDate().toISOString()});
   }catch(error){
-    console.error(JSON.stringify({event:'captured-reality.dispatch.failed',jobId:job.jobId,error:error instanceof Error?error.message:String(error)}));
+    console.error(JSON.stringify({event:'captured-reality.dispatch.failed',jobId:job.jobId,callbackAuthorityRegistered,error:error instanceof Error?error.message:String(error)}));
     return res.status(502).send({ok:false,error:'Captured Reality dispatch failed.'});
   }
 });
