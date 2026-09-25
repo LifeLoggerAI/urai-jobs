@@ -9,6 +9,8 @@ set -euo pipefail
 : "${URAI_JOBS_WORKER_TOKEN_SECRET:=urai-jobs-worker-token}"
 : "${URAI_WHEEL_GITHUB_TOKEN_SECRET:=urai-wheel-github-token}"
 : "${URAI_JOBS_CALLBACK_SECRET_NAME:=urai-jobs-callback-secret}"
+: "${PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET:=urai-private-source-authority-token}"
+: "${CAPTURED_REALITY_ENGINE_TOKEN_SECRET:=urai-captured-reality-engine-token}"
 : "${GITHUB_SHA:?GITHUB_SHA must contain the verified deployment source SHA}"
 : "${DEPLOY_ROLLBACK_SHA:?DEPLOY_ROLLBACK_SHA must contain the approved rollback source SHA}"
 
@@ -52,7 +54,7 @@ esac
 
 for worker in "${WORKERS[@]}"; do
   case "$worker" in
-    narrator-worker|asset-worker|studio-worker) ;;
+    narrator-worker|asset-worker|studio-worker|captured-reality-worker) ;;
     spatial-worker|career-worker)
       echo "[FAIL] $worker is incomplete and is intentionally excluded from production deployment" >&2
       exit 1
@@ -75,6 +77,20 @@ for (const bucket of buckets) {
 NODE
 fi
 
+if [[ ",$WORKERS_CSV," == *",captured-reality-worker,"* ]]; then
+  : "${PRIVATE_SOURCE_AUTHORITY_URL:?captured-reality-worker requires PRIVATE_SOURCE_AUTHORITY_URL}"
+  : "${CAPTURED_REALITY_ENGINE_URL:?captured-reality-worker requires CAPTURED_REALITY_ENGINE_URL}"
+  PRIVATE_SOURCE_AUTHORITY_URL="$PRIVATE_SOURCE_AUTHORITY_URL" CAPTURED_REALITY_ENGINE_URL="$CAPTURED_REALITY_ENGINE_URL" node <<'NODE'
+for (const [name, raw] of Object.entries({
+  PRIVATE_SOURCE_AUTHORITY_URL: process.env.PRIVATE_SOURCE_AUTHORITY_URL,
+  CAPTURED_REALITY_ENGINE_URL: process.env.CAPTURED_REALITY_ENGINE_URL,
+})) {
+  const url = new URL(String(raw || ''));
+  if (url.protocol !== 'https:' || !url.hostname) throw new Error(`${name} must be a real HTTPS URL`);
+}
+NODE
+fi
+
 [ -f "$ROLLBACK_CONFIG_RECEIPT_PATH" ] || {
   echo "[FAIL] Approved rollback configuration receipt is missing: $ROLLBACK_CONFIG_RECEIPT_PATH" >&2
   exit 1
@@ -85,6 +101,9 @@ required_secrets=("$URAI_JOBS_WORKER_TOKEN_SECRET")
 for worker in "${WORKERS[@]}"; do
   if [ "$worker" = "asset-worker" ]; then
     required_secrets+=("$URAI_WHEEL_GITHUB_TOKEN_SECRET" "$URAI_JOBS_CALLBACK_SECRET_NAME")
+  fi
+  if [ "$worker" = "captured-reality-worker" ]; then
+    required_secrets+=("$PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET" "$CAPTURED_REALITY_ENGINE_TOKEN_SECRET")
   fi
 done
 
@@ -177,11 +196,17 @@ build_secret_versions_json() {
   WORKER_TOKEN_VERSION="${SECRET_VERSION_IDS[$URAI_JOBS_WORKER_TOKEN_SECRET]}" \
   WHEEL_TOKEN_VERSION="${SECRET_VERSION_IDS[$URAI_WHEEL_GITHUB_TOKEN_SECRET]:-}" \
   CALLBACK_SECRET_VERSION="${SECRET_VERSION_IDS[$URAI_JOBS_CALLBACK_SECRET_NAME]:-}" \
+  PRIVATE_SOURCE_AUTHORITY_TOKEN_VERSION="${SECRET_VERSION_IDS[$PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET]:-}" \
+  CAPTURED_REALITY_ENGINE_TOKEN_VERSION="${SECRET_VERSION_IDS[$CAPTURED_REALITY_ENGINE_TOKEN_SECRET]:-}" \
   node <<'NODE'
 const versions = { URAI_JOBS_WORKER_TOKEN: process.env.WORKER_TOKEN_VERSION };
 if (process.env.WORKER === 'asset-worker') {
   versions.URAI_WHEEL_GITHUB_TOKEN = process.env.WHEEL_TOKEN_VERSION;
   versions.URAI_JOBS_CALLBACK_SECRET = process.env.CALLBACK_SECRET_VERSION;
+}
+if (process.env.WORKER === 'captured-reality-worker') {
+  versions.PRIVATE_SOURCE_AUTHORITY_TOKEN = process.env.PRIVATE_SOURCE_AUTHORITY_TOKEN_VERSION;
+  versions.CAPTURED_REALITY_ENGINE_TOKEN = process.env.CAPTURED_REALITY_ENGINE_TOKEN_VERSION;
 }
 process.stdout.write(JSON.stringify(versions));
 NODE
@@ -276,6 +301,8 @@ if (String(revision?.spec?.serviceAccountName || '') !== process.env.EXPECTED_SE
 if (observedValues.URAI_ENV !== process.env.EXPECTED_ENVIRONMENT) failures.push('revision URAI_ENV mismatch');
 if (observedValues.GCS_BUCKET_NAME !== process.env.EXPECTED_BUCKET) failures.push('revision GCS_BUCKET_NAME mismatch');
 if (process.env.EXPECTED_STUDIO_SOURCE_BUCKETS && observedValues.URAI_STUDIO_SOURCE_BUCKETS !== process.env.EXPECTED_STUDIO_SOURCE_BUCKETS) failures.push('revision URAI_STUDIO_SOURCE_BUCKETS mismatch');
+if (process.env.EXPECTED_PRIVATE_SOURCE_AUTHORITY_URL && observedValues.PRIVATE_SOURCE_AUTHORITY_URL !== process.env.EXPECTED_PRIVATE_SOURCE_AUTHORITY_URL) failures.push('revision PRIVATE_SOURCE_AUTHORITY_URL mismatch');
+if (process.env.EXPECTED_CAPTURED_REALITY_ENGINE_URL && observedValues.CAPTURED_REALITY_ENGINE_URL !== process.env.EXPECTED_CAPTURED_REALITY_ENGINE_URL) failures.push('revision CAPTURED_REALITY_ENGINE_URL mismatch');
 if (normalizeDigest(revision?.status?.imageDigest) !== normalizeDigest(process.env.EXPECTED_IMAGE_DIGEST)) failures.push('revision image digest mismatch');
 if (failures.length) {
   console.error(`[FAIL] Deployed revision configuration mismatch:\n- ${failures.join('\n- ')}`);
@@ -454,6 +481,10 @@ deploy_worker() {
     env_vars="$env_vars,ASSET_FACTORY_REPO=LifeLoggerAI/asset-factory"
     secret_vars="$secret_vars,URAI_WHEEL_GITHUB_TOKEN=${URAI_WHEEL_GITHUB_TOKEN_SECRET}:${SECRET_VERSION_IDS[$URAI_WHEEL_GITHUB_TOKEN_SECRET]},URAI_JOBS_CALLBACK_SECRET=${URAI_JOBS_CALLBACK_SECRET_NAME}:${SECRET_VERSION_IDS[$URAI_JOBS_CALLBACK_SECRET_NAME]}"
   fi
+  if [ "$worker" = "captured-reality-worker" ]; then
+    env_vars="$env_vars,PRIVATE_SOURCE_AUTHORITY_URL=$PRIVATE_SOURCE_AUTHORITY_URL,CAPTURED_REALITY_ENGINE_URL=$CAPTURED_REALITY_ENGINE_URL"
+    secret_vars="$secret_vars,PRIVATE_SOURCE_AUTHORITY_TOKEN=${PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET}:${SECRET_VERSION_IDS[$PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET]},CAPTURED_REALITY_ENGINE_TOKEN=${CAPTURED_REALITY_ENGINE_TOKEN_SECRET}:${SECRET_VERSION_IDS[$CAPTURED_REALITY_ENGINE_TOKEN_SECRET]}"
+  fi
   [[ "$secret_vars" != *":latest"* ]] || {
     echo "[FAIL] [$worker] Mutable Secret Manager aliases are forbidden in deployed revisions" >&2
     exit 1
@@ -466,6 +497,11 @@ deploy_worker() {
     worker_memory="2Gi"
     worker_concurrency="2"
     worker_timeout="3600"
+  fi
+  if [ "$worker" = "captured-reality-worker" ]; then
+    worker_memory="512Mi"
+    worker_concurrency="10"
+    worker_timeout="300"
   fi
 
   echo "[INFO] [$worker] Deploying immutable digest with revision-bound source identity and exact Secret Manager versions"
@@ -512,6 +548,8 @@ deploy_worker() {
   secret_versions_json="$(build_secret_versions_json "$worker")"
   revision_json="$(gcloud run revisions describe "$revision" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format=json)"
   EXPECTED_STUDIO_SOURCE_BUCKETS="$([ "$worker" = "studio-worker" ] && printf '%s' "$URAI_STUDIO_SOURCE_BUCKETS" || true)" \
+  EXPECTED_PRIVATE_SOURCE_AUTHORITY_URL="$([ "$worker" = "captured-reality-worker" ] && printf '%s' "$PRIVATE_SOURCE_AUTHORITY_URL" || true)" \
+  EXPECTED_CAPTURED_REALITY_ENGINE_URL="$([ "$worker" = "captured-reality-worker" ] && printf '%s' "$CAPTURED_REALITY_ENGINE_URL" || true)" \
   verify_revision_configuration "$revision_json" "$secret_versions_json" "$build_image_digest"
   labels_json="$(revision_labels_json "$revision_json")"
   worker_token="$(gcloud secrets versions access "$worker_token_version" --secret "$URAI_JOBS_WORKER_TOKEN_SECRET" --project "$GCLOUD_PROJECT")"
