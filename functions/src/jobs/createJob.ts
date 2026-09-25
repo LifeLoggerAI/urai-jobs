@@ -27,6 +27,17 @@ const PrivateSourcePayloadSchema = z.object({
   requestReceipt: z.string().trim().regex(/^req_[A-Za-z0-9_-]{12,128}$/).optional(),
 }).strict();
 
+const CapturedRealityReconstructionPayloadSchema = z.object({
+  sourceReceiptRefs: z.array(z.string().trim().min(8).max(256).regex(/^[A-Za-z0-9._:-]+$/)).min(1).max(32),
+  studioProjectRef: z.string().trim().min(8).max(256).regex(/^[A-Za-z0-9._:-]+$/),
+  assetFactoryGovernanceRef: z.string().trim().min(8).max(256).regex(/^[A-Za-z0-9._:-]+$/),
+  spatialAuthorityHead: z.string().trim().regex(/^[0-9a-f]{40}$/),
+  reconstructionMethod: z.enum(['3dgs', 'photogrammetry', 'nerf-derived', 'hybrid']),
+  requestedPurpose: z.literal('reconstruct-place'),
+  providerSpendAuthorized: z.literal(false),
+  publicReleaseAuthorized: z.literal(false),
+}).strict();
+
 const CommunicationsMessagePayloadSchema = z.object({
   channel: z.literal('email').default('email'),
   templateId: z.string().trim().min(6).max(128).regex(/^template_[A-Za-z0-9_-]+$/),
@@ -37,7 +48,7 @@ const CommunicationsMessagePayloadSchema = z.object({
 
 
 function isPrivateSourceJobType(jobType: string): boolean {
-  return jobType === 'memory.private-source.transcribe';
+  return jobType === 'memory.private-source.transcribe' || jobType === 'memory.private-source.reconstruct-place';
 }
 
 const JobConsentSchema = z.object({
@@ -51,6 +62,7 @@ const CreateJobSchema = z.object({
   payload: z.record(z.any()),
   idempotencyKey: z.string().trim().min(1).max(160).optional(),
   consent: JobConsentSchema.optional(),
+  consents: z.array(JobConsentSchema).min(1).max(8).optional(),
 });
 
 function payloadSizeBytes(payload: unknown): number {
@@ -125,21 +137,26 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     throw httpsError('invalid-argument', 'Invalid job data.', validationResult.error.flatten());
   }
 
-  const { jobType, payload, idempotencyKey, consent } = validationResult.data;
+  const { jobType, payload, idempotencyKey, consent, consents } = validationResult.data;
   const canonicalConsent: JobConsentContext | undefined = consent ? {
     purpose: consent.purpose,
     policyVersion: consent.policyVersion,
     decisionReceiptId: consent.decisionReceiptId,
   } : undefined;
+  const canonicalConsents: JobConsentContext[] | undefined = consents?.map((entry) => ({
+    purpose: entry.purpose,
+    policyVersion: entry.policyVersion,
+    decisionReceiptId: entry.decisionReceiptId,
+  }));
   if (!isActiveRuntimeJobType(jobType)) {
     throw httpsError('invalid-argument', `Unsupported or inactive job type: ${jobType}`);
   }
 
-  if (isPrivateSourceJobType(jobType)) {
+  if (jobType === 'memory.private-source.transcribe') {
     if (!consent) {
       throw httpsError(
         'failed-precondition',
-        'Private-source jobs require canonical consent context: purpose, policy version, and decision receipt.'
+        'Private-source transcription requires canonical consent context: purpose, policy version, and decision receipt.'
       );
     }
     const privateSource = PrivateSourcePayloadSchema.safeParse(payload);
@@ -148,6 +165,24 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
         'invalid-argument',
         'Private-source jobs require an opaque sourceReceiptRef and purpose-only payload; raw media URLs, transcript text, identities, addresses, and arbitrary fields are rejected.',
         privateSource.error.flatten()
+      );
+    }
+  }
+
+  if (jobType === 'memory.private-source.reconstruct-place') {
+    const reconstruction = CapturedRealityReconstructionPayloadSchema.safeParse(payload);
+    if (!reconstruction.success) {
+      throw httpsError(
+        'invalid-argument',
+        'Captured Reality reconstruction accepts opaque receipt/project/governance references only; raw media URLs, exact addresses, identities, provider authorization, and public-release authorization are rejected.',
+        reconstruction.error.flatten()
+      );
+    }
+    const purposes = new Set((canonicalConsents || []).map((entry) => entry.purpose));
+    if (purposes.size !== 2 || !purposes.has('memory.storage') || !purposes.has('location.context')) {
+      throw httpsError(
+        'failed-precondition',
+        'Captured Reality reconstruction requires exactly memory.storage and location.context consent receipts.'
       );
     }
   }
@@ -215,7 +250,9 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   const db = getFirestore();
   const fingerprintPayload = communicationsJob
     ? { payload, tenantId }
-    : payload;
+    : jobType === 'memory.private-source.reconstruct-place'
+      ? { payload, consents: canonicalConsents }
+      : payload;
   const requestFingerprint = buildRequestFingerprint(jobType, fingerprintPayload);
   const expectedBinding = { ownerUid: uid, jobType, requestFingerprint };
   const bindingRef = idempotencyKey
@@ -242,6 +279,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     payload,
     ownerUid: uid,
     ...(canonicalConsent ? { consent: canonicalConsent } : {}),
+    ...(canonicalConsents ? { consents: canonicalConsents } : {}),
     ...(orgId ? { orgId } : {}),
     ...(tenantId ? { tenantId } : {}),
     retryCount: 0,
