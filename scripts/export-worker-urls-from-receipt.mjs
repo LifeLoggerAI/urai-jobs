@@ -11,6 +11,7 @@ const allowedWorkers = new Map([
   ['narrator-worker', 'NARRATOR_WORKER_URL'],
   ['asset-worker', 'ASSET_WORKER_URL'],
   ['studio-worker', 'STUDIO_WORKER_URL'],
+  ['private-source-worker', 'PRIVATE_SOURCE_WORKER_URL'],
 ]);
 
 if (!fs.existsSync(receiptPath)) throw new Error(`Worker deploy receipt is missing: ${receiptPath}`);
