@@ -40,6 +40,12 @@ const JobExecutionMessageSchema = z.object({
   leaseToken: z.string().min(1),
 });
 
+function jobConsentContexts(job: Job) {
+  const contexts = Array.isArray(job.consents) ? job.consents.filter(isConsentContext) : []
+  if (contexts.length > 0) return contexts
+  return isConsentContext(job.consent) ? [job.consent] : []
+}
+
 function getJobType(job: Job): string {
   return String(job.type || job.jobType || '');
 }
@@ -65,7 +71,7 @@ function normalizedEnv(): string {
 }
 
 function inlineFallbackAllowed(jobType?: string): boolean {
-  if (jobType === 'memory.private-source.transcribe') return false;
+  if (jobType === 'memory.private-source.transcribe' || jobType === 'memory.private-source.reconstruct-place') return false;
   if (PRODUCTION_ENVS.has(normalizedEnv())) return false;
   return process.env.URAI_JOBS_ALLOW_INLINE_FALLBACK === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
 }
@@ -276,10 +282,15 @@ export const executeJob = onMessagePublished({
       return decision;
     }
 
-    if (job.ownerUid && isConsentContext(job.consent)) {
-      const blockSnapshot = await transaction.get(consentBlockRef(job.ownerUid, job.consent.purpose));
-      const block = blockSnapshot.exists ? blockSnapshot.data() : null;
-      if (block?.active === true) {
+    const consentContexts = jobConsentContexts(job);
+    if (job.ownerUid && consentContexts.length > 0) {
+      const blockSnapshots = await Promise.all(
+        consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
+      );
+      const blockedPurpose = blockSnapshots
+        .map((snapshot, index) => ({ snapshot, purpose: consentContexts[index].purpose }))
+        .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
+      if (blockedPurpose) {
         const now = FieldValue.serverTimestamp();
         transaction.update(jobRef, {
           status: 'CANCELLED',
@@ -349,9 +360,15 @@ export const executeJob = onMessagePublished({
     let result: unknown;
 
     if (target) {
-      if (job.ownerUid && isConsentContext(job.consent)) {
-        const blockSnapshot = await consentBlockRef(job.ownerUid, job.consent.purpose).get();
-        if (blockSnapshot.exists && blockSnapshot.data()?.active === true) {
+      const dispatchConsentContexts = jobConsentContexts(job);
+      if (job.ownerUid && dispatchConsentContexts.length > 0) {
+        const blockSnapshots = await Promise.all(
+          dispatchConsentContexts.map((context) => consentBlockRef(job.ownerUid!, context.purpose).get())
+        );
+        const blockedPurpose = blockSnapshots
+          .map((snapshot, index) => ({ snapshot, purpose: dispatchConsentContexts[index].purpose }))
+          .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
+        if (blockedPurpose) {
           const now = FieldValue.serverTimestamp();
           await db.runTransaction(async (transaction) => {
             const currentSnapshot = await transaction.get(jobRef);
@@ -376,8 +393,8 @@ export const executeJob = onMessagePublished({
           await appendJobLog(jobId, {
             level: 'warn',
             source: 'executeJob',
-            message: 'Worker dispatch blocked because consent was revoked.',
-            metadata: { jobType, consentPurpose: job.consent.purpose },
+            message: 'Worker dispatch blocked because required consent was revoked.',
+            metadata: { jobType, consentPurpose: blockedPurpose },
           });
           return;
         }
