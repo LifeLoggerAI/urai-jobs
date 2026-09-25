@@ -18,12 +18,13 @@ for(const marker of [
   "captured-reality.dispatch.ambiguous",
   "callback authority remains active",
   "execution.asyncCallbackPending':false",
-  "Captured Reality consent revoked:",
+  "callback rejected because consent was revoked:",
   "location.context",
   "memory.storage",
   "jobConsentBlocks",
-  "required consent receipts missing from active job",
+  "function consentBlockId(ownerUid,purpose)",
   "CAPTURED_REALITY_WORKER_PUBLIC_URL must use HTTPS outside local/test",
+  "captured reality callback origin must use HTTPS outside local/test",
 ]) assert.ok(worker.includes(marker), marker);
 assert.ok(!worker.includes('rawMediaUrl'));
 assert.ok(!worker.includes('drive.google.com'));
@@ -34,3 +35,5 @@ assert.match(worker,/reconstruction engine rejected dispatch status/);
 assert.match(worker,/status\('SUCCESS'\)|status:'SUCCESS'/);
 assert.match(worker,/status:'FAILED'/);
 console.log('[PASS] captured reality worker adapter contract');
+
+assert.ok(worker.includes('const revokedPurpose=await revokedConsentPurpose(job)'));
