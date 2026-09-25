@@ -17,6 +17,7 @@ const active = [
   'studio.render.video',
   'communications.message.send',
   'memory.private-source.transcribe',
+  'memory.historical-context.import',
 ];
 
 for (const type of active) {
@@ -44,7 +45,8 @@ check('executeJob broad worker env prefix routing removed', !/getWorkerEnvKey[\s
 check('executeJob contains no broad jobType prefix fallback', !executeJob.includes("jobType.startsWith("));
 check('implicit narrator default removed', !executeJob.includes("job.jobType || 'narrator.tts'"));
 check('communications remains exact-type admission', runtime.includes("'communications.message.send'"));
-check('private-source remains exact-type admission', runtime.includes("'memory.private-source.transcribe'"));
+check('private-source transcription remains exact-type admission', runtime.includes("'memory.private-source.transcribe'"));
+check('historical-context import is exact-type admission', runtime.includes("'memory.historical-context.import'"));
 
 if (failures) {
   throw new Error(`RUNTIME_JOB_ADMISSION_CONTRACT ${failures} checks failed`);
