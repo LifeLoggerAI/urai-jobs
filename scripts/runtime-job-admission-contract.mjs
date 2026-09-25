@@ -17,6 +17,7 @@ const active = [
   'studio.render.video',
   'communications.message.send',
   'memory.private-source.transcribe',
+  'memory.private-source.reconstruct-place',
 ];
 
 for (const type of active) {
@@ -45,6 +46,9 @@ check('executeJob contains no broad jobType prefix fallback', !executeJob.includ
 check('implicit narrator default removed', !executeJob.includes("job.jobType || 'narrator.tts'"));
 check('communications remains exact-type admission', runtime.includes("'communications.message.send'"));
 check('private-source remains exact-type admission', runtime.includes("'memory.private-source.transcribe'"));
+check('captured-reality reconstruction is exact-type admission', runtime.includes("'memory.private-source.reconstruct-place'"));
+check('captured-reality worker is dedicated', runtime.includes("workerEnvKey: 'CAPTURED_REALITY_WORKER_URL'"));
+check('captured-reality does not use inline fallback', executeJob.includes("jobType === 'memory.private-source.reconstruct-place'"));
 
 if (failures) {
   throw new Error(`RUNTIME_JOB_ADMISSION_CONTRACT ${failures} checks failed`);
