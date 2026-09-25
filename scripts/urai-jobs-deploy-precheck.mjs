@@ -106,7 +106,7 @@ for (const envKey of [
   "COMMUNICATIONS_WORKER_URL",
   "PRIVATE_SOURCE_WORKER_URL",
 ]) {
-  check(runtimeJobTypes.includes(`return '${envKey}'`), `runtime registry declares ${envKey}`);
+  check(runtimeJobTypes.includes(`workerEnvKey: '${envKey}'`), `runtime registry declares ${envKey}`);
 }
 
 check(
