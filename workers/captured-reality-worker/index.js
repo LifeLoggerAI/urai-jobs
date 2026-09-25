@@ -80,11 +80,23 @@ async function authorizeSources(job) {
 }
 function publicBaseUrl(req){
   const configured=String(process.env.CAPTURED_REALITY_WORKER_PUBLIC_URL||'').trim();
-  if(configured) return configured.replace(/\/$/,'');
+  if(configured){
+    const url=new URL(configured);
+    if(productionRuntime()&&url.protocol!=='https:') throw new Error('CAPTURED_REALITY_WORKER_PUBLIC_URL must use HTTPS outside local/test');
+    return configured.replace(/\/$/,'');
+  }
   const proto=String(req.get('x-forwarded-proto')||req.protocol||'https').split(',')[0].trim();
   const hostName=req.get('x-forwarded-host')||req.get('host');
   if(!hostName) throw new Error('public worker host unavailable');
+  if(productionRuntime()&&proto!=='https') throw new Error('captured reality callback origin must use HTTPS outside local/test');
   return `${proto}://${hostName}`;
+}
+function consentBlockId(ownerUid,purpose){
+  return crypto.createHash('sha256').update(String(ownerUid)+'\n'+String(purpose)).digest('hex');
+}
+function requiredConsentPurposes(job){
+  const values=Array.isArray(job?.consents)?job.consents.map(x=>String(x?.purpose||'')):[];
+  return [...new Set(values.filter(Boolean))];
 }
 function validArtifact(x){
   return x && PRIVATE_HANDLE.test(String(x.ref||'')) && SHA256.test(String(x.sha256||'')) && Number.isSafeInteger(x.byteSize) && x.byteSize>0;
@@ -165,7 +177,20 @@ app.post('/engine-callback',async(req,res)=>{
       if(!expected||!timingSafeString(presented,expected)) throw new Error('callback token rejected');
       if(job.status!=='RUNNING'||job.execution?.asyncCallbackPending!==true) throw new Error('callback not active');
       const deadline=job.execution?.callbackDeadlineAt?.toMillis?.()||0; if(deadline<=Date.now()) throw new Error('callback expired');
+
+      const requiredPurposes=requiredConsentPurposes(job);
+      if(!requiredPurposes.includes('memory.storage')||!requiredPurposes.includes('location.context')) throw new Error('required consent receipts missing from active job');
+      const blockSnaps=[];
+      for(const purpose of requiredPurposes){
+        blockSnaps.push({purpose,snapshot:await tx.get(db.collection('jobConsentBlocks').doc(consentBlockId(String(job.ownerUid||''),purpose)))});
+      }
+      const blocked=blockSnaps.find(x=>x.snapshot.exists&&x.snapshot.data()?.active===true);
       const now=admin.firestore.FieldValue.serverTimestamp();
+      if(blocked){
+        tx.update(jobRef,{status:'CANCELLED',error:{message:`Captured Reality consent revoked: ${blocked.purpose}`},lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
+        tx.set(queueRef,{jobId,status:'DONE',lease:admin.firestore.FieldValue.delete(),updatedAt:now},{merge:true});
+        return 'cancelled';
+      }
       if(status==='success'){
         const result=req.body?.result||{};
         if(!validArtifact(result.archival)||!validArtifact(result.runtime)||!validArtifact(result.collision)||!PRIVATE_HANDLE.test(String(result.cameraSolveReceiptRef||''))||!PRIVATE_HANDLE.test(String(result.trainingReceiptRef||''))||!PRIVATE_HANDLE.test(String(result.sourceVsReconstructionReceiptRef||''))) throw new Error('callback missing governed reconstruction artifacts or QA receipts');
