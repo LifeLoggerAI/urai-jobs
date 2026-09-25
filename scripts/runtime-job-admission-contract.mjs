@@ -41,6 +41,8 @@ check('createJob broad allowlist removed', !createJob.includes('ALLOWED_JOB_TYPE
 check('executeJob derives env from canonical registry', executeJob.includes('workerEnvKeyForJobType(jobType)'));
 check('executeJob derives route from canonical registry', executeJob.includes('workerRouteForJobType(jobType)'));
 check('executeJob broad worker env prefix routing removed', !/getWorkerEnvKey[\s\S]*jobType\.startsWith\(/.test(executeJob));
+check('executeJob contains no broad jobType prefix fallback', !executeJob.includes("jobType.startsWith("));
+check('implicit narrator default removed', !executeJob.includes("job.jobType || 'narrator.tts'"));
 check('communications remains exact-type admission', runtime.includes("'communications.message.send'"));
 check('private-source remains exact-type admission', runtime.includes("'memory.private-source.transcribe'"));
 
