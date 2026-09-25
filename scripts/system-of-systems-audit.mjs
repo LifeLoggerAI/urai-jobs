@@ -54,6 +54,7 @@ const prodEnvExample = read("ops/production.env.example");
 const readme = read("README.md");
 const deployReadiness = read("docs/URAI_JOBS_DEPLOYMENT_READINESS.md");
 const executeJob = read("functions/src/jobs/executeJob.ts");
+const runtimeJobTypes = read("functions/src/core/runtimeJobTypes.ts");
 const smoke = read("scripts/urai-jobs-smoke.mjs");
 
 for (const path of [
@@ -143,17 +144,19 @@ for (const marker of ["URAI_JOBS_DEPLOY_PRECHECK", "Production", "Firebase", "Cl
 
 for (const marker of [
   "ASSET_WORKER_URL",
-  "SPATIAL_WORKER_URL",
   "STUDIO_WORKER_URL",
   "NARRATOR_WORKER_URL",
+  "CAPTURED_REALITY_WORKER_URL",
   "asset-render",
-  "spatial-index",
-  "studio-render",
+  "studio.render.video",
+  "memory.private-source.reconstruct-place",
   "route: '/'",
   "route: '/execute-job'"
 ]) {
-  requireIncludes("functions/src/jobs/executeJob.ts", executeJob, marker, `worker routing marker ${marker}`);
+  requireIncludes("functions/src/core/runtimeJobTypes.ts", runtimeJobTypes, marker, `worker routing registry marker ${marker}`);
 }
+requireIncludes("functions/src/jobs/executeJob.ts", executeJob, "workerEnvKeyForJobType", "centralized worker registry lookup");
+requireIncludes("functions/src/jobs/executeJob.ts", executeJob, "workerRouteForJobType", "centralized worker route lookup");
 
 for (const marker of [
   "asset-render routes to asset worker root",
