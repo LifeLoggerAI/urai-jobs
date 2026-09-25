@@ -5,6 +5,7 @@ export const ACTIVE_RUNTIME_JOB_TYPES = [
   'studio.render.video',
   'communications.message.send',
   'memory.private-source.transcribe',
+  'memory.historical-context.import',
 ] as const;
 
 export type ActiveRuntimeJobType = typeof ACTIVE_RUNTIME_JOB_TYPES[number];
@@ -101,6 +102,19 @@ export const RUNTIME_JOB_REGISTRY: Record<ActiveRuntimeJobType, RuntimeJobDefini
     cancellation: 'lease-fenced',
     providerCostClass: 'provider-bound',
     artifactContract: 'private transcript/index derivative + provenance receipt',
+  },
+  'memory.historical-context.import': {
+    owner: 'urai-jobs',
+    payloadContract: 'HistoricalContextImportPayloadSchema + JobConsentSchema',
+    resultContract: 'Historical-context private source batch + provenance receipt',
+    workerEnvKey: 'PRIVATE_SOURCE_WORKER_URL',
+    route: '/execute-job',
+    mode: 'sync',
+    timeoutMs: 120000,
+    maxAttempts: 3,
+    cancellation: 'lease-fenced',
+    providerCostClass: 'provider-bound',
+    artifactContract: 'opaque private source receipt refs + provenance receipt',
   },
 };
 
