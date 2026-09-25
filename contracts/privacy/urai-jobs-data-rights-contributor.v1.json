@@ -1,0 +1,62 @@
+{
+  "contractVersion": "1.0.0",
+  "system": "urai-jobs",
+  "repository": "LifeLoggerAI/urai-jobs",
+  "authority": "request-control-plane",
+  "centralStatus": "pending",
+  "executionState": "HARD_OFF_PENDING_GOVERNED_WORKER",
+  "requestCollection": "dataRightsRequests",
+  "requestSurface": [
+    "submitDataRightsRequest",
+    "getDataRightsRequest",
+    "listDataRightsRequests"
+  ],
+  "requestTypes": [
+    "EXPORT",
+    "DELETE"
+  ],
+  "implementedControls": [
+    "authenticated-request-intake",
+    "owner-scoped-readback",
+    "admin-operator-listing",
+    "server-only-request-records",
+    "server-only-audit-subcollection",
+    "hard-off-execution-state"
+  ],
+  "candidateDataDomains": [
+    "candidate-profile",
+    "applications",
+    "resume-artifact-references",
+    "candidate-consent",
+    "saved-jobs",
+    "employer-organization",
+    "job-postings",
+    "applicant-review-state",
+    "jobs",
+    "jobQueue",
+    "jobResults",
+    "logs",
+    "notifications",
+    "auditLogs"
+  ],
+  "activationRequirements": [
+    "governed-export-worker",
+    "private-export-delivery-receipt",
+    "governed-delete-anonymize-worker",
+    "retention-and-legal-hold-policy",
+    "provider-deletion-propagation-where-applicable",
+    "cross-tenant-tests",
+    "retry-and-terminal-failure-behavior",
+    "record-count-and-digest-receipts",
+    "protected-staging-e2e-proof",
+    "backup-restore-recovery-proof",
+    "legal-privacy-review",
+    "deployment-and-rollback-receipts"
+  ],
+  "claims": {
+    "requestIntakeImplemented": true,
+    "exportExecutionActive": false,
+    "deletionExecutionActive": false,
+    "crossSystemComplete": false
+  }
+}
