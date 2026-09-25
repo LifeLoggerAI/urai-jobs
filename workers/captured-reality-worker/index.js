@@ -192,6 +192,8 @@ app.post('/engine-callback',async(req,res)=>{
         return 'cancelled';
       }
       if(status==='success'){
+        const revokedPurpose=await revokedConsentPurpose(job);
+        if(revokedPurpose) throw new Error(`callback rejected because consent was revoked: ${revokedPurpose}`);
         const result=req.body?.result||{};
         if(!validArtifact(result.archival)||!validArtifact(result.runtime)||!validArtifact(result.collision)||!PRIVATE_HANDLE.test(String(result.cameraSolveReceiptRef||''))||!PRIVATE_HANDLE.test(String(result.trainingReceiptRef||''))||!PRIVATE_HANDLE.test(String(result.sourceVsReconstructionReceiptRef||''))) throw new Error('callback missing governed reconstruction artifacts or QA receipts');
         tx.update(jobRef,{status:'SUCCESS',result,output:result,error:admin.firestore.FieldValue.delete(),lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
