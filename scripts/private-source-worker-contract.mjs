@@ -10,13 +10,14 @@ const read = (path) => fs.readFileSync(path, 'utf8');
 const createJob = read('functions/src/jobs/createJob.ts');
 const executeJob = read('functions/src/jobs/executeJob.ts');
 const worker = read('workers/private-source-worker/src/index.ts');
+const runtimeTypes = read('functions/src/core/runtimeJobTypes.ts');
 const pkg = JSON.parse(read('package.json'));
 
-check('createJob registers only exact private source type', createJob.includes('/^memory\\.private-source\\.transcribe$/'));
+check('createJob registers only exact private source type', createJob.includes("return jobType === 'memory.private-source.transcribe';") && !createJob.includes("jobType.startsWith('memory.private-source')"));
 check('private source payload is strict', createJob.includes('PrivateSourcePayloadSchema') && createJob.includes('.strict()'));
 check('private source payload requires opaque receipt', createJob.includes('sourceReceiptRef') && createJob.includes('/^psr_'));
 check('private source owner is not accepted in payload', !createJob.includes("ownerUid: z."));
-check('executeJob routes dedicated private source worker', executeJob.includes("return 'PRIVATE_SOURCE_WORKER_URL'"));
+check('executeJob routes dedicated private source worker', executeJob.includes('workerEnvKeyForJobType(jobType)') && runtimeTypes.includes("'memory.private-source.transcribe':") && runtimeTypes.includes("workerEnvKey: 'PRIVATE_SOURCE_WORKER_URL'") && runtimeTypes.includes("route: '/execute-job'"));
 check('private source inline fallback is forbidden', executeJob.includes("jobType === 'memory.private-source.transcribe') return false"));
 check('worker validates exact job type', worker.includes("jobType !== 'memory.private-source.transcribe'"));
 check('worker requires server-owned owner uid', worker.includes('server-owned ownerUid is required'));
