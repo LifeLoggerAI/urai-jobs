@@ -52,10 +52,11 @@ const careerJobTypes = [
   "career.passport.export",
 ];
 
-const createJobSource = read("functions/src/jobs/createJob.ts");
+const runtimeJobTypes = read("functions/src/core/runtimeJobTypes.ts");
 ok(
-  "createJob accepts the career namespace",
-  createJobSource.includes("startsWith('career.')") || createJobSource.includes('startsWith("career.")') || createJobSource.includes("/^career\\./"),
+  "career runtime remains fail-closed until explicitly activated in the canonical registry",
+  !runtimeJobTypes.includes("'career.") &&
+    runtimeJobTypes.includes("export const ACTIVE_RUNTIME_JOB_TYPES")
 );
 
 const worker = read("workers/career-worker/src/index.ts");
