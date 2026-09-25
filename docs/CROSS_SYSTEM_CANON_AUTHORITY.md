@@ -1,10 +1,10 @@
 # UrAi Cross-System Canon Authority
 
-Status: ADOPTION CANDIDATE - binding cross-system authority begins only after Labs PR #101 legitimately merges.
+Status: ADOPTION CANDIDATE - binding cross-system authority begins only after Labs PR #102 legitimately merges.
 
 Repository role: **careers and talent system**
 
-Upstream candidate: `LifeLoggerAI/urai-labs-llc#101`, path `docs/canon/`.
+Upstream candidate: `LifeLoggerAI/urai-labs-llc#102`, path `docs/canon/`.
 
 Until that merge, current merged local contracts govern implementation facts. This file transfers no certification, review, deployment, provider, legal, financial or exact-head evidence.
 
