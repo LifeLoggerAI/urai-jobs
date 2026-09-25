@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { createHash } from 'node:crypto';
 
 const E2E_TIMESTAMP = Date.now();
 const PROJECT_ID = process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || 'demo-urai-jobs';
@@ -70,6 +71,19 @@ async function invokeCallable(name, idToken, data) {
   return { response, body };
 }
 
+async function invokeHttpFunction(name, body, bearerToken) {
+  const response = await fetch(`${FUNCTIONS_EMULATOR_ORIGIN}/${PROJECT_ID}/us-central1/${name}`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${bearerToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const parsed = await response.json().catch(() => ({}));
+  return { response, body: parsed };
+}
+
 async function callCallable(name, idToken, data) {
   const { response, body } = await invokeCallable(name, idToken, data);
   if (!response.ok || body.error) {
@@ -134,6 +148,71 @@ async function main() {
     const adminToken = await signInWithPassword(ADMIN_EMAIL, ADMIN_PASSWORD);
     const userToken = await signInWithPassword(USER_EMAIL, USER_PASSWORD);
     pass('Emulator ID tokens acquired.');
+
+    log('Testing private-source creation fails closed without canonical consent context...');
+    await expectCallableError('createJob', userToken, {
+      jobType: 'memory.private-source.transcribe',
+      payload: {
+        sourceReceiptRef: 'receipt://e2e/private-source',
+        requestedPurpose: 'transcribe',
+      },
+      idempotencyKey: `private-source-no-consent-${E2E_TIMESTAMP}`,
+    }, ['failed-precondition', 'consent']);
+    pass('Private-source creation fails closed when consent context is missing.');
+
+    log('Testing consent revocation ingestion, acknowledgement integrity, and duplicate replay...');
+    const privacyToken = 'e2e-privacy-event-token';
+    const revocationEvent = {
+      type: 'consent.revoked.v1',
+      eventId: `consent-revoked-e2e-${E2E_TIMESTAMP}`,
+      ownerUid: USER_UID,
+      purpose: 'memory.private-source.transcribe',
+      policyVersion: 'e2e-policy-v1',
+      decisionReceiptId: `decision-${E2E_TIMESTAMP}`,
+      correlationId: `corr-${E2E_TIMESTAMP}`,
+      revokedAt: new Date().toISOString(),
+    };
+
+    const firstRevocation = await invokeHttpFunction('ingestConsentRevocation', revocationEvent, privacyToken);
+    if (!firstRevocation.response.ok || firstRevocation.body?.ok !== true) {
+      fail(`First consent revocation ingestion failed: ${JSON.stringify(firstRevocation.body)}`);
+    }
+    const firstAck = firstRevocation.body.acknowledgement || {};
+    if (firstAck.eventId !== revocationEvent.eventId || firstAck.status !== 'blocked' || !firstAck.integrityHash) {
+      fail(`Consent revocation acknowledgement is incomplete: ${JSON.stringify(firstAck)}`);
+    }
+
+    const expectedHash = createHash('sha256').update([
+      revocationEvent.eventId,
+      revocationEvent.ownerUid,
+      revocationEvent.purpose,
+      revocationEvent.policyVersion,
+      revocationEvent.decisionReceiptId,
+      'blocked',
+    ].join('\n')).digest('hex');
+    if (firstAck.integrityHash !== expectedHash) {
+      fail(`Consent acknowledgement integrity hash mismatch: expected ${expectedHash}, got ${firstAck.integrityHash}`);
+    }
+
+    const blockId = createHash('sha256').update(USER_UID + '\n' + revocationEvent.purpose).digest('hex');
+    const blockSnap = await db.collection('jobConsentBlocks').doc(blockId).get();
+    if (!blockSnap.exists || blockSnap.data()?.active !== true) {
+      fail('Consent revocation did not persist an active UID+purpose block.');
+    }
+
+    const duplicateRevocation = await invokeHttpFunction('ingestConsentRevocation', revocationEvent, privacyToken);
+    if (!duplicateRevocation.response.ok || duplicateRevocation.body?.ok !== true) {
+      fail(`Duplicate consent revocation ingestion failed: ${JSON.stringify(duplicateRevocation.body)}`);
+    }
+    if (duplicateRevocation.body.acknowledgement?.integrityHash !== expectedHash) {
+      fail('Duplicate revocation did not return the original acknowledgement integrity hash.');
+    }
+    const receiptDocs = await db.collection('jobConsentEventReceipts').get();
+    const matchingReceipts = receiptDocs.docs.filter((doc) => doc.data()?.eventId === revocationEvent.eventId);
+    if (matchingReceipts.length !== 1) {
+      fail(`Expected exactly one replay receipt for revocation event, found ${matchingReceipts.length}.`);
+    }
+    pass('Consent revocation ingestion is authenticated, replay-safe, block-persisting, and integrity-acknowledged.');
 
     log('Creating an idempotency-bound job as the permitted user...');
     const createResult = await callCallable('createJob', userToken, {
