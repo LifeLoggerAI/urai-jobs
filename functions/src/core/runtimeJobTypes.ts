@@ -5,6 +5,7 @@ export const ACTIVE_RUNTIME_JOB_TYPES = [
   'studio.render.video',
   'communications.message.send',
   'memory.private-source.transcribe',
+  'memory.private-source.reconstruct-place',
 ] as const;
 
 export type ActiveRuntimeJobType = typeof ACTIVE_RUNTIME_JOB_TYPES[number];
@@ -101,6 +102,19 @@ export const RUNTIME_JOB_REGISTRY: Record<ActiveRuntimeJobType, RuntimeJobDefini
     cancellation: 'lease-fenced',
     providerCostClass: 'provider-bound',
     artifactContract: 'private transcript/index derivative + provenance receipt',
+  },
+  'memory.private-source.reconstruct-place': {
+    owner: 'urai-jobs',
+    payloadContract: 'CapturedRealityReconstructionPayloadSchema + dual JobConsentSchema',
+    resultContract: 'Captured Reality reconstruction + provenance receipts',
+    workerEnvKey: 'CAPTURED_REALITY_WORKER_URL',
+    route: '/execute-job',
+    mode: 'async',
+    timeoutMs: 120000,
+    maxAttempts: 2,
+    cancellation: 'callback-fenced',
+    providerCostClass: 'local-compute',
+    artifactContract: 'archival reconstruction + web splat + collision proxy + QA receipts',
   },
 };
 
