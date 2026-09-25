@@ -117,10 +117,34 @@ Never export:
 - raw internal stack traces not needed for user transparency
 - credentials or API keys
 
-## Open implementation tasks
+## Current implementation boundary
 
-- Add candidate profile collection and callable contracts.
-- Add export callable.
-- Add deletion/anonymization callable.
-- Add admin review UI for data-rights requests.
-- Add notification delivery after completion.
+The safe request/control plane is implemented in `functions/src/privacy/dataRights.ts` and exported from the Functions entrypoint.
+
+Implemented now:
+
+- authenticated export/deletion request intake;
+- owner-scoped request readback;
+- admin/operator request listing;
+- server-only Firestore request and audit records;
+- explicit `HARD_OFF_PENDING_GOVERNED_WORKER` execution state;
+- deployment precheck coverage for the callable exports and Firestore protection.
+
+Not yet activated:
+
+- destructive deletion/anonymization execution;
+- export package generation/download delivery;
+- provider-side deletion propagation;
+- completion notification delivery;
+- backup/restore certification.
+
+Those operations remain hard-off until the governed worker, retention/legal policy, cross-tenant tests, and recovery evidence exist. Request intake must not be interpreted as completed export/deletion execution.
+
+## Remaining implementation tasks
+
+- Implement governed export worker and private delivery receipt.
+- Implement governed deletion/anonymization worker with legal-retention escalation.
+- Add provider deletion propagation where applicable.
+- Add completion notification delivery.
+- Add retention/TTL evidence and backup/restore drill receipt.
+- Add admin review UI if the operator console does not already expose the request queue.
