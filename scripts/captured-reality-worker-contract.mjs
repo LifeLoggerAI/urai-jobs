@@ -18,7 +18,6 @@ for(const marker of [
   "captured-reality.dispatch.ambiguous",
   "callback authority remains active",
   "execution.asyncCallbackPending':false",
-  "callback rejected because consent was revoked:",
   "location.context",
   "memory.storage",
   "jobConsentBlocks",
@@ -36,4 +35,26 @@ assert.match(worker,/status\('SUCCESS'\)|status:'SUCCESS'/);
 assert.match(worker,/status:'FAILED'/);
 console.log('[PASS] captured reality worker adapter contract');
 
-assert.ok(worker.includes('const revokedPurpose=await revokedConsentPurpose(job)'));
+
+const deploy=fs.readFileSync('scripts/deploy-workers.sh','utf8');
+const rootPackage=JSON.parse(fs.readFileSync('package.json','utf8'));
+const prodEnv=fs.readFileSync('ops/production.env.example','utf8');
+
+for(const marker of [
+  'narrator-worker|asset-worker|studio-worker|captured-reality-worker',
+  'PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET',
+  'CAPTURED_REALITY_ENGINE_TOKEN_SECRET',
+  'PRIVATE_SOURCE_AUTHORITY_URL',
+  'CAPTURED_REALITY_ENGINE_URL',
+  'PRIVATE_SOURCE_AUTHORITY_TOKEN=',
+  'CAPTURED_REALITY_ENGINE_TOKEN=',
+]) assert.ok(deploy.includes(marker), `deploy marker: ${marker}`);
+
+assert.ok(!/URAI_JOBS_DEPLOY_WORKERS:-[^\n]*captured-reality-worker/.test(deploy), 'Captured Reality must not enter the default production worker set');
+assert.ok(rootPackage.scripts.build.includes('captured-reality-worker:build'));
+assert.ok(rootPackage.scripts.typecheck.includes('captured-reality-worker:typecheck'));
+for(const marker of ['PRIVATE_SOURCE_AUTHORITY_URL=','PRIVATE_SOURCE_AUTHORITY_TOKEN=','CAPTURED_REALITY_ENGINE_URL=','CAPTURED_REALITY_ENGINE_TOKEN=']) {
+  assert.ok(prodEnv.includes(marker), `production env marker: ${marker}`);
+}
+assert.ok(!worker.includes('revokedConsentPurpose('), 'undefined duplicate consent helper must not exist');
+console.log('[PASS] captured reality opt-in deployment contract');
