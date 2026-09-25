@@ -41,7 +41,7 @@ const JobExecutionMessageSchema = z.object({
 });
 
 function getJobType(job: Job): string {
-  return String(job.type || job.jobType || 'narrator.tts');
+  return String(job.type || job.jobType || '');
 }
 
 function getWorkerEnvKey(jobType: string): string | null {
@@ -126,7 +126,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
   const outputPrefix = cleanPrefix(payload.outputPrefix, `${jobType.replace(/[^a-z0-9]+/gi, '-')}/${jobId}`);
   const completedAt = new Date().toISOString();
 
-  if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) {
+  if (jobType === 'asset-render' || jobType === 'asset.render') {
     return {
       ok: true,
       mode: 'inline-fallback',
@@ -140,21 +140,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
     };
   }
 
-  if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) {
-    return {
-      ok: true,
-      mode: 'inline-fallback',
-      jobId,
-      jobType,
-      indexUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/spatial-index.json`,
-      manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
-      message: 'Local inline fallback completed. This is not live worker proof.',
-      payloadEcho: payload,
-      completedAt,
-    };
-  }
-
-  if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) {
+  if (jobType === 'studio.render.video') {
     return {
       ok: true,
       mode: 'inline-fallback',
@@ -168,13 +154,13 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
     };
   }
 
-  if (jobType.startsWith('career.')) {
+  if (jobType === 'narrator.tts') {
     return {
       ok: true,
       mode: 'inline-fallback',
       jobId,
       jobType,
-      careerUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/career.json`,
+      transcriptUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/narration.txt`,
       manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
       message: 'Local inline fallback completed. This is not live worker proof.',
       payloadEcho: payload,
@@ -182,17 +168,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
     };
   }
 
-  return {
-    ok: true,
-    mode: 'inline-fallback',
-    jobId,
-    jobType,
-    transcriptUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/narration.txt`,
-    manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
-    message: 'Local inline fallback completed. This is not live worker proof.',
-    payloadEcho: payload,
-    completedAt,
-  };
+  throw new Error(`Inline fallback is not implemented for job type ${jobType}.`);
 }
 
 async function appendJobLog(jobId: string, input: { level: string; message: string; source: string; metadata?: Record<string, unknown> }) {
