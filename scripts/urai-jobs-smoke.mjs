@@ -17,31 +17,14 @@ function canCancel(status) {
   return status === "PENDING" || status === "LEASED" || status === "RUNNING";
 }
 
-const ownerByPrefix = {
-  spatial: "urai-spatial",
-  marketing: "urai-marketing",
-  studio: "urai-studio",
-  assetFactory: "asset-factory",
-  asset: "asset-factory",
-  analytics: "analytics",
-  communications: "communications",
-  privacy: "privacy-consent",
-  storytime: "storytime",
-  admin: "admin",
-  narrator: "narrator"
+const activeRoutes = {
+  "narrator.tts": "NARRATOR_WORKER_URL:/execute-job",
+  "asset-render": "ASSET_WORKER_URL:/",
+  "asset.render": "ASSET_WORKER_URL:/",
+  "studio.render.video": "STUDIO_WORKER_URL:/",
+  "communications.message.send": "COMMUNICATIONS_WORKER_URL:/executeJob",
+  "memory.private-source.transcribe": "PRIVATE_SOURCE_WORKER_URL:/execute-job"
 };
-
-function inferOwner(jobType) {
-  const [prefix] = jobType.split(/[._-]/);
-  return ownerByPrefix[prefix] ?? "unknown";
-}
-
-function inferWorkerRoute(jobType) {
-  if (jobType === "asset-render" || jobType.startsWith("asset")) return "ASSET_WORKER_URL:/";
-  if (jobType === "spatial-index" || jobType.startsWith("spatial")) return "SPATIAL_WORKER_URL:/";
-  if (jobType === "studio-render" || jobType.startsWith("studio")) return "STUDIO_WORKER_URL:/";
-  return "NARRATOR_WORKER_URL:/execute-job";
-}
 
 function runningUpdateIncludesLegacyLeaseToken(update) {
   return update["execution.leaseToken"] === "lease-token";
@@ -56,13 +39,13 @@ assert("DEAD is not retryable", !canRetry("DEAD"));
 assert("CANCELLED is not cancellable", !canCancel("CANCELLED"));
 assert("known statuses include DEAD", statuses.includes("DEAD"));
 assert("known statuses do not include retry_needed", !statuses.includes("retry_needed"));
-assert("spatial owner maps", inferOwner("spatial.memory.snapshot") === "urai-spatial");
-assert("privacy owner maps", inferOwner("privacy.delete.run") === "privacy-consent");
-assert("narrator owner maps", inferOwner("narrator.tts") === "narrator");
-assert("asset-render routes to asset worker root", inferWorkerRoute("asset-render") === "ASSET_WORKER_URL:/");
-assert("spatial-index routes to spatial worker root", inferWorkerRoute("spatial-index") === "SPATIAL_WORKER_URL:/");
-assert("studio-render routes to studio worker root", inferWorkerRoute("studio-render") === "STUDIO_WORKER_URL:/");
-assert("narrator.tts routes to narrator execute endpoint", inferWorkerRoute("narrator.tts") === "NARRATOR_WORKER_URL:/execute-job");
+assert("asset.render routes to asset worker root", activeRoutes["asset.render"] === "ASSET_WORKER_URL:/");
+assert("studio.render.video routes to studio worker root", activeRoutes["studio.render.video"] === "STUDIO_WORKER_URL:/");
+assert("narrator.tts routes to narrator execute endpoint", activeRoutes["narrator.tts"] === "NARRATOR_WORKER_URL:/execute-job");
+assert("communications.message.send routes to communications execute endpoint", activeRoutes["communications.message.send"] === "COMMUNICATIONS_WORKER_URL:/executeJob");
+assert("memory.private-source.transcribe routes to private source execute endpoint", activeRoutes["memory.private-source.transcribe"] === "PRIVATE_SOURCE_WORKER_URL:/execute-job");
+assert("career jobs remain hard-off", !Object.keys(activeRoutes).some((type) => type.startsWith("career.")));
+assert("spatial jobs remain hard-off", !Object.keys(activeRoutes).some((type) => type.startsWith("spatial.")));
 assert("running update mirrors lease token for deployed subsystem workers", runningUpdateIncludesLegacyLeaseToken({ "execution.leaseToken": "lease-token" }));
 
 if (process.exitCode) {
