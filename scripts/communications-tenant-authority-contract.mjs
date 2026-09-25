@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const createJob = fs.readFileSync('functions/src/jobs/createJob.ts', 'utf8');
 const executeJob = fs.readFileSync('functions/src/jobs/executeJob.ts', 'utf8');
+const runtimeJobTypes = fs.readFileSync('functions/src/core/runtimeJobTypes.ts', 'utf8');
 let failed = 0;
 
 function check(name, condition) {
@@ -54,8 +55,9 @@ check(
 
 check(
   'only the governed communications.message.send job type is admitted',
-  createJob.includes('/^communications\\.message\\.send$/') &&
-    !createJob.includes('/^communications\\./,')
+  runtimeJobTypes.includes("'communications.message.send'") &&
+    !runtimeJobTypes.includes("'communications.*'") &&
+    createJob.includes('isActiveRuntimeJobType(jobType)')
 );
 check(
   'communications payload is strict, email-only, and excludes caller-owned destinations',
@@ -73,8 +75,10 @@ check(
 );
 
 check(
-  'communications dispatch uses the actual Firebase executeJob route',
-  executeJob.includes("if (jobType === 'communications.message.send') return '/executeJob';")
+  'communications dispatch uses the canonical Firebase executeJob route',
+  runtimeJobTypes.includes("route: '/executeJob'") &&
+    runtimeJobTypes.includes("'communications.message.send':") &&
+    executeJob.includes('workerRouteForJobType(jobType)')
 );
 
 if (failed > 0) {
