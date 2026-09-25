@@ -102,7 +102,9 @@ jobs:
           set -euo pipefail
           log_file="${RUNNER_TEMP}/urai-jobs-emulator-e2e.log"
           printf 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT=%s\n' "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" > functions/.env.demo-urai-jobs
-          trap 'rm -f functions/.env.demo-urai-jobs' EXIT
+          printf 'URAI_JOBS_PRIVACY_EVENT_TOKEN=e2e-privacy-event-token\n' > functions/.secret.local
+          chmod 600 functions/.secret.local
+          trap 'rm -f functions/.env.demo-urai-jobs functions/.secret.local' EXIT
           if timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" --project demo-urai-jobs emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" >"$log_file" 2>&1; then
             rm -f functions/.env.demo-urai-jobs functions/.secret.local
             trap - EXIT
