@@ -10,6 +10,7 @@ const read = (path) => fs.readFileSync(path, 'utf8');
 const createJob = read('functions/src/jobs/createJob.ts');
 const executeJob = read('functions/src/jobs/executeJob.ts');
 const worker = read('workers/private-source-worker/src/index.ts');
+const dockerfile = read('workers/private-source-worker/Dockerfile');
 const runtimeTypes = read('functions/src/core/runtimeJobTypes.ts');
 const pkg = JSON.parse(read('package.json'));
 
@@ -30,6 +31,7 @@ check('worker returns private refs and checksum', worker.includes('transcriptRef
 check('root verify includes private source contract', String(pkg.scripts?.['urai-jobs:verify'] || '').includes('private-source-worker-contract.mjs'));
 check('private source worker build is in root build', String(pkg.scripts?.build || '').includes('private-source-worker:build'));
 check('private source worker typecheck is in root typecheck', String(pkg.scripts?.typecheck || '').includes('private-source-worker:typecheck'));
+check('private source worker has a reproducible Node 22 container', dockerfile.includes('FROM node:22-slim') && dockerfile.includes('RUN npm run build') && dockerfile.includes('CMD ["node", "dist/index.js"]'));
 
 if (failed) {
   console.error(`[FAIL] PRIVATE_SOURCE_WORKER_CONTRACT ${failed} checks failed`);
