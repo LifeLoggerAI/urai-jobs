@@ -58,7 +58,7 @@ function payloadSizeBytes(payload: unknown): number {
 }
 
 function isCommunicationsJobType(jobType: string): boolean {
-  return jobType.startsWith('communications.');
+  return jobType === 'communications.message.send';
 }
 
 function userRecord(user: unknown): Record<string, unknown> {
