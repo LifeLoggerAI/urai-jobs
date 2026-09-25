@@ -13,15 +13,16 @@ export const careerLaunchPlan: CareerLaunchStage[] = [
     version: "V1",
     title: "Runtime plus Career Mirror foundation",
     href: "/career-mirror",
-    status: "in-progress",
-    summary: "Launch the verified runtime backbone and first advisory Career Mirror surface.",
+    status: "blocked",
+    summary: "Retain the Career Mirror scaffold for a separately chartered product; it is not active in the canonical URAI Jobs runtime.",
     gates: [
       "Production runtime evidence recorded",
       "Career Mirror shell reachable",
       "Work preference profile visible",
       "Manual opportunity queue visible",
       "Save and hide controls available",
-      "Profile summary and fit score runtime jobs creatable",
+      "Separate product charter and runtime re-authorization required",
+      "Career runtime job types remain hard-off in URAI Jobs",
       "No external action flow present"
     ],
     runtimeJobs: ["career.profile.summarize", "career.fit.score"]
