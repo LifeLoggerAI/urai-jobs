@@ -111,37 +111,9 @@ export function isActiveRuntimeJobType(jobType: string): jobType is ActiveRuntim
 }
 
 export function workerEnvKeyForJobType(jobType: string): string | null {
-  if (isActiveRuntimeJobType(jobType)) return RUNTIME_JOB_REGISTRY[jobType].workerEnvKey;
-  switch (jobType) {
-    case 'narrator.tts':
-      return 'NARRATOR_WORKER_URL';
-    case 'asset-render':
-    case 'asset.render':
-      return 'ASSET_WORKER_URL';
-    case 'studio.render.video':
-      return 'STUDIO_WORKER_URL';
-    case 'communications.message.send':
-      return 'COMMUNICATIONS_WORKER_URL';
-    case 'memory.private-source.transcribe':
-      return 'PRIVATE_SOURCE_WORKER_URL';
-    default:
-      return null;
-  }
+  return isActiveRuntimeJobType(jobType) ? RUNTIME_JOB_REGISTRY[jobType].workerEnvKey : null;
 }
 
 export function workerRouteForJobType(jobType: string): string | null {
-  if (isActiveRuntimeJobType(jobType)) return RUNTIME_JOB_REGISTRY[jobType].route;
-  switch (jobType) {
-    case 'asset-render':
-    case 'asset.render':
-    case 'studio.render.video':
-      return '/';
-    case 'communications.message.send':
-      return '/executeJob';
-    case 'narrator.tts':
-    case 'memory.private-source.transcribe':
-      return '/execute-job';
-    default:
-      return null;
-  }
+  return isActiveRuntimeJobType(jobType) ? RUNTIME_JOB_REGISTRY[jobType].route : null;
 }
