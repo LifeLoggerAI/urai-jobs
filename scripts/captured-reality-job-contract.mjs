@@ -16,7 +16,10 @@ check('captured reconstruction is async/callback fenced', runtime.includes("'mem
 check('payload is opaque receipt/project/governance references', create.includes('CapturedRealityReconstructionPayloadSchema'));
 check('payload forbids provider spend', create.includes('providerSpendAuthorized: z.literal(false)'));
 check('payload forbids public release', create.includes('publicReleaseAuthorized: z.literal(false)'));
-check('payload contains no raw media URL field', !/CapturedRealityReconstructionPayloadSchema[\s\S]{0,1800}(rawMediaUrl|sourceUrl|address|latitude|longitude)/.test(create));
+const schemaStart = create.indexOf('const CapturedRealityReconstructionPayloadSchema');
+const schemaEnd = create.indexOf('}).strict();', schemaStart) + '}).strict();'.length;
+const reconstructionSchemaSource = schemaStart >= 0 && schemaEnd > schemaStart ? create.slice(schemaStart, schemaEnd) : '';
+check('payload contains no raw media URL field', Boolean(reconstructionSchemaSource) && !/(rawMediaUrl|sourceUrl|address|latitude|longitude)\s*:/.test(reconstructionSchemaSource));
 check('dual consent requires memory storage', create.includes("purposes.has('memory.storage')"));
 check('dual consent requires location context', create.includes("purposes.has('location.context')"));
 check('shared job type carries multiple consent receipts', shared.includes('consents?: JobConsentContext[]'));
