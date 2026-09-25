@@ -18,6 +18,12 @@ for(const marker of [
   "captured-reality.dispatch.ambiguous",
   "callback authority remains active",
   "execution.asyncCallbackPending':false",
+  "Captured Reality consent revoked:",
+  "location.context",
+  "memory.storage",
+  "jobConsentBlocks",
+  "required consent receipts missing from active job",
+  "CAPTURED_REALITY_WORKER_PUBLIC_URL must use HTTPS outside local/test",
 ]) assert.ok(worker.includes(marker), marker);
 assert.ok(!worker.includes('rawMediaUrl'));
 assert.ok(!worker.includes('drive.google.com'));
