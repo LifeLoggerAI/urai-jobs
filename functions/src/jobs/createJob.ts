@@ -27,6 +27,17 @@ const PrivateSourcePayloadSchema = z.object({
   requestReceipt: z.string().trim().regex(/^req_[A-Za-z0-9_-]{12,128}$/).optional(),
 }).strict();
 
+const HistoricalContextImportPayloadSchema = z.object({
+  importRequestRef: z.string().trim().regex(/^hir_[A-Za-z0-9_-]{16,128}$/),
+  provider: z.literal('google-workspace'),
+  categories: z.array(z.enum(['gmail', 'calendar', 'contacts', 'drive-selected']))
+    .min(1)
+    .max(4)
+    .refine((value) => new Set(value).size === value.length, 'Historical import categories must be unique.'),
+  historyDays: z.number().int().min(30).max(3650),
+  previewReceiptRef: z.string().trim().regex(/^ghp_[A-Za-z0-9_-]{16,128}$/).optional(),
+}).strict();
+
 const CommunicationsMessagePayloadSchema = z.object({
   channel: z.literal('email').default('email'),
   templateId: z.string().trim().min(6).max(128).regex(/^template_[A-Za-z0-9_-]+$/),
@@ -37,7 +48,7 @@ const CommunicationsMessagePayloadSchema = z.object({
 
 
 function isPrivateSourceJobType(jobType: string): boolean {
-  return jobType === 'memory.private-source.transcribe';
+  return jobType === 'memory.private-source.transcribe' || jobType === 'memory.historical-context.import';
 }
 
 const JobConsentSchema = z.object({
@@ -142,13 +153,32 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
         'Private-source jobs require canonical consent context: purpose, policy version, and decision receipt.'
       );
     }
-    const privateSource = PrivateSourcePayloadSchema.safeParse(payload);
-    if (!privateSource.success) {
-      throw httpsError(
-        'invalid-argument',
-        'Private-source jobs require an opaque sourceReceiptRef and purpose-only payload; raw media URLs, transcript text, identities, addresses, and arbitrary fields are rejected.',
-        privateSource.error.flatten()
-      );
+    if (jobType === 'memory.private-source.transcribe') {
+      const privateSource = PrivateSourcePayloadSchema.safeParse(payload);
+      if (!privateSource.success) {
+        throw httpsError(
+          'invalid-argument',
+          'Private-source transcription jobs require an opaque sourceReceiptRef and purpose-only payload; raw media URLs, transcript text, identities, addresses, and arbitrary fields are rejected.',
+          privateSource.error.flatten()
+        );
+      }
+    }
+
+    if (jobType === 'memory.historical-context.import') {
+      if (consent.purpose !== 'historical-context-import') {
+        throw httpsError(
+          'failed-precondition',
+          'Historical-context import jobs require consent purpose historical-context-import.'
+        );
+      }
+      const historicalImport = HistoricalContextImportPayloadSchema.safeParse(payload);
+      if (!historicalImport.success) {
+        throw httpsError(
+          'invalid-argument',
+          'Historical-context import jobs accept only an opaque import request, registered provider, bounded category list, bounded history window, and optional preview receipt; OAuth tokens and raw provider content are rejected.',
+          historicalImport.error.flatten()
+        );
+      }
     }
   }
 
