@@ -30,8 +30,8 @@
     "urai-jobs:e2e": "node scripts/urai-jobs-e2e.mjs",
     "postinstall": "npm run build --prefix packages/shared-types",
     "lint": "npm run lint --prefix packages/shared-types --if-present && npm run lint --prefix functions --if-present && npm run lint --prefix web --if-present && npm run lint --prefix workers --if-present",
-    "build": "npm run build --prefix packages/shared-types && npm run build --prefix functions && npm run build --prefix web --if-present && npm run build --prefix workers --if-present && npm run career-worker:build && npm run private-source-worker:build && npm run studio-worker:build",
-    "typecheck": "npm run typecheck --prefix packages/shared-types --if-present && npm run typecheck --prefix functions && npm run typecheck --prefix web --if-present && npm run typecheck --prefix workers --if-present && npm run career-worker:typecheck && npm run private-source-worker:typecheck && npm run studio-worker:typecheck",
+    "build": "npm run build --prefix packages/shared-types && npm run build --prefix functions && npm run build --prefix web --if-present && npm run build --prefix workers --if-present && npm run career-worker:build && npm run private-source-worker:build && npm run studio-worker:build && npm run captured-reality-worker:build",
+    "typecheck": "npm run typecheck --prefix packages/shared-types --if-present && npm run typecheck --prefix functions && npm run typecheck --prefix web --if-present && npm run typecheck --prefix workers --if-present && npm run career-worker:typecheck && npm run private-source-worker:typecheck && npm run studio-worker:typecheck && npm run captured-reality-worker:typecheck",
     "test": "npm run urai-jobs:verify && npm run urai-jobs:smoke && npm run build && node scripts/execution-guards-smoke.mjs && node scripts/queue-recovery-contract.mjs && npm run urai-jobs:deploy-precheck && npm run typecheck --prefix functions",
     "audit:systems": "node scripts/system-of-systems-audit.mjs",
     "deploy:dev": "firebase use dev && firebase deploy",
@@ -78,7 +78,9 @@
     "privacy:consent:verify": "node scripts/consent-revocation-contract.mjs",
     "runtime:admission:verify": "node scripts/runtime-job-admission-contract.mjs",
     "captured-reality:job:verify": "node scripts/captured-reality-job-contract.mjs",
-    "captured-reality:worker:verify": "node scripts/captured-reality-worker-contract.mjs"
+    "captured-reality:worker:verify": "node scripts/captured-reality-worker-contract.mjs",
+    "captured-reality-worker:build": "npm run build --prefix workers/captured-reality-worker",
+    "captured-reality-worker:typecheck": "npm run typecheck --prefix workers/captured-reality-worker"
   },
   "devDependencies": {
     "@types/uuid": "^10.0.0",
