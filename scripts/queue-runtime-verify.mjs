@@ -18,6 +18,7 @@ function requireMarker(path, content, marker) {
 
 const index = read("functions/src/index.ts");
 const executor = read("functions/src/jobs/executeJob.ts");
+const runtimeRegistry = read("functions/src/core/runtimeJobTypes.ts");
 const queueNow = read("functions/src/jobs/processQueueNow.ts");
 const jobsApi = read("web/src/lib/jobsApi.ts");
 const smoke = read("scripts/urai-jobs-smoke.mjs");
@@ -28,13 +29,14 @@ requireMarker("functions/src/jobs/processQueueNow.ts", queueNow, "JOB_EXECUTION_
 requireMarker("functions/src/jobs/processQueueNow.ts", queueNow, "PENDING");
 requireMarker("functions/src/jobs/processQueueNow.ts", queueNow, "LEASED");
 requireMarker("web/src/lib/jobsApi.ts", jobsApi, "processQueueNow");
-requireMarker("functions/src/jobs/executeJob.ts", executor, "ASSET_WORKER_URL");
-requireMarker("functions/src/jobs/executeJob.ts", executor, "SPATIAL_WORKER_URL");
-requireMarker("functions/src/jobs/executeJob.ts", executor, "STUDIO_WORKER_URL");
-requireMarker("functions/src/jobs/executeJob.ts", executor, "NARRATOR_WORKER_URL");
+requireMarker("functions/src/core/runtimeJobTypes.ts", runtimeRegistry, "ASSET_WORKER_URL");
+requireMarker("functions/src/core/runtimeJobTypes.ts", runtimeRegistry, "STUDIO_WORKER_URL");
+requireMarker("functions/src/core/runtimeJobTypes.ts", runtimeRegistry, "NARRATOR_WORKER_URL");
+requireMarker("functions/src/core/runtimeJobTypes.ts", runtimeRegistry, "CAPTURED_REALITY_WORKER_URL");
+requireMarker("functions/src/core/runtimeJobTypes.ts", runtimeRegistry, "memory.private-source.reconstruct-place");
 requireMarker("functions/src/jobs/executeJob.ts", executor, "execution.leaseToken");
-requireMarker("functions/src/jobs/executeJob.ts", executor, "route: '/'");
-requireMarker("functions/src/jobs/executeJob.ts", executor, "route: '/execute-job'");
+requireMarker("functions/src/core/runtimeJobTypes.ts", runtimeRegistry, "route: '/'");
+requireMarker("functions/src/core/runtimeJobTypes.ts", runtimeRegistry, "route: '/execute-job'");
 requireMarker("scripts/urai-jobs-smoke.mjs", smoke, "asset-render routes to asset worker root");
 requireMarker("scripts/urai-jobs-smoke.mjs", smoke, "running update mirrors lease token");
 
