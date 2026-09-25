@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: urai-jobs-typecheck-${{ github.event.pull_request.number || github.ref }}
+  group: urai-jobs-typecheck-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 env:
