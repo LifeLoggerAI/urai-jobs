@@ -214,6 +214,52 @@ async function main() {
     }
     pass('Consent revocation ingestion is authenticated, replay-safe, block-persisting, and integrity-acknowledged.');
 
+    log('Testing Data Rights request control plane...');
+    const exportRequest = await callCallable('submitDataRightsRequest', userToken, {
+      requestType: 'EXPORT',
+      format: 'json',
+      note: 'E2E export request',
+    });
+    if (!exportRequest?.requestId || exportRequest.status !== 'PENDING') {
+      fail(`submitDataRightsRequest returned unexpected result: ${JSON.stringify(exportRequest)}`);
+    }
+    if (exportRequest.executionState !== 'HARD_OFF_PENDING_GOVERNED_WORKER') {
+      fail(`Data Rights request must remain hard-off: ${JSON.stringify(exportRequest)}`);
+    }
+
+    const ownerReadback = await callCallable('getDataRightsRequest', userToken, {
+      requestId: exportRequest.requestId,
+    });
+    if (ownerReadback?.request?.requestId !== exportRequest.requestId || ownerReadback.request.status !== 'PENDING') {
+      fail(`Owner-scoped data-rights readback failed: ${JSON.stringify(ownerReadback)}`);
+    }
+    if (ownerReadback.request.executionState !== 'HARD_OFF_PENDING_GOVERNED_WORKER') {
+      fail(`Owner readback lost hard-off execution state: ${JSON.stringify(ownerReadback)}`);
+    }
+
+    const adminList = await callCallable('listDataRightsRequests', adminToken, {
+      status: 'PENDING',
+      limit: 100,
+    });
+    const rightsRequests = Array.isArray(adminList?.requests) ? adminList.requests : [];
+    if (!rightsRequests.some((entry) => entry.requestId === exportRequest.requestId && entry.ownerUid === USER_UID)) {
+      fail(`Admin list did not include the user Data Rights request: ${JSON.stringify(adminList)}`);
+    }
+
+    const auditSnap = await db.collection('dataRightsRequests').doc(exportRequest.requestId).collection('audit').doc('submitted').get();
+    if (!auditSnap.exists || auditSnap.data()?.event !== 'DATA_RIGHTS_REQUEST_SUBMITTED') {
+      fail('Data Rights request did not persist the submission audit record.');
+    }
+
+    const adminDeleteRequest = await callCallable('submitDataRightsRequest', adminToken, {
+      requestType: 'DELETE',
+      note: 'E2E owner-isolation request',
+    });
+    await expectCallableError('getDataRightsRequest', userToken, {
+      requestId: adminDeleteRequest.requestId,
+    }, ['permission-denied', 'access']);
+    pass('Data Rights intake, hard-off state, audit trail, admin listing, and owner isolation are verified.');
+
     log('Creating an idempotency-bound job as the permitted user...');
     const createResult = await callCallable('createJob', userToken, {
       jobType: 'narrator.tts',
