@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { createHash } from 'node:crypto';
+import { prepareDataRightsRequestExport } from '../functions/lib/functions/privacy/dataRightsRequestExport.js';
 
 const E2E_TIMESTAMP = Date.now();
 const PROJECT_ID = process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || 'demo-urai-jobs';
@@ -170,6 +171,12 @@ async function main() {
     const listedRights = await callCallable('listDataRightsRequests', adminToken, { status: 'PENDING', limit: 100 });
     if (!listedRights.requests?.some(request => request.requestId === rightsId)) fail('Filtered operator list omitted rights request.');
     pass('Concurrent rights retries are atomic, owner-bound, conflict-rejecting and execution-hard-off.');
+    const requestExport = await prepareDataRightsRequestExport(db, USER_UID);
+    if (requestExport.requestCount !== 1 || requestExport.auditCount !== 1 || requestExport.recordCount !== 2) fail('Request contributor count mismatch.');
+    if (requestExport.payload.requests[0]?.requestId !== rightsId || requestExport.crossSystemComplete !== false || requestExport.exportDeliveryActive !== false) fail('Request contributor scope or activation boundary mismatch.');
+    if (JSON.stringify(requestExport).includes(ADMIN_UID)) fail('Request contributor leaked unrelated owner data.');
+    pass('Dormant request-record export preparation reads only the owner receipt and audit, with bounded scope and digest.');
+
 
     log('Testing private-source creation fails closed without canonical consent context...');
     await expectCallableError('createJob', userToken, {
