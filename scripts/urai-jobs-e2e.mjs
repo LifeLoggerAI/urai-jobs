@@ -161,7 +161,7 @@ async function main() {
     const rightsAudit = await rightsRef.collection('audit').get();
     if (rightsRecord?.ownerUid !== USER_UID || rightsAudit.size !== 1 || rightsAudit.docs[0].data().actorUid !== USER_UID) fail('Owner-bound request/audit receipt mismatch.');
     await expectCallableError('submitDataRightsRequest', userToken, { ...rightsPayload, requestType: 'DELETE' }, ['already_exists', 'already-exists']);
-    await expectCallableError('submitDataRightsRequest', userToken, { ...rightsPayload, ownerUid: ADMIN_UID }, ['invalid-argument']);
+    await expectCallableError('submitDataRightsRequest', userToken, { ...rightsPayload, ownerUid: ADMIN_UID }, ['invalid_argument', 'invalid-argument']);
     await expectCallableError('getDataRightsRequest', adminToken, { requestId: rightsId }, ['permission-denied']);
     await expectCallableError('listDataRightsRequests', userToken, {}, ['permission-denied']);
     const ownedRights = await callCallable('getDataRightsRequest', userToken, { requestId: rightsId });
