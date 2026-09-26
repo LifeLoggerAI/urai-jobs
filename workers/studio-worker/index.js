@@ -128,7 +128,7 @@ function parsePayload(job) {
     }
     if (endMs - startMs > 30 * 60 * 1000) throw new Error(`timeline_item_too_long:${index}`);
     return { sourceId, startMs, endMs };
-  });
+  }).sort((left, right) => left.startMs - right.startMs);
 
   for (let i = 1; i < normalizedTimeline.length; i += 1) {
     if (normalizedTimeline[i].startMs < normalizedTimeline[i - 1].endMs) {
@@ -154,6 +154,29 @@ function parsePayload(job) {
     subtitleText,
     outputPrefix: safeOutputPrefix(String(payload.outputPrefix || ''), tenantId, projectId),
   };
+}
+
+// Timeline coordinates describe output positions; preserve leading/inter-clip gaps.
+function renderSegments(timeline) {
+  const segments = [];
+  let cursorMs = 0;
+  for (const item of timeline) {
+    if (item.startMs > cursorMs) segments.push({ kind: 'gap', startMs: cursorMs, endMs: item.startMs });
+    segments.push({ kind: 'source', ...item });
+    cursorMs = item.endMs;
+  }
+  return segments;
+}
+
+function gapArgs(outputPath, durationSeconds, width, height, fps) {
+  return [
+    '-y', '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=${fps}`,
+    '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000',
+    '-t', String(durationSeconds), '-map', '0:v:0', '-map', '1:a:0',
+    '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
+    '-movflags', '+faststart', outputPath,
+  ];
 }
 
 function run(command, args, options = {}) {
@@ -262,13 +285,18 @@ async function renderLifeMovie(job) {
     }
 
     const clipPaths = [];
-    for (let index = 0; index < input.timeline.length; index += 1) {
-      const item = input.timeline[index];
-      const source = input.sourceById.get(item.sourceId);
-      const sourcePath = localBySource.get(item.sourceId);
+    const segments = renderSegments(input.timeline);
+    for (let index = 0; index < segments.length; index += 1) {
+      const item = segments[index];
       const clipPath = path.join(workDir, `clip-${String(index).padStart(4, '0')}.mp4`);
       const durationSeconds = (item.endMs - item.startMs) / 1000;
-      await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps));
+      if (item.kind === 'gap') {
+        await run('ffmpeg', gapArgs(clipPath, durationSeconds, input.width, input.height, input.fps));
+      } else {
+        const source = input.sourceById.get(item.sourceId);
+        const sourcePath = localBySource.get(item.sourceId);
+        await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps));
+      }
       clipPaths.push(clipPath);
     }
 
@@ -300,6 +328,8 @@ async function renderLifeMovie(job) {
       publicReleaseAuthorized: false,
       sourceCount: input.sources.length,
       timelineItemCount: input.timeline.length,
+      timeline: input.timeline,
+      gapTreatment: 'black-video-silent-audio',
       sources: input.sources.map((source) => ({
         id: source.id,
         bucket: source.bucket,
