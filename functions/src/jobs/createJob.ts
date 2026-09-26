@@ -27,6 +27,7 @@ const ALLOWED_JOB_TYPE_PATTERNS = [
   /^storytime\./,
   /^analytics\./,
   /^communications\./,
+  /^web\.(search|fetch|agent)$/,
   /^admin\./,
   /^deployment\./,
   /^proof\./,
