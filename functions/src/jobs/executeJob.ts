@@ -5,6 +5,9 @@ import axios from 'axios';
 import { z } from 'zod';
 import type { Job } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
+import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJobTypes.js';
+import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
 import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
 
 // URAI Jobs worker routing audit markers.
@@ -39,27 +42,15 @@ const JobExecutionMessageSchema = z.object({
 });
 
 function getJobType(job: Job): string {
-  return String(job.type || job.jobType || 'narrator.tts');
+  return String(job.type || job.jobType || '');
 }
 
 function getWorkerEnvKey(jobType: string): string | null {
-  if (jobType === 'narrator.tts') return 'NARRATOR_WORKER_URL';
-  if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) return 'ASSET_WORKER_URL';
-  if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) return 'SPATIAL_WORKER_URL';
-  if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) return 'STUDIO_WORKER_URL';
-  if (jobType.startsWith('career.')) return 'CAREER_WORKER_URL';
-  if (jobType.startsWith('content.') || jobType.startsWith('content-')) return 'CONTENT_WORKER_URL';
-  if (jobType.startsWith('storytime.')) return 'STORYTIME_WORKER_URL';
-  if (jobType.startsWith('analytics.')) return 'ANALYTICS_WORKER_URL';
-  if (jobType.startsWith('communications.')) return 'COMMUNICATIONS_WORKER_URL';
-  return null;
+  return workerEnvKeyForJobType(jobType);
 }
 
 function getWorkerRoute(jobType: string): string {
-  if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) return '/';
-  if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) return '/';
-  if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) return '/';
-  return '/execute-job';
+  return workerRouteForJobType(jobType) || '/execute-job';
 }
 
 function getWorkerTarget(jobType: string): WorkerTarget | null {
@@ -74,7 +65,8 @@ function normalizedEnv(): string {
   return String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
 }
 
-function inlineFallbackAllowed(): boolean {
+function inlineFallbackAllowed(jobType?: string): boolean {
+  if (jobType === 'memory.private-source.transcribe') return false;
   if (PRODUCTION_ENVS.has(normalizedEnv())) return false;
   return process.env.URAI_JOBS_ALLOW_INLINE_FALLBACK === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
 }
@@ -135,7 +127,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
   const outputPrefix = cleanPrefix(payload.outputPrefix, `${jobType.replace(/[^a-z0-9]+/gi, '-')}/${jobId}`);
   const completedAt = new Date().toISOString();
 
-  if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) {
+  if (jobType === 'asset-render' || jobType === 'asset.render') {
     return {
       ok: true,
       mode: 'inline-fallback',
@@ -149,21 +141,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
     };
   }
 
-  if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) {
-    return {
-      ok: true,
-      mode: 'inline-fallback',
-      jobId,
-      jobType,
-      indexUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/spatial-index.json`,
-      manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
-      message: 'Local inline fallback completed. This is not live worker proof.',
-      payloadEcho: payload,
-      completedAt,
-    };
-  }
-
-  if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) {
+  if (jobType === 'studio.render.video') {
     return {
       ok: true,
       mode: 'inline-fallback',
@@ -177,13 +155,13 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
     };
   }
 
-  if (jobType.startsWith('career.')) {
+  if (jobType === 'narrator.tts') {
     return {
       ok: true,
       mode: 'inline-fallback',
       jobId,
       jobType,
-      careerUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/career.json`,
+      transcriptUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/narration.txt`,
       manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
       message: 'Local inline fallback completed. This is not live worker proof.',
       payloadEcho: payload,
@@ -191,17 +169,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
     };
   }
 
-  return {
-    ok: true,
-    mode: 'inline-fallback',
-    jobId,
-    jobType,
-    transcriptUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/narration.txt`,
-    manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
-    message: 'Local inline fallback completed. This is not live worker proof.',
-    payloadEcho: payload,
-    completedAt,
-  };
+  throw new Error(`Inline fallback is not implemented for job type ${jobType}.`);
 }
 
 async function appendJobLog(jobId: string, input: { level: string; message: string; source: string; metadata?: Record<string, unknown> }) {
@@ -234,14 +202,43 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
     }
 
     const now = FieldValue.serverTimestamp();
+    const attemptCount = Number(current.execution?.attemptCount || 0);
+    const maxAttempts = Number(current.execution?.maxAttempts || current.maxAttempts || 3);
+
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || attemptCount >= maxAttempts) {
+      transaction.update(jobRef, {
+        status: 'DEAD',
+        error: { message: errorMessage },
+        lease: FieldValue.delete(),
+        updatedAt: now,
+        completedAt: now,
+        'execution.leaseToken': FieldValue.delete(),
+        'execution.completedAt': now,
+        'execution.asyncCallbackPending': false,
+        'execution.callbackTokenHash': FieldValue.delete(),
+        'execution.callbackLeaseToken': FieldValue.delete(),
+        'execution.callbackDeadlineAt': FieldValue.delete(),
+      });
+      transaction.set(queueRef, {
+        jobId,
+        status: 'DEAD',
+        lease: FieldValue.delete(),
+        updatedAt: now,
+      }, { merge: true });
+      return 'failed';
+    }
+
+    const retryDelayMs = Math.min(60000, 1000 * Math.pow(2, Math.max(1, attemptCount)));
+    const nextAvailableAt = new Date(Date.now() + retryDelayMs);
     transaction.update(jobRef, {
-      status: 'FAILED',
+      status: 'PENDING',
+      retryCount: FieldValue.increment(1),
       error: { message: errorMessage },
       lease: FieldValue.delete(),
       updatedAt: now,
-      completedAt: now,
+      completedAt: FieldValue.delete(),
       'execution.leaseToken': FieldValue.delete(),
-      'execution.completedAt': now,
+      'execution.completedAt': FieldValue.delete(),
       'execution.asyncCallbackPending': false,
       'execution.callbackTokenHash': FieldValue.delete(),
       'execution.callbackLeaseToken': FieldValue.delete(),
@@ -249,7 +246,9 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
     });
     transaction.set(queueRef, {
       jobId,
-      status: 'DONE',
+      status: 'PENDING',
+      availableAt: nextAvailableAt,
+      retryCount: FieldValue.increment(1),
       lease: FieldValue.delete(),
       updatedAt: now,
     }, { merge: true });
@@ -275,7 +274,7 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
   await appendJobLog(jobId, {
     level: 'error',
     source: 'executeJob',
-    message: 'Job execution failed.',
+    message: 'Job execution failed; retry or DEAD transition applied by canonical failure policy.',
     metadata: { error: errorMessage },
   });
 
@@ -284,7 +283,7 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
 
 export const executeJob = onMessagePublished({
   topic: JOB_EXECUTION_TOPIC,
-  secrets: [workerTokenSecret],
+  secrets: [workerTokenSecret, tinyFishApiKeySecret],
 }, async (event) => {
   const validationResult = JobExecutionMessageSchema.safeParse(event.data.message.json);
   if (!validationResult.success) {
@@ -307,6 +306,29 @@ export const executeJob = onMessagePublished({
     const decision = decideExecutionStart(job, leaseToken);
     if (decision.action === 'ignore') {
       return decision;
+    }
+
+    if (job.ownerUid && isConsentContext(job.consent)) {
+      const blockSnapshot = await transaction.get(consentBlockRef(job.ownerUid, job.consent.purpose));
+      const block = blockSnapshot.exists ? blockSnapshot.data() : null;
+      if (block?.active === true) {
+        const now = FieldValue.serverTimestamp();
+        transaction.update(jobRef, {
+          status: 'CANCELLED',
+          lease: FieldValue.delete(),
+          updatedAt: now,
+          completedAt: now,
+          'execution.leaseToken': FieldValue.delete(),
+          'execution.completedAt': now,
+        });
+        transaction.set(queueRef, {
+          jobId,
+          status: 'CANCELLED',
+          lease: FieldValue.delete(),
+          updatedAt: now,
+        }, { merge: true });
+        return { action: 'ignore' as const, reason: 'consent-revoked' as const };
+      }
     }
 
     const now = FieldValue.serverTimestamp();
@@ -358,7 +380,49 @@ export const executeJob = onMessagePublished({
   try {
     let result: unknown;
 
-    if (target) {
+    if (isTinyFishJobType(jobType)) {
+      await appendJobLog(jobId, {
+        level: 'info',
+        source: 'executeJob',
+        message: 'Executing governed TinyFish web job.',
+        metadata: { jobType, provider: 'tinyfish' },
+      });
+      result = await executeTinyFishJob(jobType, getPayloadRecord(job));
+    } else if (target) {
+      if (job.ownerUid && isConsentContext(job.consent)) {
+        const blockSnapshot = await consentBlockRef(job.ownerUid, job.consent.purpose).get();
+        if (blockSnapshot.exists && blockSnapshot.data()?.active === true) {
+          const now = FieldValue.serverTimestamp();
+          await db.runTransaction(async (transaction) => {
+            const currentSnapshot = await transaction.get(jobRef);
+            if (!currentSnapshot.exists) return;
+            const current = currentSnapshot.data() as Job;
+            if (current.status !== 'RUNNING' || current.execution?.leaseToken !== leaseToken) return;
+            transaction.update(jobRef, {
+              status: 'CANCELLED',
+              lease: FieldValue.delete(),
+              updatedAt: now,
+              completedAt: now,
+              'execution.leaseToken': FieldValue.delete(),
+              'execution.completedAt': now,
+            });
+            transaction.set(queueRef, {
+              jobId,
+              status: 'CANCELLED',
+              lease: FieldValue.delete(),
+              updatedAt: now,
+            }, { merge: true });
+          });
+          await appendJobLog(jobId, {
+            level: 'warn',
+            source: 'executeJob',
+            message: 'Worker dispatch blocked because consent was revoked.',
+            metadata: { jobType, consentPurpose: job.consent.purpose },
+          });
+          return;
+        }
+      }
+
       const workerUrl = target.url.replace(/\/$/, '');
       const route = target.route;
 
@@ -398,7 +462,7 @@ export const executeJob = onMessagePublished({
         throw new Error(`No worker mapping is registered for job type ${jobType}.`);
       }
 
-      if (!inlineFallbackAllowed()) {
+      if (!inlineFallbackAllowed(jobType)) {
         throw new Error(`Worker URL ${envKey} is required for ${normalizedEnv()} runtime; inline fallback is disabled.`);
       }
 

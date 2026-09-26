@@ -52,9 +52,12 @@ WEBHOOK_SIGNING_SECRET
 GCS_BUCKET_NAME
 NARRATOR_WORKER_URL
 ASSET_WORKER_URL
-SPATIAL_WORKER_URL
 STUDIO_WORKER_URL
+COMMUNICATIONS_WORKER_URL
+PRIVATE_SOURCE_WORKER_URL
 ```
+
+Only job types present in `functions/src/core/runtimeJobTypes.ts` are active runtime families. Historical/future Spatial, Career, Content, Storytime, Analytics, Admin, Deployment, Proof and similar families must not be provisioned merely because older docs or code mention them; they remain fail-closed until separately promoted.
 
 Optional where used:
 
@@ -97,6 +100,8 @@ export GCLOUD_PROJECT=<project-id>
 export GCP_REGION=us-central1
 export GCS_BUCKET_NAME=<bucket-name>
 pnpm deploy:workers
+
+# This command is source-SHA and rollback-authority bound. Do not replace it with legacy direct gcloud/firebase deploy scripts.
 ```
 
 Verify the expected worker services are healthy and then record their current Cloud Run URLs in protected runtime configuration.

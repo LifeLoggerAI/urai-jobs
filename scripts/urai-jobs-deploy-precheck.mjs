@@ -47,6 +47,11 @@ check(Boolean(firebaseJson.emulators), "firebase emulators configured");
 check(Boolean(firebaseJson.emulators?.storage), "firebase storage emulator configured");
 
 const storageRules = fs.readFileSync("storage.rules", "utf8");
+const firestoreRules = fs.readFileSync("firestore.rules", "utf8");
+const functionsIndex = fs.readFileSync("functions/src/index.ts", "utf8");
+const consentBlocks = fs.readFileSync("functions/src/privacy/consentBlocks.ts", "utf8");
+const consentRevocation = fs.readFileSync("functions/src/privacy/consentRevocation.ts", "utf8");
+const runtimeJobTypes = fs.readFileSync("functions/src/core/runtimeJobTypes.ts", "utf8");
 
 check(
   !storageRules.includes("allow read, write: if request.auth != null"),
@@ -57,6 +62,60 @@ check(
   storageRules.includes("match /{allPaths=**}") &&
     storageRules.includes("allow read, write: if false"),
   "storage.rules has default deny"
+);
+
+check(
+  firestoreRules.includes("match /jobConsentBlocks/{blockId}") &&
+    firestoreRules.includes("match /jobConsentEventReceipts/{receiptId}"),
+  "Firestore explicitly protects consent control collections"
+);
+
+check(
+  functionsIndex.includes("ingestConsentRevocation"),
+  "consent revocation endpoint is exported"
+);
+
+check(
+  functionsIndex.includes("submitDataRightsRequest") &&
+    functionsIndex.includes("getDataRightsRequest") &&
+    functionsIndex.includes("listDataRightsRequests"),
+  "data-rights control plane is exported"
+);
+
+check(
+  firestoreRules.includes("match /dataRightsRequests/{requestId}"),
+  "Firestore explicitly protects data-rights request records"
+);
+
+check(
+  consentRevocation.includes("URAI_JOBS_PRIVACY_EVENT_TOKEN") &&
+    consentRevocation.includes("consent.revoked.v1"),
+  "consent revocation endpoint requires governed event contract and secret"
+);
+
+check(
+  consentBlocks.includes("jobConsentBlocks") &&
+    consentBlocks.includes("jobConsentEventReceipts"),
+  "consent block and replay receipt stores are canonical"
+);
+
+for (const envKey of [
+  "NARRATOR_WORKER_URL",
+  "ASSET_WORKER_URL",
+  "STUDIO_WORKER_URL",
+  "COMMUNICATIONS_WORKER_URL",
+  "PRIVATE_SOURCE_WORKER_URL",
+]) {
+  check(runtimeJobTypes.includes(`workerEnvKey: '${envKey}'`), `runtime registry declares ${envKey}`);
+}
+
+check(
+  runtimeJobTypes.includes("'narrator.tts'") &&
+    runtimeJobTypes.includes("'asset.render'") &&
+    runtimeJobTypes.includes("'studio.render.video'") &&
+    runtimeJobTypes.includes("'communications.message.send'") &&
+    runtimeJobTypes.includes("'memory.private-source.transcribe'"),
+  "runtime registry declares every active governed family"
 );
 
 const packageJson = readJson("package.json");

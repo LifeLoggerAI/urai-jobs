@@ -120,8 +120,14 @@ requireText(
 requireText(
   '.github/workflows/urai-jobs-typecheck-diagnostics.yml',
   diagnostics,
+  'retention-days: 90',
+  'diagnostic artifact must use the supported 90-day public-repository release-evidence retention',
+);
+rejectText(
+  '.github/workflows/urai-jobs-typecheck-diagnostics.yml',
+  diagnostics,
   'retention-days: 365',
-  'diagnostic artifact must use release-evidence retention',
+  'diagnostic artifact must not request unsupported 365-day retention',
 );
 requireText(
   '.github/workflows/urai-jobs-typecheck-diagnostics.yml',

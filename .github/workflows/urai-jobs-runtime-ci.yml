@@ -20,6 +20,8 @@ env:
   # Prevent firebase-functions params from opening an interactive prompt in CI.
   # This is an emulator-only identity; protected deploys supply the real account.
   URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT: urai-jobs-emulator@demo-urai-jobs.iam.gserviceaccount.com
+  # Emulator-only token for the consent.revoked.v1 HTTP contract.
+  URAI_JOBS_PRIVACY_EVENT_TOKEN: e2e-privacy-event-token
 
 jobs:
   validate:
@@ -72,6 +74,16 @@ jobs:
       - name: Prove install preserved exact source
         shell: bash
         run: test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Verify actual Life Movies media timing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          node scripts/life-movies-media-timing-smoke.mjs
 
       - name: Verify activation readiness guardrails
         run: pnpm activation:verify
@@ -157,7 +169,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          printf 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT=%s\n' "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" > functions/.env.demo-urai-jobs
+          printf 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT=%s\nURAI_JOBS_PRIVACY_EVENT_TOKEN=%s\n' "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" "$URAI_JOBS_PRIVACY_EVENT_TOKEN" > functions/.env.demo-urai-jobs
           trap 'rm -f functions/.env.demo-urai-jobs' EXIT
           timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" --project demo-urai-jobs emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
           status=$?

@@ -10,14 +10,18 @@ FIREBASE_CONFIG_RECEIPT_PATH="${FIREBASE_CONFIG_RECEIPT_PATH:-docs/release-evide
 REPOSITORY_ROOT="$(pwd -P)"
 FIREBASE_DEPLOY_CONFIG_PATH="${URAI_FIREBASE_DEPLOY_CONFIG_PATH:-${REPOSITORY_ROOT}/.urai-jobs-firebase-${DEPLOY_SOURCE_SHA:-unknown}.json}"
 URAI_JOBS_WORKER_TOKEN_SECRET="${URAI_JOBS_WORKER_TOKEN_SECRET:-URAI_JOBS_WORKER_TOKEN}"
+URAI_STUDIO_JOBS_BRIDGE_TOKEN_SECRET="${URAI_STUDIO_JOBS_BRIDGE_TOKEN_SECRET:-URAI_STUDIO_JOBS_BRIDGE_TOKEN}"
 APPROVED_WORKER_TOKEN_VERSION=""
 RESOLVED_WORKER_TOKEN_VERSION=""
+APPROVED_STUDIO_BRIDGE_TOKEN_VERSION="${APPROVED_STUDIO_BRIDGE_TOKEN_VERSION:-}"
+RESOLVED_STUDIO_BRIDGE_TOKEN_VERSION=""
 
 : "${FIREBASE_PROJECT_ID:?FIREBASE_PROJECT_ID is required}"
 : "${GCLOUD_PROJECT:?GCLOUD_PROJECT is required}"
 : "${DEPLOY_SOURCE_SHA:?DEPLOY_SOURCE_SHA is required}"
 : "${URAI_FIREBASE_PREBUILT_VERIFIED:?URAI_FIREBASE_PREBUILT_VERIFIED is required}"
 : "${DEPLOY_TARGET_SECRET_VERSIONS_JSON:?DEPLOY_TARGET_SECRET_VERSIONS_JSON is required}"
+: "${APPROVED_STUDIO_BRIDGE_TOKEN_VERSION:?APPROVED_STUDIO_BRIDGE_TOKEN_VERSION is required}"
 
 command -v firebase >/dev/null 2>&1 || { echo "[FAIL] firebase CLI is required" >&2; exit 1; }
 command -v gcloud >/dev/null 2>&1 || { echo "[FAIL] gcloud CLI is required" >&2; exit 1; }
@@ -124,8 +128,36 @@ verify_worker_secret() {
   echo "[PASS] Firebase Functions worker token binding matches approved numeric version $APPROVED_WORKER_TOKEN_VERSION"
 }
 
+verify_studio_bridge_secret() {
+  [[ "$APPROVED_STUDIO_BRIDGE_TOKEN_VERSION" =~ ^[1-9][0-9]*$ ]] || {
+    echo "[FAIL] APPROVED_STUDIO_BRIDGE_TOKEN_VERSION must be an exact numeric Secret Manager version" >&2
+    exit 1
+  }
+  local state
+  state="$(gcloud secrets versions describe "$APPROVED_STUDIO_BRIDGE_TOKEN_VERSION" \
+    --secret "$URAI_STUDIO_JOBS_BRIDGE_TOKEN_SECRET" \
+    --project "$GCLOUD_PROJECT" \
+    --format='value(state)')"
+  [ "$state" = "ENABLED" ] || {
+    echo "[FAIL] Approved Studio bridge token version $APPROVED_STUDIO_BRIDGE_TOKEN_VERSION is not ENABLED" >&2
+    exit 1
+  }
+  RESOLVED_STUDIO_BRIDGE_TOKEN_VERSION="$(gcloud secrets versions list "$URAI_STUDIO_JOBS_BRIDGE_TOKEN_SECRET" \
+    --project "$GCLOUD_PROJECT" \
+    --filter='state=ENABLED' \
+    --sort-by='~createTime' \
+    --limit=1 \
+    --format='value(name.basename())')"
+  [ "$RESOLVED_STUDIO_BRIDGE_TOKEN_VERSION" = "$APPROVED_STUDIO_BRIDGE_TOKEN_VERSION" ] || {
+    echo "[FAIL] Studio bridge secret latest enabled version $RESOLVED_STUDIO_BRIDGE_TOKEN_VERSION does not match protected approval $APPROVED_STUDIO_BRIDGE_TOKEN_VERSION" >&2
+    exit 1
+  }
+  export APPROVED_STUDIO_BRIDGE_TOKEN_VERSION RESOLVED_STUDIO_BRIDGE_TOKEN_VERSION
+  echo "[PASS] Studio bridge Secret Manager binding matches approved numeric version $APPROVED_STUDIO_BRIDGE_TOKEN_VERSION"
+}
+
 write_functions_env() {
-  for key in NARRATOR_WORKER_URL ASSET_WORKER_URL GCS_BUCKET_NAME API_ALLOWED_ORIGINS URAI_ENV GCP_REGION GCLOUD_PROJECT GOOGLE_CLOUD_PROJECT FIREBASE_PROJECT_ID DEPLOY_SOURCE_SHA URAI_JOBS_TERMINAL_EVENT_TOPIC URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT; do
+  for key in NARRATOR_WORKER_URL ASSET_WORKER_URL COMMUNICATIONS_WORKER_URL PRIVATE_SOURCE_WORKER_URL GCS_BUCKET_NAME API_ALLOWED_ORIGINS URAI_ENV GCP_REGION GCLOUD_PROJECT GOOGLE_CLOUD_PROJECT FIREBASE_PROJECT_ID DEPLOY_SOURCE_SHA URAI_JOBS_TERMINAL_EVENT_TOPIC URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT; do
     if [ -z "${!key:-}" ] || [[ "${!key}" == *$'\n'* ]] || [[ "${!key}" == *$'\r'* ]]; then
       echo "[FAIL] $key is missing or contains a newline" >&2
       exit 1
@@ -142,10 +174,12 @@ API_ALLOWED_ORIGINS=$API_ALLOWED_ORIGINS
 GCS_BUCKET_NAME=$GCS_BUCKET_NAME
 NARRATOR_WORKER_URL=$NARRATOR_WORKER_URL
 ASSET_WORKER_URL=$ASSET_WORKER_URL
+COMMUNICATIONS_WORKER_URL=$COMMUNICATIONS_WORKER_URL
+PRIVATE_SOURCE_WORKER_URL=$PRIVATE_SOURCE_WORKER_URL
 URAI_JOBS_TERMINAL_EVENT_TOPIC=$URAI_JOBS_TERMINAL_EVENT_TOPIC
 URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT=$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT
 EOF
-  for key in SPATIAL_WORKER_URL STUDIO_WORKER_URL CAREER_WORKER_URL CONTENT_WORKER_URL STORYTIME_WORKER_URL ANALYTICS_WORKER_URL COMMUNICATIONS_WORKER_URL PUBSUB_JOB_EXECUTION_TOPIC URAI_JOBS_WORKER_TIMEOUT_MS; do
+  for key in STUDIO_WORKER_URL CONTENT_WORKER_URL STORYTIME_WORKER_URL ANALYTICS_WORKER_URL PUBSUB_JOB_EXECUTION_TOPIC URAI_JOBS_WORKER_TIMEOUT_MS; do
     if [ -n "${!key:-}" ]; then
       [[ "${!key}" != *$'\n'* && "${!key}" != *$'\r'* ]] || { echo "[FAIL] $key contains a newline" >&2; exit 1; }
       printf '%s=%s\n' "$key" "${!key}" >> "$FUNCTIONS_ENV_FILE"
@@ -194,6 +228,9 @@ const receipt = {
   allowedOrigins: String(process.env.API_ALLOWED_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean).sort(),
   narratorWorkerUrl: process.env.NARRATOR_WORKER_URL,
   assetWorkerUrl: process.env.ASSET_WORKER_URL,
+  communicationsWorkerUrl: process.env.COMMUNICATIONS_WORKER_URL,
+  privateSourceWorkerUrl: process.env.PRIVATE_SOURCE_WORKER_URL,
+  studioWorkerUrl: process.env.STUDIO_WORKER_URL || null,
   terminalEventTopic: process.env.URAI_JOBS_TERMINAL_EVENT_TOPIC,
   firebaseCliVersion: process.env.FIREBASE_CLI_VERSION || null,
   firebaseConfigSha256: hashFile(process.env.FIREBASE_DEPLOY_CONFIG_PATH),
@@ -201,6 +238,9 @@ const receipt = {
   workerTokenSecretName: process.env.URAI_JOBS_WORKER_TOKEN_SECRET,
   approvedWorkerTokenVersion: process.env.APPROVED_WORKER_TOKEN_VERSION,
   resolvedWorkerTokenVersion: process.env.RESOLVED_WORKER_TOKEN_VERSION,
+  studioBridgeTokenSecretName: process.env.URAI_STUDIO_JOBS_BRIDGE_TOKEN_SECRET,
+  approvedStudioBridgeTokenVersion: process.env.APPROVED_STUDIO_BRIDGE_TOKEN_VERSION,
+  resolvedStudioBridgeTokenVersion: process.env.RESOLVED_STUDIO_BRIDGE_TOKEN_VERSION,
   buildInfoPath: '/api/buildinfo',
   buildInfoExpectedSha: process.env.DEPLOY_SOURCE_SHA,
   deploymentCommandCompleted: process.env.DEPLOYMENT_COMPLETED === 'true',
@@ -229,6 +269,7 @@ if ! ensure_hosting_site "$HOSTING_SITE"; then
 fi
 
 verify_worker_secret
+verify_studio_bridge_secret
 write_functions_env
 write_temporary_config
 node scripts/firebase-prebuilt-manifest.mjs --verify
@@ -240,6 +281,7 @@ firebase deploy \
   --only functions,firestore,hosting \
   --project "$FIREBASE_PROJECT_ID" \
   --non-interactive
+verify_studio_bridge_secret
 verify_worker_secret
 write_config_receipt true
 

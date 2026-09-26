@@ -1,6 +1,8 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { createHash } from 'node:crypto';
+import { prepareDataRightsRequestExport } from '../functions/lib/functions/privacy/dataRightsRequestExport.js';
 
 const E2E_TIMESTAMP = Date.now();
 const PROJECT_ID = process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || 'demo-urai-jobs';
@@ -70,6 +72,19 @@ async function invokeCallable(name, idToken, data) {
   return { response, body };
 }
 
+async function invokeHttpFunction(name, body, bearerToken) {
+  const response = await fetch(`${FUNCTIONS_EMULATOR_ORIGIN}/${PROJECT_ID}/us-central1/${name}`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${bearerToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const parsed = await response.json().catch(() => ({}));
+  return { response, body: parsed };
+}
+
 async function callCallable(name, idToken, data) {
   const { response, body } = await invokeCallable(name, idToken, data);
   if (!response.ok || body.error) {
@@ -85,7 +100,8 @@ async function expectCallableError(name, idToken, data, expectedTokens) {
   }
 
   const serialized = JSON.stringify(body).toLowerCase();
-  if (!expectedTokens.some((token) => serialized.includes(token.toLowerCase()))) {
+  const normalizedSerialized = serialized.replaceAll('_', '-');
+  if (!expectedTokens.some((token) => normalizedSerialized.includes(token.toLowerCase().replaceAll('_', '-')))) {
     fail(`${name} returned the wrong error. Expected one of ${expectedTokens.join(', ')}, got ${JSON.stringify(body)}`);
   }
   return body.error;
@@ -134,6 +150,145 @@ async function main() {
     const adminToken = await signInWithPassword(ADMIN_EMAIL, ADMIN_PASSWORD);
     const userToken = await signInWithPassword(USER_EMAIL, USER_PASSWORD);
     pass('Emulator ID tokens acquired.');
+
+    log('Testing governed data-rights intake retries and owner boundaries...');
+    const rightsPayload = { requestType: 'EXPORT', idempotencyKey: `rights-${E2E_TIMESTAMP}` };
+    const rightsResults = await Promise.all(Array.from({ length: 3 }, () => callCallable('submitDataRightsRequest', userToken, rightsPayload)));
+    const rightsId = rightsResults[0]?.requestId;
+    if (!rightsId || rightsResults.some(result => result.requestId !== rightsId)) fail('Concurrent rights retries created different requests.');
+    if (rightsResults.some(result => result.executionState !== 'HARD_OFF_PENDING_GOVERNED_WORKER')) fail('Rights retry changed execution boundary.');
+    const rightsRef = db.collection('dataRightsRequests').doc(rightsId);
+    const rightsRecord = (await rightsRef.get()).data();
+    const rightsAudit = await rightsRef.collection('audit').get();
+    if (rightsRecord?.ownerUid !== USER_UID || rightsAudit.size !== 1 || rightsAudit.docs[0].data().actorUid !== USER_UID) fail('Owner-bound request/audit receipt mismatch.');
+    await expectCallableError('submitDataRightsRequest', userToken, { ...rightsPayload, requestType: 'DELETE' }, ['already_exists', 'already-exists']);
+    await expectCallableError('submitDataRightsRequest', userToken, { ...rightsPayload, ownerUid: ADMIN_UID }, ['invalid_argument', 'invalid-argument']);
+    await expectCallableError('getDataRightsRequest', adminToken, { requestId: rightsId }, ['permission-denied']);
+    await expectCallableError('listDataRightsRequests', userToken, {}, ['permission-denied']);
+    const ownedRights = await callCallable('getDataRightsRequest', userToken, { requestId: rightsId });
+    if (ownedRights?.request?.requestId !== rightsId) fail('Owner cannot read own data-rights request.');
+    const adminRights = await callCallable('submitDataRightsRequest', adminToken, rightsPayload);
+    if (adminRights.requestId === rightsId) fail('Rights idempotency key crossed owner boundaries.');
+    const listedRights = await callCallable('listDataRightsRequests', adminToken, { status: 'PENDING', limit: 100 });
+    if (!listedRights.requests?.some(request => request.requestId === rightsId)) fail('Filtered operator list omitted rights request.');
+    pass('Concurrent rights retries are atomic, owner-bound, conflict-rejecting and execution-hard-off.');
+    const requestExport = await prepareDataRightsRequestExport(db, USER_UID);
+    if (requestExport.requestCount !== 1 || requestExport.auditCount !== 1 || requestExport.recordCount !== 2) fail('Request contributor count mismatch.');
+    if (requestExport.payload.requests[0]?.requestId !== rightsId || requestExport.crossSystemComplete !== false || requestExport.exportDeliveryActive !== false) fail('Request contributor scope or activation boundary mismatch.');
+    if (JSON.stringify(requestExport).includes(ADMIN_UID)) fail('Request contributor leaked unrelated owner data.');
+    pass('Dormant request-record export preparation reads only the owner receipt and audit, with bounded scope and digest.');
+
+
+    log('Testing private-source creation fails closed without canonical consent context...');
+    await expectCallableError('createJob', userToken, {
+      jobType: 'memory.private-source.transcribe',
+      payload: {
+        sourceReceiptRef: 'receipt://e2e/private-source',
+        requestedPurpose: 'transcribe',
+      },
+      idempotencyKey: `private-source-no-consent-${E2E_TIMESTAMP}`,
+    }, ['failed-precondition', 'consent']);
+    pass('Private-source creation fails closed when consent context is missing.');
+
+    log('Testing consent revocation ingestion, acknowledgement integrity, and duplicate replay...');
+    const privacyToken = 'e2e-privacy-event-token';
+    const revocationEvent = {
+      type: 'consent.revoked.v1',
+      eventId: `consent-revoked-e2e-${E2E_TIMESTAMP}`,
+      ownerUid: USER_UID,
+      purpose: 'memory.private-source.transcribe',
+      policyVersion: 'e2e-policy-v1',
+      decisionReceiptId: `decision-${E2E_TIMESTAMP}`,
+      correlationId: `corr-${E2E_TIMESTAMP}`,
+      revokedAt: new Date().toISOString(),
+    };
+
+    const firstRevocation = await invokeHttpFunction('ingestConsentRevocation', revocationEvent, privacyToken);
+    if (!firstRevocation.response.ok || firstRevocation.body?.ok !== true) {
+      fail(`First consent revocation ingestion failed: ${JSON.stringify(firstRevocation.body)}`);
+    }
+    const firstAck = firstRevocation.body.acknowledgement || {};
+    if (firstAck.eventId !== revocationEvent.eventId || firstAck.status !== 'blocked' || !firstAck.integrityHash) {
+      fail(`Consent revocation acknowledgement is incomplete: ${JSON.stringify(firstAck)}`);
+    }
+
+    const expectedHash = createHash('sha256').update([
+      revocationEvent.eventId,
+      revocationEvent.ownerUid,
+      revocationEvent.purpose,
+      revocationEvent.policyVersion,
+      revocationEvent.decisionReceiptId,
+      'blocked',
+    ].join('\n')).digest('hex');
+    if (firstAck.integrityHash !== expectedHash) {
+      fail(`Consent acknowledgement integrity hash mismatch: expected ${expectedHash}, got ${firstAck.integrityHash}`);
+    }
+
+    const blockId = createHash('sha256').update(USER_UID + '\n' + revocationEvent.purpose).digest('hex');
+    const blockSnap = await db.collection('jobConsentBlocks').doc(blockId).get();
+    if (!blockSnap.exists || blockSnap.data()?.active !== true) {
+      fail('Consent revocation did not persist an active UID+purpose block.');
+    }
+
+    const duplicateRevocation = await invokeHttpFunction('ingestConsentRevocation', revocationEvent, privacyToken);
+    if (!duplicateRevocation.response.ok || duplicateRevocation.body?.ok !== true) {
+      fail(`Duplicate consent revocation ingestion failed: ${JSON.stringify(duplicateRevocation.body)}`);
+    }
+    if (duplicateRevocation.body.acknowledgement?.integrityHash !== expectedHash) {
+      fail('Duplicate revocation did not return the original acknowledgement integrity hash.');
+    }
+    const receiptDocs = await db.collection('jobConsentEventReceipts').get();
+    const matchingReceipts = receiptDocs.docs.filter((doc) => doc.data()?.eventId === revocationEvent.eventId);
+    if (matchingReceipts.length !== 1) {
+      fail(`Expected exactly one replay receipt for revocation event, found ${matchingReceipts.length}.`);
+    }
+    pass('Consent revocation ingestion is authenticated, replay-safe, block-persisting, and integrity-acknowledged.');
+
+    log('Testing Data Rights request control plane...');
+    const exportRequest = await callCallable('submitDataRightsRequest', userToken, {
+      requestType: 'EXPORT',
+      format: 'json',
+      note: 'E2E export request',
+    });
+    if (!exportRequest?.requestId || exportRequest.status !== 'PENDING') {
+      fail(`submitDataRightsRequest returned unexpected result: ${JSON.stringify(exportRequest)}`);
+    }
+    if (exportRequest.executionState !== 'HARD_OFF_PENDING_GOVERNED_WORKER') {
+      fail(`Data Rights request must remain hard-off: ${JSON.stringify(exportRequest)}`);
+    }
+
+    const ownerReadback = await callCallable('getDataRightsRequest', userToken, {
+      requestId: exportRequest.requestId,
+    });
+    if (ownerReadback?.request?.requestId !== exportRequest.requestId || ownerReadback.request.status !== 'PENDING') {
+      fail(`Owner-scoped data-rights readback failed: ${JSON.stringify(ownerReadback)}`);
+    }
+    if (ownerReadback.request.executionState !== 'HARD_OFF_PENDING_GOVERNED_WORKER') {
+      fail(`Owner readback lost hard-off execution state: ${JSON.stringify(ownerReadback)}`);
+    }
+
+    const adminList = await callCallable('listDataRightsRequests', adminToken, {
+      status: 'PENDING',
+      limit: 100,
+    });
+    const rightsRequests = Array.isArray(adminList?.requests) ? adminList.requests : [];
+    if (!rightsRequests.some((entry) => entry.requestId === exportRequest.requestId && entry.ownerUid === USER_UID)) {
+      fail(`Admin list did not include the user Data Rights request: ${JSON.stringify(adminList)}`);
+    }
+
+    const auditSnap = await db.collection('dataRightsRequests').doc(exportRequest.requestId).collection('audit').doc('submitted').get();
+    if (!auditSnap.exists || auditSnap.data()?.event !== 'DATA_RIGHTS_REQUEST_SUBMITTED') {
+      fail('Data Rights request did not persist the submission audit record.');
+    }
+
+    const adminDeleteRequest = await callCallable('submitDataRightsRequest', adminToken, {
+      requestType: 'DELETE',
+      note: 'E2E owner-isolation request',
+    });
+    await expectCallableError('getDataRightsRequest', userToken, {
+      requestId: adminDeleteRequest.requestId,
+    }, ['permission-denied', 'access']);
+    pass('Data Rights intake, hard-off state, audit trail, admin listing, and owner isolation are verified.');
 
     log('Creating an idempotency-bound job as the permitted user...');
     const createResult = await callCallable('createJob', userToken, {

@@ -8,7 +8,7 @@ const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const HEX64_PATTERN = /^[0-9a-f]{64}$/;
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const NUMERIC_PATTERN = /^[1-9][0-9]*$/;
-const APPROVED_WORKERS = ['asset-worker', 'narrator-worker'];
+const APPROVED_WORKERS = ['asset-worker', 'narrator-worker', 'studio-worker'];
 
 function nonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -72,8 +72,8 @@ function validateLedger(ledger, expectedSourceSha) {
     if (!Number.isInteger(entry.sourceTotalBytes) || entry.sourceTotalBytes <= 0) failures.push(`${prefix}.sourceTotalBytes must be positive`);
   }
 
-  if (stableJson([...entries.keys()].sort()) !== stableJson(APPROVED_WORKERS)) {
-    failures.push('source ledger must contain exactly the canonical workers');
+  if (!entries.size || [...entries.keys()].some((worker) => !APPROVED_WORKERS.includes(worker))) {
+    failures.push('source ledger must contain only approved workers');
   }
   if (failures.length) throw new Error(`worker build source ledger validation failed:\n- ${failures.join('\n- ')}`);
   return entries;
@@ -146,8 +146,8 @@ export function createWorkerBuildProvenanceEvidence({
     });
   }
 
-  if (stableJson([...seenWorkers].sort()) !== stableJson(APPROVED_WORKERS)) {
-    throw new Error('worker deployment receipt must contain exactly the canonical workers');
+  if (stableJson([...seenWorkers].sort()) !== stableJson([...ledgerEntries.keys()].sort())) {
+    throw new Error('worker deployment receipt and source ledger must contain the same approved worker set');
   }
 
   const evidence = {
@@ -203,7 +203,7 @@ export function validateWorkerBuildProvenanceEvidence(evidence) {
     if (service.buildImageDigest !== service.deployedImageDigest) failures.push(`${prefix} build and deployed digests must match`);
     if (!nonEmptyString(service.deployedRevision) || !String(service.deployedRevision).startsWith(`${service.worker}-`)) failures.push(`${prefix}.deployedRevision must belong to the worker`);
   }
-  if (stableJson([...workers].sort()) !== stableJson(APPROVED_WORKERS)) failures.push('services must contain exactly the canonical workers');
+  if (!workers.size || [...workers].some((worker) => !APPROVED_WORKERS.includes(worker))) failures.push('services must contain only approved workers');
   if (failures.length) throw new Error(`worker build provenance validation failed:\n- ${failures.join('\n- ')}`);
   return true;
 }
