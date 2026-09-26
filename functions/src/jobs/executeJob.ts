@@ -7,6 +7,7 @@ import type { Job } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJobTypes.js';
+import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
 import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
 
 // URAI Jobs worker routing audit markers.
@@ -282,7 +283,7 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
 
 export const executeJob = onMessagePublished({
   topic: JOB_EXECUTION_TOPIC,
-  secrets: [workerTokenSecret],
+  secrets: [workerTokenSecret, tinyFishApiKeySecret],
 }, async (event) => {
   const validationResult = JobExecutionMessageSchema.safeParse(event.data.message.json);
   if (!validationResult.success) {
@@ -379,7 +380,15 @@ export const executeJob = onMessagePublished({
   try {
     let result: unknown;
 
-    if (target) {
+    if (isTinyFishJobType(jobType)) {
+      await appendJobLog(jobId, {
+        level: 'info',
+        source: 'executeJob',
+        message: 'Executing governed TinyFish web job.',
+        metadata: { jobType, provider: 'tinyfish' },
+      });
+      result = await executeTinyFishJob(jobType, getPayloadRecord(job));
+    } else if (target) {
       if (job.ownerUid && isConsentContext(job.consent)) {
         const blockSnapshot = await consentBlockRef(job.ownerUid, job.consent.purpose).get();
         if (blockSnapshot.exists && blockSnapshot.data()?.active === true) {

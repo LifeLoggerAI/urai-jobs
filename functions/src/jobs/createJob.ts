@@ -13,7 +13,7 @@ import {
   type IdempotencyBinding,
 } from '../core/jobsReliability.js';
 import { StudioLifeMovieRenderPayloadSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
-import { isActiveRuntimeJobType } from '../core/runtimeJobTypes.js';
+import { isActiveRuntimeJobType, RUNTIME_JOB_REGISTRY } from '../core/runtimeJobTypes.js';
 
 const MAX_PAYLOAD_BYTES = parseInt(process.env.URAI_JOBS_MAX_PAYLOAD_BYTES || '', 10) || 32768;
 const MAX_CREATE_PER_MINUTE = parseInt(process.env.URAI_JOBS_CREATE_RATE_LIMIT_PER_MINUTE || '', 10) || 10;
@@ -134,6 +134,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   if (!isActiveRuntimeJobType(jobType)) {
     throw httpsError('invalid-argument', `Unsupported or inactive job type: ${jobType}`);
   }
+  const runtimeDefinition = RUNTIME_JOB_REGISTRY[jobType];
 
   if (isPrivateSourceJobType(jobType)) {
     if (!consent) {
@@ -247,7 +248,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     retryCount: 0,
     execution: {
       attemptCount: 0,
-      maxAttempts: 3,
+      maxAttempts: runtimeDefinition.maxAttempts,
     },
   };
 
