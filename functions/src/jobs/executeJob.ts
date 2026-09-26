@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { Job } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
+import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
 
 // URAI Jobs worker routing audit markers.
 // asset/spatial/studio subsystem workers route: '/'
@@ -52,6 +53,7 @@ function getWorkerEnvKey(jobType: string): string | null {
   if (jobType.startsWith('storytime.')) return 'STORYTIME_WORKER_URL';
   if (jobType.startsWith('analytics.')) return 'ANALYTICS_WORKER_URL';
   if (jobType.startsWith('communications.')) return 'COMMUNICATIONS_WORKER_URL';
+  if (isTinyFishJobType(jobType)) return null;
   return null;
 }
 
@@ -284,7 +286,7 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
 
 export const executeJob = onMessagePublished({
   topic: JOB_EXECUTION_TOPIC,
-  secrets: [workerTokenSecret],
+  secrets: [workerTokenSecret, tinyFishApiKeySecret],
 }, async (event) => {
   const validationResult = JobExecutionMessageSchema.safeParse(event.data.message.json);
   if (!validationResult.success) {
@@ -358,7 +360,15 @@ export const executeJob = onMessagePublished({
   try {
     let result: unknown;
 
-    if (target) {
+    if (isTinyFishJobType(jobType)) {
+      await appendJobLog(jobId, {
+        level: 'info',
+        source: 'executeJob',
+        message: 'Executing governed TinyFish web job.',
+        metadata: { jobType, provider: 'tinyfish' },
+      });
+      result = await executeTinyFishJob(jobType, getPayloadRecord(job));
+    } else if (target) {
       const workerUrl = target.url.replace(/\/$/, '');
       const route = target.route;
 
