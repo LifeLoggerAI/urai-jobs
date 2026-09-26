@@ -124,6 +124,7 @@ The safe request/control plane is implemented in `functions/src/privacy/dataRigh
 Implemented now:
 
 - authenticated export/deletion request intake;
+- optional `idempotencyKey` (8–128 ASCII letters/digits/._:-), scoped to the authenticated owner; concurrent identical retries return one request, changed payloads reject with `already-exists`;
 - owner-scoped request readback;
 - admin/operator request listing;
 - server-only Firestore request and audit records, created atomically in one batch;
@@ -149,3 +150,9 @@ Those operations remain hard-off until the governed worker, retention/legal poli
 - Add completion notification delivery.
 - Add retention/TTL evidence and backup/restore drill receipt.
 - Add admin review UI if the operator console does not already expose the request queue.
+
+## Dormant request-record export preparation
+
+`prepareDataRightsRequestExport` is internal source preparation for the exact request/audit collections registered by Privacy. It is not exported as a callable, attached to a trigger, or admitted as a runtime job. It does not complete a request or deliver a download. Broader candidate/employer/jobs/queue/provider data is not covered and `crossSystemComplete` remains false.
+
+Preparation queries records for the server-supplied owner UID (future integration must derive it from authenticated authority), checks ownership again, paginates both registered collections, exports only allowlisted receipt fields, and returns counts plus a deterministic payload SHA-256. Notes, fingerprints, actor identities, unknown fields and credentials are omitted. Unregistered schemas, source failures and the 10,000-record bound fail the entire preparation rather than return a successful partial payload. Protected staging evidence and approved scope/retention/legal policy are still required before worker integration or activation.

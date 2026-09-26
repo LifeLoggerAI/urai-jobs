@@ -10,13 +10,24 @@ const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKi
 let committed = [];
 let failCommit = false;
 let batches = 0;
+const records = new Map();
 const db = {
   collection(name) {
     assert.equal(name, 'dataRightsRequests');
-    return { doc: () => ({ id: 'request-123', collection: name => {
+    return { doc: (id = 'request-123') => ({ id, path: `requests/${id}`, collection: name => {
       assert.equal(name, 'audit');
-      return { doc: id => ({ id }) };
+      return { doc: auditId => ({ id: auditId, path: `requests/${id}/audit/${auditId}` }) };
     } }) };
+  },
+  async runTransaction(callback) {
+    const writes = [];
+    const result = await callback({
+      async get(ref) { return { exists: records.has(ref.path), data: () => records.get(ref.path) }; },
+      create(ref, record) { writes.push({ path: ref.path, record }); },
+    });
+    if (failCommit) throw new Error('unavailable');
+    for (const write of writes) records.set(write.path, write.record);
+    return result;
   },
   batch() {
     batches++;
@@ -37,7 +48,7 @@ vm.runInNewContext(code, {
     if (name === 'firebase-admin/firestore') return { getFirestore: () => db, FieldValue: { serverTimestamp: () => 'server-time' } };
     if (name === '../core/auth.js') return { withAuthenticatedRole: (_roles, handler) => handler };
     if (name === '../core/errors.js') return { httpsError: (code, message) => Object.assign(new Error(message), { code }) };
-    if (name === 'zod') return require(name);
+    if (name === 'zod' || name === 'node:crypto') return require(name);
     throw new Error(`Unexpected dependency: ${name}`);
   },
 });
@@ -64,3 +75,22 @@ assert.ok(indexes.some(index => index.collectionGroup === 'dataRightsRequests' &
   { fieldPath: 'status', order: 'ASCENDING' }, { fieldPath: 'createdAt', order: 'DESCENDING' },
 ])), 'status-filtered operator listing requires its deployed composite index');
 console.log('[PASS] Data-rights atomic intake, failure propagation, authority and listing index');
+
+const keyed = { requestType: 'EXPORT', idempotencyKey: 'retry-key-123' };
+const first = await submit(keyed, context);
+const again = await submit({ ...keyed, format: 'json' }, context);
+assert.equal(first.requestId, again.requestId);
+assert.equal(records.size, 2, 'retry must not duplicate request or audit');
+assert.equal(again.executionState, 'HARD_OFF_PENDING_GOVERNED_WORKER');
+await assert.rejects(submit({ ...keyed, requestType: 'DELETE' }, context), error => error.code === 'already-exists');
+assert.equal(records.size, 2);
+const other = await submit(keyed, { auth: { uid: 'owner-2' } });
+assert.notEqual(other.requestId, first.requestId);
+assert.equal(records.size, 4);
+failCommit = true;
+await assert.rejects(submit({ ...keyed, idempotencyKey: 'retry-failure-123' }, context), /unavailable/);
+assert.equal(records.size, 4, 'failed transaction must persist neither record');
+failCommit = false;
+await submit({ ...keyed, idempotencyKey: 'retry-failure-123' }, context);
+assert.equal(records.size, 6, 'failed submission must remain retryable');
+console.log('[PASS] Data-rights retries preserve owner and payload authority, audit uniqueness and failure recovery');
