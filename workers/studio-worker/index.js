@@ -83,8 +83,8 @@ function parsePayload(job) {
   const width = Number(payload.width || 1920);
   const height = Number(payload.height || 1080);
   const fps = Number(payload.fps || 30);
-  if (!Number.isInteger(width) || width < 320 || width > 3840) throw new Error('invalid_width');
-  if (!Number.isInteger(height) || height < 320 || height > 3840) throw new Error('invalid_height');
+  if (!Number.isInteger(width) || width < 320 || width > 3840 || width % 2 !== 0) throw new Error('invalid_width');
+  if (!Number.isInteger(height) || height < 320 || height > 3840 || height % 2 !== 0) throw new Error('invalid_height');
   if (![24, 25, 30, 50, 60].includes(fps)) throw new Error('invalid_fps');
 
   const sources = Array.isArray(payload.sources) ? payload.sources : [];
