@@ -9,6 +9,11 @@ function requireText(path, text, description) {
   if (!source.includes(text)) failures.push(`${description}: ${path} is missing ${JSON.stringify(text)}`);
 }
 
+function requireRegex(path, pattern, description) {
+  const source = read(path);
+  if (!pattern.test(source)) failures.push(`${description}: ${path} does not match ${pattern}`);
+}
+
 function rejectText(path, text, description) {
   const source = read(path);
   if (source.includes(text)) failures.push(`${description}: ${path} still contains ${JSON.stringify(text)}`);
@@ -38,8 +43,13 @@ for (const [path, text, description] of [
   ['workers/narrator-worker/src/index.ts', "validateRequiredEnv(productionRuntime ? ['URAI_JOBS_WORKER_TOKEN', 'GCS_BUCKET_NAME'] : []);", 'narrator production secrets must be mandatory'],
   ['workers/narrator-worker/src/index.ts', "app.get('/authz', requireWorkerAuth", 'narrator auth probe must be protected'],
   ['functions/src/jobs/executeJob.ts', "defineSecret('URAI_JOBS_WORKER_TOKEN')", 'Firebase worker token must use Secret Manager'],
-  ['functions/src/jobs/executeJob.ts', 'secrets: [workerTokenSecret]', 'PubSub function must bind the worker secret'],
 ]) requireText(path, text, description);
+
+requireRegex(
+  'functions/src/jobs/executeJob.ts',
+  /secrets:\s*\[[^\]]*\bworkerTokenSecret\b[^\]]*\]/s,
+  'PubSub function must bind the worker secret',
+);
 
 requireText('functions/src/events/publishJobTerminalEvents.ts', "defineString('URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT')", 'terminal publisher must bind an explicit runtime identity');
 requireText('.github/workflows/urai-jobs-runtime-ci.yml', 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT: urai-jobs-emulator@demo-urai-jobs.iam.gserviceaccount.com', 'runtime CI must provide a noninteractive emulator-only function identity');
