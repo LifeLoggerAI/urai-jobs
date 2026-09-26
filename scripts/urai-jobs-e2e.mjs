@@ -100,7 +100,8 @@ async function expectCallableError(name, idToken, data, expectedTokens) {
   }
 
   const serialized = JSON.stringify(body).toLowerCase();
-  if (!expectedTokens.some((token) => serialized.includes(token.toLowerCase()))) {
+  const normalizedSerialized = serialized.replaceAll('_', '-');
+  if (!expectedTokens.some((token) => normalizedSerialized.includes(token.toLowerCase().replaceAll('_', '-')))) {
     fail(`${name} returned the wrong error. Expected one of ${expectedTokens.join(', ')}, got ${JSON.stringify(body)}`);
   }
   return body.error;
