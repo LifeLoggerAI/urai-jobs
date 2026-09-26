@@ -124,6 +124,7 @@ The safe request/control plane is implemented in `functions/src/privacy/dataRigh
 Implemented now:
 
 - authenticated export/deletion request intake;
+- optional `idempotencyKey` (8–128 ASCII letters/digits/._:-), scoped to the authenticated owner; concurrent identical retries return one request, changed payloads reject with `already-exists`;
 - owner-scoped request readback;
 - admin/operator request listing;
 - server-only Firestore request and audit records, created atomically in one batch;

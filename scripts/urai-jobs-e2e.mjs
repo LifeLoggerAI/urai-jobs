@@ -149,6 +149,28 @@ async function main() {
     const userToken = await signInWithPassword(USER_EMAIL, USER_PASSWORD);
     pass('Emulator ID tokens acquired.');
 
+    log('Testing governed data-rights intake retries and owner boundaries...');
+    const rightsPayload = { requestType: 'EXPORT', idempotencyKey: `rights-${E2E_TIMESTAMP}` };
+    const rightsResults = await Promise.all(Array.from({ length: 3 }, () => callCallable('submitDataRightsRequest', userToken, rightsPayload)));
+    const rightsId = rightsResults[0]?.requestId;
+    if (!rightsId || rightsResults.some(result => result.requestId !== rightsId)) fail('Concurrent rights retries created different requests.');
+    if (rightsResults.some(result => result.executionState !== 'HARD_OFF_PENDING_GOVERNED_WORKER')) fail('Rights retry changed execution boundary.');
+    const rightsRef = db.collection('dataRightsRequests').doc(rightsId);
+    const rightsRecord = (await rightsRef.get()).data();
+    const rightsAudit = await rightsRef.collection('audit').get();
+    if (rightsRecord?.ownerUid !== USER_UID || rightsAudit.size !== 1 || rightsAudit.docs[0].data().actorUid !== USER_UID) fail('Owner-bound request/audit receipt mismatch.');
+    await expectCallableError('submitDataRightsRequest', userToken, { ...rightsPayload, requestType: 'DELETE' }, ['already-exists']);
+    await expectCallableError('submitDataRightsRequest', userToken, { ...rightsPayload, ownerUid: ADMIN_UID }, ['invalid-argument']);
+    await expectCallableError('getDataRightsRequest', adminToken, { requestId: rightsId }, ['permission-denied']);
+    await expectCallableError('listDataRightsRequests', userToken, {}, ['permission-denied']);
+    const ownedRights = await callCallable('getDataRightsRequest', userToken, { requestId: rightsId });
+    if (ownedRights?.request?.requestId !== rightsId) fail('Owner cannot read own data-rights request.');
+    const adminRights = await callCallable('submitDataRightsRequest', adminToken, rightsPayload);
+    if (adminRights.requestId === rightsId) fail('Rights idempotency key crossed owner boundaries.');
+    const listedRights = await callCallable('listDataRightsRequests', adminToken, { status: 'PENDING', limit: 100 });
+    if (!listedRights.requests?.some(request => request.requestId === rightsId)) fail('Filtered operator list omitted rights request.');
+    pass('Concurrent rights retries are atomic, owner-bound, conflict-rejecting and execution-hard-off.');
+
     log('Testing private-source creation fails closed without canonical consent context...');
     await expectCallableError('createJob', userToken, {
       jobType: 'memory.private-source.transcribe',

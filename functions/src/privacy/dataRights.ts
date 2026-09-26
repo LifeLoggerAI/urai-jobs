@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import type { CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
@@ -8,6 +9,7 @@ const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
 
 const SubmitSchema = z.object({
   requestType: z.enum(['EXPORT', 'DELETE']),
+  idempotencyKey: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/).optional(),
   format: z.enum(['json', 'csv']).optional(),
   note: z.string().trim().max(1000).optional(),
 }).strict();
@@ -35,7 +37,11 @@ const submitHandler = async (data: unknown, context: CallableContext) => {
 
   const uid = ownerUid(context);
   const db = getFirestore();
-  const requestRef = db.collection(DATA_RIGHTS_COLLECTION).doc();
+  const requestId = parsed.data.idempotencyKey
+    ? createHash('sha256').update(JSON.stringify([uid, parsed.data.idempotencyKey])).digest('hex')
+    : undefined;
+  const collection = db.collection(DATA_RIGHTS_COLLECTION);
+  const requestRef = requestId ? collection.doc(requestId) : collection.doc();
   const now = FieldValue.serverTimestamp();
 
   const record = {
@@ -50,15 +56,41 @@ const submitHandler = async (data: unknown, context: CallableContext) => {
     updatedAt: now,
   };
 
-  const batch = db.batch();
-  batch.create(requestRef, record);
-  batch.create(requestRef.collection('audit').doc('submitted'), {
+  const audit = {
     event: 'DATA_RIGHTS_REQUEST_SUBMITTED',
     actorUid: uid,
     status: 'PENDING',
     createdAt: now,
-  });
-  await batch.commit();
+  };
+
+  if (requestId) {
+    const fingerprint = createHash('sha256').update(JSON.stringify([
+      record.requestType, record.requestedFormat, record.note,
+    ])).digest('hex');
+    const replay = await db.runTransaction(async transaction => {
+      const existing = await transaction.get(requestRef);
+      if (existing.exists) {
+        const saved = existing.data() || {};
+        if (saved.ownerUid !== uid || saved.payloadFingerprint !== fingerprint) {
+          throw httpsError('already-exists', 'This idempotency key is already bound to another request.');
+        }
+        return {
+          requestId: requestRef.id,
+          status: saved.status,
+          executionState: saved.executionState,
+        };
+      }
+      transaction.create(requestRef, { ...record, payloadFingerprint: fingerprint });
+      transaction.create(requestRef.collection('audit').doc('submitted'), audit);
+      return null;
+    });
+    if (replay) return replay;
+  } else {
+    const batch = db.batch();
+    batch.create(requestRef, record);
+    batch.create(requestRef.collection('audit').doc('submitted'), audit);
+    await batch.commit();
+  }
 
   return {
     requestId: requestRef.id,
