@@ -1,3 +1,4 @@
+import './life-movies-dimensions-smoke.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 

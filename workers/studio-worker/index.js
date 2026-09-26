@@ -83,8 +83,8 @@ function parsePayload(job) {
   const width = Number(payload.width || 1920);
   const height = Number(payload.height || 1080);
   const fps = Number(payload.fps || 30);
-  if (!Number.isInteger(width) || width < 320 || width > 3840) throw new Error('invalid_width');
-  if (!Number.isInteger(height) || height < 320 || height > 3840) throw new Error('invalid_height');
+  if (!Number.isInteger(width) || width < 320 || width > 3840 || width % 2 !== 0) throw new Error('invalid_width');
+  if (!Number.isInteger(height) || height < 320 || height > 3840 || height % 2 !== 0) throw new Error('invalid_height');
   if (![24, 25, 30, 50, 60].includes(fps)) throw new Error('invalid_fps');
 
   const sources = Array.isArray(payload.sources) ? payload.sources : [];
@@ -128,7 +128,7 @@ function parsePayload(job) {
     }
     if (endMs - startMs > 30 * 60 * 1000) throw new Error(`timeline_item_too_long:${index}`);
     return { sourceId, startMs, endMs };
-  });
+  }).sort((left, right) => left.startMs - right.startMs);
 
   for (let i = 1; i < normalizedTimeline.length; i += 1) {
     if (normalizedTimeline[i].startMs < normalizedTimeline[i - 1].endMs) {
@@ -154,6 +154,29 @@ function parsePayload(job) {
     subtitleText,
     outputPrefix: safeOutputPrefix(String(payload.outputPrefix || ''), tenantId, projectId),
   };
+}
+
+// Timeline coordinates describe output positions; preserve leading/inter-clip gaps.
+function renderSegments(timeline) {
+  const segments = [];
+  let cursorMs = 0;
+  for (const item of timeline) {
+    if (item.startMs > cursorMs) segments.push({ kind: 'gap', startMs: cursorMs, endMs: item.startMs });
+    segments.push({ kind: 'source', ...item });
+    cursorMs = item.endMs;
+  }
+  return segments;
+}
+
+function gapArgs(outputPath, durationSeconds, width, height, fps) {
+  return [
+    '-y', '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=${fps}`,
+    '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000',
+    '-t', String(durationSeconds), '-map', '0:v:0', '-map', '1:a:0',
+    '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
+    '-movflags', '+faststart', outputPath,
+  ];
 }
 
 function run(command, args, options = {}) {
@@ -209,7 +232,7 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
     if (!streams.audio) {
       args.push('-f', 'lavfi', '-t', String(durationSeconds), '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
     }
-    args.push('-t', String(durationSeconds), '-vf', visualFilter, '-map', '0:v:0');
+    args.push('-t', String(durationSeconds), '-vf', `${visualFilter},tpad=stop_mode=clone:stop_duration=${durationSeconds}`, '-af', 'apad', '-map', '0:v:0');
     args.push(...(streams.audio ? ['-map', '0:a:0'] : ['-map', '1:a:0']));
     args.push(
       '-c:v', 'libx264', '-preset', 'medium', '-crf', '20',
@@ -222,7 +245,7 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
   if (streams.audio) {
     return [
       '-y', '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=${fps}`,
-      '-i', inputPath, '-t', String(durationSeconds),
+      '-i', inputPath, '-t', String(durationSeconds), '-af', 'apad',
       '-map', '0:v:0', '-map', '1:a:0',
       '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
@@ -262,13 +285,18 @@ async function renderLifeMovie(job) {
     }
 
     const clipPaths = [];
-    for (let index = 0; index < input.timeline.length; index += 1) {
-      const item = input.timeline[index];
-      const source = input.sourceById.get(item.sourceId);
-      const sourcePath = localBySource.get(item.sourceId);
+    const segments = renderSegments(input.timeline);
+    for (let index = 0; index < segments.length; index += 1) {
+      const item = segments[index];
       const clipPath = path.join(workDir, `clip-${String(index).padStart(4, '0')}.mp4`);
       const durationSeconds = (item.endMs - item.startMs) / 1000;
-      await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps));
+      if (item.kind === 'gap') {
+        await run('ffmpeg', gapArgs(clipPath, durationSeconds, input.width, input.height, input.fps));
+      } else {
+        const source = input.sourceById.get(item.sourceId);
+        const sourcePath = localBySource.get(item.sourceId);
+        await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps));
+      }
       clipPaths.push(clipPath);
     }
 
@@ -300,6 +328,9 @@ async function renderLifeMovie(job) {
       publicReleaseAuthorized: false,
       sourceCount: input.sources.length,
       timelineItemCount: input.timeline.length,
+      timeline: input.timeline,
+      gapTreatment: 'black-video-silent-audio',
+      shortSourceTreatment: 'hold-last-video-frame-and-pad-silent-audio-to-declared-duration',
       sources: input.sources.map((source) => ({
         id: source.id,
         bucket: source.bucket,
