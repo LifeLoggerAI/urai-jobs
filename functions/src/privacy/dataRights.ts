@@ -50,13 +50,15 @@ const submitHandler = async (data: unknown, context: CallableContext) => {
     updatedAt: now,
   };
 
-  await requestRef.create(record);
-  await requestRef.collection('audit').doc('submitted').create({
+  const batch = db.batch();
+  batch.create(requestRef, record);
+  batch.create(requestRef.collection('audit').doc('submitted'), {
     event: 'DATA_RIGHTS_REQUEST_SUBMITTED',
     actorUid: uid,
     status: 'PENDING',
     createdAt: now,
   });
+  await batch.commit();
 
   return {
     requestId: requestRef.id,
