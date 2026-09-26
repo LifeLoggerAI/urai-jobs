@@ -1,3 +1,4 @@
+import './privacy-request-export-smoke.mjs';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 

@@ -9,7 +9,7 @@
     "workers/*"
   ],
   "scripts": {
-    "urai-jobs:verify": "node scripts/privacy-data-rights-contract.mjs && node scripts/runtime-job-admission-contract.mjs && node scripts/consent-revocation-contract.mjs && node scripts/wif-deploy-auth-contract.mjs && node scripts/private-source-worker-contract.mjs && node scripts/life-movies-studio-worker-contract.mjs && node scripts/urai-jobs-verify.mjs && node scripts/communications-tenant-authority-contract.mjs && node scripts/queue-recovery-contract.mjs && node scripts/release-sequence-verify.mjs && node scripts/jobs-reliability-verify.mjs && node scripts/activation-readiness-verify.mjs && node scripts/worker-readiness-source-contract.mjs && node scripts/career-surfaces-verify.mjs && node scripts/career-runtime-smoke.mjs && node scripts/check-secure-worker-deploy.mjs && node scripts/check-worker-build-provenance.mjs && node scripts/check-firebase-runtime-identity.mjs && node scripts/functions-runtime-firestore-iam-contract.mjs && node scripts/check-rollback-provenance.mjs && node scripts/check-required-ci-exact-head.mjs",
+    "urai-jobs:verify": "node scripts/privacy-data-rights-contract.mjs && node scripts/privacy-data-rights-runtime-smoke.mjs && node scripts/runtime-job-admission-contract.mjs && node scripts/consent-revocation-contract.mjs && node scripts/wif-deploy-auth-contract.mjs && node scripts/private-source-worker-contract.mjs && node scripts/life-movies-studio-worker-contract.mjs && node scripts/urai-jobs-verify.mjs && node scripts/communications-tenant-authority-contract.mjs && node scripts/queue-recovery-contract.mjs && node scripts/release-sequence-verify.mjs && node scripts/jobs-reliability-verify.mjs && node scripts/activation-readiness-verify.mjs && node scripts/worker-readiness-source-contract.mjs && node scripts/career-surfaces-verify.mjs && node scripts/career-runtime-smoke.mjs && node scripts/check-secure-worker-deploy.mjs && node scripts/check-worker-build-provenance.mjs && node scripts/check-firebase-runtime-identity.mjs && node scripts/functions-runtime-firestore-iam-contract.mjs && node scripts/check-rollback-provenance.mjs && node scripts/check-required-ci-exact-head.mjs",
     "ci:exact-head": "node scripts/check-required-ci-exact-head.mjs",
     "jobs:reliability:verify": "node scripts/jobs-reliability-verify.mjs",
     "activation:verify": "node scripts/activation-readiness-verify.mjs && node scripts/worker-readiness-source-contract.mjs && node scripts/career-surfaces-verify.mjs",
@@ -77,7 +77,7 @@
     "life-movies:worker:verify": "node scripts/life-movies-studio-worker-contract.mjs",
     "privacy:consent:verify": "node scripts/consent-revocation-contract.mjs",
     "runtime:admission:verify": "node scripts/runtime-job-admission-contract.mjs",
-    "privacy:data-rights:verify": "node scripts/privacy-data-rights-contract.mjs"
+    "privacy:data-rights:verify": "node scripts/privacy-data-rights-contract.mjs && node scripts/privacy-data-rights-runtime-smoke.mjs"
   },
   "devDependencies": {
     "@types/uuid": "^10.0.0",
