@@ -232,7 +232,7 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
     if (!streams.audio) {
       args.push('-f', 'lavfi', '-t', String(durationSeconds), '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
     }
-    args.push('-t', String(durationSeconds), '-vf', visualFilter, '-map', '0:v:0');
+    args.push('-t', String(durationSeconds), '-vf', `${visualFilter},tpad=stop_mode=clone:stop_duration=${durationSeconds}`, '-af', 'apad', '-map', '0:v:0');
     args.push(...(streams.audio ? ['-map', '0:a:0'] : ['-map', '1:a:0']));
     args.push(
       '-c:v', 'libx264', '-preset', 'medium', '-crf', '20',
@@ -245,7 +245,7 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
   if (streams.audio) {
     return [
       '-y', '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=${fps}`,
-      '-i', inputPath, '-t', String(durationSeconds),
+      '-i', inputPath, '-t', String(durationSeconds), '-af', 'apad',
       '-map', '0:v:0', '-map', '1:a:0',
       '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
@@ -330,6 +330,7 @@ async function renderLifeMovie(job) {
       timelineItemCount: input.timeline.length,
       timeline: input.timeline,
       gapTreatment: 'black-video-silent-audio',
+      shortSourceTreatment: 'hold-last-video-frame-and-pad-silent-audio-to-declared-duration',
       sources: input.sources.map((source) => ({
         id: source.id,
         bucket: source.bucket,
