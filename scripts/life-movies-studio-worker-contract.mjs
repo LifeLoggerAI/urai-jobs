@@ -46,7 +46,14 @@ assert.ok(createJob.includes('StudioLifeMovieRenderPayloadSchema'), 'createJob m
 assert.ok(sharedContract.includes('assertLifeMovieTenantPaths'), 'Life Movies contract must bind source/output paths to tenant authority');
 assert.ok(bridge.includes("defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN')"), 'Studio bridge must use a dedicated Secret Manager identity');
 assert.ok(bridge.includes("action: z.literal('create')"), 'Studio bridge must expose bounded create semantics');
-assert.ok(bridge.includes("action: z.enum(['status', 'cancel'])"), 'Studio bridge must expose bounded status/cancel semantics');
+assert.ok(bridge.includes("action: z.enum(['status', 'cancel', 'playback'])"), 'Studio bridge must expose bounded status/cancel/playback semantics');
+assert.ok(bridge.includes('playbackForBoundJob'), 'Studio bridge must issue owner-bound playback only after boundary validation');
+assert.ok(bridge.includes("String(job.status) !== 'SUCCESS'"), 'Playback must require a successful render');
+assert.ok(bridge.includes('Date.now() + 5 * 60 * 1000'), 'Playback access must be short-lived');
+assert.ok(bridge.includes("responseDisposition: 'inline'"), 'Playback should be inline rather than public release');
+assert.ok(bridge.includes('life_movie_subtitles_too_large'), 'Subtitle playback response must be byte bounded');
+assert.ok(bridge.includes('sanitizedOutput(job.output)'), 'Status projection must sanitize worker output');
+assert.ok(!bridge.includes('output: job.output'), 'Status must not expose raw internal GCS output refs');
 assert.ok(bridge.includes("sourceSystem: 'urai-studio'"), 'Studio bridge jobs must retain source-system authority');
 assert.ok(bridge.includes("'execution.leaseToken': FieldValue.delete()"), 'Studio bridge cancellation must revoke the active lease');
 assert.ok(functionsIndex.includes('studioLifeMovieBridge'), 'Life Movies bridge must be exported from Firebase Functions');
