@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const handler = fs.readFileSync(new URL('../workers/narrator-worker/src/handlers/narrator-tts.ts', import.meta.url), 'utf8');
 const runtime = fs.readFileSync(new URL('../workers/narrator-worker/src/index.ts', import.meta.url), 'utf8');
+const deploy = fs.readFileSync(new URL('./deploy-workers.sh', import.meta.url), 'utf8');
 
 for (const token of [
   'provider?: "google" | "elevenlabs"',
@@ -51,3 +52,17 @@ assert.ok(runtime.includes('!elevenLabsEnabled || Boolean(process.env.ELEVENLABS
 assert.ok(runtime.includes('!elevenLabsEnabled || Boolean(process.env.ELEVENLABS_ALLOWED_VOICE_IDS)'));
 
 console.log('Governed ElevenLabs narrator provider contract passed');
+
+
+for (const token of [
+  'URAI_NARRATOR_ELEVENLABS_ENABLED:=false',
+  'ELEVENLABS_API_KEY_SECRET:=ELEVENLABS_API_KEY',
+  'ELEVENLABS_ALLOWED_VOICE_IDS is required when ElevenLabs narrator execution is enabled',
+  'required_secrets+=("$ELEVENLABS_API_KEY_SECRET")',
+  'versions.ELEVENLABS_API_KEY = process.env.ELEVENLABS_SECRET_VERSION',
+  'URAI_NARRATOR_ELEVENLABS_ENABLED=$URAI_NARRATOR_ELEVENLABS_ENABLED',
+  'ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY_SECRET}:${SECRET_VERSION_IDS[$ELEVENLABS_API_KEY_SECRET]}',
+]) assert.ok(deploy.includes(token), `narrator deploy boundary missing ${token}`);
+
+assert.ok(deploy.includes('if [ "$worker" = "narrator-worker" ] && [ "$URAI_NARRATOR_ELEVENLABS_ENABLED" = "true" ]'));
+assert.ok(deploy.includes('if [ "$worker" = "narrator-worker" ]; then'));
