@@ -28,6 +28,15 @@ const ALLOWED_MIME = new Set([
   'audio/ogg',
 ]);
 
+// Kept in parity with Jobs admission by life-movies-dimensions-smoke.mjs.
+const LIFE_MOVIE_EXECUTION_BUDGET = {
+  maxDurationMs: 30_000,
+  maxPixelFrames: 1920 * 1080 * 30 * 15,
+  maxFramePixels: 3840 * 2160,
+  maxSources: 12,
+  maxTimelineItems: 12,
+};
+
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
@@ -164,7 +173,8 @@ function parsePayload(job) {
   const sources = Array.isArray(payload.sources) ? payload.sources : [];
   const timeline = Array.isArray(payload.timeline) ? payload.timeline : [];
   if (!sources.length || !timeline.length) throw new Error('sources_and_timeline_required');
-  if (sources.length > 100 || timeline.length > 250) throw new Error('life_movie_too_large');
+  if (sources.length > LIFE_MOVIE_EXECUTION_BUDGET.maxSources
+    || timeline.length > LIFE_MOVIE_EXECUTION_BUDGET.maxTimelineItems) throw new Error('life_movie_too_large');
 
   const sourceById = new Map();
   for (const raw of sources) {
@@ -210,7 +220,11 @@ function parsePayload(job) {
     }
   }
   const totalTimelineMs = normalizedTimeline.reduce((max, item) => Math.max(max, item.endMs), 0);
-  if (totalTimelineMs > 45 * 60 * 1000) throw new Error('life_movie_exceeds_launch_render_window');
+  if (totalTimelineMs > LIFE_MOVIE_EXECUTION_BUDGET.maxDurationMs
+    || width * height > LIFE_MOVIE_EXECUTION_BUDGET.maxFramePixels
+    || width * height * fps * totalTimelineMs / 1000 > LIFE_MOVIE_EXECUTION_BUDGET.maxPixelFrames) {
+    throw new Error('life_movie_exceeds_synchronous_render_budget');
+  }
 
   const subtitleText = typeof payload.subtitleText === 'string' ? payload.subtitleText : '';
   if (Buffer.byteLength(subtitleText, 'utf8') > 2 * 1024 * 1024) throw new Error('subtitles_too_large');
@@ -247,7 +261,7 @@ function gapArgs(outputPath, durationSeconds, width, height, fps) {
     '-y', '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=${fps}`,
     '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000',
     '-t', String(durationSeconds), '-map', '0:v:0', '-map', '1:a:0',
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+    '-c:v', 'libx264', '-threads', '1', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
     '-movflags', '+faststart', outputPath,
   ];
@@ -305,7 +319,7 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
       '-t', String(durationSeconds),
       '-vf', visualFilter,
       '-map', '0:v:0', '-map', '1:a:0',
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20',
+      '-c:v', 'libx264', '-threads', '1', '-preset', 'medium', '-crf', '20',
       '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
       '-movflags', '+faststart', outputPath,
     ];
@@ -320,7 +334,7 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
     args.push('-t', String(durationSeconds), '-vf', `${visualFilter},tpad=stop_mode=clone:stop_duration=${durationSeconds}`, '-af', 'apad', '-map', '0:v:0');
     args.push(...(streams.audio ? ['-map', '0:a:0'] : ['-map', '1:a:0']));
     args.push(
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20',
+      '-c:v', 'libx264', '-threads', '1', '-preset', 'medium', '-crf', '20',
       '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
       '-movflags', '+faststart', outputPath,
     );
@@ -332,7 +346,7 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
       '-y', '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=${fps}`,
       '-i', inputPath, '-t', String(durationSeconds), '-af', 'apad',
       '-map', '0:v:0', '-map', '1:a:0',
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-c:v', 'libx264', '-threads', '1', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
       '-shortest', '-movflags', '+faststart', outputPath,
     ];
@@ -379,7 +393,7 @@ async function renderLifeMovie(job) {
         transform(chunk, _encoding, callback) {
           sourceBytes += chunk.length;
           totalSourceBytes += chunk.length;
-          if (sourceBytes > 256 * 1024 * 1024 || totalSourceBytes > 1024 * 1024 * 1024) {
+          if (sourceBytes > 32 * 1024 * 1024 || totalSourceBytes > 64 * 1024 * 1024) {
             callback(new Error('source_byte_budget_exceeded'));
             return;
           }
@@ -418,8 +432,9 @@ async function renderLifeMovie(job) {
     const moviePath = path.join(workDir, 'life-movie.mp4');
     await run('ffmpeg', [
       '-y', '-f', 'concat', '-safe', '0', '-i', concatPath,
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20',
-      '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
+      // Every segment already has the same H.264/AAC output profile. Remux it;
+      // encoding the full movie again doubles CPU work and loses quality.
+      '-c', 'copy',
       '-movflags', '+faststart', moviePath,
     ], { signal: control.signal });
 

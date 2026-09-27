@@ -85,6 +85,7 @@ jobs:
           fi
           node scripts/life-movies-media-timing-smoke.mjs
           node scripts/life-movies-cancellation-smoke.mjs
+          node scripts/life-movies-render-budget-smoke.mjs
 
       - name: Verify activation readiness guardrails
         run: pnpm activation:verify

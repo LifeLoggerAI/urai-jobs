@@ -1,5 +1,14 @@
 import { z } from 'zod';
 
+// Admission for the existing bounded synchronous worker, not an authoring limit.
+export const LIFE_MOVIE_EXECUTION_BUDGET = {
+  maxDurationMs: 30_000,
+  maxPixelFrames: 1920 * 1080 * 30 * 15,
+  maxFramePixels: 3840 * 2160,
+  maxSources: 12,
+  maxTimelineItems: 12,
+} as const;
+
 export const LifeMovieSourceSchema = z.object({
   id: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
   bucket: z.string().trim().min(3).max(255).regex(/^[a-z0-9][a-z0-9._-]+[a-z0-9]$/),
@@ -34,8 +43,8 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
   width: z.number().int().min(320).max(3840).multipleOf(2).default(1920),
   height: z.number().int().min(320).max(3840).multipleOf(2).default(1080),
   fps: z.union([z.literal(24), z.literal(25), z.literal(30), z.literal(50), z.literal(60)]).default(30),
-  sources: z.array(LifeMovieSourceSchema).min(1).max(100),
-  timeline: z.array(LifeMovieTimelineItemSchema).min(1).max(250),
+  sources: z.array(LifeMovieSourceSchema).min(1).max(LIFE_MOVIE_EXECUTION_BUDGET.maxSources),
+  timeline: z.array(LifeMovieTimelineItemSchema).min(1).max(LIFE_MOVIE_EXECUTION_BUDGET.maxTimelineItems),
   subtitleText: z.string().max(2 * 1024 * 1024).default(''),
   spatialRequired: z.literal(false),
   publicReleaseAuthorized: z.literal(false),
@@ -54,8 +63,10 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
     }
   }
   const totalTimelineMs = ordered.reduce((max, item) => Math.max(max, item.endMs), 0);
-  if (totalTimelineMs > 45 * 60 * 1000) {
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline'], message: 'Launch Life Movies are limited to 45 minutes on the synchronous Studio render worker.' });
+  if (totalTimelineMs > LIFE_MOVIE_EXECUTION_BUDGET.maxDurationMs
+    || value.width * value.height > LIFE_MOVIE_EXECUTION_BUDGET.maxFramePixels
+    || value.width * value.height * value.fps * totalTimelineMs / 1000 > LIFE_MOVIE_EXECUTION_BUDGET.maxPixelFrames) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline'], message: 'Life Movie exceeds the synchronous render budget (15 seconds at 1080p30, at most 30 seconds at lower resolution). Long-form rendering requires a separately verified execution path.' });
   }
 });
 
