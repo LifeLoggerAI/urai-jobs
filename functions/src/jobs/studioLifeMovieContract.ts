@@ -7,6 +7,7 @@ export const LIFE_MOVIE_EXECUTION_BUDGET = {
   maxFramePixels: 3840 * 2160,
   maxSources: 12,
   maxTimelineItems: 12,
+  maxAudioCues: 12,
 } as const;
 
 export const LifeMovieSourceSchema = z.object({
@@ -35,6 +36,18 @@ export const LifeMovieTimelineItemSchema = z.object({
   message: 'Each timeline item must have a positive duration no longer than 30 minutes.',
 });
 
+
+export const LifeMovieAudioCueSchema = z.object({
+  sourceId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  role: z.enum(['narration', 'dialogue', 'music', 'ambience', 'foley', 'effects']),
+  startMs: z.number().int().nonnegative(),
+  endMs: z.number().int().positive(),
+  sourceStartMs: z.number().int().nonnegative().default(0),
+  gainDb: z.number().finite().min(-60).max(12).default(0),
+}).strict().refine((value) => value.endMs > value.startMs, {
+  message: 'Audio cue must have positive output duration.',
+});
+
 export const StudioLifeMovieRenderPayloadSchema = z.object({
   schemaVersion: z.literal('urai-life-movie-render-v1'),
   projectId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
@@ -45,6 +58,7 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
   fps: z.union([z.literal(24), z.literal(25), z.literal(30), z.literal(50), z.literal(60)]).default(30),
   sources: z.array(LifeMovieSourceSchema).min(1).max(LIFE_MOVIE_EXECUTION_BUDGET.maxSources),
   timeline: z.array(LifeMovieTimelineItemSchema).min(1).max(LIFE_MOVIE_EXECUTION_BUDGET.maxTimelineItems),
+  audioCues: z.array(LifeMovieAudioCueSchema).max(LIFE_MOVIE_EXECUTION_BUDGET.maxAudioCues).default([]),
   subtitleText: z.string().max(2 * 1024 * 1024).default(''),
   spatialRequired: z.literal(false),
   publicReleaseAuthorized: z.literal(false),
@@ -56,6 +70,16 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index, 'sourceId'], message: 'Timeline source must exist in sources.' });
     }
   }
+  for (const [index, cue] of value.audioCues.entries()) {
+    const source = value.sources.find((candidate) => candidate.id === cue.sourceId);
+    if (!source) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['audioCues', index, 'sourceId'], message: 'Audio cue source must exist in sources.' });
+      continue;
+    }
+    if (!source.mimeType.startsWith('audio/') && !source.mimeType.startsWith('video/')) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['audioCues', index, 'sourceId'], message: 'Audio cue source must contain an audio-capable media type.' });
+    }
+  }
   const ordered = [...value.timeline].sort((left, right) => left.startMs - right.startMs);
   for (let index = 1; index < ordered.length; index += 1) {
     if (ordered[index].startMs < ordered[index - 1].endMs) {
@@ -63,6 +87,11 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
     }
   }
   const totalTimelineMs = ordered.reduce((max, item) => Math.max(max, item.endMs), 0);
+  for (const [index, cue] of value.audioCues.entries()) {
+    if (cue.endMs > totalTimelineMs) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['audioCues', index, 'endMs'], message: 'Audio cue must fit inside the rendered timeline.' });
+    }
+  }
   if (totalTimelineMs > LIFE_MOVIE_EXECUTION_BUDGET.maxDurationMs
     || value.width * value.height > LIFE_MOVIE_EXECUTION_BUDGET.maxFramePixels
     || value.width * value.height * value.fps * totalTimelineMs / 1000 > LIFE_MOVIE_EXECUTION_BUDGET.maxPixelFrames) {
