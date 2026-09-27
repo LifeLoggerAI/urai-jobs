@@ -28,6 +28,17 @@ for (const token of [
   "uploadPrivateFile(moviePath",
   "uploadPrivateFile(subtitlePath",
   "uploadPrivateFile(manifestPath",
+  "audioCues",
+  "narration",
+  "dialogue",
+  "music",
+  "ambience",
+  "foley",
+  "effects",
+  "mixAudioCues",
+  "amix=inputs=",
+  "audio_cue_source_missing_audio",
+  "audioCueCount: input.audioCues.length",
 ]) assert.ok(worker.includes(token), `studio worker missing ${token}`);
 
 assert.ok(dockerfile.includes('apt-get install -y --no-install-recommends ffmpeg'), 'Studio worker image must include FFmpeg');
@@ -44,9 +55,17 @@ for (const token of [
   'spatialRequired: z.literal(false)',
   'publicReleaseAuthorized: z.literal(false)',
   'providerGenerationAuthorized: z.literal(false)',
+  'LifeMovieAudioCueSchema',
+  "role: z.enum(['narration', 'dialogue', 'music', 'ambience', 'foley', 'effects'])",
+  'audioCues: z.array(LifeMovieAudioCueSchema)',
 ]) {
   assert.ok(sharedContract.includes(token), `Life Movies render admission must preserve hard-off boolean: ${token}`);
 }
+assert.ok(sharedContract.includes('gainDb: z.number().finite().min(-60).max(12)'), 'Audio gain must be bounded');
+assert.ok(sharedContract.includes('Audio cue must fit inside the rendered timeline.'), 'Audio cues must remain inside the render timeline');
+assert.ok(worker.includes("const usedSourceIds = new Set(["), 'Audio cue sources must use the same governed download path');
+assert.ok(worker.includes("...input.audioCues.map((cue) => cue.sourceId)"), 'Audio cue source downloads must be provenance/tenant governed');
+
 assert.ok(deploy.includes('narrator-worker|asset-worker|studio-worker'), 'canonical deploy script must recognize completed studio-worker');
 assert.ok(approved.includes("new Set(['narrator-worker', 'asset-worker', 'studio-worker'])"), 'approved wrapper must admit studio-worker only through explicit approved worker selection');
 assert.ok(approved.includes('narrator-worker|asset-worker|studio-worker'), 'exact-source build wrapper must admit studio-worker');
