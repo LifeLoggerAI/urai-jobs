@@ -31,7 +31,7 @@ const CreateSchema = IdentitySchema.extend({
 }).strict();
 
 const JobActionSchema = IdentitySchema.extend({
-  action: z.enum(['status', 'cancel', 'playback']),
+  action: z.enum(['status', 'cancel', 'playback', 'download', 'delete-output']),
   jobId: z.string().trim().min(10).max(64).regex(/^[A-Za-z0-9_-]+$/),
 }).strict();
 
@@ -209,7 +209,7 @@ function parseGcsRef(ref: unknown) {
   return { bucket, objectPath };
 }
 
-async function playbackForBoundJob(tenantId: string, userId: string, jobId: string) {
+async function signedMovieAccess(tenantId: string, userId: string, jobId: string, disposition: 'inline' | 'attachment') {
   const job = await loadBoundJob(tenantId, userId, jobId);
   if (String(job.status) !== 'SUCCESS') throw new Error('job_not_ready_for_playback');
   const output = job.output as WorkerOutput | undefined;
@@ -222,7 +222,7 @@ async function playbackForBoundJob(tenantId: string, userId: string, jobId: stri
   const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
     action: 'read',
     expires: expiresAtMs,
-    responseDisposition: 'inline',
+    responseDisposition: disposition,
     responseType: typeof video.mimeType === 'string' ? video.mimeType : 'video/mp4',
   });
 
@@ -237,6 +237,7 @@ async function playbackForBoundJob(tenantId: string, userId: string, jobId: stri
 
   return {
     expiresAt: new Date(expiresAtMs).toISOString(),
+    disposition,
     video: {
       url: videoUrl,
       mimeType: typeof video.mimeType === 'string' ? video.mimeType : 'video/mp4',
@@ -246,6 +247,56 @@ async function playbackForBoundJob(tenantId: string, userId: string, jobId: stri
     renderPlanDigest: typeof output?.renderPlanDigest === 'string' ? output.renderPlanDigest : undefined,
     publicReleaseAuthorized: false,
   };
+}
+
+async function deleteBoundMovieOutput(tenantId: string, userId: string, jobId: string) {
+  const job = await loadBoundJob(tenantId, userId, jobId);
+  const output = job.output as WorkerOutput | undefined;
+  const artifacts = Array.isArray(output?.outputs) ? output!.outputs! : [];
+  const locations = artifacts
+    .map((artifact) => artifact?.ref)
+    .filter((ref): ref is string => typeof ref === 'string' && ref.startsWith('gs://'))
+    .map(parseGcsRef);
+
+  const expectedPrefix = `tenants/${tenantId}/life-movies/`;
+  for (const location of locations) {
+    if (!location.objectPath.startsWith(expectedPrefix)) throw new Error('output_delete_boundary_mismatch');
+  }
+
+  await Promise.all(locations.map(({ bucket, objectPath }) =>
+    getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true })));
+
+  const db = getFirestore();
+  const now = FieldValue.serverTimestamp();
+  await db.runTransaction(async (transaction) => {
+    const ref = jobDoc(jobId);
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new Error('job_not_found');
+    const current = snapshot.data() as Job & { sourceSystem?: string };
+    if (current.sourceSystem !== 'urai-studio' || current.tenantId !== tenantId || current.ownerUid !== userId || (current.jobType || current.type) !== 'studio.render.video') {
+      throw new Error('job_boundary_mismatch');
+    }
+    transaction.update(ref, {
+      output: FieldValue.delete(),
+      outputDeletedAt: now,
+      outputDeletedBy: userId,
+      updatedAt: now,
+    });
+    transaction.create(ref.collection('logs').doc(`output-deleted-${Date.now()}`), {
+      level: 'info',
+      source: 'studioLifeMovieBridge',
+      message: 'Life Movie generated outputs deleted by the bound owner.',
+      metadata: {
+        tenantId,
+        ownerUid: userId,
+        deletedObjectCount: locations.length,
+        retainedSourceMedia: true,
+      },
+      createdAt: now,
+    });
+  });
+
+  return { deleted: true, deletedObjectCount: locations.length, retainedSourceMedia: true };
 }
 
 async function cancelBoundJob(tenantId: string, userId: string, jobId: string) {
@@ -319,8 +370,20 @@ export const studioLifeMovieBridge = onRequest({
     }
 
     if (parsed.data.action === 'playback') {
-      const playback = await playbackForBoundJob(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId);
+      const playback = await signedMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'inline');
       res.status(200).json({ ok: true, playback });
+      return;
+    }
+
+    if (parsed.data.action === 'download') {
+      const download = await signedMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'attachment');
+      res.status(200).json({ ok: true, download });
+      return;
+    }
+
+    if (parsed.data.action === 'delete-output') {
+      const deletion = await deleteBoundMovieOutput(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId);
+      res.status(200).json({ ok: true, deletion });
       return;
     }
 
@@ -332,6 +395,7 @@ export const studioLifeMovieBridge = onRequest({
       : code === 'job_boundary_mismatch' ? 403
       : code === 'idempotency_conflict' ? 409
       : code === 'job_not_ready_for_playback' ? 409
+      : code === 'output_delete_boundary_mismatch' ? 403
       : 400;
     res.status(status).json({ ok: false, error: code });
   }
