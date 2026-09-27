@@ -84,6 +84,7 @@ jobs:
             sudo apt-get install -y ffmpeg
           fi
           node scripts/life-movies-media-timing-smoke.mjs
+          node scripts/life-movies-cancellation-smoke.mjs
 
       - name: Verify activation readiness guardrails
         run: pnpm activation:verify
