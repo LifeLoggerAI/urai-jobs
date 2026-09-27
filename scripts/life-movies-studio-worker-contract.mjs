@@ -25,9 +25,9 @@ for (const token of [
   "app.get('/readyz'",
   "app.get('/authz', requireWorkerAuth",
   "app.post('/', requireWorkerAuth",
-  "bucket.upload(moviePath",
-  "bucket.upload(subtitlePath",
-  "bucket.upload(manifestPath",
+  "uploadPrivateFile(moviePath",
+  "uploadPrivateFile(subtitlePath",
+  "uploadPrivateFile(manifestPath",
 ]) assert.ok(worker.includes(token), `studio worker missing ${token}`);
 
 assert.ok(dockerfile.includes('apt-get install -y --no-install-recommends ffmpeg'), 'Studio worker image must include FFmpeg');

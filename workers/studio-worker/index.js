@@ -3,6 +3,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
+const { setTimeout, clearTimeout } = require('node:timers');
+const { Transform } = require('node:stream');
+const { pipeline } = require('node:stream/promises');
 const express = require('express');
 const admin = require('firebase-admin');
 
@@ -24,6 +27,77 @@ const ALLOWED_MIME = new Set([
   'audio/webm',
   'audio/ogg',
 ]);
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+// The queue's cancellation endpoint revokes this lease. Check the same durable
+// authority during rendering, not just when the dispatcher starts the request.
+function createRenderControl(job) {
+  const jobId = safeSegment(String(job.jobId || ''), 'job_id');
+  if (typeof job.leaseToken !== 'string' || !job.leaseToken) throw new Error('lease_token_required');
+  const controller = new AbortController();
+  const requestedTimeout = Number(process.env.URAI_STUDIO_RENDER_TIMEOUT_MS || 110000);
+  const timeoutMs = Number.isFinite(requestedTimeout) && requestedTimeout > 0
+    ? Math.min(requestedTimeout, 110000) : 110000;
+  const pollMs = Math.max(25, Math.min(1000, Number(process.env.URAI_STUDIO_LEASE_POLL_MS) || 1000));
+  let pollTimer;
+  let stopped = false;
+  let checking;
+  const abort = (code) => {
+    if (!controller.signal.aborted) controller.abort(new Error(code));
+  };
+  const deadlineTimer = setTimeout(() => abort('render_deadline_exceeded'), timeoutMs);
+  const wait = (promise) => new Promise((resolve, reject) => {
+    const onAbort = () => reject(controller.signal.reason);
+    // Attach handlers even after cancellation so late network errors are consumed.
+    Promise.resolve(promise).then(resolve, reject).finally(() => controller.signal.removeEventListener('abort', onAbort));
+    if (controller.signal.aborted) return onAbort();
+    controller.signal.addEventListener('abort', onAbort, { once: true });
+  });
+  const check = async () => {
+    if (controller.signal.aborted) throw controller.signal.reason;
+    if (!checking) {
+      checking = (async () => {
+        const snapshot = await wait(admin.firestore().collection('jobs').doc(jobId).get());
+        const current = snapshot.exists ? snapshot.data() : null;
+        if (!current || current.status !== 'RUNNING' || current.execution?.leaseToken !== job.leaseToken) {
+          throw new Error('render_lease_revoked');
+        }
+        if (current.tenantId !== job.tenantId || current.ownerUid !== job.ownerUid
+          || (current.jobType || current.type) !== 'studio.render.video'
+          || canonicalJson(current.payload) !== canonicalJson(job.payload)) {
+          throw new Error('render_job_binding_mismatch');
+        }
+        if (current.ownerUid && current.consent?.purpose) {
+          const id = crypto.createHash('sha256').update(`${current.ownerUid}\n${current.consent.purpose}`).digest('hex');
+          const block = await wait(admin.firestore().collection('jobConsentBlocks').doc(id).get());
+          if (block.exists && block.data()?.active === true) throw new Error('render_consent_revoked');
+        }
+      })().catch((error) => {
+        const allowed = ['render_lease_revoked', 'render_job_binding_mismatch', 'render_consent_revoked', 'render_deadline_exceeded'];
+        abort(allowed.includes(error?.message) ? error.message : 'render_authority_unavailable');
+        throw controller.signal.reason;
+      }).finally(() => { checking = undefined; });
+    }
+    await checking;
+    if (controller.signal.aborted) throw controller.signal.reason;
+  };
+  const poll = async () => {
+    try { await check(); } catch { return; }
+    if (!stopped) pollTimer = setTimeout(poll, pollMs);
+  };
+  return {
+    signal: controller.signal, wait, check,
+    async start() { await check(); pollTimer = setTimeout(poll, pollMs); },
+    stop() { stopped = true; clearTimeout(pollTimer); clearTimeout(deadlineTimer); },
+  };
+}
 
 function timingSafeTokenMatch(actualHeader, expectedToken) {
   const actualHash = crypto.createHash('sha256').update(actualHeader).digest();
@@ -181,7 +255,15 @@ function gapArgs(outputPath, durationSeconds, width, height, fps) {
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], ...options });
+    const { signal, ...spawnOptions } = options;
+    if (signal?.aborted) return reject(signal.reason);
+    const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'], ...spawnOptions });
+    let killTimer;
+    const abort = () => {
+      child.kill('SIGTERM');
+      killTimer = setTimeout(() => child.kill('SIGKILL'), 1000);
+    };
+    signal?.addEventListener('abort', abort, { once: true });
     let stderr = '';
     child.stderr.on('data', (chunk) => {
       stderr += chunk.toString();
@@ -189,6 +271,9 @@ function run(command, args, options = {}) {
     });
     child.on('error', reject);
     child.on('close', (code) => {
+      clearTimeout(killTimer);
+      signal?.removeEventListener('abort', abort);
+      if (signal?.aborted) return reject(signal.reason);
       if (code === 0) return resolve();
       reject(new Error(`${command}_failed_${code}:${stderr.slice(-4000)}`));
     });
@@ -201,7 +286,7 @@ function probeStreams(filePath) {
     '-show_entries', 'stream=codec_type',
     '-of', 'json',
     filePath,
-  ], { encoding: 'utf8' });
+  ], { encoding: 'utf8', timeout: 5000 });
   if (result.status !== 0) throw new Error(`ffprobe_failed:${String(result.stderr || '').slice(-1000)}`);
   const parsed = JSON.parse(result.stdout || '{}');
   const streams = Array.isArray(parsed.streams) ? parsed.streams : [];
@@ -271,31 +356,59 @@ async function renderLifeMovie(job) {
   const bucketName = process.env.GCS_BUCKET_NAME;
   if (!bucketName) throw new Error('GCS_BUCKET_NAME_not_configured');
   const bucket = admin.storage().bucket(bucketName);
-
+  const control = createRenderControl(job);
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'urai-life-movie-'));
+  // Isolate every execution attempt so cancelled/stale work cannot overwrite or
+  // delete a newer attempt's objects, even when the requested prefix is reused.
+  const attemptPrefix = `${input.outputPrefix}/attempt-${crypto.randomUUID()}`;
+  const writtenObjects = [];
+  let completed = false;
   try {
+    await control.start();
     const localBySource = new Map();
+    const sourceIntegrity = new Map();
+    let totalSourceBytes = 0;
     const usedSourceIds = new Set(input.timeline.map((item) => item.sourceId));
     for (const source of input.sources) {
       if (!usedSourceIds.has(source.id)) continue;
       const ext = path.extname(source.objectPath).slice(0, 10) || '.bin';
       const localPath = path.join(workDir, `source-${crypto.createHash('sha256').update(source.id).digest('hex').slice(0, 12)}${ext}`);
-      await admin.storage().bucket(source.bucket).file(source.objectPath).download({ destination: localPath });
+      let sourceBytes = 0;
+      const sourceHash = crypto.createHash('sha256');
+      const meter = new Transform({
+        transform(chunk, _encoding, callback) {
+          sourceBytes += chunk.length;
+          totalSourceBytes += chunk.length;
+          if (sourceBytes > 256 * 1024 * 1024 || totalSourceBytes > 1024 * 1024 * 1024) {
+            callback(new Error('source_byte_budget_exceeded'));
+            return;
+          }
+          sourceHash.update(chunk);
+          callback(null, chunk);
+        },
+      });
+      await pipeline(
+        admin.storage().bucket(source.bucket).file(source.objectPath).createReadStream(),
+        meter, fs.createWriteStream(localPath, { mode: 0o600 }), { signal: control.signal },
+      );
+      await control.check();
+      sourceIntegrity.set(source.id, { sha256: sourceHash.digest('hex'), bytes: sourceBytes });
       localBySource.set(source.id, localPath);
     }
 
     const clipPaths = [];
     const segments = renderSegments(input.timeline);
     for (let index = 0; index < segments.length; index += 1) {
+      await control.check();
       const item = segments[index];
       const clipPath = path.join(workDir, `clip-${String(index).padStart(4, '0')}.mp4`);
       const durationSeconds = (item.endMs - item.startMs) / 1000;
       if (item.kind === 'gap') {
-        await run('ffmpeg', gapArgs(clipPath, durationSeconds, input.width, input.height, input.fps));
+        await run('ffmpeg', gapArgs(clipPath, durationSeconds, input.width, input.height, input.fps), { signal: control.signal });
       } else {
         const source = input.sourceById.get(item.sourceId);
         const sourcePath = localBySource.get(item.sourceId);
-        await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps));
+        await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps), { signal: control.signal });
       }
       clipPaths.push(clipPath);
     }
@@ -308,7 +421,7 @@ async function renderLifeMovie(job) {
       '-c:v', 'libx264', '-preset', 'medium', '-crf', '20',
       '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
       '-movflags', '+faststart', moviePath,
-    ]);
+    ], { signal: control.signal });
 
     const subtitlePath = path.join(workDir, 'life-movie.srt');
     fs.writeFileSync(subtitlePath, input.subtitleText, 'utf8');
@@ -340,6 +453,7 @@ async function renderLifeMovie(job) {
         sourceRefs: source.sourceRefs,
         consentRef: source.consentRef,
         ownerOrRightsRef: source.ownerOrRightsRef,
+        ...(sourceIntegrity.has(source.id) ? { downloadedBytes: sourceIntegrity.get(source.id) } : { usedInRender: false }),
       })),
       outputs: {
         mp4: { sha256: movieHash, mimeType: 'video/mp4' },
@@ -352,15 +466,22 @@ async function renderLifeMovie(job) {
     const manifestHash = await sha256File(manifestPath);
 
     const outputPaths = {
-      mp4: `${input.outputPrefix}/life-movie.mp4`,
-      srt: `${input.outputPrefix}/life-movie.srt`,
-      manifest: `${input.outputPrefix}/life-movie.render-manifest.json`,
+      mp4: `${attemptPrefix}/life-movie.mp4`,
+      srt: `${attemptPrefix}/life-movie.srt`,
+      manifest: `${attemptPrefix}/life-movie.render-manifest.json`,
     };
-    await Promise.all([
-      bucket.upload(moviePath, { destination: outputPaths.mp4, metadata: { contentType: 'video/mp4' } }),
-      bucket.upload(subtitlePath, { destination: outputPaths.srt, metadata: { contentType: 'application/x-subrip' } }),
-      bucket.upload(manifestPath, { destination: outputPaths.manifest, metadata: { contentType: 'application/json' } }),
-    ]);
+    async function uploadPrivateFile(localPath, destination, contentType) {
+      await control.check();
+      writtenObjects.push(destination);
+      await pipeline(fs.createReadStream(localPath), bucket.file(destination).createWriteStream({
+        resumable: false, metadata: { contentType, cacheControl: 'private, no-store' },
+      }), { signal: control.signal });
+    }
+    await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4');
+    await uploadPrivateFile(subtitlePath, outputPaths.srt, 'application/x-subrip');
+    await uploadPrivateFile(manifestPath, outputPaths.manifest, 'application/json');
+    await control.check();
+    completed = true;
 
     return {
       ok: true,
@@ -378,8 +499,18 @@ async function renderLifeMovie(job) {
       ],
       renderPlanDigest: input.renderPlanDigest,
     };
+  } catch (error) {
+    throw control.signal.aborted ? control.signal.reason : error;
   } finally {
+    control.stop();
     fs.rmSync(workDir, { recursive: true, force: true });
+    if (!completed) {
+      const cleanup = await Promise.allSettled(writtenObjects.map((destination) =>
+        bucket.file(destination).delete({ ignoreNotFound: true })));
+      if (cleanup.some((result) => result.status === 'rejected')) {
+        throw new Error('render_cleanup_incomplete');
+      }
+    }
   }
 }
 
