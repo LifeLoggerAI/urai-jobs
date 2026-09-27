@@ -63,7 +63,7 @@ function nonEmpty(value: unknown): value is string {
 function allowedElevenLabsVoiceIds() {
   return new Set(
     String(process.env.ELEVENLABS_ALLOWED_VOICE_IDS || "")
-      .split(",")
+      .split(";")
       .map((value) => value.trim())
       .filter(Boolean),
   );
