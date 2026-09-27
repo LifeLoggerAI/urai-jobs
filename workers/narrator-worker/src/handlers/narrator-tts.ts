@@ -14,6 +14,12 @@ type NarratorTtsPayload = {
   voiceId?: string;
   format?: string;
   outputPrefix?: string;
+  provider?: "google" | "elevenlabs";
+  externalProcessingConsent?: boolean;
+  providerExecutionAuthorized?: boolean;
+  voiceConsentRef?: string;
+  voiceRightsRef?: string;
+  provenanceRef?: string;
 };
 
 function normalizeAudioEncoding(format: unknown): "MP3" | "OGG_OPUS" {
@@ -40,21 +46,91 @@ function normalizePayload(payload: unknown): NarratorTtsPayload {
     voiceId: typed.voiceId,
     format: typed.format,
     outputPrefix: typed.outputPrefix,
+    provider: typed.provider === "elevenlabs" ? "elevenlabs" : "google",
+    externalProcessingConsent: typed.externalProcessingConsent,
+    providerExecutionAuthorized: typed.providerExecutionAuthorized,
+    voiceConsentRef: typed.voiceConsentRef,
+    voiceRightsRef: typed.voiceRightsRef,
+    provenanceRef: typed.provenanceRef,
   };
 }
 
-export async function handleNarratorTts(job: any) {
-  if (!BUCKET_NAME) {
-    throw new Error("GCS_BUCKET_NAME environment variable is required.");
+
+function nonEmpty(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function allowedElevenLabsVoiceIds() {
+  return new Set(
+    String(process.env.ELEVENLABS_ALLOWED_VOICE_IDS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+}
+
+async function synthesizeElevenLabs(payload: NarratorTtsPayload) {
+  if (process.env.URAI_NARRATOR_ELEVENLABS_ENABLED !== "true") {
+    throw new Error("elevenlabs_provider_disabled");
   }
+  const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
+  if (!apiKey) throw new Error("elevenlabs_api_key_unconfigured");
+  if (payload.providerExecutionAuthorized !== true) throw new Error("elevenlabs_provider_execution_not_authorized");
+  if (payload.externalProcessingConsent !== true) throw new Error("elevenlabs_external_processing_consent_required");
+  if (!nonEmpty(payload.voiceConsentRef)) throw new Error("elevenlabs_voice_consent_required");
+  if (!nonEmpty(payload.voiceRightsRef)) throw new Error("elevenlabs_voice_rights_required");
+  if (!nonEmpty(payload.provenanceRef)) throw new Error("elevenlabs_voice_provenance_required");
+  if (!nonEmpty(payload.voiceId)) throw new Error("elevenlabs_voice_id_required");
 
-  console.log(`Handling narrator.tts job: ${job.jobId}`);
+  const allowed = allowedElevenLabsVoiceIds();
+  if (!allowed.size || !allowed.has(payload.voiceId)) throw new Error("elevenlabs_voice_not_allowlisted");
 
-  const payload = normalizePayload(job.payload);
+  const maxCharacters = Math.max(1, Math.min(5000, Number(process.env.ELEVENLABS_MAX_CHARACTERS_PER_REQUEST || 1200)));
+  if (payload.text.length > maxCharacters) throw new Error("elevenlabs_text_limit_exceeded");
+
+  const modelId = process.env.ELEVENLABS_MODEL_ID?.trim() || "eleven_multilingual_v2";
+  const outputFormat = process.env.ELEVENLABS_OUTPUT_FORMAT?.trim() || "mp3_44100_128";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45_000);
+  try {
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(payload.voiceId)}?output_format=${encodeURIComponent(outputFormat)}`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": apiKey,
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg",
+        },
+        body: JSON.stringify({
+          text: payload.text,
+          model_id: modelId,
+        }),
+        signal: controller.signal,
+      },
+    );
+    if (!response.ok) {
+      const body = (await response.text()).slice(0, 300);
+      throw new Error(`elevenlabs_http_${response.status}:${body.replace(/\s+/g, " ")}`);
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length) throw new Error("elevenlabs_empty_audio");
+    return {
+      audioBuffer: bytes,
+      audioEncoding: "MP3" as const,
+      fileExtension: "mp3",
+      mimeType: "audio/mpeg",
+      provider: "elevenlabs" as const,
+      modelId,
+      voiceId: payload.voiceId,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function synthesizeGoogle(payload: NarratorTtsPayload) {
   const audioEncoding = normalizeAudioEncoding(payload.format);
-  const fileExtension = audioEncoding === "OGG_OPUS" ? "ogg" : "mp3";
-  const mimeType = audioEncoding === "OGG_OPUS" ? "audio/ogg" : "audio/mpeg";
-
   const [response] = await ttsClient.synthesizeSpeech({
     input: { text: payload.text },
     voice: {
@@ -68,9 +144,31 @@ export async function handleNarratorTts(job: any) {
     throw new Error("TTS synthesis failed to produce audio content.");
   }
 
-  const audioBuffer = Buffer.isBuffer(response.audioContent)
-    ? response.audioContent
-    : Buffer.from(response.audioContent as Uint8Array);
+  return {
+    audioBuffer: Buffer.isBuffer(response.audioContent)
+      ? response.audioContent
+      : Buffer.from(response.audioContent as Uint8Array),
+    audioEncoding,
+    fileExtension: audioEncoding === "OGG_OPUS" ? "ogg" : "mp3",
+    mimeType: audioEncoding === "OGG_OPUS" ? "audio/ogg" : "audio/mpeg",
+    provider: "google" as const,
+    modelId: "google-cloud-text-to-speech",
+    voiceId: payload.voice || payload.voiceId || "default",
+  };
+}
+
+export async function handleNarratorTts(job: any) {
+  if (!BUCKET_NAME) {
+    throw new Error("GCS_BUCKET_NAME environment variable is required.");
+  }
+
+  console.log(`Handling narrator.tts job: ${job.jobId}`);
+
+  const payload = normalizePayload(job.payload);
+  const synthesis = payload.provider === "elevenlabs"
+    ? await synthesizeElevenLabs(payload)
+    : await synthesizeGoogle(payload);
+  const { audioBuffer, fileExtension, mimeType } = synthesis;
 
   const fileName = `${payload.outputPrefix || "tts"}/${randomUUID()}.${fileExtension}`;
   const file = storage.bucket(BUCKET_NAME).file(fileName);
@@ -78,6 +176,12 @@ export async function handleNarratorTts(job: any) {
   await file.save(audioBuffer, {
     metadata: {
       contentType: mimeType,
+      metadata: {
+        uraiProvider: synthesis.provider,
+        uraiModelId: synthesis.modelId,
+        uraiVoiceId: synthesis.voiceId,
+        uraiProvenanceRef: payload.provenanceRef || "provider-native",
+      },
     },
   });
 
@@ -87,5 +191,11 @@ export async function handleNarratorTts(job: any) {
     artifactPath: `gs://${BUCKET_NAME}/${fileName}`,
     mimeType,
     size: audioBuffer.length,
+    provider: synthesis.provider,
+    modelId: synthesis.modelId,
+    voiceId: synthesis.voiceId,
+    provenanceRef: payload.provenanceRef || "provider-native",
+    consentRef: payload.voiceConsentRef || null,
+    rightsRef: payload.voiceRightsRef || null,
   };
 }
