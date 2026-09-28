@@ -33,9 +33,18 @@ for (const forbidden of [
   'voiceRightsRef?: string',
 ]) assert.ok(!handler.includes(forbidden), `caller-controlled authorization field remains: ${forbidden}`);
 
-assert.ok(handler.indexOf('trustedProviderAuthorization(job, payload)') < handler.indexOf('fetch('),
-  'trusted provider authorization must be evaluated before network provider execution');
-assert.ok(handler.indexOf('allowedElevenLabsVoiceIds') < handler.indexOf('fetch('),
+const handleStart = handler.indexOf('export async function handleNarratorTts');
+assert.ok(handleStart >= 0, 'narrator handler entry point must exist');
+const handleBody = handler.slice(handleStart);
+assert.ok(handleBody.indexOf('trustedProviderAuthorization(job, payload)') >= 0,
+  'trusted provider authorization must be evaluated by the narrator handler');
+assert.ok(
+  handleBody.indexOf('trustedProviderAuthorization(job, payload)') < handleBody.indexOf('synthesizeElevenLabs(payload, providerAuthorization'),
+  'trusted provider authorization must be evaluated before ElevenLabs synthesis is invoked',
+);
+const synthesisStart = handler.indexOf('async function synthesizeElevenLabs');
+const synthesisBody = handler.slice(synthesisStart, handleStart);
+assert.ok(synthesisStart >= 0 && synthesisBody.indexOf('allowedElevenLabsVoiceIds') < synthesisBody.indexOf('fetch('),
   'voice allowlist must be evaluated before provider execution');
 assert.ok(handler.includes('outputFormat !== "mp3_44100_128"'),
   'worker must fail closed until additional ElevenLabs output formats have verified MIME/extension handling');
