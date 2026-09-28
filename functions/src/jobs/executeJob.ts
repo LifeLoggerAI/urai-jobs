@@ -104,7 +104,8 @@ async function resolveTrustedNarratorProviderAuthorization(job: Job): Promise<Tr
   const payload = getPayloadRecord(job);
   if (payload.provider !== 'elevenlabs') return null;
   if (!job.ownerUid) throw new Error('elevenlabs_owner_required');
-  if (!isConsentContext(job.consent)) throw new Error('elevenlabs_canonical_consent_required');
+  const consent = job.consent;
+  if (!isConsentContext(consent)) throw new Error('elevenlabs_canonical_consent_required');
 
   const voiceId = typeof payload.voiceId === 'string' ? payload.voiceId.trim() : '';
   if (!voiceId) throw new Error('elevenlabs_voice_id_required');
@@ -126,9 +127,9 @@ async function resolveTrustedNarratorProviderAuthorization(job: Job): Promise<Tr
     data.enabled !== true ||
     data.provider !== 'elevenlabs' ||
     data.ownerUid !== job.ownerUid ||
-    consentPurpose !== job.consent.purpose ||
-    policyVersion !== job.consent.policyVersion ||
-    consentReceiptId !== job.consent.decisionReceiptId ||
+    consentPurpose !== consent.purpose ||
+    policyVersion !== consent.policyVersion ||
+    consentReceiptId !== consent.decisionReceiptId ||
     !voiceIds.includes(voiceId) ||
     !consentReceiptId ||
     !rightsReceiptId ||
