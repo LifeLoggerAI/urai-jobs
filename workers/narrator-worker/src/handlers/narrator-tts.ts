@@ -15,11 +15,6 @@ type NarratorTtsPayload = {
   format?: string;
   outputPrefix?: string;
   provider?: "google" | "elevenlabs";
-  externalProcessingConsent?: boolean;
-  providerExecutionAuthorized?: boolean;
-  voiceConsentRef?: string;
-  voiceRightsRef?: string;
-  provenanceRef?: string;
 };
 
 function normalizeAudioEncoding(format: unknown): "MP3" | "OGG_OPUS" {
@@ -47,11 +42,6 @@ function normalizePayload(payload: unknown): NarratorTtsPayload {
     format: typed.format,
     outputPrefix: typed.outputPrefix,
     provider: typed.provider === "elevenlabs" ? "elevenlabs" : "google",
-    externalProcessingConsent: typed.externalProcessingConsent,
-    providerExecutionAuthorized: typed.providerExecutionAuthorized,
-    voiceConsentRef: typed.voiceConsentRef,
-    voiceRightsRef: typed.voiceRightsRef,
-    provenanceRef: typed.provenanceRef,
   };
 }
 
@@ -69,17 +59,42 @@ function allowedElevenLabsVoiceIds() {
   );
 }
 
-async function synthesizeElevenLabs(payload: NarratorTtsPayload) {
+type TrustedProviderAuthorization = {
+  provider: "elevenlabs";
+  ownerUid: string;
+  consentReceiptId: string;
+  rightsReceiptId: string;
+  provenanceRef: string;
+  voiceId: string;
+};
+
+function trustedProviderAuthorization(job: any, payload: NarratorTtsPayload): TrustedProviderAuthorization {
+  const authorization = job?.providerAuthorization;
+  if (!authorization || typeof authorization !== "object") {
+    throw new Error("elevenlabs_server_authorization_required");
+  }
+  const typed = authorization as Partial<TrustedProviderAuthorization>;
+  if (
+    typed.provider !== "elevenlabs" ||
+    !nonEmpty(typed.ownerUid) ||
+    typed.ownerUid !== job?.ownerUid ||
+    !nonEmpty(typed.consentReceiptId) ||
+    !nonEmpty(typed.rightsReceiptId) ||
+    !nonEmpty(typed.provenanceRef) ||
+    !nonEmpty(typed.voiceId) ||
+    typed.voiceId !== payload.voiceId
+  ) {
+    throw new Error("elevenlabs_server_authorization_invalid");
+  }
+  return typed as TrustedProviderAuthorization;
+}
+
+async function synthesizeElevenLabs(payload: NarratorTtsPayload, authorization: TrustedProviderAuthorization) {
   if (process.env.URAI_NARRATOR_ELEVENLABS_ENABLED !== "true") {
     throw new Error("elevenlabs_provider_disabled");
   }
   const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
   if (!apiKey) throw new Error("elevenlabs_api_key_unconfigured");
-  if (payload.providerExecutionAuthorized !== true) throw new Error("elevenlabs_provider_execution_not_authorized");
-  if (payload.externalProcessingConsent !== true) throw new Error("elevenlabs_external_processing_consent_required");
-  if (!nonEmpty(payload.voiceConsentRef)) throw new Error("elevenlabs_voice_consent_required");
-  if (!nonEmpty(payload.voiceRightsRef)) throw new Error("elevenlabs_voice_rights_required");
-  if (!nonEmpty(payload.provenanceRef)) throw new Error("elevenlabs_voice_provenance_required");
   if (!nonEmpty(payload.voiceId)) throw new Error("elevenlabs_voice_id_required");
 
   const allowed = allowedElevenLabsVoiceIds();
@@ -168,8 +183,11 @@ export async function handleNarratorTts(job: any) {
   console.log(`Handling narrator.tts job: ${job.jobId}`);
 
   const payload = normalizePayload(job.payload);
+  const providerAuthorization = payload.provider === "elevenlabs"
+    ? trustedProviderAuthorization(job, payload)
+    : null;
   const synthesis = payload.provider === "elevenlabs"
-    ? await synthesizeElevenLabs(payload)
+    ? await synthesizeElevenLabs(payload, providerAuthorization as TrustedProviderAuthorization)
     : await synthesizeGoogle(payload);
   const { audioBuffer, fileExtension, mimeType } = synthesis;
 
@@ -183,7 +201,7 @@ export async function handleNarratorTts(job: any) {
         uraiProvider: synthesis.provider,
         uraiModelId: synthesis.modelId,
         uraiVoiceId: synthesis.voiceId,
-        uraiProvenanceRef: payload.provenanceRef || "provider-native",
+        uraiProvenanceRef: providerAuthorization?.provenanceRef || "provider-native",
       },
     },
   });
@@ -197,8 +215,8 @@ export async function handleNarratorTts(job: any) {
     provider: synthesis.provider,
     modelId: synthesis.modelId,
     voiceId: synthesis.voiceId,
-    provenanceRef: payload.provenanceRef || "provider-native",
-    consentRef: payload.voiceConsentRef || null,
-    rightsRef: payload.voiceRightsRef || null,
+    provenanceRef: providerAuthorization?.provenanceRef || "provider-native",
+    consentRef: providerAuthorization?.consentReceiptId || null,
+    rightsRef: providerAuthorization?.rightsReceiptId || null,
   };
 }
