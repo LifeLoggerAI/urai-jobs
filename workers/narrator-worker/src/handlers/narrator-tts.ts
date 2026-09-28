@@ -90,6 +90,9 @@ async function synthesizeElevenLabs(payload: NarratorTtsPayload) {
 
   const modelId = process.env.ELEVENLABS_MODEL_ID?.trim() || "eleven_multilingual_v2";
   const outputFormat = process.env.ELEVENLABS_OUTPUT_FORMAT?.trim() || "mp3_44100_128";
+  if (outputFormat !== "mp3_44100_128") {
+    throw new Error("elevenlabs_output_format_not_verified");
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45_000);
   try {
