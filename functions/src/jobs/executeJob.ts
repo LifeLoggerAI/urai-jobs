@@ -91,6 +91,62 @@ function getPayloadRecord(job: Job): Record<string, unknown> {
   return job.payload && typeof job.payload === 'object' ? (job.payload as Record<string, unknown>) : {};
 }
 
+type TrustedNarratorProviderAuthorization = {
+  provider: 'elevenlabs';
+  ownerUid: string;
+  consentReceiptId: string;
+  rightsReceiptId: string;
+  provenanceRef: string;
+  voiceId: string;
+};
+
+async function resolveTrustedNarratorProviderAuthorization(job: Job): Promise<TrustedNarratorProviderAuthorization | null> {
+  const payload = getPayloadRecord(job);
+  if (payload.provider !== 'elevenlabs') return null;
+  if (!job.ownerUid) throw new Error('elevenlabs_owner_required');
+  if (!isConsentContext(job.consent)) throw new Error('elevenlabs_canonical_consent_required');
+
+  const voiceId = typeof payload.voiceId === 'string' ? payload.voiceId.trim() : '';
+  if (!voiceId) throw new Error('elevenlabs_voice_id_required');
+
+  const authorization = await getFirestore()
+    .doc(`users/${job.ownerUid}/providerAuthorizations/elevenlabs`)
+    .get();
+  if (!authorization.exists) throw new Error('elevenlabs_server_authorization_required');
+
+  const data = authorization.data() || {};
+  const voiceIds = Array.isArray(data.voiceIds) ? data.voiceIds.map((value) => String(value)) : [];
+  const consentPurpose = String(data.consentPurpose || '');
+  const policyVersion = String(data.policyVersion || '');
+  const consentReceiptId = String(data.decisionReceiptId || '');
+  const rightsReceiptId = String(data.rightsReceiptId || '');
+  const provenanceRef = String(data.provenanceRef || '');
+
+  if (
+    data.enabled !== true ||
+    data.provider !== 'elevenlabs' ||
+    data.ownerUid !== job.ownerUid ||
+    consentPurpose !== job.consent.purpose ||
+    policyVersion !== job.consent.policyVersion ||
+    consentReceiptId !== job.consent.decisionReceiptId ||
+    !voiceIds.includes(voiceId) ||
+    !consentReceiptId ||
+    !rightsReceiptId ||
+    !provenanceRef
+  ) {
+    throw new Error('elevenlabs_server_authorization_mismatch');
+  }
+
+  return {
+    provider: 'elevenlabs',
+    ownerUid: job.ownerUid,
+    consentReceiptId,
+    rightsReceiptId,
+    provenanceRef,
+    voiceId,
+  };
+}
+
 function cleanPrefix(value: unknown, fallback: string): string {
   const raw = typeof value === 'string' && value.trim() ? value.trim() : fallback;
   return raw.replace(/^\/+|\/+$/g, '') || fallback;
@@ -436,12 +492,17 @@ export const executeJob = onMessagePublished({
         metadata: { jobType, workerEnvKey: target.envKey, route },
       });
 
+      const providerAuthorization = jobType === 'narrator.tts'
+        ? await resolveTrustedNarratorProviderAuthorization(job)
+        : null;
+
       const response = await axios.post(`${workerUrl}${route}`, {
         ...job,
         jobId,
         leaseToken,
         type: jobType,
         jobType,
+        ...(providerAuthorization ? { providerAuthorization } : {}),
       }, {
         headers: getWorkerAuthHeaders(),
         timeout: jobType === 'studio.render.video'
