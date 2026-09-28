@@ -42,6 +42,10 @@ case "$URAI_NARRATOR_ELEVENLABS_ENABLED" in
 esac
 if [ "$URAI_NARRATOR_ELEVENLABS_ENABLED" = "true" ]; then
   : "${ELEVENLABS_ALLOWED_VOICE_IDS:?ELEVENLABS_ALLOWED_VOICE_IDS is required when ElevenLabs narrator execution is enabled}"
+  if [ "$ELEVENLABS_OUTPUT_FORMAT" != "mp3_44100_128" ]; then
+    echo "[FAIL] ELEVENLABS_OUTPUT_FORMAT must remain mp3_44100_128 until additional formats have explicit extension/MIME verification" >&2
+    exit 1
+  fi
 fi
 WORKER_BUILD_TIMEOUT_SECONDS="${WORKER_BUILD_TIMEOUT_SECONDS:-900}"
 WORKER_BUILD_POLL_SECONDS="${WORKER_BUILD_POLL_SECONDS:-10}"
