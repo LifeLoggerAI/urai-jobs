@@ -3,6 +3,12 @@ import fs from 'node:fs';
 const policyPath = new URL('../verification/runpod-gaussian-recovery-policy.json', import.meta.url);
 const policy = JSON.parse(fs.readFileSync(policyPath, 'utf8'));
 
+const ABSOLUTE_LIMITS = Object.freeze({
+  maxHourlyUsd: 1.25,
+  maxInitialPaidRunUsd: 5.0,
+  maxEstimatedRunHours: 4.0,
+});
+
 function fail(message) {
   console.error(`[FAIL] ${message}`);
   process.exitCode = 1;
@@ -26,10 +32,13 @@ function validatePolicyShape() {
   if (storage.networkVolumeRequired !== true) fail('network volume must remain mandatory');
   if (storage.forbidContainerOnlyPersistence !== true) fail('container-only persistence must remain forbidden');
   if (policy?.recovery?.reuseExistingCheckpointBeforeRetraining !== true) fail('checkpoint reuse must remain mandatory');
-  positiveNumber('maxHourlyUsd', limits.maxHourlyUsd);
-  positiveNumber('maxInitialPaidRunUsd', limits.maxInitialPaidRunUsd);
-  positiveNumber('maxEstimatedRunHours', limits.maxEstimatedRunHours);
+  const maxHourlyUsd = positiveNumber('maxHourlyUsd', limits.maxHourlyUsd);
+  const maxInitialPaidRunUsd = positiveNumber('maxInitialPaidRunUsd', limits.maxInitialPaidRunUsd);
+  const maxEstimatedRunHours = positiveNumber('maxEstimatedRunHours', limits.maxEstimatedRunHours);
   positiveNumber('autoStopIdleMinutes', limits.autoStopIdleMinutes);
+  if (maxHourlyUsd !== null && maxHourlyUsd > ABSOLUTE_LIMITS.maxHourlyUsd) fail(`maxHourlyUsd must not exceed fixed ceiling ${ABSOLUTE_LIMITS.maxHourlyUsd.toFixed(2)}/hr`);
+  if (maxInitialPaidRunUsd !== null && maxInitialPaidRunUsd > ABSOLUTE_LIMITS.maxInitialPaidRunUsd) fail(`maxInitialPaidRunUsd must not exceed fixed ceiling ${ABSOLUTE_LIMITS.maxInitialPaidRunUsd.toFixed(2)}`);
+  if (maxEstimatedRunHours !== null && maxEstimatedRunHours > ABSOLUTE_LIMITS.maxEstimatedRunHours) fail(`maxEstimatedRunHours must not exceed fixed ceiling ${ABSOLUTE_LIMITS.maxEstimatedRunHours}h`);
 }
 
 function paidPreflight(env = process.env) {
@@ -80,9 +89,9 @@ function selfTest() {
   const denied = [
     [{...base, URAI_RUNPOD_ALLOW_PAID_EXECUTION: ''}, 'acknowledgement'],
     [{...base, RUNPOD_NETWORK_VOLUME_ID: ''}, 'network volume'],
-    [{...base, URAI_RUNPOD_GPU_HOURLY_USD: String(policy.limits.maxHourlyUsd + 0.01)}, 'hourly cap'],
-    [{...base, URAI_RUNPOD_ESTIMATED_HOURS: String(policy.limits.maxEstimatedRunHours + 0.01)}, 'time cap'],
-    [{...base, URAI_RUNPOD_MAX_JOB_USD: String(policy.limits.maxInitialPaidRunUsd + 0.01)}, 'job cap'],
+    [{...base, URAI_RUNPOD_GPU_HOURLY_USD: String(ABSOLUTE_LIMITS.maxHourlyUsd + 0.01)}, 'fixed hourly cap'],
+    [{...base, URAI_RUNPOD_ESTIMATED_HOURS: String(ABSOLUTE_LIMITS.maxEstimatedRunHours + 0.01)}, 'fixed time cap'],
+    [{...base, URAI_RUNPOD_MAX_JOB_USD: String(ABSOLUTE_LIMITS.maxInitialPaidRunUsd + 0.01)}, 'fixed job cap'],
   ];
 
   for (const [env, label] of denied) {
