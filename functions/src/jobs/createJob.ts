@@ -157,7 +157,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     if (!consent) {
       throw httpsError(
         'failed-precondition',
-        'Private-source jobs require canonical consent context: purpose, policy version, and decision receipt.'
+        'Private-source transcription requires canonical consent context: purpose, policy version, and decision receipt.'
       );
     }
     const privateSource = PrivateSourcePayloadSchema.safeParse(payload);
