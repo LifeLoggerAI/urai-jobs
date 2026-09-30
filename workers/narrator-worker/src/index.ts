@@ -38,15 +38,21 @@ app.get('/', (_req: any, res: any) => {
 });
 
 function narratorConfiguration() {
+  const elevenLabsEnabled = process.env.URAI_NARRATOR_ELEVENLABS_ENABLED === 'true';
   return {
     workerToken: Boolean(process.env.URAI_JOBS_WORKER_TOKEN),
     gcsBucket: Boolean(process.env.GCS_BUCKET_NAME),
+    elevenLabsEnabled,
+    elevenLabsApiKey: !elevenLabsEnabled || Boolean(process.env.ELEVENLABS_API_KEY),
+    elevenLabsVoiceAllowlist: !elevenLabsEnabled || Boolean(process.env.ELEVENLABS_ALLOWED_VOICE_IDS),
   };
 }
 
 app.get('/healthz', (_req: any, res: any) => {
   const configured = narratorConfiguration();
-  const ok = productionRuntime ? Object.values(configured).every(Boolean) : true;
+  const ok = productionRuntime
+    ? configured.workerToken && configured.gcsBucket && configured.elevenLabsApiKey && configured.elevenLabsVoiceAllowlist
+    : true;
   res.set('Cache-Control', 'no-store');
   res.status(ok ? 200 : 503).send({
     ok,
@@ -60,7 +66,9 @@ app.get('/healthz', (_req: any, res: any) => {
 app.get('/readyz', (_req: any, res: any) => {
   const configured = narratorConfiguration();
   const checks = {
-    configuration: productionRuntime ? Object.values(configured).every(Boolean) : true,
+    configuration: productionRuntime
+      ? configured.workerToken && configured.gcsBucket && configured.elevenLabsApiKey && configured.elevenLabsVoiceAllowlist
+      : true,
     sourceShaExact: productionRuntime ? sourceShaExact : true,
     runtimeRevision: productionRuntime ? runtimeRevisionPresent : true,
     capacityAvailable: governor.canAcceptJob(),

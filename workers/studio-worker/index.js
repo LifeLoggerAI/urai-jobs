@@ -35,6 +35,7 @@ const LIFE_MOVIE_EXECUTION_BUDGET = {
   maxFramePixels: 3840 * 2160,
   maxSources: 12,
   maxTimelineItems: 12,
+  maxAudioCues: 12,
 };
 
 function canonicalJson(value) {
@@ -172,9 +173,11 @@ function parsePayload(job) {
 
   const sources = Array.isArray(payload.sources) ? payload.sources : [];
   const timeline = Array.isArray(payload.timeline) ? payload.timeline : [];
+  const audioCues = Array.isArray(payload.audioCues) ? payload.audioCues : [];
   if (!sources.length || !timeline.length) throw new Error('sources_and_timeline_required');
   if (sources.length > LIFE_MOVIE_EXECUTION_BUDGET.maxSources
-    || timeline.length > LIFE_MOVIE_EXECUTION_BUDGET.maxTimelineItems) throw new Error('life_movie_too_large');
+    || timeline.length > LIFE_MOVIE_EXECUTION_BUDGET.maxTimelineItems
+    || audioCues.length > LIFE_MOVIE_EXECUTION_BUDGET.maxAudioCues) throw new Error('life_movie_too_large');
 
   const sourceById = new Map();
   for (const raw of sources) {
@@ -226,6 +229,29 @@ function parsePayload(job) {
     throw new Error('life_movie_exceeds_synchronous_render_budget');
   }
 
+  const audioRoles = new Set(['narration', 'dialogue', 'music', 'ambience', 'foley', 'effects']);
+  const normalizedAudioCues = audioCues.map((raw, index) => {
+    const sourceId = safeSegment(String(raw.sourceId || ''), 'audio_cue_source_id');
+    const source = sourceById.get(sourceId);
+    if (!source) throw new Error(`unknown_audio_cue_source:${sourceId}`);
+    if (!source.mimeType.startsWith('audio/') && !source.mimeType.startsWith('video/')) {
+      throw new Error(`audio_cue_source_not_audio_capable:${sourceId}`);
+    }
+    const role = String(raw.role || '');
+    if (!audioRoles.has(role)) throw new Error(`invalid_audio_cue_role:${index}`);
+    const startMs = Number(raw.startMs);
+    const endMs = Number(raw.endMs);
+    const sourceStartMs = Number(raw.sourceStartMs || 0);
+    const gainDb = Number(raw.gainDb ?? 0);
+    if (!Number.isInteger(startMs) || !Number.isInteger(endMs) || startMs < 0 || endMs <= startMs) {
+      throw new Error(`invalid_audio_cue_range:${index}`);
+    }
+    if (!Number.isInteger(sourceStartMs) || sourceStartMs < 0) throw new Error(`invalid_audio_cue_source_start:${index}`);
+    if (!Number.isFinite(gainDb) || gainDb < -60 || gainDb > 12) throw new Error(`invalid_audio_cue_gain:${index}`);
+    if (endMs > totalTimelineMs) throw new Error(`audio_cue_outside_timeline:${index}`);
+    return { sourceId, role, startMs, endMs, sourceStartMs, gainDb };
+  });
+
   const subtitleText = typeof payload.subtitleText === 'string' ? payload.subtitleText : '';
   if (Buffer.byteLength(subtitleText, 'utf8') > 2 * 1024 * 1024) throw new Error('subtitles_too_large');
 
@@ -239,6 +265,7 @@ function parsePayload(job) {
     sources: [...sourceById.values()],
     sourceById,
     timeline: normalizedTimeline,
+    audioCues: normalizedAudioCues,
     subtitleText,
     outputPrefix: safeOutputPrefix(String(payload.outputPrefix || ''), tenantId, projectId),
   };
@@ -355,6 +382,46 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
   throw new Error('source_has_no_supported_media_stream');
 }
 
+async function mixAudioCues(baseMoviePath, outputPath, audioCues, localBySource, sourceById, signal) {
+  if (!audioCues.length) {
+    fs.renameSync(baseMoviePath, outputPath);
+    return;
+  }
+  const args = ['-y', '-i', baseMoviePath];
+  for (const cue of audioCues) {
+    const sourcePath = localBySource.get(cue.sourceId);
+    if (!sourcePath) throw new Error(`audio_cue_source_not_downloaded:${cue.sourceId}`);
+    const streams = probeStreams(sourcePath);
+    if (!streams.audio) throw new Error(`audio_cue_source_missing_audio:${cue.sourceId}`);
+    args.push('-i', sourcePath);
+  }
+
+  const filters = ['[0:a:0]aformat=sample_rates=48000:channel_layouts=stereo[baseaudio]'];
+  const mixInputs = ['[baseaudio]'];
+  for (let index = 0; index < audioCues.length; index += 1) {
+    const cue = audioCues[index];
+    const inputIndex = index + 1;
+    const durationSeconds = (cue.endMs - cue.startMs) / 1000;
+    const sourceStartSeconds = cue.sourceStartMs / 1000;
+    const label = `cue${index}`;
+    filters.push(
+      `[${inputIndex}:a:0]atrim=start=${sourceStartSeconds}:duration=${durationSeconds},asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo,volume=${cue.gainDb}dB,adelay=${cue.startMs}|${cue.startMs}[${label}]`,
+    );
+    mixInputs.push(`[${label}]`);
+  }
+  filters.push(`${mixInputs.join('')}amix=inputs=${mixInputs.length}:duration=first:dropout_transition=0:normalize=0[mixedaudio]`);
+
+  args.push(
+    '-filter_complex', filters.join(';'),
+    '-map', '0:v:0', '-map', '[mixedaudio]',
+    '-c:v', 'copy',
+    '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
+    '-movflags', '+faststart',
+    outputPath,
+  );
+  await run('ffmpeg', args, { signal });
+}
+
 async function sha256File(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
@@ -382,7 +449,10 @@ async function renderLifeMovie(job) {
     const localBySource = new Map();
     const sourceIntegrity = new Map();
     let totalSourceBytes = 0;
-    const usedSourceIds = new Set(input.timeline.map((item) => item.sourceId));
+    const usedSourceIds = new Set([
+      ...input.timeline.map((item) => item.sourceId),
+      ...input.audioCues.map((cue) => cue.sourceId),
+    ]);
     for (const source of input.sources) {
       if (!usedSourceIds.has(source.id)) continue;
       const ext = path.extname(source.objectPath).slice(0, 10) || '.bin';
@@ -429,14 +499,17 @@ async function renderLifeMovie(job) {
 
     const concatPath = path.join(workDir, 'concat.txt');
     fs.writeFileSync(concatPath, clipPaths.map((clipPath) => `file '${clipPath.replace(/'/g, "'\\''")}'`).join('\n') + '\n');
-    const moviePath = path.join(workDir, 'life-movie.mp4');
+    const baseMoviePath = path.join(workDir, 'life-movie-base.mp4');
     await run('ffmpeg', [
       '-y', '-f', 'concat', '-safe', '0', '-i', concatPath,
       // Every segment already has the same H.264/AAC output profile. Remux it;
       // encoding the full movie again doubles CPU work and loses quality.
       '-c', 'copy',
-      '-movflags', '+faststart', moviePath,
+      '-movflags', '+faststart', baseMoviePath,
     ], { signal: control.signal });
+
+    const moviePath = path.join(workDir, 'life-movie.mp4');
+    await mixAudioCues(baseMoviePath, moviePath, input.audioCues, localBySource, input.sourceById, control.signal);
 
     const subtitlePath = path.join(workDir, 'life-movie.srt');
     fs.writeFileSync(subtitlePath, input.subtitleText, 'utf8');
@@ -457,6 +530,8 @@ async function renderLifeMovie(job) {
       sourceCount: input.sources.length,
       timelineItemCount: input.timeline.length,
       timeline: input.timeline,
+      audioCueCount: input.audioCues.length,
+      audioCues: input.audioCues,
       gapTreatment: 'black-video-silent-audio',
       shortSourceTreatment: 'hold-last-video-frame-and-pad-silent-audio-to-declared-duration',
       sources: input.sources.map((source) => ({
