@@ -9,6 +9,11 @@ set -euo pipefail
 : "${URAI_JOBS_WORKER_TOKEN_SECRET:=urai-jobs-worker-token}"
 : "${URAI_WHEEL_GITHUB_TOKEN_SECRET:=urai-wheel-github-token}"
 : "${URAI_JOBS_CALLBACK_SECRET_NAME:=urai-jobs-callback-secret}"
+: "${URAI_NARRATOR_ELEVENLABS_ENABLED:=false}"
+: "${ELEVENLABS_API_KEY_SECRET:=ELEVENLABS_API_KEY}"
+: "${ELEVENLABS_MODEL_ID:=eleven_multilingual_v2}"
+: "${ELEVENLABS_OUTPUT_FORMAT:=mp3_44100_128}"
+: "${ELEVENLABS_MAX_CHARACTERS_PER_REQUEST:=1200}"
 : "${GITHUB_SHA:?GITHUB_SHA must contain the verified deployment source SHA}"
 : "${DEPLOY_ROLLBACK_SHA:?DEPLOY_ROLLBACK_SHA must contain the approved rollback source SHA}"
 
@@ -28,6 +33,20 @@ digest_pattern='^sha256:[0-9a-f]{64}$'
 }
 
 URAI_ENV="${URAI_ENV:-prod}"
+case "$URAI_NARRATOR_ELEVENLABS_ENABLED" in
+  true|false) ;;
+  *)
+    echo "[FAIL] URAI_NARRATOR_ELEVENLABS_ENABLED must be true or false" >&2
+    exit 1
+    ;;
+esac
+if [ "$URAI_NARRATOR_ELEVENLABS_ENABLED" = "true" ]; then
+  : "${ELEVENLABS_ALLOWED_VOICE_IDS:?ELEVENLABS_ALLOWED_VOICE_IDS is required when ElevenLabs narrator execution is enabled}"
+  if [ "$ELEVENLABS_OUTPUT_FORMAT" != "mp3_44100_128" ]; then
+    echo "[FAIL] ELEVENLABS_OUTPUT_FORMAT must remain mp3_44100_128 until additional formats have explicit extension/MIME verification" >&2
+    exit 1
+  fi
+fi
 WORKER_BUILD_TIMEOUT_SECONDS="${WORKER_BUILD_TIMEOUT_SECONDS:-900}"
 WORKER_BUILD_POLL_SECONDS="${WORKER_BUILD_POLL_SECONDS:-10}"
 DEPLOY_RECEIPT_PATH="${DEPLOY_RECEIPT_PATH:-docs/release-evidence/worker-deploy-receipt.json}"
@@ -85,6 +104,9 @@ required_secrets=("$URAI_JOBS_WORKER_TOKEN_SECRET")
 for worker in "${WORKERS[@]}"; do
   if [ "$worker" = "asset-worker" ]; then
     required_secrets+=("$URAI_WHEEL_GITHUB_TOKEN_SECRET" "$URAI_JOBS_CALLBACK_SECRET_NAME")
+  fi
+  if [ "$worker" = "narrator-worker" ] && [ "$URAI_NARRATOR_ELEVENLABS_ENABLED" = "true" ]; then
+    required_secrets+=("$ELEVENLABS_API_KEY_SECRET")
   fi
 done
 
@@ -177,11 +199,16 @@ build_secret_versions_json() {
   WORKER_TOKEN_VERSION="${SECRET_VERSION_IDS[$URAI_JOBS_WORKER_TOKEN_SECRET]}" \
   WHEEL_TOKEN_VERSION="${SECRET_VERSION_IDS[$URAI_WHEEL_GITHUB_TOKEN_SECRET]:-}" \
   CALLBACK_SECRET_VERSION="${SECRET_VERSION_IDS[$URAI_JOBS_CALLBACK_SECRET_NAME]:-}" \
+  ELEVENLABS_ENABLED="$URAI_NARRATOR_ELEVENLABS_ENABLED" \
+  ELEVENLABS_SECRET_VERSION="${SECRET_VERSION_IDS[$ELEVENLABS_API_KEY_SECRET]:-}" \
   node <<'NODE'
 const versions = { URAI_JOBS_WORKER_TOKEN: process.env.WORKER_TOKEN_VERSION };
 if (process.env.WORKER === 'asset-worker') {
   versions.URAI_WHEEL_GITHUB_TOKEN = process.env.WHEEL_TOKEN_VERSION;
   versions.URAI_JOBS_CALLBACK_SECRET = process.env.CALLBACK_SECRET_VERSION;
+}
+if (process.env.WORKER === 'narrator-worker' && process.env.ELEVENLABS_ENABLED === 'true') {
+  versions.ELEVENLABS_API_KEY = process.env.ELEVENLABS_SECRET_VERSION;
 }
 process.stdout.write(JSON.stringify(versions));
 NODE
@@ -449,6 +476,13 @@ deploy_worker() {
   local secret_vars="URAI_JOBS_WORKER_TOKEN=${URAI_JOBS_WORKER_TOKEN_SECRET}:${worker_token_version}"
   if [ "$worker" = "studio-worker" ]; then
     env_vars="$env_vars,URAI_STUDIO_SOURCE_BUCKETS=$URAI_STUDIO_SOURCE_BUCKETS"
+  fi
+  if [ "$worker" = "narrator-worker" ]; then
+    env_vars="$env_vars,URAI_NARRATOR_ELEVENLABS_ENABLED=$URAI_NARRATOR_ELEVENLABS_ENABLED"
+    if [ "$URAI_NARRATOR_ELEVENLABS_ENABLED" = "true" ]; then
+      env_vars="$env_vars,ELEVENLABS_ALLOWED_VOICE_IDS=$ELEVENLABS_ALLOWED_VOICE_IDS,ELEVENLABS_MODEL_ID=$ELEVENLABS_MODEL_ID,ELEVENLABS_OUTPUT_FORMAT=$ELEVENLABS_OUTPUT_FORMAT,ELEVENLABS_MAX_CHARACTERS_PER_REQUEST=$ELEVENLABS_MAX_CHARACTERS_PER_REQUEST"
+      secret_vars="$secret_vars,ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY_SECRET}:${SECRET_VERSION_IDS[$ELEVENLABS_API_KEY_SECRET]}"
+    fi
   fi
   if [ "$worker" = "asset-worker" ]; then
     env_vars="$env_vars,ASSET_FACTORY_REPO=LifeLoggerAI/asset-factory"

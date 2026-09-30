@@ -11,7 +11,7 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../functions/src/
 const app = { use() {}, get() {}, post() {}, listen() {} };
 const express = Object.assign(() => app, { json: () => () => {} });
 const worker = {};
-vm.runInNewContext(fs.readFileSync(new URL('../workers/studio-worker/index.js', import.meta.url), 'utf8') + '\nmodule.exports = { parsePayload, renderSegments, gapArgs };', {
+vm.runInNewContext(fs.readFileSync(new URL('../workers/studio-worker/index.js', import.meta.url), 'utf8') + '\nmodule.exports = { parsePayload, renderSegments, gapArgs, LIFE_MOVIE_EXECUTION_BUDGET };', {
   module: worker, Buffer, console,
   process: { env: { GCS_BUCKET_NAME: 'private-fixture-bucket' } },
   require(name) {
@@ -65,3 +65,26 @@ assert.ok(args.includes('color=c=black:s=320x320:r=30'));
 assert.ok(args.includes('anullsrc=channel_layout=stereo:sample_rate=48000'));
 assert.equal(args[args.indexOf('-t') + 1], '0.5');
 console.log('[PASS] Life Movies output timeline preserves leading/inter-clip gaps and chronological ordering');
+
+assert.deepEqual(JSON.parse(JSON.stringify(worker.exports.LIFE_MOVIE_EXECUTION_BUDGET)),
+  JSON.parse(JSON.stringify(schemaExports.LIFE_MOVIE_EXECUTION_BUDGET)));
+for (const [width, height, fps, durationMs] of [
+  [1920, 1080, 30, 15000], [3840, 2160, 30, 3750], [320, 320, 60, 30000],
+]) {
+  const value = { ...payload, width, height, fps, timeline: [{ sourceId: 'source-1', startMs: 0, endMs: durationMs }] };
+  assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(value).success, true);
+  assert.equal(workerParse(value).timeline[0].endMs, durationMs);
+  const outside = { ...value, timeline: [{ sourceId: 'source-1', startMs: 0, endMs: durationMs + 1 }] };
+  assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(outside).success, false);
+  assert.throws(() => workerParse(outside), /synchronous_render_budget/);
+}
+for (const value of [
+  { ...payload, width: 3840, height: 3840 },
+  { ...payload, timeline: [{ sourceId: 'source-1', startMs: 2699000, endMs: 2700000 }] },
+  { ...payload, sources: Array.from({ length: 13 }, (_, i) => ({ ...payload.sources[0], id: `source-${i + 1}` })) },
+  { ...payload, timeline: Array.from({ length: 13 }, (_, i) => ({ sourceId: 'source-1', startMs: i * 100, endMs: (i + 1) * 100 })) },
+]) {
+  assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(value).success, false);
+  assert.throws(() => workerParse(value), /synchronous_render_budget|life_movie_too_large/);
+}
+console.log('[PASS] Synchronous render budget parity, exact boundaries, gaps, source/item counts and long-form rejection');

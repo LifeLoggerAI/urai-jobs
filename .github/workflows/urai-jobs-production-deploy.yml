@@ -408,7 +408,7 @@ jobs:
                 console.error(`Studio worker runtime identity lacks unconditional read authority on source bucket ${process.env.SOURCE_BUCKET}: ${member}`);
                 process.exit(1);
               }
-NODE
+          NODE
             done
           fi
 

@@ -28,6 +28,17 @@ for (const token of [
   "uploadPrivateFile(moviePath",
   "uploadPrivateFile(subtitlePath",
   "uploadPrivateFile(manifestPath",
+  "audioCues",
+  "narration",
+  "dialogue",
+  "music",
+  "ambience",
+  "foley",
+  "effects",
+  "mixAudioCues",
+  "amix=inputs=",
+  "audio_cue_source_missing_audio",
+  "audioCueCount: input.audioCues.length",
 ]) assert.ok(worker.includes(token), `studio worker missing ${token}`);
 
 assert.ok(dockerfile.includes('apt-get install -y --no-install-recommends ffmpeg'), 'Studio worker image must include FFmpeg');
@@ -35,7 +46,26 @@ assert.ok(createJob.includes('StudioLifeMovieRenderPayloadSchema'), 'createJob m
 assert.ok(sharedContract.includes('assertLifeMovieTenantPaths'), 'Life Movies contract must bind source/output paths to tenant authority');
 assert.ok(bridge.includes("defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN')"), 'Studio bridge must use a dedicated Secret Manager identity');
 assert.ok(bridge.includes("action: z.literal('create')"), 'Studio bridge must expose bounded create semantics');
-assert.ok(bridge.includes("action: z.enum(['status', 'cancel'])"), 'Studio bridge must expose bounded status/cancel semantics');
+assert.ok(bridge.includes("action: z.enum(['status', 'cancel', 'playback', 'download', 'delete-output'])"), 'Studio bridge must expose bounded status/cancel/playback/download/delete semantics');
+const signedAccessStart = bridge.indexOf('async function signedMovieAccess(');
+const signedAccessEnd = bridge.indexOf('async function deleteBoundMovieOutput(', signedAccessStart);
+assert.ok(signedAccessStart >= 0 && signedAccessEnd > signedAccessStart, 'Studio bridge must expose bounded signed playback/download access');
+const signedAccess = bridge.slice(signedAccessStart, signedAccessEnd);
+assert.ok(signedAccess.indexOf('await loadBoundJob(tenantId, userId, jobId)') >= 0, 'Playback/download must validate owner/tenant/job boundary');
+assert.ok(signedAccess.indexOf('await loadBoundJob(tenantId, userId, jobId)') < signedAccess.indexOf('getSignedUrl('), 'Boundary validation must occur before any signed playback/download URL is issued');
+assert.ok(signedAccess.includes("String(job.status) !== 'SUCCESS'"), 'Playback must require a successful render');
+assert.ok(signedAccess.includes('Date.now() + 5 * 60 * 1000'), 'Playback access must be short-lived');
+assert.ok(signedAccess.includes('responseDisposition: disposition'), 'Playback/download disposition must remain explicit and caller-bounded');
+assert.ok(bridge.includes("signedMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'inline')"), 'Playback action must request inline private access');
+assert.ok(bridge.includes('life_movie_subtitles_too_large'), 'Subtitle playback response must be byte bounded');
+assert.ok(bridge.includes('sanitizedOutput(job.output)'), 'Status projection must sanitize worker output');
+assert.ok(bridge.includes("signedMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'attachment')"), 'Download must use owner-bound short-lived access');
+assert.ok(bridge.includes('deleteBoundMovieOutput'), 'Generated-output deletion must use an owner-bound path');
+assert.ok(bridge.includes('output_delete_boundary_mismatch'), 'Deletion must fail closed outside the Life Movies tenant prefix');
+assert.ok(bridge.includes('retainedSourceMedia: true'), 'Deleting generated output must not silently delete source memories');
+assert.ok(bridge.includes('output: FieldValue.delete()'), 'Deletion must scrub generated-output references from the job');
+assert.ok(bridge.includes('outputDeletedAt: now'), 'Deletion must retain an audit timestamp');
+assert.ok(!bridge.includes('output: job.output'), 'Status must not expose raw internal GCS output refs');
 assert.ok(bridge.includes("sourceSystem: 'urai-studio'"), 'Studio bridge jobs must retain source-system authority');
 assert.ok(bridge.includes("'execution.leaseToken': FieldValue.delete()"), 'Studio bridge cancellation must revoke the active lease');
 assert.ok(functionsIndex.includes('studioLifeMovieBridge'), 'Life Movies bridge must be exported from Firebase Functions');
@@ -44,9 +74,17 @@ for (const token of [
   'spatialRequired: z.literal(false)',
   'publicReleaseAuthorized: z.literal(false)',
   'providerGenerationAuthorized: z.literal(false)',
+  'LifeMovieAudioCueSchema',
+  "role: z.enum(['narration', 'dialogue', 'music', 'ambience', 'foley', 'effects'])",
+  'audioCues: z.array(LifeMovieAudioCueSchema)',
 ]) {
   assert.ok(sharedContract.includes(token), `Life Movies render admission must preserve hard-off boolean: ${token}`);
 }
+assert.ok(sharedContract.includes('gainDb: z.number().finite().min(-60).max(12)'), 'Audio gain must be bounded');
+assert.ok(sharedContract.includes('Audio cue must fit inside the rendered timeline.'), 'Audio cues must remain inside the render timeline');
+assert.ok(worker.includes("const usedSourceIds = new Set(["), 'Audio cue sources must use the same governed download path');
+assert.ok(worker.includes("...input.audioCues.map((cue) => cue.sourceId)"), 'Audio cue source downloads must be provenance/tenant governed');
+
 assert.ok(deploy.includes('narrator-worker|asset-worker|studio-worker'), 'canonical deploy script must recognize completed studio-worker');
 assert.ok(approved.includes("new Set(['narrator-worker', 'asset-worker', 'studio-worker'])"), 'approved wrapper must admit studio-worker only through explicit approved worker selection');
 assert.ok(approved.includes('narrator-worker|asset-worker|studio-worker'), 'exact-source build wrapper must admit studio-worker');

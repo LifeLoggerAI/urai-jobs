@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import './workflow-shell-syntax-smoke.mjs';
 import { runWorkerDeployReceiptValidatorSelfTest } from './validate-worker-deploy-receipt.mjs';
 
 const read = (path) => fs.readFileSync(path, 'utf8');

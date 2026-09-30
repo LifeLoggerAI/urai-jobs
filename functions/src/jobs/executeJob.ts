@@ -91,6 +91,63 @@ function getPayloadRecord(job: Job): Record<string, unknown> {
   return job.payload && typeof job.payload === 'object' ? (job.payload as Record<string, unknown>) : {};
 }
 
+type TrustedNarratorProviderAuthorization = {
+  provider: 'elevenlabs';
+  ownerUid: string;
+  consentReceiptId: string;
+  rightsReceiptId: string;
+  provenanceRef: string;
+  voiceId: string;
+};
+
+async function resolveTrustedNarratorProviderAuthorization(job: Job): Promise<TrustedNarratorProviderAuthorization | null> {
+  const payload = getPayloadRecord(job);
+  if (payload.provider !== 'elevenlabs') return null;
+  if (!job.ownerUid) throw new Error('elevenlabs_owner_required');
+  const consent = job.consent;
+  if (!isConsentContext(consent)) throw new Error('elevenlabs_canonical_consent_required');
+
+  const voiceId = typeof payload.voiceId === 'string' ? payload.voiceId.trim() : '';
+  if (!voiceId) throw new Error('elevenlabs_voice_id_required');
+
+  const authorization = await getFirestore()
+    .doc(`users/${job.ownerUid}/providerAuthorizations/elevenlabs`)
+    .get();
+  if (!authorization.exists) throw new Error('elevenlabs_server_authorization_required');
+
+  const data = authorization.data() || {};
+  const voiceIds = Array.isArray(data.voiceIds) ? data.voiceIds.map((value) => String(value)) : [];
+  const consentPurpose = String(data.consentPurpose || '');
+  const policyVersion = String(data.policyVersion || '');
+  const consentReceiptId = String(data.decisionReceiptId || '');
+  const rightsReceiptId = String(data.rightsReceiptId || '');
+  const provenanceRef = String(data.provenanceRef || '');
+
+  if (
+    data.enabled !== true ||
+    data.provider !== 'elevenlabs' ||
+    data.ownerUid !== job.ownerUid ||
+    consentPurpose !== consent.purpose ||
+    policyVersion !== consent.policyVersion ||
+    consentReceiptId !== consent.decisionReceiptId ||
+    !voiceIds.includes(voiceId) ||
+    !consentReceiptId ||
+    !rightsReceiptId ||
+    !provenanceRef
+  ) {
+    throw new Error('elevenlabs_server_authorization_mismatch');
+  }
+
+  return {
+    provider: 'elevenlabs',
+    ownerUid: job.ownerUid,
+    consentReceiptId,
+    rightsReceiptId,
+    provenanceRef,
+    voiceId,
+  };
+}
+
 function cleanPrefix(value: unknown, fallback: string): string {
   const raw = typeof value === 'string' && value.trim() ? value.trim() : fallback;
   return raw.replace(/^\/+|\/+$/g, '') || fallback;
@@ -283,6 +340,9 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
 
 export const executeJob = onMessagePublished({
   topic: JOB_EXECUTION_TOPIC,
+  // 110s render + 10s transport allowance + bounded bookkeeping headroom.
+  // The function must outlive its existing worker request, not abandon it.
+  timeoutSeconds: 180,
   secrets: [workerTokenSecret, tinyFishApiKeySecret],
 }, async (event) => {
   const validationResult = JobExecutionMessageSchema.safeParse(event.data.message.json);
@@ -433,15 +493,22 @@ export const executeJob = onMessagePublished({
         metadata: { jobType, workerEnvKey: target.envKey, route },
       });
 
+      const providerAuthorization = jobType === 'narrator.tts'
+        ? await resolveTrustedNarratorProviderAuthorization(job)
+        : null;
+
       const response = await axios.post(`${workerUrl}${route}`, {
         ...job,
         jobId,
         leaseToken,
         type: jobType,
         jobType,
+        ...(providerAuthorization ? { providerAuthorization } : {}),
       }, {
         headers: getWorkerAuthHeaders(),
-        timeout: parseInt(process.env.URAI_JOBS_WORKER_TIMEOUT_MS || '', 10) || 120000,
+        timeout: jobType === 'studio.render.video'
+          ? 120000
+          : Math.max(1, Math.min(120000, parseInt(process.env.URAI_JOBS_WORKER_TIMEOUT_MS || '', 10) || 120000)),
         validateStatus: (status) => status >= 200 && status < 300,
       });
 
