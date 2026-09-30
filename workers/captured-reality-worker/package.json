@@ -1,0 +1,9 @@
+{
+  "name": "captured-reality-worker",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "engines": {"node": ">=22"},
+  "scripts": {"build": "node --check index.js", "typecheck": "node --check index.js", "start": "node index.js"},
+  "dependencies": {"express": "^4.18.3", "firebase-admin": "^12.1.0"}
+}

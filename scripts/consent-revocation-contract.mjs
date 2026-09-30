@@ -19,16 +19,33 @@ const index = read("functions/src/index.ts");
 
 ok("shared Job contract includes consent context", shared.includes("JobConsentContext") && shared.includes("consent?: JobConsentContext"));
 ok("createJob accepts canonical consent context", createJob.includes("decisionReceiptId") && createJob.includes("policyVersion") && createJob.includes("purpose"));
-ok("private-source creation requires consent", createJob.includes("Private-source jobs require canonical consent context"));
+ok(
+  "private-source creation requires consent",
+  createJob.includes("Private-source transcription requires canonical consent context")
+    && createJob.includes("Captured Reality reconstruction requires exactly memory.storage and location.context consent receipts.")
+);
 ok("consent block collection exists", blocks.includes("jobConsentBlocks"));
 ok("consent event receipts are replay-safe", blocks.includes("jobConsentEventReceipts") && endpoint.includes("transaction.get(receiptRef)") && endpoint.includes("transaction.create(receiptRef"));
 ok("revocation endpoint only admits consent.revoked.v1", endpoint.includes("z.literal('consent.revoked.v1')"));
 ok("revocation endpoint requires secret bearer auth", endpoint.includes("URAI_JOBS_PRIVACY_EVENT_TOKEN") && endpoint.includes("authorization"));
 ok("revocation writes active block", endpoint.includes("active: true"));
 ok("revocation returns integrity acknowledgement", endpoint.includes("integrityHash") && endpoint.includes("acknowledgement"));
-ok("LEASED to RUNNING path checks consent block", executeJob.includes("consentBlockRef(job.ownerUid, job.consent.purpose)") && executeJob.includes("reason: 'consent-revoked'"));
-ok("revoked consent cancels job and queue", executeJob.includes("status: 'CANCELLED'") && executeJob.includes("Worker dispatch blocked because consent was revoked."));
-ok("dispatch path rechecks consent immediately before worker call", executeJob.indexOf("Worker dispatch blocked because consent was revoked.") < executeJob.indexOf("axios.post"));
+ok(
+  "LEASED to RUNNING path checks all consent blocks",
+  executeJob.includes("jobConsentContexts(job)")
+    && executeJob.includes("consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))")
+    && executeJob.includes("reason: 'consent-revoked'")
+);
+ok(
+  "revoked consent cancels job and queue",
+  executeJob.includes("status: 'CANCELLED'")
+    && executeJob.includes("Worker dispatch blocked because required consent was revoked.")
+);
+ok(
+  "dispatch path rechecks consent immediately before worker call",
+  executeJob.includes("dispatchConsentContexts = jobConsentContexts(job)")
+    && executeJob.indexOf("Worker dispatch blocked because required consent was revoked.") < executeJob.indexOf("axios.post")
+);
 ok("revocation endpoint is exported", index.includes("ingestConsentRevocation"));
 
 if (failed) {

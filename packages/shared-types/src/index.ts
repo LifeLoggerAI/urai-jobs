@@ -62,6 +62,7 @@ export interface Job {
   orgId?: string;
   ownerUid?: string;
   consent?: JobConsentContext;
+  consents?: JobConsentContext[];
   retryCount?: number;
   execution?: JobExecutionMeta;
   lease?: JobLease;
