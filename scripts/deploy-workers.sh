@@ -11,6 +11,8 @@ set -euo pipefail
 : "${URAI_JOBS_CALLBACK_SECRET_NAME:=urai-jobs-callback-secret}"
 : "${URAI_NARRATOR_ELEVENLABS_ENABLED:=false}"
 : "${ELEVENLABS_API_KEY_SECRET:=ELEVENLABS_API_KEY}"
+: "${PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET:=urai-private-source-authority-token}"
+: "${CAPTURED_REALITY_ENGINE_TOKEN_SECRET:=urai-captured-reality-engine-token}"
 : "${ELEVENLABS_MODEL_ID:=eleven_multilingual_v2}"
 : "${ELEVENLABS_OUTPUT_FORMAT:=mp3_44100_128}"
 : "${ELEVENLABS_MAX_CHARACTERS_PER_REQUEST:=1200}"
@@ -71,7 +73,7 @@ esac
 
 for worker in "${WORKERS[@]}"; do
   case "$worker" in
-    narrator-worker|asset-worker|studio-worker) ;;
+    narrator-worker|asset-worker|studio-worker|captured-reality-worker) ;;
     spatial-worker|career-worker)
       echo "[FAIL] $worker is incomplete and is intentionally excluded from production deployment" >&2
       exit 1
@@ -82,6 +84,11 @@ for worker in "${WORKERS[@]}"; do
       ;;
   esac
 done
+
+if [[ ",$WORKERS_CSV," == *",captured-reality-worker,"* ]]; then
+  : "${PRIVATE_SOURCE_AUTHORITY_URL:?PRIVATE_SOURCE_AUTHORITY_URL is required when deploying captured-reality-worker}"
+  : "${CAPTURED_REALITY_ENGINE_URL:?CAPTURED_REALITY_ENGINE_URL is required when deploying captured-reality-worker}"
+fi
 
 if [[ ",$WORKERS_CSV," == *",studio-worker,"* ]]; then
   : "${URAI_STUDIO_SOURCE_BUCKETS:?URAI_STUDIO_SOURCE_BUCKETS is required when deploying studio-worker}"
@@ -107,6 +114,9 @@ for worker in "${WORKERS[@]}"; do
   fi
   if [ "$worker" = "narrator-worker" ] && [ "$URAI_NARRATOR_ELEVENLABS_ENABLED" = "true" ]; then
     required_secrets+=("$ELEVENLABS_API_KEY_SECRET")
+  fi
+  if [ "$worker" = "captured-reality-worker" ]; then
+    required_secrets+=("$PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET" "$CAPTURED_REALITY_ENGINE_TOKEN_SECRET")
   fi
 done
 
@@ -201,6 +211,8 @@ build_secret_versions_json() {
   CALLBACK_SECRET_VERSION="${SECRET_VERSION_IDS[$URAI_JOBS_CALLBACK_SECRET_NAME]:-}" \
   ELEVENLABS_ENABLED="$URAI_NARRATOR_ELEVENLABS_ENABLED" \
   ELEVENLABS_SECRET_VERSION="${SECRET_VERSION_IDS[$ELEVENLABS_API_KEY_SECRET]:-}" \
+  PRIVATE_SOURCE_AUTHORITY_TOKEN_VERSION="${SECRET_VERSION_IDS[$PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET]:-}" \
+  CAPTURED_REALITY_ENGINE_TOKEN_VERSION="${SECRET_VERSION_IDS[$CAPTURED_REALITY_ENGINE_TOKEN_SECRET]:-}" \
   node <<'NODE'
 const versions = { URAI_JOBS_WORKER_TOKEN: process.env.WORKER_TOKEN_VERSION };
 if (process.env.WORKER === 'asset-worker') {
@@ -209,6 +221,10 @@ if (process.env.WORKER === 'asset-worker') {
 }
 if (process.env.WORKER === 'narrator-worker' && process.env.ELEVENLABS_ENABLED === 'true') {
   versions.ELEVENLABS_API_KEY = process.env.ELEVENLABS_SECRET_VERSION;
+}
+if (process.env.WORKER === 'captured-reality-worker') {
+  versions.PRIVATE_SOURCE_AUTHORITY_TOKEN = process.env.PRIVATE_SOURCE_AUTHORITY_TOKEN_VERSION;
+  versions.CAPTURED_REALITY_ENGINE_TOKEN = process.env.CAPTURED_REALITY_ENGINE_TOKEN_VERSION;
 }
 process.stdout.write(JSON.stringify(versions));
 NODE
@@ -488,6 +504,10 @@ deploy_worker() {
     env_vars="$env_vars,ASSET_FACTORY_REPO=LifeLoggerAI/asset-factory"
     secret_vars="$secret_vars,URAI_WHEEL_GITHUB_TOKEN=${URAI_WHEEL_GITHUB_TOKEN_SECRET}:${SECRET_VERSION_IDS[$URAI_WHEEL_GITHUB_TOKEN_SECRET]},URAI_JOBS_CALLBACK_SECRET=${URAI_JOBS_CALLBACK_SECRET_NAME}:${SECRET_VERSION_IDS[$URAI_JOBS_CALLBACK_SECRET_NAME]}"
   fi
+  if [ "$worker" = "captured-reality-worker" ]; then
+    env_vars="$env_vars,PRIVATE_SOURCE_AUTHORITY_URL=$PRIVATE_SOURCE_AUTHORITY_URL,CAPTURED_REALITY_ENGINE_URL=$CAPTURED_REALITY_ENGINE_URL"
+    secret_vars="$secret_vars,PRIVATE_SOURCE_AUTHORITY_TOKEN=${PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET}:${SECRET_VERSION_IDS[$PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET]},CAPTURED_REALITY_ENGINE_TOKEN=${CAPTURED_REALITY_ENGINE_TOKEN_SECRET}:${SECRET_VERSION_IDS[$CAPTURED_REALITY_ENGINE_TOKEN_SECRET]}"
+  fi
   [[ "$secret_vars" != *":latest"* ]] || {
     echo "[FAIL] [$worker] Mutable Secret Manager aliases are forbidden in deployed revisions" >&2
     exit 1
@@ -597,7 +617,8 @@ const receipt = {
     'Cloud Run ingress is public because Asset Factory callbacks cannot present Cloud Run IAM credentials.',
     'Execution and callback routes are protected by exact Secret Manager version-backed bearer tokens.',
     'Spatial and Career workers remain intentionally excluded until their implementations are production-capable.',
-    'Studio worker deployment is permitted only when explicitly selected through the protected exact-source approval path.',
+    'Studio and Captured Reality worker deployment are permitted only when explicitly selected through the protected exact-source approval path.',
+    'Captured Reality is not part of the default worker set and additionally requires bounded private-source authority and reconstruction-engine configuration.',
   ],
 };
 fs.writeFileSync(process.env.RECEIPT_PATH, `${JSON.stringify(receipt, null, 2)}\n`);
