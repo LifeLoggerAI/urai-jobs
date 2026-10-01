@@ -23,6 +23,8 @@ check('payload contains no raw media URL field', Boolean(reconstructionSchemaSou
 check('dual consent requires memory storage', create.includes("purposes.has('memory.storage')"));
 check('dual consent requires location context', create.includes("purposes.has('location.context')"));
 check('shared job type carries multiple consent receipts', shared.includes('consents?: JobConsentContext[]'));
+check('transcription rejects plural consent ambiguity', create.includes('Private-source transcription accepts only the canonical single consent field'));
+check('reconstruction rejects single consent ambiguity', create.includes('Captured Reality reconstruction requires the plural consents field only'));
 check('execution evaluates all consent contexts', execute.includes('function jobConsentContexts'));
 check('execution checks consent before starting', execute.includes('consentContexts.map((context) => transaction.get(consentBlockRef'));
 check('execution rechecks consent before worker dispatch', execute.includes('dispatchConsentContexts.map((context) => consentBlockRef'));
