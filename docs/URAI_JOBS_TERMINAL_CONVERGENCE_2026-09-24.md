@@ -1,5 +1,17 @@
 # URAI Jobs terminal convergence authority — 2026-09-24
 
+## Current terminal successor — 2026-09-30
+
+- Current release PR: #122.
+- Exact source head before this authority correction: `46153d1eba2dc70fd7bc7fa42f8d79f8e886f694`.
+- Target branch: `main` at `65ec6f8cd33d351cbee66eceefd231326cff0bc3`.
+- PR #105 is closed and explicitly superseded by #122.
+- Ancestry was rechecked before retarget: #122 was 168 commits ahead of `main` and 0 behind.
+- The retarget itself did not change source bytes, but pre-retarget workflow results are not sufficient for final main-bound acceptance.
+- This documentation correction creates a successor source head that must earn a fresh exact-head workflow matrix against `main`.
+- Independent review, merge, protected deployment, live worker/provider execution, retained production receipts, and launch certification remain separate.
+- The Jobs visual workflow retained server/runtime evidence rather than inspectable product pixels; no pixel acceptance is claimed from that artifact.
+
 Status: **CONVERGENCE CANDIDATE / UNREVIEWED / UNMERGED / UNDEPLOYED**
 
 This record binds the current whole-system audit to a concrete successor branch. It does not transfer review, deployment, provider, or production certification from any predecessor.
