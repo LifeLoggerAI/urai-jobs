@@ -26,7 +26,11 @@ for(const marker of [
   "captured reality callback origin must use HTTPS outside local/test",
 ]) assert.ok(worker.includes(marker), marker);
 assert.ok(!worker.includes('rawMediaUrl'));
-assert.ok(!worker.includes('drive.google.com'));
+assert.ok(!worker.includes('sourceMediaUrl'));
+assert.ok(worker.includes('PRIVATE_HANDLE'));
+assert.ok(worker.includes("app.post('/engine-callback',callbackRateLimit"));
+assert.ok(worker.includes("status:'CANCELLED'"));
+assert.ok(worker.includes('boundedResult'));
 assert.ok(!worker.includes('providerSpendAuthorized:true'));
 assert.ok(!worker.includes('publicReleaseAuthorized:true'));
 assert.ok(worker.indexOf('const sourceHandles=await authorizeSources(job)') < worker.indexOf("'execution.asyncCallbackPending':true"));
