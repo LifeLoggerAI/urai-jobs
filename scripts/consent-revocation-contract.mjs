@@ -20,6 +20,12 @@ const index = read("functions/src/index.ts");
 ok("shared Job contract includes consent context", shared.includes("JobConsentContext") && shared.includes("consent?: JobConsentContext"));
 ok("createJob accepts canonical consent context", createJob.includes("decisionReceiptId") && createJob.includes("policyVersion") && createJob.includes("purpose"));
 ok(
+  "execution preserves canonical consent alongside plural contexts",
+  executeJob.includes("...(isConsentContext(job.consent) ? [job.consent] : [])")
+    && executeJob.includes("...(Array.isArray(job.consents) ? job.consents.filter(isConsentContext) : [])")
+    && executeJob.includes("const seen = new Set<string>()")
+);
+ok(
   "private-source creation requires consent",
   createJob.includes("Private-source transcription requires canonical consent context")
     && createJob.includes("Captured Reality reconstruction requires exactly memory.storage and location.context consent receipts.")
