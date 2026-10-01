@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const express = require('express');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const admin = require('firebase-admin');
 
 if (!admin.apps.length) admin.initializeApp();
@@ -16,10 +17,8 @@ const SHA256 = /^[0-9a-f]{64}$/;
 const callbackTimeoutMs = Math.max(5 * 60_000, Number(process.env.CAPTURED_REALITY_CALLBACK_TIMEOUT_MS || 45 * 60_000));
 const callbackRateWindowMs = 60_000;
 const callbackRateMax = Math.max(10, Math.min(600, Number(process.env.CAPTURED_REALITY_CALLBACK_RATE_LIMIT_PER_MINUTE || 120)));
-const callbackRateBuckets = new Map();
 const executeRateWindowMs = 60_000;
 const executeRateMax = Math.max(5, Math.min(300, Number(process.env.CAPTURED_REALITY_EXECUTE_RATE_LIMIT_PER_MINUTE || 60)));
-const executeRateBuckets = new Map();
 const CAPTURED_PAYLOAD_KEYS = new Set([
   'sourceReceiptRefs',
   'studioProjectRef',
@@ -31,40 +30,27 @@ const CAPTURED_PAYLOAD_KEYS = new Set([
   'publicReleaseAuthorized',
 ]);
 
-function callbackRateLimit(req,res,next){
-  const key=String(req.ip||req.socket?.remoteAddress||'unknown');
-  const now=Date.now();
-  const current=callbackRateBuckets.get(key);
-  if(!current||current.resetAt<=now){
-    callbackRateBuckets.set(key,{count:1,resetAt:now+callbackRateWindowMs});
-    return next();
-  }
-  if(current.count>=callbackRateMax){
-    res.set('retry-after',String(Math.max(1,Math.ceil((current.resetAt-now)/1000))));
-    return res.status(429).send({ok:false,error:'callback rate limit exceeded'});
-  }
-  current.count+=1;
-  return next();
-}
+const callbackRateLimit = rateLimit({
+  windowMs: callbackRateWindowMs,
+  limit: callbackRateMax,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { ok:false, error:'callback rate limit exceeded' },
+});
 
-function executeRateLimit(req,res,next){
-  const presented=bearer(req);
-  const subject=presented
-    ? crypto.createHash('sha256').update(presented).digest('hex')
-    : String(req.ip||req.socket?.remoteAddress||'unknown');
-  const now=Date.now();
-  const current=executeRateBuckets.get(subject);
-  if(!current||current.resetAt<=now){
-    executeRateBuckets.set(subject,{count:1,resetAt:now+executeRateWindowMs});
-    return next();
-  }
-  if(current.count>=executeRateMax){
-    res.set('retry-after',String(Math.max(1,Math.ceil((current.resetAt-now)/1000))));
-    return res.status(429).send({ok:false,error:'execute rate limit exceeded'});
-  }
-  current.count+=1;
-  return next();
-}
+const executeRateLimit = rateLimit({
+  windowMs: executeRateWindowMs,
+  limit: executeRateMax,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const presented=bearer(req);
+    return presented
+      ? crypto.createHash('sha256').update(presented).digest('hex')
+      : ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown');
+  },
+  message: { ok:false, error:'execute rate limit exceeded' },
+});
 
 function productionRuntime() {
   return ['prod', 'production', 'staging'].includes(String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase());
