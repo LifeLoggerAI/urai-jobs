@@ -55,6 +55,7 @@ for(const marker of [
 ]) assert.ok(deploy.includes(marker), `deploy marker: ${marker}`);
 
 assert.ok(!/URAI_JOBS_DEPLOY_WORKERS:-[^\n]*captured-reality-worker/.test(deploy), 'Captured Reality must not enter the default production worker set');
+assert.ok(rootPackage.scripts['urai-jobs:verify'].includes('captured-reality-worker-contract.mjs'));
 assert.ok(rootPackage.scripts.build.includes('captured-reality-worker:build'));
 assert.ok(rootPackage.scripts.typecheck.includes('captured-reality-worker:typecheck'));
 for(const marker of ['PRIVATE_SOURCE_AUTHORITY_URL=','PRIVATE_SOURCE_AUTHORITY_TOKEN=','CAPTURED_REALITY_ENGINE_URL=','CAPTURED_REALITY_ENGINE_TOKEN=']) {
