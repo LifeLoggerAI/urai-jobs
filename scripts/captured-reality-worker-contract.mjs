@@ -57,4 +57,7 @@ for(const marker of ['PRIVATE_SOURCE_AUTHORITY_URL=','PRIVATE_SOURCE_AUTHORITY_T
   assert.ok(prodEnv.includes(marker), `production env marker: ${marker}`);
 }
 assert.ok(!worker.includes('revokedConsentPurpose('), 'undefined duplicate consent helper must not exist');
+assert.ok(worker.includes("status:'CANCELLED'"), 'revoked Captured Reality queue entries must remain cancelled');
+assert.ok(worker.includes('const boundedResult={'), 'successful callback persistence must construct a bounded result');
+assert.ok(worker.includes('result:boundedResult,output:boundedResult'), 'raw provider callback bodies must not be persisted');
 console.log('[PASS] captured reality opt-in deployment contract');
