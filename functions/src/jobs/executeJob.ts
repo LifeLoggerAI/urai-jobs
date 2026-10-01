@@ -42,9 +42,20 @@ const JobExecutionMessageSchema = z.object({
 });
 
 function jobConsentContexts(job: Job) {
-  const contexts = Array.isArray(job.consents) ? job.consents.filter(isConsentContext) : [];
-  if (contexts.length > 0) return contexts;
-  return isConsentContext(job.consent) ? [job.consent] : [];
+  const contexts: JobConsentContext[] = [];
+  if (isConsentContext(job.consent)) contexts.push(job.consent);
+  if (Array.isArray(job.consents)) {
+    for (const consent of job.consents) {
+      if (isConsentContext(consent)) contexts.push(consent);
+    }
+  }
+  const seen = new Set<string>();
+  return contexts.filter((consent) => {
+    const key = `${consent.purpose}\n${consent.policyVersion}\n${consent.decisionReceiptId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function getJobType(job: Job): string {
