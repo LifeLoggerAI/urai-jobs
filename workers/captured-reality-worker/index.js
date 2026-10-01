@@ -17,6 +17,9 @@ const callbackTimeoutMs = Math.max(5 * 60_000, Number(process.env.CAPTURED_REALI
 const callbackRateWindowMs = 60_000;
 const callbackRateMax = Math.max(10, Math.min(600, Number(process.env.CAPTURED_REALITY_CALLBACK_RATE_LIMIT_PER_MINUTE || 120)));
 const callbackRateBuckets = new Map();
+const executeRateWindowMs = 60_000;
+const executeRateMax = Math.max(5, Math.min(300, Number(process.env.CAPTURED_REALITY_EXECUTE_RATE_LIMIT_PER_MINUTE || 60)));
+const executeRateBuckets = new Map();
 const CAPTURED_PAYLOAD_KEYS = new Set([
   'sourceReceiptRefs',
   'studioProjectRef',
@@ -39,6 +42,25 @@ function callbackRateLimit(req,res,next){
   if(current.count>=callbackRateMax){
     res.set('retry-after',String(Math.max(1,Math.ceil((current.resetAt-now)/1000))));
     return res.status(429).send({ok:false,error:'callback rate limit exceeded'});
+  }
+  current.count+=1;
+  return next();
+}
+
+function executeRateLimit(req,res,next){
+  const presented=bearer(req);
+  const subject=presented
+    ? crypto.createHash('sha256').update(presented).digest('hex')
+    : String(req.ip||req.socket?.remoteAddress||'unknown');
+  const now=Date.now();
+  const current=executeRateBuckets.get(subject);
+  if(!current||current.resetAt<=now){
+    executeRateBuckets.set(subject,{count:1,resetAt:now+executeRateWindowMs});
+    return next();
+  }
+  if(current.count>=executeRateMax){
+    res.set('retry-after',String(Math.max(1,Math.ceil((current.resetAt-now)/1000))));
+    return res.status(429).send({ok:false,error:'execute rate limit exceeded'});
   }
   current.count+=1;
   return next();
@@ -140,7 +162,7 @@ app.get('/healthz',(_req,res)=>res.status(200).send({ok:true,service:'captured-r
 app.get('/readyz',(_req,res)=>{const state=readiness();res.set('cache-control','no-store');res.status(state.ok?200:503).send({ok:state.ok,service:'captured-reality-worker',checks:state.checks,sourceSha:String(process.env.URAI_SOURCE_SHA||'')});});
 app.get('/authz',requireWorkerAuth,(_req,res)=>res.status(200).send({ok:true,service:'captured-reality-worker',authorized:true}));
 
-app.post('/execute-job',requireWorkerAuth,async(req,res)=>{
+app.post('/execute-job',requireWorkerAuth,executeRateLimit,async(req,res)=>{
   let job;
   try{job=validateJob(req.body);}catch(error){return res.status(400).send({ok:false,error:error.message});}
   const state=readiness();
