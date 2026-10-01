@@ -17,6 +17,16 @@ const callbackTimeoutMs = Math.max(5 * 60_000, Number(process.env.CAPTURED_REALI
 const callbackRateWindowMs = 60_000;
 const callbackRateMax = Math.max(10, Math.min(600, Number(process.env.CAPTURED_REALITY_CALLBACK_RATE_LIMIT_PER_MINUTE || 120)));
 const callbackRateBuckets = new Map();
+const CAPTURED_PAYLOAD_KEYS = new Set([
+  'sourceReceiptRefs',
+  'studioProjectRef',
+  'assetFactoryGovernanceRef',
+  'spatialAuthorityHead',
+  'reconstructionMethod',
+  'requestedPurpose',
+  'providerSpendAuthorized',
+  'publicReleaseAuthorized',
+]);
 
 function callbackRateLimit(req,res,next){
   const key=String(req.ip||req.socket?.remoteAddress||'unknown');
@@ -76,6 +86,8 @@ function validateJob(body) {
   const ownerUid=String(body?.ownerUid||'').trim();
   const jobType=String(body?.jobType||body?.type||'').trim();
   const payload=body?.payload && typeof body.payload==='object' ? body.payload : {};
+  const unsupportedPayloadKeys=Object.keys(payload).filter(key=>!CAPTURED_PAYLOAD_KEYS.has(key));
+  if(unsupportedPayloadKeys.length) throw new Error('unsupported captured reality payload field');
   const sourceReceiptRefs=Array.isArray(payload.sourceReceiptRefs) ? payload.sourceReceiptRefs.map(String) : [];
   if(!jobId||!leaseToken||!ownerUid) throw new Error('jobId leaseToken and ownerUid are required');
   if(jobType!=='memory.private-source.reconstruct-place') throw new Error('unsupported job type');

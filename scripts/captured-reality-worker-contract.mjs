@@ -28,6 +28,8 @@ for(const marker of [
 assert.ok(!worker.includes('rawMediaUrl'));
 assert.ok(!worker.includes('sourceMediaUrl'));
 assert.ok(worker.includes('PRIVATE_HANDLE'));
+assert.ok(worker.includes('CAPTURED_PAYLOAD_KEYS'));
+assert.ok(worker.includes('unsupported captured reality payload field'));
 assert.ok(worker.includes("app.post('/engine-callback',callbackRateLimit"));
 assert.ok(worker.includes("status:'CANCELLED'"));
 assert.ok(worker.includes('boundedResult'));
