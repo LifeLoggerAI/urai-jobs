@@ -14,6 +14,25 @@ const PRIVATE_HANDLE = /^[A-Za-z0-9._:-]{8,512}$/;
 const SHA40 = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const callbackTimeoutMs = Math.max(5 * 60_000, Number(process.env.CAPTURED_REALITY_CALLBACK_TIMEOUT_MS || 45 * 60_000));
+const callbackRateWindowMs = 60_000;
+const callbackRateMax = Math.max(10, Math.min(600, Number(process.env.CAPTURED_REALITY_CALLBACK_RATE_LIMIT_PER_MINUTE || 120)));
+const callbackRateBuckets = new Map();
+
+function callbackRateLimit(req,res,next){
+  const key=String(req.ip||req.socket?.remoteAddress||'unknown');
+  const now=Date.now();
+  const current=callbackRateBuckets.get(key);
+  if(!current||current.resetAt<=now){
+    callbackRateBuckets.set(key,{count:1,resetAt:now+callbackRateWindowMs});
+    return next();
+  }
+  if(current.count>=callbackRateMax){
+    res.set('retry-after',String(Math.max(1,Math.ceil((current.resetAt-now)/1000))));
+    return res.status(429).send({ok:false,error:'callback rate limit exceeded'});
+  }
+  current.count+=1;
+  return next();
+}
 
 function productionRuntime() {
   return ['prod', 'production', 'staging'].includes(String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase());
@@ -101,6 +120,9 @@ function requiredConsentPurposes(job){
 function validArtifact(x){
   return x && PRIVATE_HANDLE.test(String(x.ref||'')) && SHA256.test(String(x.sha256||'')) && Number.isSafeInteger(x.byteSize) && x.byteSize>0;
 }
+function boundedArtifact(x){
+  return {ref:String(x.ref),sha256:String(x.sha256),byteSize:Number(x.byteSize)};
+}
 
 app.get('/healthz',(_req,res)=>res.status(200).send({ok:true,service:'captured-reality-worker',sourceSha:String(process.env.URAI_SOURCE_SHA||'')}));
 app.get('/readyz',(_req,res)=>{const state=readiness();res.set('cache-control','no-store');res.status(state.ok?200:503).send({ok:state.ok,service:'captured-reality-worker',checks:state.checks,sourceSha:String(process.env.URAI_SOURCE_SHA||'')});});
@@ -163,7 +185,7 @@ app.post('/execute-job',requireWorkerAuth,async(req,res)=>{
   }
 });
 
-app.post('/engine-callback',async(req,res)=>{
+app.post('/engine-callback',callbackRateLimit,async(req,res)=>{
   const jobId=String(req.body?.jobId||'').trim();
   const token=String(req.query.callbackToken||'');
   const status=String(req.body?.status||'').toLowerCase();
@@ -188,13 +210,21 @@ app.post('/engine-callback',async(req,res)=>{
       const now=admin.firestore.FieldValue.serverTimestamp();
       if(blocked){
         tx.update(jobRef,{status:'CANCELLED',error:{message:`Captured Reality consent revoked: ${blocked.purpose}`},lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
-        tx.set(queueRef,{jobId,status:'DONE',lease:admin.firestore.FieldValue.delete(),updatedAt:now},{merge:true});
+        tx.set(queueRef,{jobId,status:'CANCELLED',lease:admin.firestore.FieldValue.delete(),updatedAt:now},{merge:true});
         return 'cancelled';
       }
       if(status==='success'){
         const result=req.body?.result||{};
         if(!validArtifact(result.archival)||!validArtifact(result.runtime)||!validArtifact(result.collision)||!PRIVATE_HANDLE.test(String(result.cameraSolveReceiptRef||''))||!PRIVATE_HANDLE.test(String(result.trainingReceiptRef||''))||!PRIVATE_HANDLE.test(String(result.sourceVsReconstructionReceiptRef||''))) throw new Error('callback missing governed reconstruction artifacts or QA receipts');
-        tx.update(jobRef,{status:'SUCCESS',result,output:result,error:admin.firestore.FieldValue.delete(),lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
+        const boundedResult={
+          archival:boundedArtifact(result.archival),
+          runtime:boundedArtifact(result.runtime),
+          collision:boundedArtifact(result.collision),
+          cameraSolveReceiptRef:String(result.cameraSolveReceiptRef),
+          trainingReceiptRef:String(result.trainingReceiptRef),
+          sourceVsReconstructionReceiptRef:String(result.sourceVsReconstructionReceiptRef),
+        };
+        tx.update(jobRef,{status:'SUCCESS',result:boundedResult,output:boundedResult,error:admin.firestore.FieldValue.delete(),lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
       }else{
         tx.update(jobRef,{status:'FAILED',error:{message:'Captured Reality reconstruction engine reported failure.'},lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
       }
