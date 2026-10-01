@@ -188,13 +188,21 @@ app.post('/engine-callback',async(req,res)=>{
       const now=admin.firestore.FieldValue.serverTimestamp();
       if(blocked){
         tx.update(jobRef,{status:'CANCELLED',error:{message:`Captured Reality consent revoked: ${blocked.purpose}`},lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
-        tx.set(queueRef,{jobId,status:'DONE',lease:admin.firestore.FieldValue.delete(),updatedAt:now},{merge:true});
+        tx.set(queueRef,{jobId,status:'CANCELLED',lease:admin.firestore.FieldValue.delete(),updatedAt:now},{merge:true});
         return 'cancelled';
       }
       if(status==='success'){
         const result=req.body?.result||{};
         if(!validArtifact(result.archival)||!validArtifact(result.runtime)||!validArtifact(result.collision)||!PRIVATE_HANDLE.test(String(result.cameraSolveReceiptRef||''))||!PRIVATE_HANDLE.test(String(result.trainingReceiptRef||''))||!PRIVATE_HANDLE.test(String(result.sourceVsReconstructionReceiptRef||''))) throw new Error('callback missing governed reconstruction artifacts or QA receipts');
-        tx.update(jobRef,{status:'SUCCESS',result,output:result,error:admin.firestore.FieldValue.delete(),lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
+        const boundedResult={
+          archival:{ref:String(result.archival.ref),sha256:String(result.archival.sha256),byteSize:Number(result.archival.byteSize)},
+          runtime:{ref:String(result.runtime.ref),sha256:String(result.runtime.sha256),byteSize:Number(result.runtime.byteSize)},
+          collision:{ref:String(result.collision.ref),sha256:String(result.collision.sha256),byteSize:Number(result.collision.byteSize)},
+          cameraSolveReceiptRef:String(result.cameraSolveReceiptRef),
+          trainingReceiptRef:String(result.trainingReceiptRef),
+          sourceVsReconstructionReceiptRef:String(result.sourceVsReconstructionReceiptRef),
+        };
+        tx.update(jobRef,{status:'SUCCESS',result:boundedResult,output:boundedResult,error:admin.firestore.FieldValue.delete(),lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
       }else{
         tx.update(jobRef,{status:'FAILED',error:{message:'Captured Reality reconstruction engine reported failure.'},lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
       }
