@@ -154,6 +154,12 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   const runtimeDefinition = RUNTIME_JOB_REGISTRY[jobType];
 
   if (jobType === 'memory.private-source.transcribe') {
+    if (consents?.length) {
+      throw httpsError(
+        'failed-precondition',
+        'Private-source transcription accepts only the canonical single consent field; plural consents are not permitted.'
+      );
+    }
     if (!consent) {
       throw httpsError(
         'failed-precondition',
@@ -171,6 +177,12 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   }
 
   if (jobType === 'memory.private-source.reconstruct-place') {
+    if (consent) {
+      throw httpsError(
+        'failed-precondition',
+        'Captured Reality reconstruction requires the plural consents field only; single consent is not permitted.'
+      );
+    }
     const reconstruction = CapturedRealityReconstructionPayloadSchema.safeParse(payload);
     if (!reconstruction.success) {
       throw httpsError('invalid-argument', 'Captured Reality reconstruction accepts opaque receipt/project/governance references only; raw media URLs, exact addresses, identities, provider authorization, and public-release authorization are rejected.', reconstruction.error.flatten());
