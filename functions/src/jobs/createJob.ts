@@ -228,6 +228,13 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   }
 
 
+  if (jobType === 'studio.assemble.video') {
+    throw httpsError(
+      'failed-precondition',
+      'studio.assemble.video must be created through the dedicated authenticated Studio Life Movie long-form bridge.'
+    );
+  }
+
   if (jobType === 'studio.render.video') {
     const lifeMovieRender = StudioLifeMovieRenderPayloadSchema.safeParse(payload);
     if (!lifeMovieRender.success) {
