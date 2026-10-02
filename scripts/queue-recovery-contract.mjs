@@ -125,7 +125,7 @@ for (const marker of [
   'Firebase Functions would bind worker token version',
   'approvedWorkerTokenVersion',
   'resolvedWorkerTokenVersion',
-  'verify_worker_secret\nwrite_config_receipt true',
+  'verify_studio_bridge_secret\nverify_scene_truth_secret\nverify_worker_secret\nwrite_config_receipt true',
 ]) assert.ok(firebaseDeploy.includes(marker), `deploy-firebase missing ${marker}`);
 
 assert.match(workspace, /^\s*-\s*["']?workers["']?\s*$/m, 'root workers package must participate in pnpm installation');
@@ -148,6 +148,6 @@ console.log('[PASS] scheduled and manual dispatch preserve master state');
 console.log('[PASS] retryExpiredLeases is the sole LEASED recovery owner');
 console.log('[PASS] stale RUNNING recovery revalidates exact lease and heartbeat');
 console.log('[PASS] ambiguous failures preserve active callbacks, retryable failures requeue, and exhausted attempts become DEAD');
-console.log('[PASS] legacy Firebase authority is blocked and one approved worker-token version binds Workers and Functions');
+console.log('[PASS] legacy Firebase authority is blocked and approved worker/Studio/SceneTruth secret versions bind Firebase Functions');
 console.log('[PASS] root and individual worker dependencies are installed by pnpm workspace authority');
 console.log('[PASS] terminal outbox due-time queries have their required composite indexes');
