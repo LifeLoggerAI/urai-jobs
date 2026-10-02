@@ -15,6 +15,10 @@ for (const marker of [
   "const BINDING_COLLECTION = 'studioLifeMovieLongformBindings'",
   "const jobType = 'studio.render.longform'",
   "assertSceneTruthReceiptValue(",
+  "consent: z.object({",
+  "purpose: z.literal('life-movie.render')",
+  "consentBlockRef(input.userId, input.consent.purpose)",
+  "life_movie_longform_consent_revoked",
   "planLifeMovieLongformSegments(payload)",
   "authorityType: 'longform'",
   "scene_truth_receipt_replay_conflict",
@@ -28,6 +32,7 @@ for (const marker of [
   "transaction.getAll(...childRefs)",
   "'execution.leaseToken': FieldValue.delete()",
   "status: 'CANCELLED'",
+  "consent: input.consent",
   "publicReleaseAuthorized: false",
 ]) assert.ok(bridge.includes(marker), `long-form orchestrator missing ${marker}`)
 
@@ -43,3 +48,6 @@ assert.ok(bridge.indexOf('assertSceneTruthReceiptValue(') < bridge.indexOf('plan
 assert.equal((bridge.match(/assertSceneTruthReceiptValue\(/g) ?? []).length, 1, 'SceneTruth receipt must be verified once at parent creation, not replayed per child')
 
 console.log('Life Movie durable long-form orchestrator contract passed')
+
+assert.ok(bridge.includes("status: 'CANCELLED'"), 'parent cancellation must retain explicit cancelled queue semantics')
+assert.doesNotMatch(bridge, /status: 'DONE'[\s\S]{0,120}longform/, 'long-form cancellation must not collapse cancellation into generic DONE state')

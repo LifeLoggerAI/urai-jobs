@@ -54,3 +54,13 @@ Still intentionally open before runtime enablement:
 - long-form private playback;
 - restart/recovery proof against deployed Firestore/worker infrastructure;
 - literal long-form audio/video acceptance.
+
+## Consent propagation
+
+Long-form creation now requires a canonical `life-movie.render` consent context.
+The parent bridge checks the existing consent-block authority before creating
+children and copies that exact consent context onto every child
+`studio.render.video` job. Existing Jobs execution checks therefore reject or
+cancel each segment if the consent becomes blocked before or during dispatch.
+Parent cancellation also writes explicit `CANCELLED` queue state for every
+unfinished segment and clears its active lease token.

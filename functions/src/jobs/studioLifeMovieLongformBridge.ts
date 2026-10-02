@@ -6,6 +6,7 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 import type { Job, JobQueueEntry, JobStatus } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
+import { consentBlockRef } from '../privacy/consentBlocks.js';
 import {
   bindingMatches,
   buildIdempotencyBindingId,
@@ -35,6 +36,11 @@ const IdentitySchema = z.object({
 const CreateSchema = IdentitySchema.extend({
   action: z.literal('create'),
   idempotencyKey: z.string().trim().min(8).max(160),
+  consent: z.object({
+    purpose: z.literal('life-movie.render'),
+    policyVersion: z.string().trim().min(1).max(80),
+    decisionReceiptId: z.string().trim().min(1).max(160),
+  }).strict(),
   payload: StudioLifeMovieLongformPayloadSchema,
 }).strict();
 
@@ -129,6 +135,10 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
   if (!longformEnabled()) throw new Error('life_movie_longform_disabled');
 
   const payload = assertLifeMovieLongformTenantPaths(input.payload, input.tenantId);
+  const consentSnapshot = await consentBlockRef(input.userId, input.consent.purpose).get();
+  if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
+    throw new Error('life_movie_longform_consent_revoked');
+  }
   const secret = configuredSceneTruthSecret();
   const receipt = assertSceneTruthReceiptValue(
     payload.projectId,
@@ -146,6 +156,7 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
     tenantId: input.tenantId,
     userId: input.userId,
     payload,
+    consent: input.consent,
   });
   const expectedBinding = { ownerUid: ownerBinding, jobType, requestFingerprint };
   const db = getFirestore();
@@ -226,6 +237,7 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
       renderPlanDigest: payload.renderPlanDigest,
       sceneTruthDigest: payload.sceneTruthDigest,
       sceneTruthReceiptRef: payload.sceneTruthReceiptRef,
+      consent: input.consent,
       childJobIds: childIds,
       segments: storedSegments,
       segmentCount: childIds.length,
@@ -246,6 +258,7 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
         payload: segment.payload,
         ownerUid: input.userId,
         tenantId: input.tenantId,
+        consent: input.consent,
         retryCount: 0,
         execution: { attemptCount: 0, maxAttempts: 2 },
         sourceSystem: 'urai-studio',
@@ -350,7 +363,7 @@ async function cancelPlan(planId: string, tenantId: string, userId: string) {
       transaction.set(jobQueueEntryDoc(jobId), {
         jobId,
         jobType: 'studio.render.video',
-        status: 'DONE',
+        status: 'CANCELLED',
         lease: FieldValue.delete(),
         updatedAt: now,
       }, { merge: true });
@@ -414,6 +427,7 @@ export const studioLifeMovieLongformBridge = onRequest({
       : code === 'scene_truth_receipt_replay_conflict' ? 409
       : code === 'idempotency_conflict' ? 409
       : code === 'life_movie_longform_disabled' ? 503
+      : code === 'life_movie_longform_consent_revoked' ? 409
       : code === 'scene_truth_receipt_authority_unavailable' ? 503
       : code === 'scene_truth_receipt_expired' ? 409
       : code === 'invalid_scene_truth_receipt_signature' ? 403
