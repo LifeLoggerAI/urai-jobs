@@ -18,7 +18,7 @@ const baseJob = {
   jobId: 'job-fixture-1', tenantId: 'tenant-fixture-1', ownerUid: 'owner-fixture-1',
   type: 'studio.render.video', leaseToken: 'fixture-lease',
   payload: {
-    schemaVersion: 'urai-life-movie-render-v1', projectId: 'project-fixture-1', renderPlanDigest: 'a'.repeat(64), sceneTruthReceiptRef: 'str_abcdefghijklmnopqrstuvwx_mabcdefg_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', sceneTruthDigest: 'b'.repeat(64),
+    schemaVersion: 'urai-life-movie-render-v1', projectId: 'project-fixture-1', renderPlanDigest: 'a'.repeat(64), sceneTruthReceiptRef: 'str_abcdefghijklmnopqrstuvwx_mabcdefg_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq', sceneTruthDigest: 'b'.repeat(64),
     width: 320, height: 320, fps: 30,
     sources: [{ id: 'source-1', bucket: 'private-fixture-bucket', objectPath: 'tenants/tenant-fixture-1/source.wav',
       mimeType: 'audio/wav', provenance: 'original-source', sourceRefs: ['synthetic-test-tone'],
