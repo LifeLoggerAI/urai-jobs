@@ -278,6 +278,9 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
       if (!['initial-source', 'new-source', 'correction', 'stronger-source'].includes(correlationTrigger)) {
         throw new Error('memory index provider did not return a valid correlation trigger');
       }
+      if (correlationTrigger !== (job.payload.correlationTrigger || 'initial-source')) {
+        throw new Error('memory index provider correlation trigger does not match the requested recorrelation cause');
+      }
 
       return res.status(200).send({
         ok: true,
