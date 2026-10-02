@@ -30,7 +30,7 @@ for (const marker of [
   "transaction.create(jobDoc(jobId)",
   "transaction.create(jobQueueEntryDoc(jobId)",
   "transaction.getAll(...childRefs)",
-  "action: z.enum(['status', 'cancel', 'playback', 'resume', 'delete-output'])",
+  "action: z.enum(['status', 'cancel', 'playback', 'resume', 'assemble', 'delete-output'])",
   "readPlanPlayback",
   "longform_plan_not_ready_for_playback",
   "longform_output_boundary_mismatch",
@@ -57,6 +57,15 @@ for (const marker of [
   "output: FieldValue.delete()",
   "if (parsed.data.action === 'resume')",
   "if (parsed.data.action === 'delete-output')",
+  "async function assemblePlan(",
+  "type: 'studio.assemble.video'",
+  "jobType: 'studio.assemble.video'",
+  "schemaVersion: 'urai-life-movie-assembly-v1'",
+  "longform_segment_checksum_missing",
+  "assemblyJobId",
+  "finalFile",
+  "assemblyResumed",
+  "assemblyCancelled",
 ]) assert.ok(bridge.includes(marker), `long-form orchestrator missing ${marker}`)
 
 assert.ok(contract.includes('assertLifeMovieLongformTenantPaths'), 'long-form contract must bind source/output paths to tenant authority')
@@ -77,3 +86,7 @@ assert.doesNotMatch(bridge, /status: 'DONE'[\s\S]{0,120}longform/, 'long-form ca
 
 assert.doesNotMatch(bridge, /segments\.push\([\s\S]*?ref:/, 'private playback response must not expose raw GCS refs')
 assert.ok(bridge.indexOf('assertPlanOwner') < bridge.indexOf('readPlanPlayback'), 'owner/tenant boundary helper must exist before playback implementation')
+
+assert.ok(bridge.includes("responseDisposition: 'inline'"), 'final assembled playback must remain private and inline-bounded')
+assert.ok(bridge.includes("outputPrefix: `tenants/${tenantId}/life-movies/${plan.projectId}/final/`"), 'assembly output must remain inside the tenant/project final prefix')
+assert.ok(bridge.includes("buildRequestFingerprint('studio.assemble.video'"), 'assembly job replay must bind to exact payload identity')
