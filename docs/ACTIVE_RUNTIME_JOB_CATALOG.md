@@ -12,6 +12,7 @@ This catalog documents **admitted runtime types only**. Historical/future types 
 | `studio.render.video` | Studio Life Movies worker | `STUDIO_WORKER_URL`, `/` | admitted with Life Movies payload/tenant contract |
 | `communications.message.send` | Communications worker | `COMMUNICATIONS_WORKER_URL`, `/executeJob` | admitted with tenant/message contract |
 | `memory.private-source.transcribe` | Private-source worker | `PRIVATE_SOURCE_WORKER_URL`, `/execute-job` | admitted with consent + opaque source receipt contract |
+| `memory.private-source.index` | Private-source worker | `PRIVATE_SOURCE_WORKER_URL`, `/execute-job` | admitted with consent + opaque transcript/provenance/source refs; returns private memory-graph + scene-truth refs |
 
 ## Fail-closed rule
 
