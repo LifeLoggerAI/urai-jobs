@@ -47,6 +47,7 @@ check('memory index success requires source fixity and dependency lineage', work
 check('memory index success requires machine-readable terminal backlog state', worker.includes("new Set(['INDEXED', 'DUPLICATE', 'CONFLICTED'])") && worker.includes('non-terminal backlog state as success'));
 check('memory index success carries monotonic correlation revision', worker.includes('correlationRevision') && worker.includes('valid correlation revision'));
 check('memory index returns correlation trigger used for this revision', worker.includes('correlationTrigger') && worker.includes('valid correlation trigger'));
+check('memory index receipt is bound to the requested recorrelation cause', worker.includes('correlation trigger does not match the requested recorrelation cause'));
 
 check('worker refuses synthetic success when unconfigured', worker.includes('PRIVATE_SOURCE_WORKER_NOT_READY') && worker.includes('refusing synthetic success'));
 check('worker never returns transcript text', !/transcript(Text|\s*:\s*provider\.data)/.test(worker));
