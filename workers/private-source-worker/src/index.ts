@@ -59,6 +59,8 @@ type PrivatePayload = {
   requestReceipt?: string;
   transcriptRef?: string;
   provenanceRef?: string;
+  priorMemoryIndexRef?: string;
+  correlationTrigger?: 'initial-source' | 'new-source' | 'correction' | 'stronger-source';
 };
 
 function validateJob(body: any): { jobId: string; jobType: 'memory.private-source.transcribe' | 'memory.private-source.index'; ownerUid: string; payload: PrivatePayload } {
@@ -74,7 +76,7 @@ function validateJob(body: any): { jobId: string; jobType: 'memory.private-sourc
   if (!ownerUid) throw new Error('server-owned ownerUid is required');
 
   const allowed = jobType === 'memory.private-source.index'
-    ? ['locale', 'provenanceRef', 'requestReceipt', 'requestedPurpose', 'sourceReceiptRef', 'transcriptRef']
+    ? ['correlationTrigger', 'locale', 'priorMemoryIndexRef', 'provenanceRef', 'requestReceipt', 'requestedPurpose', 'sourceReceiptRef', 'transcriptRef']
     : ['locale', 'requestReceipt', 'requestedPurpose', 'sourceReceiptRef'];
   const keys = Object.keys(payload).sort();
   if (keys.some((key) => !allowed.includes(key))) throw new Error('private-source payload contains forbidden fields');
@@ -100,6 +102,8 @@ function validateJob(body: any): { jobId: string; jobType: 'memory.private-sourc
       ...(payload.requestReceipt ? { requestReceipt: String(payload.requestReceipt) } : {}),
       ...(payload.transcriptRef ? { transcriptRef: String(payload.transcriptRef) } : {}),
       ...(payload.provenanceRef ? { provenanceRef: String(payload.provenanceRef) } : {}),
+      ...(payload.priorMemoryIndexRef ? { priorMemoryIndexRef: String(payload.priorMemoryIndexRef) } : {}),
+      correlationTrigger: (payload.correlationTrigger || 'initial-source') as NonNullable<PrivatePayload['correlationTrigger']>,
     },
   };
 }
@@ -213,6 +217,8 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
           provenanceRef: job.payload.provenanceRef,
           requestedPurpose: 'memory-index',
           locale: job.payload.locale,
+          priorMemoryIndexRef: job.payload.priorMemoryIndexRef,
+          correlationTrigger: job.payload.correlationTrigger || 'initial-source',
           idempotencyKey: job.jobId,
         },
         {
@@ -236,7 +242,13 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
       const checksum = String(provider.data?.checksum || '');
       const lifeModelSchemaVersion = String(provider.data?.lifeModelSchemaVersion || '');
       const syntheticOutputMayBecomeHistoricalSource = provider.data?.syntheticOutputMayBecomeHistoricalSource;
-      const refs = [memoryIndexRef, entityGraphRef, temporalIndexRef, placeIndexRef, conflictSetRef, sceneTruthRef, provenanceRef];
+      const sourceFixityRef = String(provider.data?.sourceFixityRef || '');
+      const dependencyGraphRef = String(provider.data?.dependencyGraphRef || '');
+      const backlogState = String(provider.data?.backlogState || '');
+      const correlationRevision = Number(provider.data?.correlationRevision);
+      const correlationTrigger = String(provider.data?.correlationTrigger || '');
+      const terminalBacklogStates = new Set(['INDEXED', 'DUPLICATE', 'CONFLICTED']);
+      const refs = [memoryIndexRef, entityGraphRef, temporalIndexRef, placeIndexRef, conflictSetRef, sceneTruthRef, provenanceRef, sourceFixityRef, dependencyGraphRef];
       if (refs.some((ref) => !PRIVATE_REF.test(ref)) || !SHA256.test(checksum)) {
         throw new Error('memory index provider response is missing private refs or integrity checksum');
       }
@@ -245,6 +257,15 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
       }
       if (syntheticOutputMayBecomeHistoricalSource !== false) {
         throw new Error('memory index provider did not prove the synthetic-memory firewall');
+      }
+      if (!terminalBacklogStates.has(backlogState)) {
+        throw new Error('memory index provider returned a non-terminal backlog state as success');
+      }
+      if (!Number.isInteger(correlationRevision) || correlationRevision < 1) {
+        throw new Error('memory index provider did not return a valid correlation revision');
+      }
+      if (!['initial-source', 'new-source', 'correction', 'stronger-source'].includes(correlationTrigger)) {
+        throw new Error('memory index provider did not return a valid correlation trigger');
       }
 
       return res.status(200).send({
@@ -262,6 +283,11 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
           checksum,
           lifeModelSchemaVersion,
           syntheticOutputMayBecomeHistoricalSource: false,
+          sourceFixityRef,
+          dependencyGraphRef,
+          backlogState,
+          correlationRevision,
+          correlationTrigger,
           requestedPurpose: 'memory-index',
         },
       });
