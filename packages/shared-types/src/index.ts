@@ -31,6 +31,9 @@ export interface JobExecutionMeta {
   callbackLeaseToken?: string;
   callbackDeadlineAt?: unknown;
   completedAt?: unknown;
+  rootJobId?: string;
+  parentJobId?: string;
+  correlationId?: string;
 }
 
 export interface JobLease {
