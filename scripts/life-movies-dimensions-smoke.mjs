@@ -88,3 +88,14 @@ for (const value of [
   assert.throws(() => workerParse(value), /synchronous_render_budget|life_movie_too_large/);
 }
 console.log('[PASS] Synchronous render budget parity, exact boundaries, gaps, source/item counts and long-form rejection');
+
+
+const missingTruthReceipt = { ...payload };
+delete missingTruthReceipt.sceneTruthReceiptRef;
+assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(missingTruthReceipt).success, false);
+assert.throws(() => workerParse(missingTruthReceipt), /invalid_scene_truth_receipt_ref/);
+
+const malformedTruthReceipt = { ...payload, sceneTruthReceiptRef: 'bad' };
+assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(malformedTruthReceipt).success, false);
+assert.throws(() => workerParse(malformedTruthReceipt), /invalid_scene_truth_receipt_ref/);
+console.log('[PASS] Life Movies admission and worker fail closed without a valid SceneTruth receipt');
