@@ -21,7 +21,7 @@ vm.runInNewContext(fs.readFileSync(new URL('../workers/studio-worker/index.js', 
   },
 });
 const payload = {
-  schemaVersion: 'urai-life-movie-render-v1', projectId: 'project-1', renderPlanDigest: 'a'.repeat(64), sceneTruthReceiptRef: 'str_fixture_truth_receipt_0001',
+  schemaVersion: 'urai-life-movie-render-v1', projectId: 'project-1', renderPlanDigest: 'a'.repeat(64), sceneTruthReceiptRef: 'str_abcdefghijklmnopqrstuvwx_mabcdefg_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', sceneTruthDigest: 'b'.repeat(64),
   outputPrefix: 'tenants/tenant-1/life-movies/project-1/render-1',
   width: 1920, height: 1080, fps: 30,
   sources: [{ id: 'source-1', bucket: 'private-fixture-bucket', objectPath: 'tenants/tenant-1/source.png', mimeType: 'image/png', provenance: 'original-source', sourceRefs: ['fixture'], consentRef: 'consent-1', ownerOrRightsRef: 'rights-1' }],
@@ -99,3 +99,12 @@ const malformedTruthReceipt = { ...payload, sceneTruthReceiptRef: 'bad' };
 assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(malformedTruthReceipt).success, false);
 assert.throws(() => workerParse(malformedTruthReceipt), /invalid_scene_truth_receipt_ref/);
 console.log('[PASS] Life Movies admission and worker fail closed without a valid SceneTruth receipt');
+
+const missingTruthDigest = { ...payload };
+delete missingTruthDigest.sceneTruthDigest;
+assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(missingTruthDigest).success, false);
+assert.throws(() => workerParse(missingTruthDigest), /invalid_scene_truth_digest/);
+const malformedTruthDigest = { ...payload, sceneTruthDigest: 'bad' };
+assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(malformedTruthDigest).success, false);
+assert.throws(() => workerParse(malformedTruthDigest), /invalid_scene_truth_digest/);
+console.log('[PASS] Life Movies admission and worker fail closed without a valid SceneTruth digest');
