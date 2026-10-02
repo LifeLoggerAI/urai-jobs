@@ -52,6 +52,7 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
   schemaVersion: z.literal('urai-life-movie-render-v1'),
   projectId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
   renderPlanDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  sceneTruthReceiptRef: z.string().trim().regex(/^str_[A-Za-z0-9_-]{16,128}$/),
   outputPrefix: z.string().trim().min(1).max(1024).refine((value) => !value.startsWith('/') && !value.includes('..') && !value.includes('\\\\'), 'Unsafe output prefix'),
   width: z.number().int().min(320).max(3840).multipleOf(2).default(1920),
   height: z.number().int().min(320).max(3840).multipleOf(2).default(1080),
