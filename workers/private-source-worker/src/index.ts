@@ -104,7 +104,7 @@ function validateJob(body: any): { jobId: string; jobType: 'memory.private-sourc
   };
 }
 
-function readiness() {
+function readiness(jobType?: 'memory.private-source.transcribe' | 'memory.private-source.index') {
   const checks = {
     workerAuth: Boolean(process.env.URAI_JOBS_WORKER_TOKEN) || !productionRuntime(),
     sourceShaExact: exactSha() || !productionRuntime(),
@@ -116,7 +116,21 @@ function readiness() {
     indexUrl: Boolean(process.env.PRIVATE_SOURCE_INDEX_URL),
     indexToken: Boolean(process.env.PRIVATE_SOURCE_INDEX_TOKEN),
   };
-  return { checks, ok: Object.values(checks).every(Boolean) };
+  const baseReady = checks.workerAuth
+    && checks.sourceShaExact
+    && checks.runtimeRevision
+    && checks.authorityUrl
+    && checks.authorityToken;
+  const transcribeReady = checks.transcribeUrl && checks.transcribeToken;
+  const indexReady = checks.indexUrl && checks.indexToken;
+
+  const ok = jobType === 'memory.private-source.transcribe'
+    ? baseReady && transcribeReady
+    : jobType === 'memory.private-source.index'
+      ? baseReady && indexReady
+      : baseReady && transcribeReady && indexReady;
+
+  return { checks, capabilities: { transcribe: transcribeReady, index: indexReady }, ok };
 }
 
 app.get('/healthz', (_req, res) => {
@@ -152,7 +166,7 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
     return res.status(400).send({ ok: false, error: error instanceof Error ? error.message : 'invalid job' });
   }
 
-  const state = readiness();
+  const state = readiness(job.jobType);
   if (!state.ok) {
     return res.status(503).send({
       ok: false,
@@ -164,7 +178,6 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
 
   try {
     const authorityUrl = httpsUrl('PRIVATE_SOURCE_AUTHORITY_URL');
-    const transcribeUrl = httpsUrl('PRIVATE_SOURCE_TRANSCRIBE_URL');
 
     const authorization = await axios.post(
       `${authorityUrl}/authorize`,
@@ -244,6 +257,7 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
       });
     }
 
+    const transcribeUrl = httpsUrl('PRIVATE_SOURCE_TRANSCRIBE_URL');
     const provider = await axios.post(
       transcribeUrl,
       {
