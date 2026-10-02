@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 import { defineSecret } from 'firebase-functions/params';
 import { onRequest } from 'firebase-functions/v2/https';
 import { ulid } from 'ulid';
@@ -45,7 +46,7 @@ const CreateSchema = IdentitySchema.extend({
 }).strict();
 
 const PlanActionSchema = IdentitySchema.extend({
-  action: z.enum(['status', 'cancel']),
+  action: z.enum(['status', 'cancel', 'playback']),
   planId: z.string().trim().regex(/^lmp_[A-Za-z0-9_-]{20,64}$/),
 }).strict();
 
@@ -96,6 +97,20 @@ function makeChildId(planId: string, index: number) {
   return `lms_${createHash('sha256').update(`${planId}:${suffix}`).digest('hex').slice(0, 32)}_${suffix}`;
 }
 
+type WorkerArtifact = {
+  kind?: unknown;
+  ref?: unknown;
+  mimeType?: unknown;
+  checksum?: unknown;
+};
+
+type WorkerOutput = {
+  outputs?: WorkerArtifact[];
+  renderPlanDigest?: unknown;
+  sceneTruthDigest?: unknown;
+  publicReleaseAuthorized?: unknown;
+};
+
 type StoredPlan = {
   planId: string;
   schemaVersion: 'urai-life-movie-longform-plan-v1';
@@ -115,6 +130,28 @@ type StoredPlan = {
     jobId: string;
   }>;
 };
+
+function parseGcsRef(ref: string) {
+  const match = /^gs:\/\/([^/]+)\/(.+)$/.exec(ref);
+  if (!match) throw new Error('longform_output_ref_invalid');
+  return { bucket: match[1], objectPath: match[2] };
+}
+
+function boundedArtifact(output: unknown, kind: 'mp4' | 'srt') {
+  if (!output || typeof output !== 'object' || Array.isArray(output)) throw new Error('longform_child_output_missing');
+  const typed = output as WorkerOutput;
+  if (typed.publicReleaseAuthorized === true) throw new Error('longform_public_release_mismatch');
+  const artifacts = Array.isArray(typed.outputs) ? typed.outputs : [];
+  const artifact = artifacts.find((candidate) => candidate?.kind === kind);
+  if (!artifact || typeof artifact.ref !== 'string') throw new Error(`longform_${kind}_output_missing`);
+  return {
+    ref: artifact.ref,
+    mimeType: typeof artifact.mimeType === 'string'
+      ? artifact.mimeType
+      : kind === 'mp4' ? 'video/mp4' : 'application/x-subrip',
+    checksum: typeof artifact.checksum === 'string' ? artifact.checksum : undefined,
+  };
+}
 
 function assertPlanOwner(plan: StoredPlan, tenantId: string, userId: string) {
   if (plan.tenantId !== tenantId || plan.ownerUid !== userId) throw new Error('longform_plan_boundary_mismatch');
@@ -335,6 +372,91 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
   };
 }
 
+async function readPlanPlayback(planId: string, tenantId: string, userId: string) {
+  const plan = await loadPlan(planId, tenantId, userId);
+  const db = getFirestore();
+  const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
+  const jobs = snapshots.map((snapshot) => snapshot.exists ? snapshot.data() : undefined);
+  const statuses = jobs.map((job) => (job?.status ?? 'DEAD') as JobStatus);
+  if (deriveStatus(plan, statuses) !== 'SUCCESS') throw new Error('longform_plan_not_ready_for_playback');
+
+  const expiresAtMs = Date.now() + 5 * 60 * 1000;
+  const requiredPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/segments/`;
+  const segmentAuthority: Array<{
+    index: number;
+    startMs: number;
+    endMs: number;
+    gapBeforeMs: number;
+    videoChecksum?: string;
+    subtitleChecksum?: string;
+  }> = [];
+  const segments = [];
+
+  for (const [index, job] of jobs.entries()) {
+    if (!job || job.status !== 'SUCCESS') throw new Error('longform_plan_not_ready_for_playback');
+    const descriptor = plan.segments[index];
+    if (!descriptor || descriptor.jobId !== plan.childJobIds[index]) throw new Error('longform_segment_binding_mismatch');
+    const video = boundedArtifact(job.output, 'mp4');
+    const subtitle = boundedArtifact(job.output, 'srt');
+    const videoLocation = parseGcsRef(video.ref);
+    const subtitleLocation = parseGcsRef(subtitle.ref);
+    if (!videoLocation.objectPath.startsWith(requiredPrefix) || !subtitleLocation.objectPath.startsWith(requiredPrefix)) {
+      throw new Error('longform_output_boundary_mismatch');
+    }
+
+    const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
+      action: 'read',
+      expires: expiresAtMs,
+      responseDisposition: 'inline',
+      responseType: video.mimeType,
+    });
+    const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).getSignedUrl({
+      action: 'read',
+      expires: expiresAtMs,
+      responseDisposition: 'inline',
+      responseType: subtitle.mimeType,
+    });
+
+    const previousEnd = index > 0 ? plan.segments[index - 1].endMs : 0;
+    const gapBeforeMs = Math.max(0, descriptor.startMs - previousEnd);
+    segmentAuthority.push({
+      index: descriptor.index,
+      startMs: descriptor.startMs,
+      endMs: descriptor.endMs,
+      gapBeforeMs,
+      videoChecksum: video.checksum,
+      subtitleChecksum: subtitle.checksum,
+    });
+    segments.push({
+      index: descriptor.index,
+      startMs: descriptor.startMs,
+      endMs: descriptor.endMs,
+      gapBeforeMs,
+      video: { url: videoUrl, mimeType: video.mimeType, checksum: video.checksum },
+      subtitles: { url: subtitleUrl, mimeType: subtitle.mimeType, checksum: subtitle.checksum },
+    });
+  }
+
+  const playlistDigest = createHash('sha256').update(JSON.stringify({
+    schemaVersion: 'urai-life-movie-private-playlist-v1',
+    planId,
+    renderPlanDigest: plan.renderPlanDigest,
+    sceneTruthDigest: plan.sceneTruthDigest,
+    segments: segmentAuthority,
+  })).digest('hex');
+
+  return {
+    schemaVersion: 'urai-life-movie-private-playlist-v1',
+    planId,
+    expiresAt: new Date(expiresAtMs).toISOString(),
+    renderPlanDigest: plan.renderPlanDigest,
+    sceneTruthDigest: plan.sceneTruthDigest,
+    playlistDigest,
+    publicReleaseAuthorized: false,
+    segments,
+  };
+}
+
 async function cancelPlan(planId: string, tenantId: string, userId: string) {
   const db = getFirestore();
   const ref = planRef(planId);
@@ -418,12 +540,19 @@ export const studioLifeMovieLongformBridge = onRequest({
       res.status(200).json({ ok: true, plan: result });
       return;
     }
+    if (parsed.data.action === 'playback') {
+      const result = await readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);
+      res.status(200).json({ ok: true, playback: result });
+      return;
+    }
     const result = await cancelPlan(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);
     res.status(200).json({ ok: true, cancellation: result });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'longform_bridge_failed';
     const status = code === 'longform_plan_not_found' ? 404
       : code === 'longform_plan_boundary_mismatch' ? 403
+      : code === 'longform_output_boundary_mismatch' ? 403
+      : code === 'longform_plan_not_ready_for_playback' ? 409
       : code === 'scene_truth_receipt_replay_conflict' ? 409
       : code === 'idempotency_conflict' ? 409
       : code === 'life_movie_longform_disabled' ? 503

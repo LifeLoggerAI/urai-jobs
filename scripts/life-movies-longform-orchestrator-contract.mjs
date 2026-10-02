@@ -30,6 +30,15 @@ for (const marker of [
   "transaction.create(jobDoc(jobId)",
   "transaction.create(jobQueueEntryDoc(jobId)",
   "transaction.getAll(...childRefs)",
+  "action: z.enum(['status', 'cancel', 'playback'])",
+  "readPlanPlayback",
+  "longform_plan_not_ready_for_playback",
+  "longform_output_boundary_mismatch",
+  "Date.now() + 5 * 60 * 1000",
+  "responseDisposition: 'inline'",
+  "schemaVersion: 'urai-life-movie-private-playlist-v1'",
+  "gapBeforeMs",
+  "playlistDigest",
   "'execution.leaseToken': FieldValue.delete()",
   "status: 'CANCELLED'",
   "consent: input.consent",
@@ -51,3 +60,6 @@ console.log('Life Movie durable long-form orchestrator contract passed')
 
 assert.ok(bridge.includes("status: 'CANCELLED'"), 'parent cancellation must retain explicit cancelled queue semantics')
 assert.doesNotMatch(bridge, /status: 'DONE'[\s\S]{0,120}longform/, 'long-form cancellation must not collapse cancellation into generic DONE state')
+
+assert.doesNotMatch(bridge, /segments\.push\([\s\S]*?ref:/, 'private playback response must not expose raw GCS refs')
+assert.ok(bridge.indexOf('assertPlanOwner') < bridge.indexOf('readPlanPlayback'), 'owner/tenant boundary helper must exist before playback implementation')

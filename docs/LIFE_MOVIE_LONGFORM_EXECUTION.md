@@ -72,3 +72,16 @@ boundary, rebases them to the child's local timeline, renumbers them, and places
 the resulting SRT in each existing short-render payload. Empty caption tracks
 remain empty; malformed non-empty SRT is rejected instead of silently dropping
 captions.
+
+## Private segmented playback
+
+The hard-off long-form bridge now has an owner/tenant-bound `playback` action.
+It only succeeds when every child render is SUCCESS. It validates every child
+against the parent segment identity, requires video and SRT objects to remain
+under the exact tenant/project/segments prefix, and issues five-minute inline
+signed URLs. Raw storage refs are not returned. The playlist preserves each
+segment's absolute start/end time and `gapBeforeMs`, plus video/subtitle
+checksums and a deterministic playlist digest.
+
+This is private segmented playback, not final single-file export and not public
+release authority.
