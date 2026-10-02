@@ -19,6 +19,7 @@ export { listJobsV2, listJobLogsV2, retryJobV2 } from "./jobs/admin-v2.js";
 export { buildInfo } from "./system/buildInfo.js";
 
 export { studioLifeMovieBridge } from "./jobs/studioLifeMovieBridge.js";
+export { studioLifeMovieLongformBridge } from "./jobs/studioLifeMovieLongformBridge.js";
 
 export { ingestConsentRevocation } from "./privacy/consentRevocation.js";
 

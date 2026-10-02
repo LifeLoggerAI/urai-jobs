@@ -73,6 +73,18 @@ export const StudioLifeMovieLongformPayloadSchema = z.object({
 
 export type StudioLifeMovieLongformPayload = z.infer<typeof StudioLifeMovieLongformPayloadSchema>;
 
+export function assertLifeMovieLongformTenantPaths(payload: StudioLifeMovieLongformPayload, tenantId: string) {
+  const allowedSourcePrefixes = [`studios/${tenantId}/`, `tenants/${tenantId}/`];
+  const requiredOutputPrefix = `tenants/${tenantId}/life-movies/${payload.projectId}/`;
+  if (!payload.outputPrefix.startsWith(requiredOutputPrefix)) {
+    throw new Error('life_movie_longform_output_outside_tenant_project');
+  }
+  if (payload.sources.some((source) => !allowedSourcePrefixes.some((prefix) => source.objectPath.startsWith(prefix)))) {
+    throw new Error('life_movie_longform_source_outside_tenant');
+  }
+  return payload;
+}
+
 export type LifeMovieLongformSegment = {
   index: number;
   startMs: number;
