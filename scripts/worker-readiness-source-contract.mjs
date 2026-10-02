@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [genericWorker, narratorWorker, assetWorker, studioWorker, runtimeVerifier] = await Promise.all([
+const [genericWorker, narratorWorker, assetWorker, studioWorker, privateSourceWorker, runtimeVerifier] = await Promise.all([
   readFile(new URL('./run-worker.mjs', import.meta.url), 'utf8'),
   readFile(new URL('../workers/narrator-worker/src/index.ts', import.meta.url), 'utf8'),
   readFile(new URL('../workers/asset-worker/index.js', import.meta.url), 'utf8'),
   readFile(new URL('../workers/studio-worker/index.js', import.meta.url), 'utf8'),
+  readFile(new URL('../workers/private-source-worker/src/index.ts', import.meta.url), 'utf8'),
   readFile(new URL('./verify-worker-health.mjs', import.meta.url), 'utf8'),
 ]);
 
@@ -36,6 +37,14 @@ assert.match(studioWorker, /K_REVISION/, 'studio readiness must require deployed
 assert.match(studioWorker, /sourceShaExact/, 'studio readiness must bind exact source identity');
 assert.match(studioWorker, /GCS_BUCKET_NAME/, 'studio readiness must require artifact storage');
 assert.match(studioWorker, /ffmpeg/, 'studio readiness must require FFmpeg');
+
+assert.match(privateSourceWorker, /app\.get\('\/readyz'/, 'private-source worker must expose readiness');
+assert.match(privateSourceWorker, /sourceShaExact/, 'private-source readiness must bind exact source identity');
+assert.match(privateSourceWorker, /PRIVATE_SOURCE_AUTHORITY_URL/, 'private-source readiness must require source authority');
+assert.match(privateSourceWorker, /PRIVATE_SOURCE_TRANSCRIBE_URL/, 'private-source readiness must require transcription provider');
+assert.match(privateSourceWorker, /PRIVATE_SOURCE_INDEX_URL/, 'private-source readiness must require memory index provider');
+assert.match(privateSourceWorker, /PRIVATE_SOURCE_INDEX_TOKEN/, 'private-source readiness must require memory index provider auth');
+
 
 assert.match(runtimeVerifier, /\$\{rootUrl\}\/healthz/, 'production verifier must check liveness');
 assert.match(runtimeVerifier, /\$\{rootUrl\}\/readyz/, 'production verifier must check readiness');
