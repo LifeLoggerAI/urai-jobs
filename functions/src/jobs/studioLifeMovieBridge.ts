@@ -19,6 +19,7 @@ import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
 const sceneTruthReceiptSecret = defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC');
 const IDEMPOTENCY_COLLECTION = 'studioLifeMovieBridgeBindings';
+const SCENE_TRUTH_RECEIPT_BINDING_COLLECTION = 'studioSceneTruthReceiptBindings';
 const MAX_BODY_BYTES = 32768;
 
 const IdentitySchema = z.object({
@@ -136,6 +137,8 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   const db = getFirestore();
   const bindingId = buildIdempotencyBindingId(ownerBinding, jobType, input.idempotencyKey);
   const bindingRef = db.collection(IDEMPOTENCY_COLLECTION).doc(bindingId);
+  const sceneTruthBindingId = createHash('sha256').update(payload.sceneTruthReceiptRef).digest('hex');
+  const sceneTruthBindingRef = db.collection(SCENE_TRUTH_RECEIPT_BINDING_COLLECTION).doc(sceneTruthBindingId);
 
   const existing = await bindingRef.get();
   if (existing.exists) {
@@ -170,11 +173,48 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
 
   return db.runTransaction(async (transaction) => {
     const inside = await transaction.get(bindingRef);
+    const sceneTruthInside = await transaction.get(sceneTruthBindingRef);
+
+    if (sceneTruthInside.exists) {
+      const bound = sceneTruthInside.data() as {
+        requestFingerprint?: unknown;
+        ownerUid?: unknown;
+        jobId?: unknown;
+        projectId?: unknown;
+        sceneTruthDigest?: unknown;
+      };
+      const sameReceiptUse =
+        bound.requestFingerprint === requestFingerprint &&
+        bound.ownerUid === ownerBinding &&
+        bound.projectId === payload.projectId &&
+        bound.sceneTruthDigest === payload.sceneTruthDigest &&
+        typeof bound.jobId === 'string' &&
+        bound.jobId.length > 0;
+      if (!sameReceiptUse) throw new Error('scene_truth_receipt_replay_conflict');
+      if (inside.exists) {
+        const binding = inside.data() as Partial<IdempotencyBinding>;
+        if (!bindingMatches(binding, expectedBinding) || binding.jobId !== bound.jobId) {
+          throw new Error('idempotency_conflict');
+        }
+      }
+      return { jobId: bound.jobId as string, deduplicated: true };
+    }
+
     if (inside.exists) {
       const binding = inside.data() as Partial<IdempotencyBinding>;
       if (!bindingMatches(binding, expectedBinding) || typeof binding.jobId !== 'string' || !binding.jobId) {
         throw new Error('idempotency_conflict');
       }
+      transaction.create(sceneTruthBindingRef, {
+        receiptHash: sceneTruthBindingId,
+        ownerUid: ownerBinding,
+        projectId: payload.projectId,
+        sceneTruthDigest: payload.sceneTruthDigest,
+        requestFingerprint,
+        jobId: binding.jobId,
+        expiresAt: new Date(sceneTruthReceipt.expiresAt).toISOString(),
+        createdAt: FieldValue.serverTimestamp(),
+      });
       return { jobId: binding.jobId, deduplicated: true };
     }
 
@@ -209,6 +249,16 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
       ...expectedBinding,
       jobId,
       idempotencyKeyHash: createHash('sha256').update(input.idempotencyKey).digest('hex'),
+      createdAt: now,
+    });
+    transaction.create(sceneTruthBindingRef, {
+      receiptHash: sceneTruthBindingId,
+      ownerUid: ownerBinding,
+      projectId: payload.projectId,
+      sceneTruthDigest: payload.sceneTruthDigest,
+      requestFingerprint,
+      jobId,
+      expiresAt: new Date(sceneTruthReceipt.expiresAt).toISOString(),
       createdAt: now,
     });
     return { jobId, deduplicated: false };
@@ -426,6 +476,7 @@ export const studioLifeMovieBridge = onRequest({
       : code === 'scene_truth_receipt_authority_unavailable' ? 503
       : code === 'scene_truth_receipt_expired' ? 409
       : code === 'invalid_scene_truth_receipt_signature' ? 403
+      : code === 'scene_truth_receipt_replay_conflict' ? 409
       : 400;
     res.status(status).json({ ok: false, error: code });
   }
