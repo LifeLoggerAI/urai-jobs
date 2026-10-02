@@ -15,6 +15,10 @@ for (const marker of [
   "providerGenerationAuthorized: false",
   "spatialRequired: false",
   "sourceStartMs: cue.sourceStartMs + (overlapStart - cue.startMs)",
+  "parseSrtTimestamp",
+  "life_movie_longform_invalid_subtitles",
+  "segmentSubtitleText(value.subtitleText, range.startMs, range.endMs)",
+  "Math.max(cue.startMs, startMs) - startMs",
   "life_movie_longform_segment_audio_budget_exceeded",
   "life_movie_longform_segment_source_budget_exceeded",
 ]) assert.ok(source.includes(marker), `long-form contract missing ${marker}`)
@@ -28,3 +32,6 @@ assert.ok(shortContract.includes('maxDurationMs: 30_000'), 'short synchronous co
 assert.ok(shortContract.includes('maxPixelFrames: 1920 * 1080 * 30 * 15'), 'short 1080p30 pixel-frame budget must remain unchanged')
 
 console.log('Life Movie long-form segmentation contract passed')
+
+assert.doesNotMatch(source, /subtitleText:\s*''/, 'long-form child payloads must not silently discard caption timing')
+assert.match(source, /formatSrtTimestamp\(cue\.startMs\).*formatSrtTimestamp\(cue\.endMs\)/s)

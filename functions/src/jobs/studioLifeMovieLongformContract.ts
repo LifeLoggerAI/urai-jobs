@@ -99,6 +99,59 @@ function childDigest(parentDigest: string, index: number, startMs: number, endMs
     .digest('hex');
 }
 
+type SubtitleCue = { startMs: number; endMs: number; text: string };
+
+function parseSrtTimestamp(value: string) {
+  const match = /^(\d{2}):(\d{2}):(\d{2}),(\d{3})$/.exec(value.trim());
+  if (!match) throw new Error('life_movie_longform_invalid_subtitles');
+  const [, hours, minutes, seconds, millis] = match;
+  const h = Number(hours);
+  const m = Number(minutes);
+  const s = Number(seconds);
+  const ms = Number(millis);
+  if (m > 59 || s > 59) throw new Error('life_movie_longform_invalid_subtitles');
+  return (((h * 60 + m) * 60 + s) * 1000) + ms;
+}
+
+function formatSrtTimestamp(value: number) {
+  const bounded = Math.max(0, Math.trunc(value));
+  const hours = Math.floor(bounded / 3_600_000);
+  const minutes = Math.floor((bounded % 3_600_000) / 60_000);
+  const seconds = Math.floor((bounded % 60_000) / 1000);
+  const millis = bounded % 1000;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
+}
+
+function parseSrt(value: string): SubtitleCue[] {
+  const normalized = value.replace(/\r\n?/g, '\n').trim();
+  if (!normalized) return [];
+  return normalized.split(/\n{2,}/).map((block) => {
+    const lines = block.split('\n');
+    const timeIndex = lines[0]?.includes('-->') ? 0 : 1;
+    const timing = lines[timeIndex] ?? '';
+    const match = /^(\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2},\d{3})(?:\s+.*)?$/.exec(timing.trim());
+    const text = lines.slice(timeIndex + 1).join('\n').trim();
+    if (!match || !text) throw new Error('life_movie_longform_invalid_subtitles');
+    const startMs = parseSrtTimestamp(match[1]);
+    const endMs = parseSrtTimestamp(match[2]);
+    if (endMs <= startMs) throw new Error('life_movie_longform_invalid_subtitles');
+    return { startMs, endMs, text };
+  });
+}
+
+function segmentSubtitleText(value: string, startMs: number, endMs: number) {
+  const cues = parseSrt(value)
+    .filter((cue) => cue.endMs > startMs && cue.startMs < endMs)
+    .map((cue) => ({
+      startMs: Math.max(cue.startMs, startMs) - startMs,
+      endMs: Math.min(cue.endMs, endMs) - startMs,
+      text: cue.text,
+    }));
+  return cues.map((cue, index) =>
+    `${index + 1}\n${formatSrtTimestamp(cue.startMs)} --> ${formatSrtTimestamp(cue.endMs)}\n${cue.text}`
+  ).join('\n\n') + (cues.length ? '\n' : '');
+}
+
 export function planLifeMovieLongformSegments(input: StudioLifeMovieLongformPayload): LifeMovieLongformSegment[] {
   const value = StudioLifeMovieLongformPayloadSchema.parse(input);
   const sourceById = new Map(value.sources.map((source) => [source.id, source]));
@@ -183,7 +236,7 @@ export function planLifeMovieLongformSegments(input: StudioLifeMovieLongformPayl
       sources,
       timeline,
       audioCues,
-      subtitleText: '',
+      subtitleText: segmentSubtitleText(value.subtitleText, range.startMs, range.endMs),
       spatialRequired: false,
       publicReleaseAuthorized: false,
       providerGenerationAuthorized: false,

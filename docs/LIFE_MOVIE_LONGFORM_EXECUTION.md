@@ -64,3 +64,11 @@ children and copies that exact consent context onto every child
 cancel each segment if the consent becomes blocked before or during dispatch.
 Parent cancellation also writes explicit `CANCELLED` queue state for every
 unfinished segment and clears its active lease token.
+
+## Caption continuity
+
+The segment planner now parses SRT fail-closed, clips cues that cross a child
+boundary, rebases them to the child's local timeline, renumbers them, and places
+the resulting SRT in each existing short-render payload. Empty caption tracks
+remain empty; malformed non-empty SRT is rejected instead of silently dropping
+captions.
