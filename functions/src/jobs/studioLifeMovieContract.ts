@@ -13,7 +13,7 @@ export const LIFE_MOVIE_EXECUTION_BUDGET = {
 export const LifeMovieSourceSchema = z.object({
   id: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
   bucket: z.string().trim().min(3).max(255).regex(/^[a-z0-9][a-z0-9._-]+[a-z0-9]$/),
-  objectPath: z.string().trim().min(1).max(1024).refine((value) => !value.startsWith('/') && !value.includes('..') && !value.includes('\\\\'), 'Unsafe object path'),
+  objectPath: z.string().trim().min(1).max(1024).refine((value) => !value.startsWith('/') && !value.includes('..') && !value.includes('\\'), 'Unsafe object path'),
   mimeType: z.enum([
     'image/jpeg', 'image/png', 'image/webp',
     'video/mp4', 'video/quicktime', 'video/webm',
@@ -52,7 +52,7 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
   schemaVersion: z.literal('urai-life-movie-render-v1'),
   projectId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
   renderPlanDigest: z.string().regex(/^[a-f0-9]{64}$/),
-  outputPrefix: z.string().trim().min(1).max(1024).refine((value) => !value.startsWith('/') && !value.includes('..') && !value.includes('\\\\'), 'Unsafe output prefix'),
+  outputPrefix: z.string().trim().min(1).max(1024).refine((value) => !value.startsWith('/') && !value.includes('..') && !value.includes('\\'), 'Unsafe output prefix'),
   width: z.number().int().min(320).max(3840).multipleOf(2).default(1920),
   height: z.number().int().min(320).max(3840).multipleOf(2).default(1080),
   fps: z.union([z.literal(24), z.literal(25), z.literal(30), z.literal(50), z.literal(60)]).default(30),
