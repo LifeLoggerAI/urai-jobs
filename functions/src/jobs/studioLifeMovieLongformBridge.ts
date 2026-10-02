@@ -310,12 +310,15 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
           decisionReceiptId: input.consent.decisionReceiptId,
         },
         retryCount: 0,
-        execution: { attemptCount: 0, maxAttempts: 2 },
+        execution: {
+          attemptCount: 0,
+          maxAttempts: 2,
+          rootJobId: planId,
+          parentJobId: planId,
+          correlationId: planId,
+        },
         sourceSystem: 'urai-studio',
         sourceProject: 'urai-studio',
-        rootJobId: planId,
-        parentJobId: planId,
-        correlationId: planId,
       };
       const queue: JobQueueEntry = {
         jobId,
