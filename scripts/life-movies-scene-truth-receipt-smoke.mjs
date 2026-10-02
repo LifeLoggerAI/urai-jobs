@@ -48,7 +48,7 @@ assert.deepEqual(
 );
 
 const expiredToken = (nowMs - 1).toString(36);
-const expired = sign(projectId, digest, expiredToken);
+const expired = sign(projectId, digest, ownerUid, expiredToken);
 assert.deepEqual(
   JSON.parse(JSON.stringify(verifySceneTruthReceiptValue(projectId, digest, ownerUid, expired, secret, nowMs))),
   { ok: false, code: 'scene_truth_receipt_expired' },
