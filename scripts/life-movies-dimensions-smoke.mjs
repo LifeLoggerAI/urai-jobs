@@ -21,7 +21,7 @@ vm.runInNewContext(fs.readFileSync(new URL('../workers/studio-worker/index.js', 
   },
 });
 const payload = {
-  schemaVersion: 'urai-life-movie-render-v1', projectId: 'project-1', renderPlanDigest: 'a'.repeat(64),
+  schemaVersion: 'urai-life-movie-render-v1', projectId: 'project-1', renderPlanDigest: 'a'.repeat(64), sceneTruthReceiptRef: 'str_fixture_truth_receipt_0001',
   outputPrefix: 'tenants/tenant-1/life-movies/project-1/render-1',
   width: 1920, height: 1080, fps: 30,
   sources: [{ id: 'source-1', bucket: 'private-fixture-bucket', objectPath: 'tenants/tenant-1/source.png', mimeType: 'image/png', provenance: 'original-source', sourceRefs: ['fixture'], consentRef: 'consent-1', ownerOrRightsRef: 'rights-1' }],
