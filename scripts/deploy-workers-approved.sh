@@ -17,6 +17,10 @@ URAI_WHEEL_GITHUB_TOKEN_SECRET="${URAI_WHEEL_GITHUB_TOKEN_SECRET:-urai-wheel-git
 URAI_JOBS_CALLBACK_SECRET_NAME="${URAI_JOBS_CALLBACK_SECRET_NAME:-urai-jobs-callback-secret}"
 URAI_NARRATOR_ELEVENLABS_ENABLED="${URAI_NARRATOR_ELEVENLABS_ENABLED:-false}"
 ELEVENLABS_API_KEY_SECRET="${ELEVENLABS_API_KEY_SECRET:-ELEVENLABS_API_KEY}"
+PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET="${PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET:-urai-private-source-authority-token}"
+PRIVATE_SOURCE_TRANSCRIBE_TOKEN_SECRET="${PRIVATE_SOURCE_TRANSCRIBE_TOKEN_SECRET:-urai-private-source-transcribe-token}"
+PRIVATE_SOURCE_INDEX_TOKEN_SECRET="${PRIVATE_SOURCE_INDEX_TOKEN_SECRET:-urai-private-source-index-token}"
+CAPTURED_REALITY_ENGINE_TOKEN_SECRET="${CAPTURED_REALITY_ENGINE_TOKEN_SECRET:-urai-captured-reality-engine-token}"
 DEPLOY_RECEIPT_PATH="${DEPLOY_RECEIPT_PATH:-docs/release-evidence/worker-deploy-receipt.json}"
 WORKER_BUILD_PROVENANCE_PATH="${WORKER_BUILD_PROVENANCE_PATH:-docs/release-evidence/worker-build-provenance.json}"
 
@@ -36,6 +40,7 @@ trap cleanup_worker_build_source EXIT
 
 export REAL_GCLOUD WORKERS_CSV URAI_JOBS_WORKER_TOKEN_SECRET URAI_WHEEL_GITHUB_TOKEN_SECRET URAI_JOBS_CALLBACK_SECRET_NAME
 export URAI_NARRATOR_ELEVENLABS_ENABLED ELEVENLABS_API_KEY_SECRET
+export PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET PRIVATE_SOURCE_TRANSCRIBE_TOKEN_SECRET PRIVATE_SOURCE_INDEX_TOKEN_SECRET CAPTURED_REALITY_ENGINE_TOKEN_SECRET
 export DEPLOY_RECEIPT_PATH WORKER_BUILD_PROVENANCE_PATH WORKER_BUILD_SOURCE_ROOT WORKER_BUILD_SOURCE_LEDGER
 
 SOURCE_SHA="$GITHUB_SHA" LEDGER_PATH="$WORKER_BUILD_SOURCE_LEDGER" node <<'NODE'
@@ -51,7 +56,7 @@ NODE
 
 required_bindings_json="$(WORKERS_CSV="$WORKERS_CSV" URAI_NARRATOR_ELEVENLABS_ENABLED="$URAI_NARRATOR_ELEVENLABS_ENABLED" node <<'NODE'
 const workers = String(process.env.WORKERS_CSV || '').split(',').map((value) => value.trim()).filter(Boolean);
-const allowed = new Set(['narrator-worker', 'asset-worker', 'studio-worker']);
+const allowed = new Set(['narrator-worker', 'asset-worker', 'studio-worker', 'private-source-worker', 'captured-reality-worker']);
 if (!workers.length || workers.some((worker) => !allowed.has(worker)) || new Set(workers).size !== workers.length) {
   throw new Error('URAI_JOBS_DEPLOY_WORKERS must contain unique approved workers only.');
 }
@@ -62,6 +67,15 @@ if (workers.includes('asset-worker')) {
 }
 if (workers.includes('narrator-worker') && process.env.URAI_NARRATOR_ELEVENLABS_ENABLED === 'true') {
   bindings.add('ELEVENLABS_API_KEY');
+}
+if (workers.includes('private-source-worker')) {
+  bindings.add('PRIVATE_SOURCE_AUTHORITY_TOKEN');
+  bindings.add('PRIVATE_SOURCE_TRANSCRIBE_TOKEN');
+  bindings.add('PRIVATE_SOURCE_INDEX_TOKEN');
+}
+if (workers.includes('captured-reality-worker')) {
+  bindings.add('PRIVATE_SOURCE_AUTHORITY_TOKEN');
+  bindings.add('CAPTURED_REALITY_ENGINE_TOKEN');
 }
 process.stdout.write(JSON.stringify([...bindings].sort()));
 NODE
@@ -90,6 +104,10 @@ logical_binding_for_secret() {
     "$URAI_WHEEL_GITHUB_TOKEN_SECRET") printf '%s' 'URAI_WHEEL_GITHUB_TOKEN' ;;
     "$URAI_JOBS_CALLBACK_SECRET_NAME") printf '%s' 'URAI_JOBS_CALLBACK_SECRET' ;;
     "$ELEVENLABS_API_KEY_SECRET") printf '%s' 'ELEVENLABS_API_KEY' ;;
+    "$PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET") printf '%s' 'PRIVATE_SOURCE_AUTHORITY_TOKEN' ;;
+    "$PRIVATE_SOURCE_TRANSCRIBE_TOKEN_SECRET") printf '%s' 'PRIVATE_SOURCE_TRANSCRIBE_TOKEN' ;;
+    "$PRIVATE_SOURCE_INDEX_TOKEN_SECRET") printf '%s' 'PRIVATE_SOURCE_INDEX_TOKEN' ;;
+    "$CAPTURED_REALITY_ENGINE_TOKEN_SECRET") printf '%s' 'CAPTURED_REALITY_ENGINE_TOKEN' ;;
     *) return 1 ;;
   esac
 }
@@ -127,6 +145,24 @@ if [[ ",$WORKERS_CSV," == *",narrator-worker,"* ]] && [ "$URAI_NARRATOR_ELEVENLA
   [ "$state" = "ENABLED" ] || { echo "[FAIL] Approved version $version for $ELEVENLABS_API_KEY_SECRET is not ENABLED" >&2; exit 1; }
 fi
 
+if [[ ",$WORKERS_CSV," == *",private-source-worker,"* ]]; then
+  for secret_name in "$PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET" "$PRIVATE_SOURCE_TRANSCRIBE_TOKEN_SECRET" "$PRIVATE_SOURCE_INDEX_TOKEN_SECRET"; do
+    binding="$(logical_binding_for_secret "$secret_name")"
+    version="$(approved_version_for_binding "$binding")"
+    state="$($REAL_GCLOUD secrets versions describe "$version" --secret "$secret_name" --project "$GCLOUD_PROJECT" --format='value(state)')"
+    [ "$state" = "ENABLED" ] || { echo "[FAIL] Approved version $version for $secret_name is not ENABLED" >&2; exit 1; }
+  done
+fi
+
+if [[ ",$WORKERS_CSV," == *",captured-reality-worker,"* ]]; then
+  for secret_name in "$PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET" "$CAPTURED_REALITY_ENGINE_TOKEN_SECRET"; do
+    binding="$(logical_binding_for_secret "$secret_name")"
+    version="$(approved_version_for_binding "$binding")"
+    state="$($REAL_GCLOUD secrets versions describe "$version" --secret "$secret_name" --project "$GCLOUD_PROJECT" --format='value(state)')"
+    [ "$state" = "ENABLED" ] || { echo "[FAIL] Approved version $version for $secret_name is not ENABLED" >&2; exit 1; }
+  done
+fi
+
 prepare_worker_build_source() {
   local source_dir="$1"
   local worker="${source_dir##*/}"
@@ -135,7 +171,7 @@ prepare_worker_build_source() {
   local archive_path="$WORKER_BUILD_SOURCE_ROOT/$worker-$GITHUB_SHA.tgz"
 
   case "$worker" in
-    narrator-worker|asset-worker|studio-worker) ;;
+    narrator-worker|asset-worker|studio-worker|private-source-worker|captured-reality-worker) ;;
     *) echo "[FAIL] Unapproved worker source directory: $source_dir" >&2; return 1 ;;
   esac
   [ "$source_dir" = "$canonical_dir" ] || {
@@ -271,7 +307,20 @@ for (const service of services) {
           URAI_JOBS_WORKER_TOKEN: String(approval.URAI_JOBS_WORKER_TOKEN),
           ELEVENLABS_API_KEY: String(approval.ELEVENLABS_API_KEY),
         }
-      : { URAI_JOBS_WORKER_TOKEN: String(approval.URAI_JOBS_WORKER_TOKEN) };
+      : service.worker === 'private-source-worker'
+        ? {
+            URAI_JOBS_WORKER_TOKEN: String(approval.URAI_JOBS_WORKER_TOKEN),
+            PRIVATE_SOURCE_AUTHORITY_TOKEN: String(approval.PRIVATE_SOURCE_AUTHORITY_TOKEN),
+            PRIVATE_SOURCE_TRANSCRIBE_TOKEN: String(approval.PRIVATE_SOURCE_TRANSCRIBE_TOKEN),
+            PRIVATE_SOURCE_INDEX_TOKEN: String(approval.PRIVATE_SOURCE_INDEX_TOKEN),
+          }
+        : service.worker === 'captured-reality-worker'
+          ? {
+              URAI_JOBS_WORKER_TOKEN: String(approval.URAI_JOBS_WORKER_TOKEN),
+              PRIVATE_SOURCE_AUTHORITY_TOKEN: String(approval.PRIVATE_SOURCE_AUTHORITY_TOKEN),
+              CAPTURED_REALITY_ENGINE_TOKEN: String(approval.CAPTURED_REALITY_ENGINE_TOKEN),
+            }
+          : { URAI_JOBS_WORKER_TOKEN: String(approval.URAI_JOBS_WORKER_TOKEN) };
   if (JSON.stringify(service.secretVersions) !== JSON.stringify(expected)) {
     throw new Error(`${service.worker} deployed secret versions do not equal the explicit target approval.`);
   }
