@@ -238,6 +238,10 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
       );
     }
   }
+    throw httpsError(
+      'failed-precondition',
+      'studio.render.video must be created through the dedicated authenticated Studio Life Movie bridge so the SceneTruth receipt can be cryptographically verified.'
+    );
 
   const payloadBytes = payloadSizeBytes(payload);
   if (payloadBytes > MAX_PAYLOAD_BYTES) {
