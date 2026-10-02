@@ -107,7 +107,7 @@ assert.ok(bridge.includes("sceneTruthReceiptRef: typeof typed.sceneTruthReceiptR
 assert.ok(sharedContract.includes("sceneTruthDigest: z.string().trim().regex(/^[a-f0-9]{64}$/)"), 'Jobs admission must require exact SceneTruth digest syntax');
 assert.ok(worker.includes("invalid_scene_truth_digest"), 'Studio worker must reject missing or malformed SceneTruth digests');
 assert.ok(worker.includes("sceneTruthDigest: input.sceneTruthDigest"), 'Render manifest must retain SceneTruth digest provenance');
-assert.ok(bridge.includes("verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, payload.sceneTruthReceiptRef)"), 'Dedicated bridge must cryptographically verify SceneTruth receipt against project and digest');
+assert.ok(bridge.includes("verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, input.userId, payload.sceneTruthReceiptRef)"), 'Dedicated bridge must cryptographically verify SceneTruth receipt against project, digest, and owner identity');
 assert.ok(bridge.includes("defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC')"), 'Dedicated bridge must bind SceneTruth HMAC secret');
 
 assert.ok(
