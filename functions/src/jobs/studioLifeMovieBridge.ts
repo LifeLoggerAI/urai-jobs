@@ -65,6 +65,7 @@ type WorkerOutputArtifact = { kind?: unknown; ref?: unknown; mimeType?: unknown;
 type WorkerOutput = {
   outputs?: WorkerOutputArtifact[];
   renderPlanDigest?: unknown;
+  sceneTruthReceiptRef?: unknown;
   providerCalled?: unknown;
   providerSpendAuthorized?: unknown;
   publicReleaseAuthorized?: unknown;
@@ -81,6 +82,7 @@ function sanitizedOutput(output: unknown) {
   return {
     artifacts,
     renderPlanDigest: typeof typed.renderPlanDigest === 'string' ? typed.renderPlanDigest : undefined,
+    sceneTruthReceiptRef: typeof typed.sceneTruthReceiptRef === 'string' ? typed.sceneTruthReceiptRef : undefined,
     providerCalled: typed.providerCalled === true,
     providerSpendAuthorized: typed.providerSpendAuthorized === true,
     publicReleaseAuthorized: typed.publicReleaseAuthorized === true,
@@ -175,6 +177,7 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
         ownerUid: input.userId,
         projectId: payload.projectId,
         renderPlanDigest: payload.renderPlanDigest,
+        sceneTruthReceiptRef: payload.sceneTruthReceiptRef,
       },
       createdAt: now,
     });
