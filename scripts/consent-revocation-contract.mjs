@@ -27,7 +27,8 @@ ok(
 );
 ok(
   "private-source creation requires consent",
-  createJob.includes("Private-source transcription requires canonical consent context")
+  createJob.includes("Private-source processing requires canonical consent context: purpose, policy version, and decision receipt.")
+    && createJob.includes("jobType === 'memory.private-source.transcribe' || jobType === 'memory.private-source.index'")
     && createJob.includes("Captured Reality reconstruction requires exactly memory.storage and location.context consent receipts.")
 );
 ok("consent block collection exists", blocks.includes("jobConsentBlocks"));
