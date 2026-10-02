@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { defineSecret } from 'firebase-functions/params';
@@ -14,6 +14,7 @@ import {
   type IdempotencyBinding,
 } from '../core/jobsReliability.js';
 import { StudioLifeMovieRenderPayloadSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
+import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
 const sceneTruthReceiptSecret = defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC');
@@ -67,29 +68,12 @@ function configuredSceneTruthSecret() {
 }
 
 function verifySceneTruthReceipt(projectId: string, digest: string, receiptRef: string) {
-  const secret = configuredSceneTruthSecret();
-  if (!secret || Buffer.byteLength(secret, 'utf8') < 32) throw new Error('scene_truth_receipt_authority_unavailable');
-
-  const match = /^str_([A-Za-z0-9_-]{16,64})_([a-z0-9]{8,16})_([A-Za-z0-9_-]{40,64})$/.exec(receiptRef);
-  if (!match) throw new Error('invalid_scene_truth_receipt_ref');
-
-  const [, receiptId, expiryToken, suppliedSignature] = match;
-  const expiresAt = Number.parseInt(expiryToken, 36);
-  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw new Error('scene_truth_receipt_expired');
-
-  const message = `${receiptId}\n${projectId}\n${digest}\n${expiryToken}`;
-  const expected = createHmac('sha256', secret).update(message).digest();
-  let supplied: Buffer;
-  try {
-    supplied = Buffer.from(suppliedSignature, 'base64url');
-  } catch {
-    throw new Error('invalid_scene_truth_receipt_signature');
-  }
-  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
-    throw new Error('invalid_scene_truth_receipt_signature');
-  }
-
-  return { expiresAt };
+  return assertSceneTruthReceiptValue(
+    projectId,
+    digest,
+    receiptRef,
+    configuredSceneTruthSecret(),
+  );
 }
 
 function jsonBytes(value: unknown) {
