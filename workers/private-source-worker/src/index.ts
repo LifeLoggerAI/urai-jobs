@@ -57,33 +57,49 @@ type PrivatePayload = {
   requestedPurpose: 'transcribe' | 'memory-index';
   locale?: string;
   requestReceipt?: string;
+  transcriptRef?: string;
+  provenanceRef?: string;
 };
 
-function validateJob(body: any): { jobId: string; ownerUid: string; payload: PrivatePayload } {
+function validateJob(body: any): { jobId: string; jobType: 'memory.private-source.transcribe' | 'memory.private-source.index'; ownerUid: string; payload: PrivatePayload } {
   const jobId = String(body?.jobId || body?.id || '').trim();
   const jobType = String(body?.jobType || body?.type || '').trim();
   const ownerUid = String(body?.ownerUid || '').trim();
   const payload = body?.payload && typeof body.payload === 'object' ? body.payload : {};
-  const keys = Object.keys(payload).sort();
-  const allowed = ['locale', 'requestReceipt', 'requestedPurpose', 'sourceReceiptRef'];
 
   if (!jobId) throw new Error('jobId is required');
-  if (jobType !== 'memory.private-source.transcribe') throw new Error('unsupported private-source job type');
+  if (!['memory.private-source.transcribe', 'memory.private-source.index'].includes(jobType)) {
+    throw new Error('unsupported private-source job type');
+  }
   if (!ownerUid) throw new Error('server-owned ownerUid is required');
+
+  const allowed = jobType === 'memory.private-source.index'
+    ? ['locale', 'provenanceRef', 'requestReceipt', 'requestedPurpose', 'sourceReceiptRef', 'transcriptRef']
+    : ['locale', 'requestReceipt', 'requestedPurpose', 'sourceReceiptRef'];
+  const keys = Object.keys(payload).sort();
   if (keys.some((key) => !allowed.includes(key))) throw new Error('private-source payload contains forbidden fields');
   if (!SOURCE_RECEIPT.test(String(payload.sourceReceiptRef || ''))) throw new Error('invalid opaque sourceReceiptRef');
   if (!['transcribe', 'memory-index'].includes(String(payload.requestedPurpose || ''))) throw new Error('invalid requestedPurpose');
   if (payload.requestReceipt && !REQUEST_RECEIPT.test(String(payload.requestReceipt))) throw new Error('invalid requestReceipt');
   if (payload.locale && !/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(String(payload.locale))) throw new Error('invalid locale');
 
+  if (jobType === 'memory.private-source.index') {
+    if (payload.requestedPurpose !== 'memory-index') throw new Error('memory index job requires memory-index purpose');
+    if (!PRIVATE_REF.test(String(payload.transcriptRef || ''))) throw new Error('invalid private transcriptRef');
+    if (!PRIVATE_REF.test(String(payload.provenanceRef || ''))) throw new Error('invalid private provenanceRef');
+  }
+
   return {
     jobId,
+    jobType: jobType as 'memory.private-source.transcribe' | 'memory.private-source.index',
     ownerUid,
     payload: {
       sourceReceiptRef: String(payload.sourceReceiptRef),
       requestedPurpose: String(payload.requestedPurpose) as PrivatePayload['requestedPurpose'],
       ...(payload.locale ? { locale: String(payload.locale) } : {}),
       ...(payload.requestReceipt ? { requestReceipt: String(payload.requestReceipt) } : {}),
+      ...(payload.transcriptRef ? { transcriptRef: String(payload.transcriptRef) } : {}),
+      ...(payload.provenanceRef ? { provenanceRef: String(payload.provenanceRef) } : {}),
     },
   };
 }
@@ -97,6 +113,8 @@ function readiness() {
     authorityToken: Boolean(process.env.PRIVATE_SOURCE_AUTHORITY_TOKEN),
     transcribeUrl: Boolean(process.env.PRIVATE_SOURCE_TRANSCRIBE_URL),
     transcribeToken: Boolean(process.env.PRIVATE_SOURCE_TRANSCRIBE_TOKEN),
+    indexUrl: Boolean(process.env.PRIVATE_SOURCE_INDEX_URL),
+    indexToken: Boolean(process.env.PRIVATE_SOURCE_INDEX_TOKEN),
   };
   return { checks, ok: Object.values(checks).every(Boolean) };
 }
@@ -170,6 +188,60 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
     const sourceHandle = String(authorization.data?.sourceHandle || '');
     if (!SOURCE_HANDLE.test(sourceHandle)) {
       throw new Error('authority returned an invalid opaque source handle');
+    }
+
+    if (job.jobType === 'memory.private-source.index') {
+      const indexUrl = httpsUrl('PRIVATE_SOURCE_INDEX_URL');
+      const provider = await axios.post(
+        indexUrl,
+        {
+          sourceHandle,
+          transcriptRef: job.payload.transcriptRef,
+          provenanceRef: job.payload.provenanceRef,
+          requestedPurpose: 'memory-index',
+          locale: job.payload.locale,
+          idempotencyKey: job.jobId,
+        },
+        {
+          timeout: 120_000,
+          headers: { Authorization: `Bearer ${process.env.PRIVATE_SOURCE_INDEX_TOKEN}` },
+          validateStatus: () => true,
+        },
+      );
+
+      if (provider.status !== 200 || provider.data?.ok !== true) {
+        throw new Error(`private memory index provider failed with status ${provider.status}`);
+      }
+
+      const memoryIndexRef = String(provider.data?.memoryIndexRef || '');
+      const entityGraphRef = String(provider.data?.entityGraphRef || '');
+      const temporalIndexRef = String(provider.data?.temporalIndexRef || '');
+      const placeIndexRef = String(provider.data?.placeIndexRef || '');
+      const conflictSetRef = String(provider.data?.conflictSetRef || '');
+      const sceneTruthRef = String(provider.data?.sceneTruthRef || '');
+      const provenanceRef = String(provider.data?.provenanceRef || '');
+      const checksum = String(provider.data?.checksum || '');
+      const refs = [memoryIndexRef, entityGraphRef, temporalIndexRef, placeIndexRef, conflictSetRef, sceneTruthRef, provenanceRef];
+      if (refs.some((ref) => !PRIVATE_REF.test(ref)) || !SHA256.test(checksum)) {
+        throw new Error('memory index provider response is missing private refs or integrity checksum');
+      }
+
+      return res.status(200).send({
+        ok: true,
+        jobId: job.jobId,
+        jobType: job.jobType,
+        result: {
+          memoryIndexRef,
+          entityGraphRef,
+          temporalIndexRef,
+          placeIndexRef,
+          conflictSetRef,
+          sceneTruthRef,
+          provenanceRef,
+          checksum,
+          requestedPurpose: 'memory-index',
+        },
+      });
     }
 
     const provider = await axios.post(
