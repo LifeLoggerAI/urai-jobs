@@ -89,6 +89,13 @@ function validateJob(body: any): { jobId: string; jobType: 'memory.private-sourc
     if (payload.requestedPurpose !== 'memory-index') throw new Error('memory index job requires memory-index purpose');
     if (!PRIVATE_REF.test(String(payload.transcriptRef || ''))) throw new Error('invalid private transcriptRef');
     if (!PRIVATE_REF.test(String(payload.provenanceRef || ''))) throw new Error('invalid private provenanceRef');
+    if (payload.priorMemoryIndexRef && !PRIVATE_REF.test(String(payload.priorMemoryIndexRef))) {
+      throw new Error('memory index priorMemoryIndexRef must remain private and opaque');
+    }
+    const correlationTrigger = String(payload.correlationTrigger || 'initial-source');
+    if (!['initial-source', 'new-source', 'correction', 'stronger-source'].includes(correlationTrigger)) {
+      throw new Error('memory index correlationTrigger is invalid');
+    }
   }
 
   return {
@@ -102,8 +109,12 @@ function validateJob(body: any): { jobId: string; jobType: 'memory.private-sourc
       ...(payload.requestReceipt ? { requestReceipt: String(payload.requestReceipt) } : {}),
       ...(payload.transcriptRef ? { transcriptRef: String(payload.transcriptRef) } : {}),
       ...(payload.provenanceRef ? { provenanceRef: String(payload.provenanceRef) } : {}),
-      ...(payload.priorMemoryIndexRef ? { priorMemoryIndexRef: String(payload.priorMemoryIndexRef) } : {}),
-      correlationTrigger: (payload.correlationTrigger || 'initial-source') as NonNullable<PrivatePayload['correlationTrigger']>,
+      ...(jobType === 'memory.private-source.index' && payload.priorMemoryIndexRef
+        ? { priorMemoryIndexRef: String(payload.priorMemoryIndexRef) }
+        : {}),
+      ...(jobType === 'memory.private-source.index'
+        ? { correlationTrigger: (payload.correlationTrigger || 'initial-source') as NonNullable<PrivatePayload['correlationTrigger']> }
+        : {}),
     },
   };
 }
