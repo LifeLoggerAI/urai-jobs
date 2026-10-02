@@ -354,9 +354,9 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
 
 export const executeJob = onMessagePublished({
   topic: JOB_EXECUTION_TOPIC,
-  // 110s render + 10s transport allowance + bounded bookkeeping headroom.
-  // The function must outlive its existing worker request, not abandon it.
-  timeoutSeconds: 180,
+  // Short renders remain capped at 120s. Long-form assembly is a separate bounded job
+  // with a larger lease-fenced transport window; it never expands the short renderer.
+  timeoutSeconds: 540,
   secrets: [workerTokenSecret, tinyFishApiKeySecret],
 }, async (event) => {
   const validationResult = JobExecutionMessageSchema.safeParse(event.data.message.json);
@@ -533,7 +533,9 @@ export const executeJob = onMessagePublished({
         headers: getWorkerAuthHeaders(),
         timeout: jobType === 'studio.render.video'
           ? 120000
-          : Math.max(1, Math.min(120000, parseInt(process.env.URAI_JOBS_WORKER_TIMEOUT_MS || '', 10) || 120000)),
+          : jobType === 'studio.assemble.video'
+            ? 480000
+            : Math.max(1, Math.min(120000, parseInt(process.env.URAI_JOBS_WORKER_TIMEOUT_MS || '', 10) || 120000)),
         validateStatus: (status) => status >= 200 && status < 300,
       });
 
