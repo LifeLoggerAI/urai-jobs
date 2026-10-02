@@ -39,7 +39,7 @@ for (const marker of [
   "allowedBuckets.has(videoLocation.bucket)",
   "allowedBuckets.has(subtitleLocation.bucket)",
   "Date.now() + 5 * 60 * 1000",
-  "responseDisposition: 'inline'",
+  "responseDisposition: disposition",
   "schemaVersion: 'urai-life-movie-private-playlist-v1'",
   "gapBeforeMs",
   "playlistDigest",
