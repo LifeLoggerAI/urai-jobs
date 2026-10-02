@@ -664,7 +664,10 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
   const db = getFirestore();
   const childRefs = plan.childJobIds.map((jobId) => jobDoc(jobId));
   return db.runTransaction(async (transaction) => {
-    const snapshots = childRefs.length ? await transaction.getAll(...childRefs) : [];
+    const [snapshots, assemblySnapshot] = await Promise.all([
+      childRefs.length ? transaction.getAll(...childRefs) : Promise.resolve([]),
+      plan.assemblyJobId ? transaction.get(jobDoc(plan.assemblyJobId)) : Promise.resolve(null),
+    ]);
     const now = FieldValue.serverTimestamp();
     let resumedChildren = 0;
 
@@ -703,10 +706,9 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
     }
 
     let assemblyResumed = false;
-    if (plan.assemblyJobId) {
+    if (plan.assemblyJobId && assemblySnapshot?.exists) {
       const assemblyRef = jobDoc(plan.assemblyJobId);
-      const assemblySnapshot = await transaction.get(assemblyRef);
-      if (assemblySnapshot.exists) {
+      {
         const assembly = assemblySnapshot.data() as Job;
         if (['FAILED', 'DEAD', 'CANCELLED'].includes(String(assembly.status))) {
           transaction.update(assemblyRef, {
@@ -826,7 +828,10 @@ async function cancelPlan(planId: string, tenantId: string, userId: string) {
     if (!planSnapshot.exists) throw new Error('longform_plan_not_found');
     const plan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
     const childRefs = plan.childJobIds.map((jobId) => jobDoc(jobId));
-    const childSnapshots = childRefs.length ? await transaction.getAll(...childRefs) : [];
+    const [childSnapshots, assemblySnapshot] = await Promise.all([
+      childRefs.length ? transaction.getAll(...childRefs) : Promise.resolve([]),
+      plan.assemblyJobId ? transaction.get(jobDoc(plan.assemblyJobId)) : Promise.resolve(null),
+    ]);
     const now = FieldValue.serverTimestamp();
     let cancelledChildren = 0;
 
@@ -854,10 +859,9 @@ async function cancelPlan(planId: string, tenantId: string, userId: string) {
     }
 
     let assemblyCancelled = false;
-    if (plan.assemblyJobId) {
+    if (plan.assemblyJobId && assemblySnapshot?.exists) {
       const assemblyRef = jobDoc(plan.assemblyJobId);
-      const assemblySnapshot = await transaction.get(assemblyRef);
-      if (assemblySnapshot.exists) {
+      {
         const assembly = assemblySnapshot.data() as Job;
         if (!TERMINAL.has(assembly.status)) {
           transaction.update(assemblyRef, {
