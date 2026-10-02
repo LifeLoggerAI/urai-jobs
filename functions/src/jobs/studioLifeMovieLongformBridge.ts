@@ -46,7 +46,7 @@ const CreateSchema = IdentitySchema.extend({
 }).strict();
 
 const PlanActionSchema = IdentitySchema.extend({
-  action: z.enum(['status', 'cancel', 'playback']),
+  action: z.enum(['status', 'cancel', 'playback', 'resume', 'delete-output']),
   planId: z.string().trim().regex(/^lmp_[A-Za-z0-9_-]{20,64}$/),
 }).strict();
 
@@ -121,6 +121,7 @@ type StoredPlan = {
   renderPlanDigest: string;
   sceneTruthDigest: string;
   sceneTruthReceiptRef: string;
+  consent: { purpose: 'life-movie.render'; policyVersion: string; decisionReceiptId: string };
   childJobIds: string[];
   segments: Array<{
     index: number;
@@ -175,6 +176,13 @@ function deriveStatus(plan: StoredPlan, statuses: JobStatus[]) {
   if (statuses.every((status) => TERMINAL.has(status)) && statuses.some((status) => status === 'CANCELLED')) return 'CANCELLED';
   if (statuses.some((status) => status === 'RUNNING' || status === 'LEASED')) return 'RUNNING';
   return 'PENDING';
+}
+
+async function assertPlanConsentActive(plan: StoredPlan) {
+  const snapshot = await consentBlockRef(plan.ownerUid, plan.consent.purpose).get();
+  if (snapshot.exists && snapshot.data()?.active === true) {
+    throw new Error('life_movie_longform_consent_revoked');
+  }
 }
 
 async function createPlan(input: z.infer<typeof CreateSchema>) {
@@ -361,6 +369,8 @@ async function loadPlan(planId: string, tenantId: string, userId: string) {
 
 async function readPlanStatus(planId: string, tenantId: string, userId: string) {
   const plan = await loadPlan(planId, tenantId, userId);
+  const consentSnapshot = await consentBlockRef(plan.ownerUid, plan.consent.purpose).get();
+  const revoked = consentSnapshot.exists && consentSnapshot.data()?.active === true;
   const db = getFirestore();
   const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
   const children = snapshots.map((snapshot, index) => {
@@ -378,7 +388,8 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
   }, {});
   return {
     planId,
-    status: deriveStatus(plan, statuses),
+    status: revoked ? 'REVOKED' : deriveStatus(plan, statuses),
+    consentRevoked: revoked,
     segmentCount: children.length,
     counts,
     children,
@@ -390,6 +401,7 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
 
 async function readPlanPlayback(planId: string, tenantId: string, userId: string) {
   const plan = await loadPlan(planId, tenantId, userId);
+  await assertPlanConsentActive(plan);
   const db = getFirestore();
   const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
   const jobs = snapshots.map((snapshot) => snapshot.exists ? snapshot.data() : undefined);
@@ -474,6 +486,111 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
     playlistDigest,
     publicReleaseAuthorized: false,
     segments,
+  };
+}
+
+async function resumePlan(planId: string, tenantId: string, userId: string) {
+  const plan = await loadPlan(planId, tenantId, userId);
+  if (plan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
+  await assertPlanConsentActive(plan);
+
+  const db = getFirestore();
+  const childRefs = plan.childJobIds.map((jobId) => jobDoc(jobId));
+  return db.runTransaction(async (transaction) => {
+    const snapshots = childRefs.length ? await transaction.getAll(...childRefs) : [];
+    const now = FieldValue.serverTimestamp();
+    let resumedChildren = 0;
+
+    for (const [index, snapshot] of snapshots.entries()) {
+      if (!snapshot.exists) continue;
+      const child = snapshot.data() as Job;
+      if (!['FAILED', 'DEAD', 'CANCELLED'].includes(String(child.status))) continue;
+      const jobId = plan.childJobIds[index];
+      transaction.update(childRefs[index], {
+        status: 'PENDING',
+        retryCount: 0,
+        error: FieldValue.delete(),
+        result: FieldValue.delete(),
+        completedAt: FieldValue.delete(),
+        lease: FieldValue.delete(),
+        updatedAt: now,
+        'execution.attemptCount': 0,
+        'execution.completedAt': FieldValue.delete(),
+        'execution.leaseToken': FieldValue.delete(),
+        'execution.asyncCallbackPending': false,
+        'execution.callbackTokenHash': FieldValue.delete(),
+        'execution.callbackLeaseToken': FieldValue.delete(),
+        'execution.callbackDeadlineAt': FieldValue.delete(),
+      });
+      transaction.set(jobQueueEntryDoc(jobId), {
+        jobId,
+        jobType: 'studio.render.video',
+        status: 'PENDING',
+        attemptCount: 0,
+        retryCount: 0,
+        availableAt: now,
+        lease: FieldValue.delete(),
+        updatedAt: now,
+      }, { merge: true });
+      resumedChildren += 1;
+    }
+
+    transaction.update(planRef(planId), {
+      status: 'PENDING',
+      resumedAt: now,
+      resumedBy: userId,
+      updatedAt: now,
+    });
+    return { planId, resumedChildren };
+  });
+}
+
+async function deletePlanOutputs(planId: string, tenantId: string, userId: string) {
+  const plan = await loadPlan(planId, tenantId, userId);
+  const db = getFirestore();
+  const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
+  const allowedBuckets = allowedLifeMovieOutputBuckets();
+  const requiredPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/segments/`;
+  const deletions: Array<{ bucket: string; objectPath: string }> = [];
+
+  for (const snapshot of snapshots) {
+    if (!snapshot.exists) continue;
+    const job = snapshot.data() as Job;
+    const output = job.output as WorkerOutput | undefined;
+    for (const artifact of Array.isArray(output?.outputs) ? output!.outputs! : []) {
+      if (typeof artifact?.ref !== 'string' || !artifact.ref.startsWith('gs://')) continue;
+      const location = parseGcsRef(artifact.ref);
+      if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(requiredPrefix)) {
+        throw new Error('longform_output_boundary_mismatch');
+      }
+      deletions.push(location);
+    }
+  }
+
+  await Promise.all(deletions.map(({ bucket, objectPath }) =>
+    getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true })));
+
+  const now = FieldValue.serverTimestamp();
+  const batch = db.batch();
+  for (const jobId of plan.childJobIds) {
+    batch.update(jobDoc(jobId), {
+      output: FieldValue.delete(),
+      outputDeletedAt: now,
+      outputDeletedBy: userId,
+      updatedAt: now,
+    });
+  }
+  batch.update(planRef(planId), {
+    outputDeletedAt: now,
+    outputDeletedBy: userId,
+    updatedAt: now,
+  });
+  await batch.commit();
+
+  return {
+    planId,
+    deletedObjectCount: deletions.length,
+    retainedSourceMedia: true,
   };
 }
 
@@ -565,6 +682,16 @@ export const studioLifeMovieLongformBridge = onRequest({
       res.status(200).json({ ok: true, playback: result });
       return;
     }
+    if (parsed.data.action === 'resume') {
+      const result = await resumePlan(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);
+      res.status(200).json({ ok: true, resume: result });
+      return;
+    }
+    if (parsed.data.action === 'delete-output') {
+      const result = await deletePlanOutputs(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);
+      res.status(200).json({ ok: true, deletion: result });
+      return;
+    }
     const result = await cancelPlan(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);
     res.status(200).json({ ok: true, cancellation: result });
   } catch (error) {
@@ -574,6 +701,7 @@ export const studioLifeMovieLongformBridge = onRequest({
       : code === 'longform_output_boundary_mismatch' ? 403
       : code === 'longform_output_bucket_authority_unavailable' ? 503
       : code === 'longform_plan_not_ready_for_playback' ? 409
+      : code === 'longform_plan_cancelled' ? 409
       : code === 'scene_truth_receipt_replay_conflict' ? 409
       : code === 'idempotency_conflict' ? 409
       : code === 'life_movie_longform_disabled' ? 503
