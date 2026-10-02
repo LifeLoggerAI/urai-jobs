@@ -68,10 +68,11 @@ function configuredSceneTruthSecret() {
   }
 }
 
-function verifySceneTruthReceipt(projectId: string, digest: string, receiptRef: string) {
+function verifySceneTruthReceipt(projectId: string, digest: string, ownerUid: string, receiptRef: string) {
   return assertSceneTruthReceiptValue(
     projectId,
     digest,
+    ownerUid,
     receiptRef,
     configuredSceneTruthSecret(),
   );
@@ -128,7 +129,7 @@ function safeJobProjection(job: Job) {
 
 async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   const payload = assertLifeMovieTenantPaths(input.payload, input.tenantId);
-  const sceneTruthReceipt = verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, payload.sceneTruthReceiptRef);
+  const sceneTruthReceipt = verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, input.userId, payload.sceneTruthReceiptRef);
   const ownerBinding = `${input.tenantId}:${input.userId}`;
   const jobType = 'studio.render.video';
   const fingerprintPayload = { tenantId: input.tenantId, userId: input.userId, payload };
