@@ -30,7 +30,7 @@ for (const marker of [
   "transaction.create(jobDoc(jobId)",
   "transaction.create(jobQueueEntryDoc(jobId)",
   "transaction.getAll(...childRefs)",
-  "action: z.enum(['status', 'cancel', 'playback', 'resume', 'assemble', 'delete-output'])",
+  "action: z.enum(['status', 'cancel', 'playback', 'download', 'resume', 'assemble', 'delete-output'])",
   "readPlanPlayback",
   "longform_plan_not_ready_for_playback",
   "longform_output_boundary_mismatch",
@@ -64,6 +64,9 @@ for (const marker of [
   "longform_segment_checksum_missing",
   "assemblyJobId",
   "finalFile",
+  "parsed.data.action === 'download'",
+  "longform_final_assembly_not_ready",
+  "readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId, 'attachment')",
   "assemblyResumed",
   "assemblyCancelled",
 ]) assert.ok(bridge.includes(marker), `long-form orchestrator missing ${marker}`)
@@ -90,3 +93,7 @@ assert.ok(bridge.indexOf('assertPlanOwner') < bridge.indexOf('readPlanPlayback')
 assert.ok(bridge.includes("responseDisposition: 'inline'"), 'final assembled playback must remain private and inline-bounded')
 assert.ok(bridge.includes("outputPrefix: `tenants/${tenantId}/life-movies/${plan.projectId}/final/`"), 'assembly output must remain inside the tenant/project final prefix')
 assert.ok(bridge.includes("buildRequestFingerprint('studio.assemble.video'"), 'assembly job replay must bind to exact payload identity')
+
+
+assert.ok(bridge.includes("responseDisposition: disposition"), 'long-form signed access must bind inline versus attachment disposition explicitly')
+assert.ok(bridge.includes("if (!result.finalFile) throw new Error('longform_final_assembly_not_ready')"), 'long-form download must require completed final assembly')
