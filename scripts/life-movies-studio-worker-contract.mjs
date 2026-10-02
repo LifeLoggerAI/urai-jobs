@@ -126,3 +126,15 @@ assert.ok(
   bridge.includes("requestFingerprint") && bridge.includes("sceneTruthDigest"),
   'SceneTruth replay binding must include exact request fingerprint and digest',
 );
+
+assert.ok(worker.includes("schemaVersion !== 'urai-life-movie-assembly-v1'"), 'Long-form assembly worker must require its own schema')
+assert.ok(worker.includes("'studio.assemble.video'"), 'Long-form assembly must use a separate job type')
+assert.ok(worker.includes('assembly_segment_checksum_mismatch'), 'Assembly must verify every child checksum before finalization')
+assert.ok(worker.includes("renderEngine: 'ffmpeg-concat'"), 'Assembly receipt must identify FFmpeg concat')
+assert.ok(worker.includes("mode: 'life-movie-ffmpeg-assembly'"), 'Assembly output must remain distinguishable from bounded child render output')
+assert.ok(worker.includes('LIFE_MOVIE_ASSEMBLY_BUDGET'), 'Assembly must have explicit resource budgets')
+assert.ok(worker.includes('assembly_video_byte_budget_exceeded'), 'Assembly must fail closed on media byte budget')
+assert.ok(worker.includes('shiftSrt'), 'Assembly must merge captions with segment time offsets')
+assert.ok(worker.includes('gapArgs(gapPath'), 'Assembly must preserve declared inter-segment gaps')
+assert.ok(worker.includes('assembly_cleanup_incomplete'), 'Assembly must clean partial uploaded outputs on failure')
+assert.ok(createJob.includes("studio.assemble.video must be created through the dedicated authenticated Studio Life Movie long-form bridge"), 'Generic Jobs admission must not bypass assembly authority')
