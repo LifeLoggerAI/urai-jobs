@@ -50,11 +50,19 @@ function canonicalJson(value) {
 // authority during rendering, not just when the dispatcher starts the request.
 function createRenderControl(job) {
   const jobId = safeSegment(String(job.jobId || ''), 'job_id');
+  const jobType = String(job.jobType || job.type || '');
+  if (!new Set(['studio.render.video', 'studio.assemble.video']).has(jobType)) throw new Error('unsupported_job_type');
   if (typeof job.leaseToken !== 'string' || !job.leaseToken) throw new Error('lease_token_required');
   const controller = new AbortController();
-  const requestedTimeout = Number(process.env.URAI_STUDIO_RENDER_TIMEOUT_MS || 110000);
+  const assembly = jobType === 'studio.assemble.video';
+  const defaultTimeout = assembly ? 450000 : 110000;
+  const requestedTimeout = Number(
+    assembly
+      ? process.env.URAI_STUDIO_ASSEMBLY_TIMEOUT_MS || defaultTimeout
+      : process.env.URAI_STUDIO_RENDER_TIMEOUT_MS || defaultTimeout
+  );
   const timeoutMs = Number.isFinite(requestedTimeout) && requestedTimeout > 0
-    ? Math.min(requestedTimeout, 110000) : 110000;
+    ? Math.min(requestedTimeout, defaultTimeout) : defaultTimeout;
   const pollMs = Math.max(25, Math.min(1000, Number(process.env.URAI_STUDIO_LEASE_POLL_MS) || 1000));
   let pollTimer;
   let stopped = false;
@@ -80,7 +88,7 @@ function createRenderControl(job) {
           throw new Error('render_lease_revoked');
         }
         if (current.tenantId !== job.tenantId || current.ownerUid !== job.ownerUid
-          || (current.jobType || current.type) !== 'studio.render.video'
+          || (current.jobType || current.type) !== jobType
           || canonicalJson(current.payload) !== canonicalJson(job.payload)) {
           throw new Error('render_job_binding_mismatch');
         }
@@ -277,6 +285,127 @@ function parsePayload(job) {
   };
 }
 
+const LIFE_MOVIE_ASSEMBLY_BUDGET = {
+  maxSegments: 180,
+  maxVideoBytes: 640 * 1024 * 1024,
+  maxSubtitleBytes: 16 * 1024 * 1024,
+};
+
+function allowedStudioOutputBuckets() {
+  return new Set([
+    String(process.env.GCS_BUCKET_NAME || '').trim(),
+    ...String(process.env.URAI_STUDIO_OUTPUT_BUCKETS || '').split(',').map((value) => value.trim()),
+  ].filter(Boolean));
+}
+
+function parsePrivateGcsRef(value, field) {
+  if (typeof value !== 'string') throw new Error(`invalid_${field}`);
+  const match = /^gs:\/\/([^/]+)\/(.+)$/.exec(value);
+  if (!match) throw new Error(`invalid_${field}`);
+  return { bucket: match[1], objectPath: safeObjectPath(match[2], field) };
+}
+
+function parseAssemblyPayload(job) {
+  const payload = job && typeof job.payload === 'object' && job.payload ? job.payload : {};
+  if (payload.schemaVersion !== 'urai-life-movie-assembly-v1') throw new Error('unsupported_life_movie_assembly_schema');
+  if (job.type !== 'studio.assemble.video' && job.jobType !== 'studio.assemble.video') throw new Error('unsupported_job_type');
+
+  const tenantId = safeSegment(String(job.tenantId || ''), 'tenant_id');
+  const planId = safeSegment(String(payload.planId || ''), 'plan_id');
+  const projectId = safeSegment(String(payload.projectId || ''), 'project_id');
+  const renderPlanDigest = String(payload.renderPlanDigest || '');
+  const sceneTruthDigest = String(payload.sceneTruthDigest || '');
+  const sceneTruthReceiptRef = String(payload.sceneTruthReceiptRef || '');
+  if (!/^[a-f0-9]{64}$/.test(renderPlanDigest)) throw new Error('invalid_render_plan_digest');
+  if (!/^[a-f0-9]{64}$/.test(sceneTruthDigest)) throw new Error('invalid_scene_truth_digest');
+  if (!/^str_[A-Za-z0-9_-]{16,64}_[a-z0-9]{8,16}_[A-Za-z0-9_-]{40,64}$/.test(sceneTruthReceiptRef)) {
+    throw new Error('invalid_scene_truth_receipt_ref');
+  }
+  if (payload.publicReleaseAuthorized !== false) throw new Error('public_release_must_be_false');
+  if (payload.providerGenerationAuthorized !== false) throw new Error('provider_generation_must_be_false');
+
+  const width = Number(payload.width);
+  const height = Number(payload.height);
+  const fps = Number(payload.fps);
+  if (!Number.isInteger(width) || width < 320 || width > 1920 || width % 2 !== 0) throw new Error('invalid_width');
+  if (!Number.isInteger(height) || height < 320 || height > 1080 || height % 2 !== 0) throw new Error('invalid_height');
+  if (![24, 25, 30].includes(fps)) throw new Error('invalid_fps');
+
+  const outputPrefix = safeOutputPrefix(String(payload.outputPrefix || ''), tenantId, projectId);
+  const requiredFinalPrefix = `tenants/${tenantId}/life-movies/${projectId}/final/`;
+  if (!outputPrefix.startsWith(requiredFinalPrefix)) throw new Error('assembly_output_prefix_mismatch');
+
+  const segments = Array.isArray(payload.segments) ? payload.segments : [];
+  if (!segments.length || segments.length > LIFE_MOVIE_ASSEMBLY_BUDGET.maxSegments) {
+    throw new Error('assembly_segment_count_invalid');
+  }
+  const allowedBuckets = allowedStudioOutputBuckets();
+  const requiredSegmentPrefix = `tenants/${tenantId}/life-movies/${projectId}/segments/`;
+  let previousEnd = 0;
+  const normalized = segments.map((segment, index) => {
+    if (Number(segment.index) !== index) throw new Error('assembly_segment_index_mismatch');
+    const startMs = Number(segment.startMs);
+    const endMs = Number(segment.endMs);
+    if (!Number.isInteger(startMs) || !Number.isInteger(endMs) || startMs < previousEnd || endMs <= startMs) {
+      throw new Error('assembly_segment_timeline_invalid');
+    }
+    previousEnd = endMs;
+    const video = parsePrivateGcsRef(segment.videoRef, 'assembly_video_ref');
+    const subtitle = parsePrivateGcsRef(segment.subtitleRef, 'assembly_subtitle_ref');
+    if (!allowedBuckets.has(video.bucket) || !allowedBuckets.has(subtitle.bucket)
+      || !video.objectPath.startsWith(requiredSegmentPrefix)
+      || !subtitle.objectPath.startsWith(requiredSegmentPrefix)) {
+      throw new Error('assembly_segment_boundary_mismatch');
+    }
+    const videoChecksum = String(segment.videoChecksum || '');
+    const subtitleChecksum = String(segment.subtitleChecksum || '');
+    if (!/^[a-f0-9]{64}$/.test(videoChecksum) || !/^[a-f0-9]{64}$/.test(subtitleChecksum)) {
+      throw new Error('assembly_segment_checksum_invalid');
+    }
+    return { index, startMs, endMs, video, subtitle, videoChecksum, subtitleChecksum };
+  });
+
+  return {
+    tenantId, planId, projectId, renderPlanDigest, sceneTruthReceiptRef, sceneTruthDigest,
+    width, height, fps, outputPrefix, segments: normalized,
+  };
+}
+
+function parseSrtTime(value) {
+  const match = /^(\d{2}):(\d{2}):(\d{2}),(\d{3})$/.exec(String(value).trim());
+  if (!match) throw new Error('assembly_subtitle_invalid');
+  return (((Number(match[1]) * 60 + Number(match[2])) * 60 + Number(match[3])) * 1000) + Number(match[4]);
+}
+
+function formatSrtTime(value) {
+  const bounded = Math.max(0, Math.trunc(value));
+  const hours = Math.floor(bounded / 3600000);
+  const minutes = Math.floor((bounded % 3600000) / 60000);
+  const seconds = Math.floor((bounded % 60000) / 1000);
+  const millis = bounded % 1000;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
+}
+
+function shiftSrt(value, offsetMs, nextIndex) {
+  const normalized = String(value || '').replace(/\r\n?/g, '\n').trim();
+  if (!normalized) return { text: '', nextIndex };
+  const out = [];
+  let cursor = nextIndex;
+  for (const block of normalized.split(/\n{2,}/)) {
+    const lines = block.split('\n');
+    const timingIndex = lines[0]?.includes('-->') ? 0 : 1;
+    const match = /^(\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2},\d{3})(?:\s+.*)?$/.exec(String(lines[timingIndex] || '').trim());
+    const text = lines.slice(timingIndex + 1).join('\n').trim();
+    if (!match || !text) throw new Error('assembly_subtitle_invalid');
+    const start = parseSrtTime(match[1]) + offsetMs;
+    const end = parseSrtTime(match[2]) + offsetMs;
+    if (end <= start) throw new Error('assembly_subtitle_invalid');
+    out.push(`${cursor}\n${formatSrtTime(start)} --> ${formatSrtTime(end)}\n${text}`);
+    cursor += 1;
+  }
+  return { text: out.join('\n\n'), nextIndex: cursor };
+}
+
 // Timeline coordinates describe output positions; preserve leading/inter-clip gaps.
 function renderSegments(timeline) {
   const segments = [];
@@ -436,6 +565,169 @@ async function sha256File(filePath) {
     input.on('data', (chunk) => hash.update(chunk));
     input.on('end', () => resolve(hash.digest('hex')));
   });
+}
+
+async function assembleLifeMovie(job) {
+  const input = parseAssemblyPayload(job);
+  const bucketName = process.env.GCS_BUCKET_NAME;
+  if (!bucketName) throw new Error('GCS_BUCKET_NAME_not_configured');
+  const bucket = admin.storage().bucket(bucketName);
+  const control = createRenderControl(job);
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'urai-life-movie-assembly-'));
+  const attemptPrefix = `${input.outputPrefix.replace(/\/+$/, '')}/attempt-${crypto.randomUUID()}`;
+  const writtenObjects = [];
+  let completed = false;
+
+  async function downloadVerified(location, expectedChecksum, localPath, budget) {
+    let bytes = 0;
+    const hash = crypto.createHash('sha256');
+    const meter = new Transform({
+      transform(chunk, _encoding, callback) {
+        bytes += chunk.length;
+        budget.used += chunk.length;
+        if (budget.used > budget.max) return callback(new Error(budget.code));
+        hash.update(chunk);
+        callback(null, chunk);
+      },
+    });
+    await pipeline(
+      admin.storage().bucket(location.bucket).file(location.objectPath).createReadStream(),
+      meter,
+      fs.createWriteStream(localPath, { mode: 0o600 }),
+      { signal: control.signal },
+    );
+    const actual = hash.digest('hex');
+    if (actual !== expectedChecksum) throw new Error('assembly_segment_checksum_mismatch');
+    return bytes;
+  }
+
+  async function uploadPrivateFile(localPath, destination, contentType) {
+    await control.check();
+    writtenObjects.push(destination);
+    await pipeline(fs.createReadStream(localPath), bucket.file(destination).createWriteStream({
+      resumable: false, metadata: { contentType, cacheControl: 'private, no-store' },
+    }), { signal: control.signal });
+  }
+
+  try {
+    await control.start();
+    const videoBudget = { used: 0, max: LIFE_MOVIE_ASSEMBLY_BUDGET.maxVideoBytes, code: 'assembly_video_byte_budget_exceeded' };
+    const subtitleBudget = { used: 0, max: LIFE_MOVIE_ASSEMBLY_BUDGET.maxSubtitleBytes, code: 'assembly_subtitle_byte_budget_exceeded' };
+    const concatEntries = [];
+    const segmentAuthority = [];
+    const subtitleBlocks = [];
+    let subtitleIndex = 1;
+    let previousEnd = 0;
+
+    for (const segment of input.segments) {
+      await control.check();
+      if (segment.startMs > previousEnd) {
+        const gapPath = path.join(workDir, `gap-${String(segment.index).padStart(4, '0')}.mp4`);
+        await run('ffmpeg', gapArgs(gapPath, (segment.startMs - previousEnd) / 1000, input.width, input.height, input.fps), { signal: control.signal });
+        concatEntries.push(gapPath);
+      }
+
+      const videoPath = path.join(workDir, `segment-${String(segment.index).padStart(4, '0')}.mp4`);
+      const subtitlePath = path.join(workDir, `segment-${String(segment.index).padStart(4, '0')}.srt`);
+      const videoBytes = await downloadVerified(segment.video, segment.videoChecksum, videoPath, videoBudget);
+      const subtitleBytes = await downloadVerified(segment.subtitle, segment.subtitleChecksum, subtitlePath, subtitleBudget);
+      concatEntries.push(videoPath);
+
+      const shifted = shiftSrt(fs.readFileSync(subtitlePath, 'utf8'), segment.startMs, subtitleIndex);
+      if (shifted.text) subtitleBlocks.push(shifted.text);
+      subtitleIndex = shifted.nextIndex;
+      segmentAuthority.push({
+        index: segment.index,
+        startMs: segment.startMs,
+        endMs: segment.endMs,
+        videoChecksum: segment.videoChecksum,
+        subtitleChecksum: segment.subtitleChecksum,
+        videoBytes,
+        subtitleBytes,
+      });
+      previousEnd = segment.endMs;
+    }
+
+    const concatPath = path.join(workDir, 'assembly-concat.txt');
+    fs.writeFileSync(concatPath, concatEntries.map((entry) => `file '${entry.replace(/'/g, "'\\''")}'`).join('\n') + '\n');
+    const moviePath = path.join(workDir, 'life-movie-final.mp4');
+    await run('ffmpeg', [
+      '-y', '-f', 'concat', '-safe', '0', '-i', concatPath,
+      '-c', 'copy', '-movflags', '+faststart', moviePath,
+    ], { signal: control.signal });
+
+    const subtitlePath = path.join(workDir, 'life-movie-final.srt');
+    fs.writeFileSync(subtitlePath, subtitleBlocks.join('\n\n') + (subtitleBlocks.length ? '\n' : ''), 'utf8');
+
+    const movieHash = await sha256File(moviePath);
+    const subtitleHash = await sha256File(subtitlePath);
+    const manifest = {
+      schemaVersion: 'urai-life-movie-assembly-receipt-v1',
+      jobId: job.jobId,
+      planId: input.planId,
+      tenantId: input.tenantId,
+      projectId: input.projectId,
+      renderPlanDigest: input.renderPlanDigest,
+      sceneTruthReceiptRef: input.sceneTruthReceiptRef,
+      sceneTruthDigest: input.sceneTruthDigest,
+      renderEngine: 'ffmpeg-concat',
+      providerCalled: false,
+      providerSpendAuthorized: false,
+      publicReleaseAuthorized: false,
+      segmentCount: input.segments.length,
+      segmentAuthority,
+      outputs: {
+        mp4: { sha256: movieHash, mimeType: 'video/mp4' },
+        srt: { sha256: subtitleHash, mimeType: 'application/x-subrip' },
+      },
+      generatedAt: new Date().toISOString(),
+    };
+    const manifestPath = path.join(workDir, 'life-movie-final.assembly-manifest.json');
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+    const manifestHash = await sha256File(manifestPath);
+
+    const outputPaths = {
+      mp4: `${attemptPrefix}/life-movie-final.mp4`,
+      srt: `${attemptPrefix}/life-movie-final.srt`,
+      manifest: `${attemptPrefix}/life-movie-final.assembly-manifest.json`,
+    };
+    await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4');
+    await uploadPrivateFile(subtitlePath, outputPaths.srt, 'application/x-subrip');
+    await uploadPrivateFile(manifestPath, outputPaths.manifest, 'application/json');
+    await control.check();
+    completed = true;
+
+    return {
+      ok: true,
+      mode: 'life-movie-ffmpeg-assembly',
+      jobId: job.jobId,
+      planId: input.planId,
+      projectId: input.projectId,
+      providerCalled: false,
+      providerSpendAuthorized: false,
+      publicReleaseAuthorized: false,
+      outputs: [
+        { kind: 'mp4', ref: `gs://${bucketName}/${outputPaths.mp4}`, mimeType: 'video/mp4', checksum: movieHash },
+        { kind: 'srt', ref: `gs://${bucketName}/${outputPaths.srt}`, mimeType: 'application/x-subrip', checksum: subtitleHash },
+        { kind: 'manifest', ref: `gs://${bucketName}/${outputPaths.manifest}`, mimeType: 'application/json', checksum: manifestHash },
+      ],
+      renderPlanDigest: input.renderPlanDigest,
+      sceneTruthReceiptRef: input.sceneTruthReceiptRef,
+      sceneTruthDigest: input.sceneTruthDigest,
+    };
+  } catch (error) {
+    throw control.signal.aborted ? control.signal.reason : error;
+  } finally {
+    control.stop();
+    fs.rmSync(workDir, { recursive: true, force: true });
+    if (!completed) {
+      const cleanup = await Promise.allSettled(writtenObjects.map((destination) =>
+        bucket.file(destination).delete({ ignoreNotFound: true })));
+      if (cleanup.some((result) => result.status === 'rejected')) {
+        throw new Error('assembly_cleanup_incomplete');
+      }
+    }
+  }
 }
 
 async function renderLifeMovie(job) {
@@ -671,7 +963,10 @@ app.post('/', requireWorkerAuth, async (req, res) => {
   if (!jobId || !leaseToken) return res.status(400).send({ ok: false, error: 'jobId and leaseToken are required' });
 
   try {
-    const result = await renderLifeMovie(req.body);
+    const jobType = String(req.body?.jobType || req.body?.type || '');
+    const result = jobType === 'studio.assemble.video'
+      ? await assembleLifeMovie(req.body)
+      : await renderLifeMovie(req.body);
     return res.status(200).send(result);
   } catch (error) {
     const errorCode = publicErrorCode(error);
