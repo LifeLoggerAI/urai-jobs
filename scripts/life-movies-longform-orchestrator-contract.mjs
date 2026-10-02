@@ -90,7 +90,8 @@ assert.doesNotMatch(bridge, /status: 'DONE'[\s\S]{0,120}longform/, 'long-form ca
 assert.doesNotMatch(bridge, /segments\.push\([\s\S]*?ref:/, 'private playback response must not expose raw GCS refs')
 assert.ok(bridge.indexOf('assertPlanOwner') < bridge.indexOf('readPlanPlayback'), 'owner/tenant boundary helper must exist before playback implementation')
 
-assert.ok(bridge.includes("responseDisposition: 'inline'"), 'final assembled playback must remain private and inline-bounded')
+assert.ok(bridge.includes("readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);"), 'ordinary playback must retain the default inline signed-access mode')
+assert.ok(bridge.includes("readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId, 'attachment')"), 'download must be the explicit attachment signed-access path')
 assert.ok(bridge.includes("outputPrefix: `tenants/${tenantId}/life-movies/${plan.projectId}/final/`"), 'assembly output must remain inside the tenant/project final prefix')
 assert.ok(bridge.includes("buildRequestFingerprint('studio.assemble.video'"), 'assembly job replay must bind to exact payload identity')
 
