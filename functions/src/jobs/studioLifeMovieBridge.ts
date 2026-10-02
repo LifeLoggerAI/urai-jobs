@@ -101,6 +101,7 @@ type WorkerOutput = {
   outputs?: WorkerOutputArtifact[];
   renderPlanDigest?: unknown;
   sceneTruthReceiptRef?: unknown;
+  sceneTruthDigest?: unknown;
   providerCalled?: unknown;
   providerSpendAuthorized?: unknown;
   publicReleaseAuthorized?: unknown;
@@ -118,6 +119,7 @@ function sanitizedOutput(output: unknown) {
     artifacts,
     renderPlanDigest: typeof typed.renderPlanDigest === 'string' ? typed.renderPlanDigest : undefined,
     sceneTruthReceiptRef: typeof typed.sceneTruthReceiptRef === 'string' ? typed.sceneTruthReceiptRef : undefined,
+    sceneTruthDigest: typeof typed.sceneTruthDigest === 'string' ? typed.sceneTruthDigest : undefined,
     providerCalled: typed.providerCalled === true,
     providerSpendAuthorized: typed.providerSpendAuthorized === true,
     publicReleaseAuthorized: typed.publicReleaseAuthorized === true,
