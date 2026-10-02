@@ -31,6 +31,8 @@ const PrivateSourceIndexPayloadSchema = z.object({
   sourceReceiptRef: z.string().trim().regex(/^psr_[A-Za-z0-9_-]{16,128}$/),
   transcriptRef: z.string().trim().regex(/^private:[A-Za-z0-9_./:-]{8,512}$/),
   provenanceRef: z.string().trim().regex(/^private:[A-Za-z0-9_./:-]{8,512}$/),
+  priorMemoryIndexRef: z.string().trim().regex(/^private:[A-Za-z0-9_./:-]{8,512}$/).optional(),
+  correlationTrigger: z.enum(['initial-source', 'new-source', 'correction', 'stronger-source']).default('initial-source'),
   requestedPurpose: z.literal('memory-index'),
   locale: z.string().trim().min(2).max(35).regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/).optional(),
   requestReceipt: z.string().trim().regex(/^req_[A-Za-z0-9_-]{12,128}$/).optional(),
