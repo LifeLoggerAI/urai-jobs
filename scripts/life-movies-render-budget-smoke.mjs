@@ -17,7 +17,7 @@ const outputs = new Map();
 const jobs = Array.from({ length: 2 }, (_, i) => ({
   jobId: `job-${i}`, tenantId: 'synthetic', ownerUid: 'synthetic', type: 'studio.render.video', leaseToken: `lease-${i}`,
   payload: {
-    schemaVersion: 'urai-life-movie-render-v1', projectId: 'proof', renderPlanDigest: 'a'.repeat(64),
+    schemaVersion: 'urai-life-movie-render-v1', projectId: 'proof', renderPlanDigest: 'a'.repeat(64), sceneTruthReceiptRef: 'str_fixture_truth_receipt_0001',
     width: 1920, height: 1080, fps: 30,
     outputPrefix: `tenants/synthetic/life-movies/proof/render-${i}`,
     sources: [{ id: 'source', bucket: 'private-fixture', objectPath: 'tenants/synthetic/source.mp4', mimeType: 'video/mp4', provenance: 'original-source', sourceRefs: ['synthetic-testsrc2'], consentRef: 'fixture', ownerOrRightsRef: 'fixture' }],
