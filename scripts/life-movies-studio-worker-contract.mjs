@@ -93,3 +93,8 @@ assert.ok(approved.includes("new Set(['narrator-worker', 'asset-worker', 'studio
 assert.ok(approved.includes('narrator-worker|asset-worker|studio-worker'), 'exact-source build wrapper must admit studio-worker');
 
 console.log('Life Movies Studio render-worker source contract verified');
+
+assert.ok(sharedContract.includes("sceneTruthReceiptRef: z.string().trim().regex(/^str_"), 'Jobs admission must fail closed on SceneTruth receipt syntax');
+assert.ok(worker.includes("invalid_scene_truth_receipt_ref"), 'Studio worker must reject missing or malformed SceneTruth receipts');
+assert.ok(bridge.includes("sceneTruthReceiptRef: payload.sceneTruthReceiptRef"), 'Jobs bridge audit metadata must retain the SceneTruth receipt');
+assert.ok(bridge.includes("sceneTruthReceiptRef: typeof typed.sceneTruthReceiptRef"), 'Jobs safe status projection must retain only the opaque SceneTruth receipt');
