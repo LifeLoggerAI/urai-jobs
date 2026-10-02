@@ -19,6 +19,8 @@ const baseJob = {
   type: 'studio.render.video', leaseToken: 'fixture-lease',
   payload: {
     schemaVersion: 'urai-life-movie-render-v1', projectId: 'project-fixture-1', renderPlanDigest: 'a'.repeat(64),
+    sceneTruthReceiptRef: `str_fixturefixture1234_zzzzzzzz_${'A'.repeat(40)}`,
+    sceneTruthDigest: 'b'.repeat(64),
     width: 320, height: 320, fps: 30,
     sources: [{ id: 'source-1', bucket: 'private-fixture-bucket', objectPath: 'tenants/tenant-fixture-1/source.wav',
       mimeType: 'audio/wav', provenance: 'original-source', sourceRefs: ['synthetic-test-tone'],
