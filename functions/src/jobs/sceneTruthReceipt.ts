@@ -62,6 +62,6 @@ export function assertSceneTruthReceiptValue(
   nowMs = Date.now(),
 ) {
   const result = verifySceneTruthReceiptValue(projectId, digest, ownerUid, receiptRef, secret, nowMs);
-  if (!result.ok) throw new Error(result.code);
+  if (result.ok === false) throw new Error(result.code);
   return result;
 }
