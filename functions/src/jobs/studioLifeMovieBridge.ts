@@ -14,9 +14,12 @@ import {
   type IdempotencyBinding,
 } from '../core/jobsReliability.js';
 import { StudioLifeMovieRenderPayloadSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
+import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
+const sceneTruthReceiptSecret = defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC');
 const IDEMPOTENCY_COLLECTION = 'studioLifeMovieBridgeBindings';
+const SCENE_TRUTH_RECEIPT_BINDING_COLLECTION = 'studioSceneTruthReceiptBindings';
 const MAX_BODY_BYTES = 32768;
 
 const IdentitySchema = z.object({
@@ -57,6 +60,24 @@ function authorized(header: string) {
   return timingSafeEqual(actualHash, expectedHash);
 }
 
+function configuredSceneTruthSecret() {
+  try {
+    return sceneTruthReceiptSecret.value() || process.env.URAI_SCENE_TRUTH_RECEIPT_HMAC || '';
+  } catch {
+    return process.env.URAI_SCENE_TRUTH_RECEIPT_HMAC || '';
+  }
+}
+
+function verifySceneTruthReceipt(projectId: string, digest: string, ownerUid: string, receiptRef: string) {
+  return assertSceneTruthReceiptValue(
+    projectId,
+    digest,
+    ownerUid,
+    receiptRef,
+    configuredSceneTruthSecret(),
+  );
+}
+
 function jsonBytes(value: unknown) {
   return Buffer.byteLength(JSON.stringify(value ?? {}), 'utf8');
 }
@@ -65,6 +86,8 @@ type WorkerOutputArtifact = { kind?: unknown; ref?: unknown; mimeType?: unknown;
 type WorkerOutput = {
   outputs?: WorkerOutputArtifact[];
   renderPlanDigest?: unknown;
+  sceneTruthReceiptRef?: unknown;
+  sceneTruthDigest?: unknown;
   providerCalled?: unknown;
   providerSpendAuthorized?: unknown;
   publicReleaseAuthorized?: unknown;
@@ -81,6 +104,8 @@ function sanitizedOutput(output: unknown) {
   return {
     artifacts,
     renderPlanDigest: typeof typed.renderPlanDigest === 'string' ? typed.renderPlanDigest : undefined,
+    sceneTruthReceiptRef: typeof typed.sceneTruthReceiptRef === 'string' ? typed.sceneTruthReceiptRef : undefined,
+    sceneTruthDigest: typeof typed.sceneTruthDigest === 'string' ? typed.sceneTruthDigest : undefined,
     providerCalled: typed.providerCalled === true,
     providerSpendAuthorized: typed.providerSpendAuthorized === true,
     publicReleaseAuthorized: typed.publicReleaseAuthorized === true,
@@ -104,6 +129,7 @@ function safeJobProjection(job: Job) {
 
 async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   const payload = assertLifeMovieTenantPaths(input.payload, input.tenantId);
+  const sceneTruthReceipt = verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, input.userId, payload.sceneTruthReceiptRef);
   const ownerBinding = `${input.tenantId}:${input.userId}`;
   const jobType = 'studio.render.video';
   const fingerprintPayload = { tenantId: input.tenantId, userId: input.userId, payload };
@@ -112,6 +138,8 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   const db = getFirestore();
   const bindingId = buildIdempotencyBindingId(ownerBinding, jobType, input.idempotencyKey);
   const bindingRef = db.collection(IDEMPOTENCY_COLLECTION).doc(bindingId);
+  const sceneTruthBindingId = createHash('sha256').update(payload.sceneTruthReceiptRef).digest('hex');
+  const sceneTruthBindingRef = db.collection(SCENE_TRUTH_RECEIPT_BINDING_COLLECTION).doc(sceneTruthBindingId);
 
   const existing = await bindingRef.get();
   if (existing.exists) {
@@ -146,11 +174,48 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
 
   return db.runTransaction(async (transaction) => {
     const inside = await transaction.get(bindingRef);
+    const sceneTruthInside = await transaction.get(sceneTruthBindingRef);
+
+    if (sceneTruthInside.exists) {
+      const bound = sceneTruthInside.data() as {
+        requestFingerprint?: unknown;
+        ownerUid?: unknown;
+        jobId?: unknown;
+        projectId?: unknown;
+        sceneTruthDigest?: unknown;
+      };
+      const sameReceiptUse =
+        bound.requestFingerprint === requestFingerprint &&
+        bound.ownerUid === ownerBinding &&
+        bound.projectId === payload.projectId &&
+        bound.sceneTruthDigest === payload.sceneTruthDigest &&
+        typeof bound.jobId === 'string' &&
+        bound.jobId.length > 0;
+      if (!sameReceiptUse) throw new Error('scene_truth_receipt_replay_conflict');
+      if (inside.exists) {
+        const binding = inside.data() as Partial<IdempotencyBinding>;
+        if (!bindingMatches(binding, expectedBinding) || binding.jobId !== bound.jobId) {
+          throw new Error('idempotency_conflict');
+        }
+      }
+      return { jobId: bound.jobId as string, deduplicated: true };
+    }
+
     if (inside.exists) {
       const binding = inside.data() as Partial<IdempotencyBinding>;
       if (!bindingMatches(binding, expectedBinding) || typeof binding.jobId !== 'string' || !binding.jobId) {
         throw new Error('idempotency_conflict');
       }
+      transaction.create(sceneTruthBindingRef, {
+        receiptHash: sceneTruthBindingId,
+        ownerUid: ownerBinding,
+        projectId: payload.projectId,
+        sceneTruthDigest: payload.sceneTruthDigest,
+        requestFingerprint,
+        jobId: binding.jobId,
+        expiresAt: new Date(sceneTruthReceipt.expiresAt).toISOString(),
+        createdAt: FieldValue.serverTimestamp(),
+      });
       return { jobId: binding.jobId, deduplicated: true };
     }
 
@@ -175,6 +240,9 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
         ownerUid: input.userId,
         projectId: payload.projectId,
         renderPlanDigest: payload.renderPlanDigest,
+        sceneTruthReceiptRef: payload.sceneTruthReceiptRef,
+        sceneTruthDigest: payload.sceneTruthDigest,
+        sceneTruthReceiptExpiresAt: new Date(sceneTruthReceipt.expiresAt).toISOString(),
       },
       createdAt: now,
     });
@@ -182,6 +250,16 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
       ...expectedBinding,
       jobId,
       idempotencyKeyHash: createHash('sha256').update(input.idempotencyKey).digest('hex'),
+      createdAt: now,
+    });
+    transaction.create(sceneTruthBindingRef, {
+      receiptHash: sceneTruthBindingId,
+      ownerUid: ownerBinding,
+      projectId: payload.projectId,
+      sceneTruthDigest: payload.sceneTruthDigest,
+      requestFingerprint,
+      jobId,
+      expiresAt: new Date(sceneTruthReceipt.expiresAt).toISOString(),
       createdAt: now,
     });
     return { jobId, deduplicated: false };
@@ -351,7 +429,7 @@ async function cancelBoundJob(tenantId: string, userId: string, jobId: string) {
 }
 
 export const studioLifeMovieBridge = onRequest({
-  secrets: [bridgeTokenSecret],
+  secrets: [bridgeTokenSecret, sceneTruthReceiptSecret],
   timeoutSeconds: 60,
   memory: '256MiB',
   cors: false,
@@ -418,6 +496,10 @@ export const studioLifeMovieBridge = onRequest({
       : code === 'output_delete_boundary_mismatch' ? 403
       : code === 'life_movie_output_boundary_mismatch' ? 403
       : code === 'life_movie_output_bucket_authority_unavailable' ? 503
+      : code === 'scene_truth_receipt_authority_unavailable' ? 503
+      : code === 'scene_truth_receipt_expired' ? 409
+      : code === 'invalid_scene_truth_receipt_signature' ? 403
+      : code === 'scene_truth_receipt_replay_conflict' ? 409
       : 400;
     res.status(status).json({ ok: false, error: code });
   }
