@@ -15,6 +15,7 @@ const PROJECT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 export function verifySceneTruthReceiptValue(
   projectId: string,
   digest: string,
+  ownerUid: string,
   receiptRef: string,
   secret: string,
   nowMs = Date.now(),
@@ -35,7 +36,9 @@ export function verifySceneTruthReceiptValue(
     return { ok: false, code: 'scene_truth_receipt_expired' };
   }
 
-  const message = `${receiptId}\n${projectId}\n${digest}\n${expiryToken}`;
+  if (!PROJECT_PATTERN.test(ownerUid)) return { ok: false, code: 'invalid_scene_truth_receipt_ref' };
+
+  const message = `${receiptId}\n${projectId}\n${digest}\n${ownerUid}\n${expiryToken}`;
   const expected = createHmac('sha256', secret).update(message).digest();
   let supplied: Buffer;
   try {
@@ -53,11 +56,12 @@ export function verifySceneTruthReceiptValue(
 export function assertSceneTruthReceiptValue(
   projectId: string,
   digest: string,
+  ownerUid: string,
   receiptRef: string,
   secret: string,
   nowMs = Date.now(),
 ) {
-  const result = verifySceneTruthReceiptValue(projectId, digest, receiptRef, secret, nowMs);
+  const result = verifySceneTruthReceiptValue(projectId, digest, ownerUid, receiptRef, secret, nowMs);
   if (!result.ok) throw new Error(result.code);
   return result;
 }
