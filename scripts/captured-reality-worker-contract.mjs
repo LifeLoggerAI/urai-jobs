@@ -57,7 +57,6 @@ const capturedWorkerPackage=JSON.parse(fs.readFileSync('workers/captured-reality
 const prodEnv=fs.readFileSync('ops/production.env.example','utf8');
 
 for(const marker of [
-  'narrator-worker|asset-worker|studio-worker|captured-reality-worker',
   'PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET',
   'CAPTURED_REALITY_ENGINE_TOKEN_SECRET',
   'PRIVATE_SOURCE_AUTHORITY_URL',
@@ -66,6 +65,9 @@ for(const marker of [
   'CAPTURED_REALITY_ENGINE_TOKEN=',
 ]) assert.ok(deploy.includes(marker), `deploy marker: ${marker}`);
 
+for (const workerName of ['narrator-worker', 'asset-worker', 'studio-worker', 'private-source-worker', 'captured-reality-worker']) {
+  assert.match(deploy, new RegExp(`(^|\\|)${workerName}(\\||\\))`), `worker admission marker: ${workerName}`);
+}
 assert.ok(!/URAI_JOBS_DEPLOY_WORKERS:-[^\n]*captured-reality-worker/.test(deploy), 'Captured Reality must not enter the default production worker set');
 assert.equal(capturedWorkerPackage.dependencies['express-rate-limit'], '^8.7.0');
 assert.ok(rootPackage.scripts['urai-jobs:verify'].includes('captured-reality-worker-contract.mjs'));
