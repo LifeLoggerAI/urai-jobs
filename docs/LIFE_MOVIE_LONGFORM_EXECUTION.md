@@ -94,3 +94,10 @@ and require every object to remain under the bound tenant Life Movies prefix.
 The same bucket/path authority applies before generated-output deletion. A
 worker result cannot make the Functions identity sign or delete an arbitrary
 accessible bucket merely by returning a crafted `gs://` reference.
+
+
+## Final assembly and lifecycle convergence
+
+Final assembly is a distinct `studio.assemble.video` queue job. It does not increase the bounded child renderer's 15-second envelope. The assembly job verifies every child MP4/SRT SHA-256 before use, preserves timeline gaps, shifts subtitle timing into the parent timeline, writes a private final MP4/SRT/manifest under the tenant/project final prefix, records exact final hashes, and deletes partial uploads on failed attempts.
+
+The long-form bridge also provides explicit resume for terminal failed children/assembly, immediate parent-level consent-revocation visibility, fail-closed playback/resume after revocation, and owner-bound generated-output deletion that retains source evidence.
