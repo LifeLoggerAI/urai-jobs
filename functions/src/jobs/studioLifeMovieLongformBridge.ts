@@ -131,6 +131,15 @@ type StoredPlan = {
   }>;
 };
 
+function allowedLifeMovieOutputBuckets() {
+  const buckets = new Set([
+    String(process.env.GCS_BUCKET_NAME || '').trim(),
+    ...String(process.env.URAI_STUDIO_OUTPUT_BUCKETS || '').split(',').map((value) => value.trim()),
+  ].filter(Boolean));
+  if (!buckets.size) throw new Error('longform_output_bucket_authority_unavailable');
+  return buckets;
+}
+
 function parseGcsRef(ref: string) {
   const match = /^gs:\/\/([^/]+)\/(.+)$/.exec(ref);
   if (!match) throw new Error('longform_output_ref_invalid');
@@ -382,6 +391,7 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
 
   const expiresAtMs = Date.now() + 5 * 60 * 1000;
   const requiredPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/segments/`;
+  const allowedBuckets = allowedLifeMovieOutputBuckets();
   const segmentAuthority: Array<{
     index: number;
     startMs: number;
@@ -400,7 +410,10 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
     const subtitle = boundedArtifact(job.output, 'srt');
     const videoLocation = parseGcsRef(video.ref);
     const subtitleLocation = parseGcsRef(subtitle.ref);
-    if (!videoLocation.objectPath.startsWith(requiredPrefix) || !subtitleLocation.objectPath.startsWith(requiredPrefix)) {
+    if (!allowedBuckets.has(videoLocation.bucket)
+      || !allowedBuckets.has(subtitleLocation.bucket)
+      || !videoLocation.objectPath.startsWith(requiredPrefix)
+      || !subtitleLocation.objectPath.startsWith(requiredPrefix)) {
       throw new Error('longform_output_boundary_mismatch');
     }
 
@@ -552,6 +565,7 @@ export const studioLifeMovieLongformBridge = onRequest({
     const status = code === 'longform_plan_not_found' ? 404
       : code === 'longform_plan_boundary_mismatch' ? 403
       : code === 'longform_output_boundary_mismatch' ? 403
+      : code === 'longform_output_bucket_authority_unavailable' ? 503
       : code === 'longform_plan_not_ready_for_playback' ? 409
       : code === 'scene_truth_receipt_replay_conflict' ? 409
       : code === 'idempotency_conflict' ? 409

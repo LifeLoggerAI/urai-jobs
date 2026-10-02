@@ -67,6 +67,9 @@ assert.ok(bridge.includes('sanitizedOutput(job.output)'), 'Status projection mus
 assert.ok(bridge.includes("signedMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'attachment')"), 'Download must use owner-bound short-lived access');
 assert.ok(bridge.includes('deleteBoundMovieOutput'), 'Generated-output deletion must use an owner-bound path');
 assert.ok(bridge.includes('output_delete_boundary_mismatch'), 'Deletion must fail closed outside the Life Movies tenant prefix');
+assert.ok(bridge.includes('allowedLifeMovieOutputBuckets'), 'Playback/delete must enforce configured output bucket authority');
+assert.ok(bridge.includes('life_movie_output_boundary_mismatch'), 'Playback must fail closed outside bucket/path authority');
+assert.ok(bridge.includes('life_movie_output_bucket_authority_unavailable'), 'Playback must fail closed when output bucket authority is not configured');
 assert.ok(bridge.includes('retainedSourceMedia: true'), 'Deleting generated output must not silently delete source memories');
 assert.ok(bridge.includes('output: FieldValue.delete()'), 'Deletion must scrub generated-output references from the job');
 assert.ok(bridge.includes('outputDeletedAt: now'), 'Deletion must retain an audit timestamp');

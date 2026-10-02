@@ -85,3 +85,12 @@ checksums and a deterministic playlist digest.
 
 This is private segmented playback, not final single-file export and not public
 release authority.
+
+## Output signing authority
+
+Short and long-form Life Movie access now both require the output bucket to be
+explicitly configured by `GCS_BUCKET_NAME` or `URAI_STUDIO_OUTPUT_BUCKETS`
+and require every object to remain under the bound tenant Life Movies prefix.
+The same bucket/path authority applies before generated-output deletion. A
+worker result cannot make the Functions identity sign or delete an arbitrary
+accessible bucket merely by returning a crafted `gs://` reference.
