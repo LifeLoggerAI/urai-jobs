@@ -11,12 +11,18 @@ const requiredWorkers = [
 ];
 const requireStudioWorker = String(process.env.REQUIRE_STUDIO_WORKER || '').toLowerCase() === 'true'
   || process.env.REQUIRE_STUDIO_WORKER === '1';
+const requirePrivateSourceWorker = String(process.env.REQUIRE_PRIVATE_SOURCE_WORKER || '').toLowerCase() === 'true'
+  || process.env.REQUIRE_PRIVATE_SOURCE_WORKER === '1';
 const optionalWorkers = [
   ['spatial-worker', process.env.SPATIAL_WORKER_URL],
   ...(!requireStudioWorker ? [['studio-worker', process.env.STUDIO_WORKER_URL]] : []),
+  ...(!requirePrivateSourceWorker ? [['private-source-worker', process.env.PRIVATE_SOURCE_WORKER_URL]] : []),
 ].filter(([, url]) => Boolean(url));
 if (requireStudioWorker) {
   requiredWorkers.push(['studio-worker', process.env.STUDIO_WORKER_URL]);
+}
+if (requirePrivateSourceWorker) {
+  requiredWorkers.push(['private-source-worker', process.env.PRIVATE_SOURCE_WORKER_URL]);
 }
 
 let failed = false;
