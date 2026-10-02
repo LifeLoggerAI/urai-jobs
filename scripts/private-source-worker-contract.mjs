@@ -35,6 +35,10 @@ check('worker uses private transcription provider binding', worker.includes('PRI
 check('memory index runtime type is admitted', runtimeTypes.includes("'memory.private-source.index':"));
 check('memory index payload is strict and opaque', createJob.includes('PrivateSourceIndexPayloadSchema') && createJob.includes('transcriptRef') && createJob.includes('provenanceRef'));
 check('worker uses dedicated memory index provider binding', worker.includes('PRIVATE_SOURCE_INDEX_URL') && worker.includes('PRIVATE_SOURCE_INDEX_TOKEN'));
+check('transcription readiness is independent from memory-index readiness', worker.includes("jobType === 'memory.private-source.transcribe'") && worker.includes('baseReady && transcribeReady'));
+check('memory-index readiness is independent from transcription readiness', worker.includes("jobType === 'memory.private-source.index'") && worker.includes('baseReady && indexReady'));
+check('transcription provider URL is resolved only on transcription path', worker.indexOf("const transcribeUrl = httpsUrl('PRIVATE_SOURCE_TRANSCRIBE_URL')") > worker.indexOf("if (job.jobType === 'memory.private-source.index')"));
+
 check('worker returns correlation refs without raw memory content', worker.includes('memoryIndexRef') && worker.includes('entityGraphRef') && worker.includes('temporalIndexRef') && worker.includes('placeIndexRef') && worker.includes('conflictSetRef') && worker.includes('sceneTruthRef'));
 
 check('worker refuses synthetic success when unconfigured', worker.includes('PRIVATE_SOURCE_WORKER_NOT_READY') && worker.includes('refusing synthetic success'));
