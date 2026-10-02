@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { defineSecret } from 'firebase-functions/params';
@@ -16,6 +16,7 @@ import {
 import { StudioLifeMovieRenderPayloadSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
+const sceneTruthReceiptSecret = defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC');
 const IDEMPOTENCY_COLLECTION = 'studioLifeMovieBridgeBindings';
 const MAX_BODY_BYTES = 32768;
 
@@ -55,6 +56,40 @@ function authorized(header: string) {
   const expectedHash = createHash('sha256').update(`Bearer ${expected}`).digest();
   const actualHash = createHash('sha256').update(header || '').digest();
   return timingSafeEqual(actualHash, expectedHash);
+}
+
+function configuredSceneTruthSecret() {
+  try {
+    return sceneTruthReceiptSecret.value() || process.env.URAI_SCENE_TRUTH_RECEIPT_HMAC || '';
+  } catch {
+    return process.env.URAI_SCENE_TRUTH_RECEIPT_HMAC || '';
+  }
+}
+
+function verifySceneTruthReceipt(projectId: string, digest: string, receiptRef: string) {
+  const secret = configuredSceneTruthSecret();
+  if (!secret || Buffer.byteLength(secret, 'utf8') < 32) throw new Error('scene_truth_receipt_authority_unavailable');
+
+  const match = /^str_([A-Za-z0-9_-]{16,64})_([a-z0-9]{8,16})_([A-Za-z0-9_-]{40,64})$/.exec(receiptRef);
+  if (!match) throw new Error('invalid_scene_truth_receipt_ref');
+
+  const [, receiptId, expiryToken, suppliedSignature] = match;
+  const expiresAt = Number.parseInt(expiryToken, 36);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw new Error('scene_truth_receipt_expired');
+
+  const message = `${receiptId}\n${projectId}\n${digest}\n${expiryToken}`;
+  const expected = createHmac('sha256', secret).update(message).digest();
+  let supplied: Buffer;
+  try {
+    supplied = Buffer.from(suppliedSignature, 'base64url');
+  } catch {
+    throw new Error('invalid_scene_truth_receipt_signature');
+  }
+  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+    throw new Error('invalid_scene_truth_receipt_signature');
+  }
+
+  return { expiresAt };
 }
 
 function jsonBytes(value: unknown) {
@@ -106,6 +141,7 @@ function safeJobProjection(job: Job) {
 
 async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   const payload = assertLifeMovieTenantPaths(input.payload, input.tenantId);
+  const sceneTruthReceipt = verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, payload.sceneTruthReceiptRef);
   const ownerBinding = `${input.tenantId}:${input.userId}`;
   const jobType = 'studio.render.video';
   const fingerprintPayload = { tenantId: input.tenantId, userId: input.userId, payload };
@@ -178,6 +214,8 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
         projectId: payload.projectId,
         renderPlanDigest: payload.renderPlanDigest,
         sceneTruthReceiptRef: payload.sceneTruthReceiptRef,
+        sceneTruthDigest: payload.sceneTruthDigest,
+        sceneTruthReceiptExpiresAt: new Date(sceneTruthReceipt.expiresAt).toISOString(),
       },
       createdAt: now,
     });
@@ -334,7 +372,7 @@ async function cancelBoundJob(tenantId: string, userId: string, jobId: string) {
 }
 
 export const studioLifeMovieBridge = onRequest({
-  secrets: [bridgeTokenSecret],
+  secrets: [bridgeTokenSecret, sceneTruthReceiptSecret],
   timeoutSeconds: 60,
   memory: '256MiB',
   cors: false,
@@ -399,6 +437,9 @@ export const studioLifeMovieBridge = onRequest({
       : code === 'idempotency_conflict' ? 409
       : code === 'job_not_ready_for_playback' ? 409
       : code === 'output_delete_boundary_mismatch' ? 403
+      : code === 'scene_truth_receipt_authority_unavailable' ? 503
+      : code === 'scene_truth_receipt_expired' ? 409
+      : code === 'invalid_scene_truth_receipt_signature' ? 403
       : 400;
     res.status(status).json({ ok: false, error: code });
   }
