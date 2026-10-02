@@ -18,6 +18,7 @@ for (const token of [
   'source_outside_tenant',
   'public_release_must_be_false',
   'provider_generation_must_be_false',
+  'invalid_scene_truth_receipt_ref',
   'spatial_required_must_be_false',
   "renderEngine: 'ffmpeg'",
   'providerCalled: false',
@@ -43,6 +44,8 @@ for (const token of [
 
 assert.ok(dockerfile.includes('apt-get install -y --no-install-recommends ffmpeg'), 'Studio worker image must include FFmpeg');
 assert.ok(createJob.includes('StudioLifeMovieRenderPayloadSchema'), 'createJob must validate Life Movies render payloads');
+assert.ok(sharedContract.includes('sceneTruthReceiptRef: z.string()'), 'Life Movies contract must require a SceneTruth receipt');
+assert.ok(worker.includes('sceneTruthReceiptRef: input.sceneTruthReceiptRef'), 'Render manifest must retain SceneTruth receipt provenance');
 assert.ok(sharedContract.includes('assertLifeMovieTenantPaths'), 'Life Movies contract must bind source/output paths to tenant authority');
 assert.ok(bridge.includes("defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN')"), 'Studio bridge must use a dedicated Secret Manager identity');
 assert.ok(bridge.includes("action: z.literal('create')"), 'Studio bridge must expose bounded create semantics');
