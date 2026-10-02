@@ -27,6 +27,15 @@ const PrivateSourcePayloadSchema = z.object({
   requestReceipt: z.string().trim().regex(/^req_[A-Za-z0-9_-]{12,128}$/).optional(),
 }).strict();
 
+const PrivateSourceIndexPayloadSchema = z.object({
+  sourceReceiptRef: z.string().trim().regex(/^psr_[A-Za-z0-9_-]{16,128}$/),
+  transcriptRef: z.string().trim().regex(/^private:[A-Za-z0-9_./:-]{8,512}$/),
+  provenanceRef: z.string().trim().regex(/^private:[A-Za-z0-9_./:-]{8,512}$/),
+  requestedPurpose: z.literal('memory-index'),
+  locale: z.string().trim().min(2).max(35).regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/).optional(),
+  requestReceipt: z.string().trim().regex(/^req_[A-Za-z0-9_-]{12,128}$/).optional(),
+}).strict();
+
 const CapturedRealityReconstructionPayloadSchema = z.object({
   sourceReceiptRefs: z.array(z.string().trim().min(8).max(256).regex(/^[A-Za-z0-9._:-]+$/)).min(1).max(32),
   studioProjectRef: z.string().trim().min(8).max(256).regex(/^[A-Za-z0-9._:-]+$/),
@@ -48,7 +57,9 @@ const CommunicationsMessagePayloadSchema = z.object({
 
 
 function isPrivateSourceJobType(jobType: string): boolean {
-  return jobType === 'memory.private-source.transcribe' || jobType === 'memory.private-source.reconstruct-place';
+  return jobType === 'memory.private-source.transcribe'
+    || jobType === 'memory.private-source.index'
+    || jobType === 'memory.private-source.reconstruct-place';
 }
 
 const JobConsentSchema = z.object({
@@ -153,26 +164,38 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   }
   const runtimeDefinition = RUNTIME_JOB_REGISTRY[jobType];
 
-  if (jobType === 'memory.private-source.transcribe') {
+  if (jobType === 'memory.private-source.transcribe' || jobType === 'memory.private-source.index') {
     if (consents?.length) {
       throw httpsError(
         'failed-precondition',
-        'Private-source transcription accepts only the canonical single consent field; plural consents are not permitted.'
+        'Private-source processing accepts only the canonical single consent field; plural consents are not permitted.'
       );
     }
     if (!consent) {
       throw httpsError(
         'failed-precondition',
-        'Private-source transcription requires canonical consent context: purpose, policy version, and decision receipt.'
+        'Private-source processing requires canonical consent context: purpose, policy version, and decision receipt.'
       );
     }
-    const privateSource = PrivateSourcePayloadSchema.safeParse(payload);
-    if (!privateSource.success) {
-      throw httpsError(
-        'invalid-argument',
-        'Private-source jobs require an opaque sourceReceiptRef and purpose-only payload; raw media URLs, transcript text, identities, addresses, and arbitrary fields are rejected.',
-        privateSource.error.flatten()
-      );
+
+    if (jobType === 'memory.private-source.transcribe') {
+      const privateSource = PrivateSourcePayloadSchema.safeParse(payload);
+      if (!privateSource.success) {
+        throw httpsError(
+          'invalid-argument',
+          'Private-source transcription requires an opaque sourceReceiptRef and purpose-only payload; raw media URLs, transcript text, identities, addresses, and arbitrary fields are rejected.',
+          privateSource.error.flatten()
+        );
+      }
+    } else {
+      const privateIndex = PrivateSourceIndexPayloadSchema.safeParse(payload);
+      if (!privateIndex.success) {
+        throw httpsError(
+          'invalid-argument',
+          'Private-source memory indexing requires opaque source/transcript/provenance refs only; raw transcript text, media URLs, identities, addresses, and arbitrary fields are rejected.',
+          privateIndex.error.flatten()
+        );
+      }
     }
   }
 
