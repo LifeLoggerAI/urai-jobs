@@ -80,7 +80,7 @@ function normalizedEnv(): string {
 }
 
 function inlineFallbackAllowed(jobType?: string): boolean {
-  if (jobType === 'memory.private-source.transcribe' || jobType === 'memory.private-source.reconstruct-place') return false;
+  if (jobType === 'memory.private-source.transcribe' || jobType === 'memory.private-source.index' || jobType === 'memory.private-source.reconstruct-place') return false;
   if (PRODUCTION_ENVS.has(normalizedEnv())) return false;
   return process.env.URAI_JOBS_ALLOW_INLINE_FALLBACK === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
 }
