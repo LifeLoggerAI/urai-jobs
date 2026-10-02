@@ -104,3 +104,20 @@ assert.ok(worker.includes("invalid_scene_truth_digest"), 'Studio worker must rej
 assert.ok(worker.includes("sceneTruthDigest: input.sceneTruthDigest"), 'Render manifest must retain SceneTruth digest provenance');
 assert.ok(bridge.includes("verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, payload.sceneTruthReceiptRef)"), 'Dedicated bridge must cryptographically verify SceneTruth receipt against project and digest');
 assert.ok(bridge.includes("defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC')"), 'Dedicated bridge must bind SceneTruth HMAC secret');
+
+assert.ok(
+  createJob.includes("studio.render.video must be created through the dedicated authenticated Studio Life Movie bridge"),
+  'Generic Jobs createJob must fail closed instead of bypassing SceneTruth HMAC verification',
+);
+assert.ok(
+  bridge.includes("SCENE_TRUTH_RECEIPT_BINDING_COLLECTION"),
+  'Dedicated bridge must bind each SceneTruth receipt on first use',
+);
+assert.ok(
+  bridge.includes("scene_truth_receipt_replay_conflict"),
+  'Dedicated bridge must reject cross-request SceneTruth receipt replay',
+);
+assert.ok(
+  bridge.includes("requestFingerprint") && bridge.includes("sceneTruthDigest"),
+  'SceneTruth replay binding must include exact request fingerprint and digest',
+);
