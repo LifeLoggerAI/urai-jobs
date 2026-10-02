@@ -13,7 +13,17 @@ Optional production variable:
 
 - `URAI_JOBS_PRODUCTION_URL`
 
-## 2. Firebase project setup
+## 2. SceneTruth receipt authority
+
+Before any Life Movie render admission is enabled:
+
+- Create `URAI_SCENE_TRUTH_RECEIPT_HMAC` in Secret Manager for both UrAi Studio and UrAi Jobs using the same high-entropy value.
+- Record and approve the exact numeric Secret Manager version for Jobs as `APPROVED_SCENE_TRUTH_HMAC_VERSION`.
+- Confirm the approved version is ENABLED and is the latest enabled version before Firebase deploy.
+- Never expose the secret value in GitHub, build output, receipts, or client configuration.
+- Retain only the secret name plus approved/resolved numeric versions in deployment evidence.
+
+## 3. Firebase project setup
 
 In Firebase Console:
 
@@ -23,7 +33,7 @@ In Firebase Console:
 - Confirm Functions deploy with Node.js 22 runtime.
 - Confirm Cloud Run worker URLs and required worker environment variables are configured.
 
-## 3. Auth and operator access
+## 4. Auth and operator access
 
 If the deployed UI uses Firebase Auth:
 
@@ -33,7 +43,7 @@ If the deployed UI uses Firebase Auth:
 - Assign operator/admin custom claims only to trusted URAI operators.
 - Confirm non-operator users cannot access operator-only controls.
 
-## 4. CI gate
+## 5. CI gate
 
 Before production deploy, verify these checks pass:
 
@@ -46,7 +56,7 @@ Before production deploy, verify these checks pass:
 - Firebase config smoke
 - launch-lock preflight
 
-## 5. Signoff ledger
+## 6. Signoff ledger
 
 Complete every section in:
 
@@ -63,7 +73,7 @@ Required approvals:
 - Domain / DNS / SSL
 - Product Launch
 
-## 6. Production deploy
+## 7. Production deploy
 
 Run the manual workflow:
 
@@ -77,7 +87,7 @@ Use input:
 LAUNCH-UNLOCK
 ```
 
-## 7. Production smoke
+## 8. Production smoke
 
 The production workflow should verify:
 
@@ -97,7 +107,7 @@ Manual checks after deploy:
 - Queue status transitions are observable.
 - Retry/cancel/admin controls behave according to operator permissions.
 
-## 8. Rollback
+## 9. Rollback
 
 If production fails:
 

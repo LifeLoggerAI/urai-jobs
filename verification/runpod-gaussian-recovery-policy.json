@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "urai-runpod-gaussian-recovery-safety-1",
+  "classification": "PAID_COMPUTE_HARD_OFF_UNTIL_EXACT_PREFLIGHT",
+  "purpose": "Prevent a repeat of unrecoverable networkless RunPod work while restoring the private Captured Reality Gaussian lane.",
+  "limits": {
+    "maxConcurrentPaidPods": 1,
+    "maxHourlyUsd": 1.25,
+    "maxInitialPaidRunUsd": 5.0,
+    "maxEstimatedRunHours": 4.0,
+    "autoStopIdleMinutes": 15,
+    "requirePerSecondOrOnDemandBilling": true,
+    "forbidSavingsPlanPurchase": true,
+    "forbidParallelGpuRuns": true
+  },
+  "storage": {
+    "networkVolumeRequired": true,
+    "networkVolumeTier": "standard",
+    "targetInitialGb": 50,
+    "maxInitialGb": 100,
+    "workspaceMount": "/workspace",
+    "forbidContainerOnlyPersistence": true,
+    "requireOffPodBackupOfCriticalOutputs": true
+  },
+  "recovery": {
+    "reuseExistingCheckpointBeforeRetraining": true,
+    "retrainOnlyWhenSourceOrQualityGateRequiresIt": true,
+    "currentExperimentalRuntimeSplatSha256": "c558ec1994d56d446f7a11766129d68f7db16b70d903ee3de22bfcccf6db2176",
+    "currentExperimentalMasterPlySha256": "5de49047e77afc9c42c2446d69b1b0ebc548c3824a8d9879fcbcc41b54c55cef",
+    "currentTrainedGaussianParamsSha256": "32de4351c19b4b780f222e40dbbbf0995c5cf54ed8ca729740af8797f9fee83d"
+  },
+  "paidExecutionGate": {
+    "requiredEnvironmentVariables": [
+      "RUNPOD_NETWORK_VOLUME_ID",
+      "URAI_RUNPOD_GPU_HOURLY_USD",
+      "URAI_RUNPOD_ESTIMATED_HOURS",
+      "URAI_RUNPOD_MAX_JOB_USD",
+      "URAI_RUNPOD_OUTPUT_BACKUP_TARGET",
+      "URAI_RUNPOD_ALLOW_PAID_EXECUTION"
+    ],
+    "exactAcknowledgement": "I_ACCEPT_THIS_EXACT_RUN",
+    "default": "DENY"
+  },
+  "completion": {
+    "checkpointBeforeStop": true,
+    "hashOutputsBeforeStop": true,
+    "copyOutputsToPersistentStorageBeforeStop": true,
+    "recordActualCostBeforeNextPaidRun": true,
+    "terminateOrStopComputeImmediatelyAfterJob": true
+  }
+}

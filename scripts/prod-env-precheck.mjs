@@ -11,8 +11,9 @@ const required = [
   "GCS_BUCKET_NAME",
   "NARRATOR_WORKER_URL",
   "ASSET_WORKER_URL",
-  "SPATIAL_WORKER_URL",
-  "STUDIO_WORKER_URL"
+  "STUDIO_WORKER_URL",
+  "COMMUNICATIONS_WORKER_URL",
+  "PRIVATE_SOURCE_WORKER_URL"
 ];
 
 const optional = [
@@ -25,8 +26,9 @@ const optional = [
 const urlKeys = new Set([
   "NARRATOR_WORKER_URL",
   "ASSET_WORKER_URL",
-  "SPATIAL_WORKER_URL",
-  "STUDIO_WORKER_URL"
+  "STUDIO_WORKER_URL",
+  "COMMUNICATIONS_WORKER_URL",
+  "PRIVATE_SOURCE_WORKER_URL"
 ]);
 
 const secretKeys = new Set([

@@ -137,6 +137,18 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  workers/captured-reality-worker:
+    dependencies:
+      express:
+        specifier: ^4.18.3
+        version: 4.22.1
+      express-rate-limit:
+        specifier: ^8.7.0
+        version: 8.7.0(express@4.22.1)
+      firebase-admin:
+        specifier: ^12.1.0
+        version: 12.7.0
+
   workers/career-worker:
     dependencies:
       express:
@@ -154,6 +166,28 @@ importers:
         version: 5.0.10
       typescript:
         specifier: ^5.3.3
+        version: 5.9.3
+
+  workers/private-source-worker:
+    dependencies:
+      axios:
+        specifier: ^1.16.0
+        version: 1.16.0
+      express:
+        specifier: ^4.18.3
+        version: 4.22.1
+    devDependencies:
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      '@types/node':
+        specifier: ^22.19.8
+        version: 22.19.8
+      rimraf:
+        specifier: ^5.0.5
+        version: 5.0.10
+      typescript:
+        specifier: ^5.7.2
         version: 5.9.3
 
   workers/narrator-worker:
@@ -2665,6 +2699,16 @@ packages:
       - supports-color
     dev: false
 
+  /express-rate-limit@8.7.0(express@4.22.1):
+    resolution: {integrity: sha512-hOwV7WOxXfjRpAM1DSJWZDXx3GhplwD8IfwuwvogD8i1Qnkgosw/H45s4ZnFAUHDAhPjlY9hLBvJhKmGMyY26g==}
+    engines: {node: '>= 16'}
+    peerDependencies:
+      express: '>= 4.11'
+    dependencies:
+      debug: 4.4.3
+      express: 4.22.1
+      ip-address: 10.2.0
+
   /extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
     requiresBuild: true
@@ -3328,6 +3372,10 @@ packages:
 
   /inherits@2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
+
+  /ip-address@10.2.0:
+    resolution: {integrity: sha512-/+S6j4E9AHvW9SWMSEY9Xfy66O5PWvVEJ08O0y5JGyEKQpojb0K0GKpz/v5HJ/G0vi3D2sjGK78119oXZeE0qA==}
+    engines: {node: '>= 12'}
 
   /ipaddr.js@1.9.1:
     resolution: {integrity: sha512-0KI/607xoxSToH7GjN1FfSbLoU0+btTicjsQSWQlh/hZykN8KpmMf7uYwPW3R+akZ6R/w18ZlXSHBYXiYUPO3g==}

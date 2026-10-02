@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "urai-jobs-captured-reality-worker-readiness-1",
+  "classification": "IMPLEMENTED_HARD_OFF_NOT_DEPLOYED",
+  "repository": "LifeLoggerAI/urai-jobs",
+  "worker": "captured-reality-worker",
+  "requiredRuntime": {
+    "workerUrl": "CAPTURED_REALITY_WORKER_URL",
+    "privateSourceAuthorityUrl": "PRIVATE_SOURCE_AUTHORITY_URL",
+    "privateSourceAuthorityToken": "PRIVATE_SOURCE_AUTHORITY_TOKEN",
+    "reconstructionEngineUrl": "CAPTURED_REALITY_ENGINE_URL",
+    "reconstructionEngineToken": "CAPTURED_REALITY_ENGINE_TOKEN",
+    "workerToken": "URAI_JOBS_WORKER_TOKEN"
+  },
+  "invariants": {
+    "defaultProductionWorkerSetIncludesCapturedReality": false,
+    "paidProviderSpendAuthorized": false,
+    "publicReleaseAuthorized": false,
+    "inlineFallbackAllowed": false,
+    "callbackRequiresMemoryConsent": true,
+    "callbackRequiresLocationConsent": true,
+    "callbackRequiresGovernedArtifacts": true
+  },
+  "status": {
+    "codeImplemented": true,
+    "deployPathImplemented": true,
+    "exactHeadCiRequired": true,
+    "deployed": false,
+    "engineBound": false,
+    "privateSourceAuthorityBound": false,
+    "reconstructionSceneProduced": false
+  }
+}

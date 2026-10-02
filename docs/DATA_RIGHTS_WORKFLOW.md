@@ -117,10 +117,42 @@ Never export:
 - raw internal stack traces not needed for user transparency
 - credentials or API keys
 
-## Open implementation tasks
+## Current implementation boundary
 
-- Add candidate profile collection and callable contracts.
-- Add export callable.
-- Add deletion/anonymization callable.
-- Add admin review UI for data-rights requests.
-- Add notification delivery after completion.
+The safe request/control plane is implemented in `functions/src/privacy/dataRights.ts` and exported from the Functions entrypoint.
+
+Implemented now:
+
+- authenticated export/deletion request intake;
+- optional `idempotencyKey` (8–128 ASCII letters/digits/._:-), scoped to the authenticated owner; concurrent identical retries return one request, changed payloads reject with `already-exists`;
+- owner-scoped request readback;
+- admin/operator request listing;
+- server-only Firestore request and audit records, created atomically in one batch;
+- declared status/createdAt composite index for filtered operator listing (requires index deployment);
+- explicit `HARD_OFF_PENDING_GOVERNED_WORKER` execution state;
+- deployment precheck coverage for the callable exports and Firestore protection.
+
+Not yet activated:
+
+- destructive deletion/anonymization execution;
+- export package generation/download delivery;
+- provider-side deletion propagation;
+- completion notification delivery;
+- backup/restore certification.
+
+Those operations remain hard-off until the governed worker, retention/legal policy, cross-tenant tests, and recovery evidence exist. Request intake must not be interpreted as completed export/deletion execution.
+
+## Remaining implementation tasks
+
+- Implement governed export worker and private delivery receipt.
+- Implement governed deletion/anonymization worker with legal-retention escalation.
+- Add provider deletion propagation where applicable.
+- Add completion notification delivery.
+- Add retention/TTL evidence and backup/restore drill receipt.
+- Add admin review UI if the operator console does not already expose the request queue.
+
+## Dormant request-record export preparation
+
+`prepareDataRightsRequestExport` is internal source preparation for the exact request/audit collections registered by Privacy. It is not exported as a callable, attached to a trigger, or admitted as a runtime job. It does not complete a request or deliver a download. Broader candidate/employer/jobs/queue/provider data is not covered and `crossSystemComplete` remains false.
+
+Preparation queries records for the server-supplied owner UID (future integration must derive it from authenticated authority), checks ownership again, paginates both registered collections, exports only allowlisted receipt fields, and returns counts plus a deterministic payload SHA-256. Notes, fingerprints, actor identities, unknown fields and credentials are omitted. Unregistered schemas, source failures and the 10,000-record bound fail the entire preparation rather than return a successful partial payload. Protected staging evidence and approved scope/retention/legal policy are still required before worker integration or activation.

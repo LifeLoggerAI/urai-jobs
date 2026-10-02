@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import * as functions from 'firebase-functions/v1';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { createLog } from '../core/logging.js';
@@ -25,6 +26,16 @@ export const onJobTerminalEvent = functions.firestore
     // idempotency without suppressing later terminal transitions.
     const transitionId = context.eventId;
     const eventId = terminalEventId(jobId, String(after.status), transitionId);
+    const analyticsProjection = {
+      schemaVersion: 'urai_job_terminal_analytics_v1',
+      analyticsEventId: createHash('sha256').update(`analytics:${eventId}`).digest('hex'),
+      eventType: 'job.terminal',
+      jobType: String(after.type ?? after.jobType ?? 'unknown'),
+      status: String(after.status),
+      targetSystem: after.target?.system ? String(after.target.system) : undefined,
+      emittedAt: new Date().toISOString(),
+    };
+
     const eventPayload = definedEntries({
       eventId,
       transitionId,
@@ -41,7 +52,8 @@ export const onJobTerminalEvent = functions.firestore
       progress: after.progress,
       resultRef: after.result?.resultId,
       errorCode: after.error?.code,
-      emittedAt: new Date().toISOString(),
+      emittedAt: analyticsProjection.emittedAt,
+      analytics: definedEntries(analyticsProjection),
     });
 
     const db = getFirestore();

@@ -14,33 +14,73 @@ const WORKER_NAME = process.env.URAI_WORKER_NAME || 'local-worker';
 const LEASE_MS = Number(process.env.URAI_LEASE_MS || 60000);
 const MAX_ATTEMPTS = Number(process.env.URAI_MAX_ATTEMPTS || 3);
 const PORT = Number(process.env.PORT || 0);
+const SOURCE_SHA = String(process.env.URAI_SOURCE_SHA || '');
+const SOURCE_SHA_PATTERN = /^[0-9a-f]{40}$/;
+const READINESS_STALE_MS = Math.max(15000, POLL_MS * 3);
 let lastLoopAt = Date.now();
 let lastClaimedJobId = '';
 let completedCount = 0;
 let failedCount = 0;
+let shuttingDown = false;
+
+function healthPayload() {
+  return {
+    ok: true,
+    workerName: WORKER_NAME,
+    jobType: JOB_TYPE_FILTER || null,
+    sourceSha: SOURCE_SHA || null,
+    shuttingDown,
+    lastLoopAt,
+    completedCount,
+    failedCount,
+  };
+}
+
+async function firestoreReady() {
+  try {
+    await Promise.race([
+      db.collection('jobQueue').limit(1).get(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('firestore_readiness_timeout')), 5000)),
+    ]);
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[WORKER] readiness Firestore probe failed: ${message}`);
+    return false;
+  }
+}
 
 function startHealthServer() {
   if (!PORT) return null;
 
-  const server = http.createServer((req, res) => {
-    const payload = JSON.stringify({
-      ok: true,
-      workerName: WORKER_NAME,
-      jobType: JOB_TYPE_FILTER || null,
-      shuttingDown,
-      lastLoopAt,
-      lastClaimedJobId: lastClaimedJobId || null,
-      completedCount,
-      failedCount
-    });
-
-    if (req.url === '/healthz' || req.url === '/readyz' || req.url === '/') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(payload);
+  const server = http.createServer(async (req, res) => {
+    if (req.url === '/healthz' || req.url === '/') {
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(healthPayload()));
       return;
     }
 
-    res.writeHead(404, { 'content-type': 'application/json' });
+    if (req.url === '/readyz') {
+      const loopFresh = Date.now() - lastLoopAt <= READINESS_STALE_MS;
+      const sourceShaExact = SOURCE_SHA_PATTERN.test(SOURCE_SHA);
+      const providerProjectPresent = Boolean(process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT);
+      const firestoreReachable = !shuttingDown && loopFresh && sourceShaExact && providerProjectPresent
+        ? await firestoreReady()
+        : false;
+      const checks = {
+        notShuttingDown: !shuttingDown,
+        loopFresh,
+        sourceShaExact,
+        providerProjectPresent,
+        firestoreReachable,
+      };
+      const ok = Object.values(checks).every(Boolean);
+      res.writeHead(ok ? 200 : 503, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ...healthPayload(), ok, checks }));
+      return;
+    }
+
+    res.writeHead(404, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     res.end(JSON.stringify({ ok: false, error: 'not_found' }));
   });
 
@@ -364,8 +404,6 @@ async function failJob(jobId, err) {
   await writeLog(jobId, 'error', message);
   console.error(`[WORKER] failed job=${jobId} error=${message}`);
 }
-
-let shuttingDown = false;
 
 async function loop() {
   while (!shuttingDown) {
