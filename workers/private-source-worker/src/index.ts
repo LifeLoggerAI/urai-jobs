@@ -234,9 +234,17 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
       const sceneTruthRef = String(provider.data?.sceneTruthRef || '');
       const provenanceRef = String(provider.data?.provenanceRef || '');
       const checksum = String(provider.data?.checksum || '');
+      const lifeModelSchemaVersion = String(provider.data?.lifeModelSchemaVersion || '');
+      const syntheticOutputMayBecomeHistoricalSource = provider.data?.syntheticOutputMayBecomeHistoricalSource;
       const refs = [memoryIndexRef, entityGraphRef, temporalIndexRef, placeIndexRef, conflictSetRef, sceneTruthRef, provenanceRef];
       if (refs.some((ref) => !PRIVATE_REF.test(ref)) || !SHA256.test(checksum)) {
         throw new Error('memory index provider response is missing private refs or integrity checksum');
+      }
+      if (lifeModelSchemaVersion !== 'urai-life-model-v1') {
+        throw new Error('memory index provider returned an unsupported life model schema');
+      }
+      if (syntheticOutputMayBecomeHistoricalSource !== false) {
+        throw new Error('memory index provider did not prove the synthetic-memory firewall');
       }
 
       return res.status(200).send({
@@ -252,6 +260,8 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
           sceneTruthRef,
           provenanceRef,
           checksum,
+          lifeModelSchemaVersion,
+          syntheticOutputMayBecomeHistoricalSource: false,
           requestedPurpose: 'memory-index',
         },
       });
