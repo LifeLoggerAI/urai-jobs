@@ -42,6 +42,11 @@ check('memory-index readiness is independent from transcription readiness', work
 check('transcription provider URL is resolved only on transcription path', worker.indexOf("const transcribeUrl = httpsUrl('PRIVATE_SOURCE_TRANSCRIBE_URL')") > worker.indexOf("if (job.jobType === 'memory.private-source.index')"));
 
 check('worker returns correlation refs without raw memory content', worker.includes('memoryIndexRef') && worker.includes('entityGraphRef') && worker.includes('temporalIndexRef') && worker.includes('placeIndexRef') && worker.includes('conflictSetRef') && worker.includes('sceneTruthRef'));
+check('memory index admits opaque incremental re-correlation context', createJob.includes('priorMemoryIndexRef') && createJob.includes('correlationTrigger') && worker.includes('priorMemoryIndexRef') && worker.includes("'stronger-source'"));
+check('memory index success requires source fixity and dependency lineage', worker.includes('sourceFixityRef') && worker.includes('dependencyGraphRef'));
+check('memory index success requires machine-readable terminal backlog state', worker.includes("new Set(['INDEXED', 'DUPLICATE', 'CONFLICTED'])") && worker.includes('non-terminal backlog state as success'));
+check('memory index success carries monotonic correlation revision', worker.includes('correlationRevision') && worker.includes('valid correlation revision'));
+check('memory index returns correlation trigger used for this revision', worker.includes('correlationTrigger') && worker.includes('valid correlation trigger'));
 
 check('worker refuses synthetic success when unconfigured', worker.includes('PRIVATE_SOURCE_WORKER_NOT_READY') && worker.includes('refusing synthetic success'));
 check('worker never returns transcript text', !/transcript(Text|\s*:\s*provider\.data)/.test(worker));
