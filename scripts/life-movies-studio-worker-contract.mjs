@@ -86,7 +86,7 @@ assert.ok(worker.includes("const usedSourceIds = new Set(["), 'Audio cue sources
 assert.ok(worker.includes("...input.audioCues.map((cue) => cue.sourceId)"), 'Audio cue source downloads must be provenance/tenant governed');
 
 assert.ok(deploy.includes('narrator-worker|asset-worker|studio-worker'), 'canonical deploy script must recognize completed studio-worker');
-assert.ok(approved.includes("new Set(['narrator-worker', 'asset-worker', 'studio-worker'])"), 'approved wrapper must admit studio-worker only through explicit approved worker selection');
-assert.ok(approved.includes('narrator-worker|asset-worker|studio-worker'), 'exact-source build wrapper must admit studio-worker');
+assert.ok(approved.includes("new Set(['narrator-worker', 'asset-worker', 'studio-worker', 'private-source-worker', 'captured-reality-worker'])"), 'approved wrapper must admit studio-worker only through the explicit approved worker allowlist');
+assert.ok(approved.includes('narrator-worker|asset-worker|studio-worker|private-source-worker|captured-reality-worker'), 'exact-source build wrapper must admit studio-worker within the current approved worker set');
 
 console.log('Life Movies Studio render-worker source contract verified');
