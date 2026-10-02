@@ -46,7 +46,7 @@ const CreateSchema = IdentitySchema.extend({
 }).strict();
 
 const PlanActionSchema = IdentitySchema.extend({
-  action: z.enum(['status', 'cancel', 'playback', 'resume', 'assemble', 'delete-output']),
+  action: z.enum(['status', 'cancel', 'playback', 'download', 'resume', 'assemble', 'delete-output']),
   planId: z.string().trim().regex(/^lmp_[A-Za-z0-9_-]{20,64}$/),
 }).strict();
 
@@ -532,7 +532,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
   });
 }
 
-async function readPlanPlayback(planId: string, tenantId: string, userId: string) {
+async function readPlanPlayback(planId: string, tenantId: string, userId: string, disposition: 'inline' | 'attachment' = 'inline') {
   const plan = await loadPlan(planId, tenantId, userId);
   await assertPlanConsentActive(plan);
   const db = getFirestore();
@@ -565,10 +565,10 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
           throw new Error('longform_output_boundary_mismatch');
         }
         const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
-          action: 'read', expires: expiresAtMs, responseDisposition: 'inline', responseType: video.mimeType,
+          action: 'read', expires: expiresAtMs, responseDisposition: disposition, responseType: video.mimeType,
         });
         const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).getSignedUrl({
-          action: 'read', expires: expiresAtMs, responseDisposition: 'inline', responseType: subtitle.mimeType,
+          action: 'read', expires: expiresAtMs, responseDisposition: disposition, responseType: subtitle.mimeType,
         });
         finalFile = {
           video: { url: videoUrl, mimeType: video.mimeType, checksum: video.checksum },
@@ -605,13 +605,13 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
     const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
       action: 'read',
       expires: expiresAtMs,
-      responseDisposition: 'inline',
+      responseDisposition: disposition,
       responseType: video.mimeType,
     });
     const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).getSignedUrl({
       action: 'read',
       expires: expiresAtMs,
-      responseDisposition: 'inline',
+      responseDisposition: disposition,
       responseType: subtitle.mimeType,
     });
 
@@ -937,6 +937,12 @@ export const studioLifeMovieLongformBridge = onRequest({
       res.status(200).json({ ok: true, playback: result });
       return;
     }
+    if (parsed.data.action === 'download') {
+      const result = await readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId, 'attachment');
+      if (!result.finalFile) throw new Error('longform_final_assembly_not_ready');
+      res.status(200).json({ ok: true, download: result });
+      return;
+    }
     if (parsed.data.action === 'resume') {
       const result = await resumePlan(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);
       res.status(200).json({ ok: true, resume: result });
@@ -962,6 +968,7 @@ export const studioLifeMovieLongformBridge = onRequest({
       : code === 'longform_output_bucket_authority_unavailable' ? 503
       : code === 'longform_plan_not_ready_for_playback' ? 409
       : code === 'longform_plan_not_ready_for_assembly' ? 409
+      : code === 'longform_final_assembly_not_ready' ? 409
       : code === 'longform_segment_checksum_missing' ? 409
       : code === 'longform_assembly_binding_mismatch' ? 409
       : code === 'longform_plan_cancelled' ? 409
