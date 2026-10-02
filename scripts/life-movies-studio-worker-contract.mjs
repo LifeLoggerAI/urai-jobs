@@ -6,6 +6,8 @@ const worker = fs.readFileSync(new URL('../workers/studio-worker/index.js', impo
 const dockerfile = fs.readFileSync(new URL('../workers/studio-worker/Dockerfile', import.meta.url), 'utf8');
 const createJob = fs.readFileSync(new URL('../functions/src/jobs/createJob.ts', import.meta.url), 'utf8');
 const sharedContract = fs.readFileSync(new URL('../functions/src/jobs/studioLifeMovieContract.ts', import.meta.url), 'utf8');
+assert.ok(sharedContract.includes("!value.includes('\\\\')"), 'Studio render admission must reject a single backslash in private object paths');
+assert.ok(worker.includes("value.includes('\\\\')"), 'Studio worker must retain matching single-backslash rejection');
 const bridge = fs.readFileSync(new URL('../functions/src/jobs/studioLifeMovieBridge.ts', import.meta.url), 'utf8');
 const functionsIndex = fs.readFileSync(new URL('../functions/src/index.ts', import.meta.url), 'utf8');
 const deploy = fs.readFileSync(new URL('./deploy-workers.sh', import.meta.url), 'utf8');

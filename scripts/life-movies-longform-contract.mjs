@@ -21,6 +21,8 @@ for (const marker of [
 
 assert.match(source, /childDigest\(value\.renderPlanDigest, index, range\.startMs, range\.endMs\)/)
 assert.match(source, /outputPrefix: .*\/segments\//)
+assert.ok(source.includes("!value.includes('\\\\')"), 'long-form output prefix must reject a single backslash')
+assert.ok(shortContract.includes("!value.includes('\\\\')"), 'short render admission must reject a single backslash before worker dispatch')
 assert.doesNotMatch(source, /maxDurationMs:\s*30_000/)
 assert.ok(shortContract.includes('maxDurationMs: 30_000'), 'short synchronous contract must remain unchanged')
 assert.ok(shortContract.includes('maxPixelFrames: 1920 * 1080 * 30 * 15'), 'short 1080p30 pixel-frame budget must remain unchanged')

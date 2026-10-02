@@ -24,7 +24,7 @@ export const StudioLifeMovieLongformPayloadSchema = z.object({
   renderPlanDigest: z.string().regex(/^[a-f0-9]{64}$/),
   sceneTruthReceiptRef: z.string().trim().regex(/^str_[A-Za-z0-9_-]{16,64}_[a-z0-9]{8,16}_[A-Za-z0-9_-]{40,64}$/),
   sceneTruthDigest: z.string().trim().regex(/^[a-f0-9]{64}$/),
-  outputPrefix: z.string().trim().min(1).max(1024).refine((value) => !value.startsWith('/') && !value.includes('..') && !value.includes('\\\\'), 'Unsafe output prefix'),
+  outputPrefix: z.string().trim().min(1).max(1024).refine((value) => !value.startsWith('/') && !value.includes('..') && !value.includes('\\'), 'Unsafe output prefix'),
   width: z.number().int().min(320).max(1920).multipleOf(2).default(1920),
   height: z.number().int().min(320).max(1080).multipleOf(2).default(1080),
   fps: z.union([z.literal(24), z.literal(25), z.literal(30)]).default(30),
