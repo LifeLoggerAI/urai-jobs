@@ -198,6 +198,15 @@ async function loadBoundJob(tenantId: string, userId: string, jobId: string) {
   return job;
 }
 
+function allowedLifeMovieOutputBuckets() {
+  const buckets = new Set([
+    String(process.env.GCS_BUCKET_NAME || '').trim(),
+    ...String(process.env.URAI_STUDIO_OUTPUT_BUCKETS || '').split(',').map((value) => value.trim()),
+  ].filter(Boolean));
+  if (!buckets.size) throw new Error('life_movie_output_bucket_authority_unavailable');
+  return buckets;
+}
+
 function parseGcsRef(ref: unknown) {
   if (typeof ref !== 'string' || !ref.startsWith('gs://')) throw new Error('invalid_output_ref');
   const raw = ref.slice(5);
@@ -217,6 +226,11 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
   const video = artifacts.find((artifact) => artifact?.kind === 'mp4');
   if (!video?.ref) throw new Error('life_movie_video_output_missing');
   const videoLocation = parseGcsRef(video.ref);
+  const allowedBuckets = allowedLifeMovieOutputBuckets();
+  const expectedPrefix = `tenants/${tenantId}/life-movies/`;
+  if (!allowedBuckets.has(videoLocation.bucket) || !videoLocation.objectPath.startsWith(expectedPrefix)) {
+    throw new Error('life_movie_output_boundary_mismatch');
+  }
 
   const expiresAtMs = Date.now() + 5 * 60 * 1000;
   const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
@@ -230,6 +244,9 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
   let subtitleText = '';
   if (subtitle?.ref) {
     const subtitleLocation = parseGcsRef(subtitle.ref);
+    if (!allowedBuckets.has(subtitleLocation.bucket) || !subtitleLocation.objectPath.startsWith(expectedPrefix)) {
+      throw new Error('life_movie_output_boundary_mismatch');
+    }
     const [bytes] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).download();
     if (bytes.length > 2 * 1024 * 1024) throw new Error('life_movie_subtitles_too_large');
     subtitleText = bytes.toString('utf8');
@@ -259,8 +276,11 @@ async function deleteBoundMovieOutput(tenantId: string, userId: string, jobId: s
     .map(parseGcsRef);
 
   const expectedPrefix = `tenants/${tenantId}/life-movies/`;
+  const allowedBuckets = allowedLifeMovieOutputBuckets();
   for (const location of locations) {
-    if (!location.objectPath.startsWith(expectedPrefix)) throw new Error('output_delete_boundary_mismatch');
+    if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(expectedPrefix)) {
+      throw new Error('output_delete_boundary_mismatch');
+    }
   }
 
   await Promise.all(locations.map(({ bucket, objectPath }) =>
@@ -396,6 +416,8 @@ export const studioLifeMovieBridge = onRequest({
       : code === 'idempotency_conflict' ? 409
       : code === 'job_not_ready_for_playback' ? 409
       : code === 'output_delete_boundary_mismatch' ? 403
+      : code === 'life_movie_output_boundary_mismatch' ? 403
+      : code === 'life_movie_output_bucket_authority_unavailable' ? 503
       : 400;
     res.status(status).json({ ok: false, error: code });
   }
