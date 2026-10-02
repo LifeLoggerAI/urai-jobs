@@ -17,6 +17,7 @@ const active = [
   'studio.render.video',
   'communications.message.send',
   'memory.private-source.transcribe',
+  'memory.private-source.index',
   'memory.private-source.reconstruct-place',
 ];
 
@@ -46,6 +47,8 @@ check('executeJob contains no broad jobType prefix fallback', !executeJob.includ
 check('implicit narrator default removed', !executeJob.includes("job.jobType || 'narrator.tts'"));
 check('communications remains exact-type admission', runtime.includes("'communications.message.send'"));
 check('private-source remains exact-type admission', runtime.includes("'memory.private-source.transcribe'"));
+check('private-source memory index is exact-type admission', runtime.includes("'memory.private-source.index'"));
+check('private-source memory index uses the dedicated private worker', runtime.includes("'memory.private-source.index':") && runtime.includes("workerEnvKey: 'PRIVATE_SOURCE_WORKER_URL'"));
 check('captured-reality reconstruction is exact-type admission', runtime.includes("'memory.private-source.reconstruct-place'"));
 check('captured-reality worker is dedicated', runtime.includes("workerEnvKey: 'CAPTURED_REALITY_WORKER_URL'"));
 check('captured-reality does not use inline fallback', executeJob.includes("jobType === 'memory.private-source.reconstruct-place'"));
