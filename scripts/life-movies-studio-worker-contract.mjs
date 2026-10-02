@@ -20,6 +20,7 @@ for (const token of [
   'source_outside_tenant',
   'public_release_must_be_false',
   'provider_generation_must_be_false',
+  'invalid_scene_truth_receipt_ref',
   'spatial_required_must_be_false',
   "renderEngine: 'ffmpeg'",
   'providerCalled: false',
@@ -45,6 +46,8 @@ for (const token of [
 
 assert.ok(dockerfile.includes('apt-get install -y --no-install-recommends ffmpeg'), 'Studio worker image must include FFmpeg');
 assert.ok(createJob.includes('StudioLifeMovieRenderPayloadSchema'), 'createJob must validate Life Movies render payloads');
+assert.ok(sharedContract.includes('sceneTruthReceiptRef: z.string()'), 'Life Movies contract must require a SceneTruth receipt');
+assert.ok(worker.includes('sceneTruthReceiptRef: input.sceneTruthReceiptRef'), 'Render manifest must retain SceneTruth receipt provenance');
 assert.ok(sharedContract.includes('assertLifeMovieTenantPaths'), 'Life Movies contract must bind source/output paths to tenant authority');
 assert.ok(bridge.includes("defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN')"), 'Studio bridge must use a dedicated Secret Manager identity');
 assert.ok(bridge.includes("action: z.literal('create')"), 'Studio bridge must expose bounded create semantics');
@@ -90,8 +93,36 @@ assert.ok(sharedContract.includes('Audio cue must fit inside the rendered timeli
 assert.ok(worker.includes("const usedSourceIds = new Set(["), 'Audio cue sources must use the same governed download path');
 assert.ok(worker.includes("...input.audioCues.map((cue) => cue.sourceId)"), 'Audio cue source downloads must be provenance/tenant governed');
 
-assert.ok(deploy.includes('narrator-worker|asset-worker|studio-worker'), 'canonical deploy script must recognize completed studio-worker');
-assert.ok(approved.includes("new Set(['narrator-worker', 'asset-worker', 'studio-worker', 'private-source-worker', 'captured-reality-worker'])"), 'approved wrapper must admit studio-worker only through the explicit approved worker allowlist');
-assert.ok(approved.includes('narrator-worker|asset-worker|studio-worker|private-source-worker|captured-reality-worker'), 'exact-source build wrapper must admit studio-worker within the current approved worker set');
+assert.ok(deploy.includes('narrator-worker|asset-worker|studio-worker|private-source-worker|captured-reality-worker'), 'canonical deploy script must recognize completed studio-worker');
+assert.ok(approved.includes("new Set(['narrator-worker', 'asset-worker', 'studio-worker', 'private-source-worker', 'captured-reality-worker'])"), 'approved wrapper must admit studio-worker only through explicit approved worker selection');
+assert.ok(approved.includes('narrator-worker|asset-worker|studio-worker'), 'exact-source build wrapper must admit studio-worker');
 
 console.log('Life Movies Studio render-worker source contract verified');
+
+assert.ok(sharedContract.includes("sceneTruthReceiptRef: z.string().trim().regex(/^str_"), 'Jobs admission must fail closed on SceneTruth receipt syntax');
+assert.ok(worker.includes("invalid_scene_truth_receipt_ref"), 'Studio worker must reject missing or malformed SceneTruth receipts');
+assert.ok(bridge.includes("sceneTruthReceiptRef: payload.sceneTruthReceiptRef"), 'Jobs bridge audit metadata must retain the SceneTruth receipt');
+assert.ok(bridge.includes("sceneTruthReceiptRef: typeof typed.sceneTruthReceiptRef"), 'Jobs safe status projection must retain only the opaque SceneTruth receipt');
+
+assert.ok(sharedContract.includes("sceneTruthDigest: z.string().trim().regex(/^[a-f0-9]{64}$/)"), 'Jobs admission must require exact SceneTruth digest syntax');
+assert.ok(worker.includes("invalid_scene_truth_digest"), 'Studio worker must reject missing or malformed SceneTruth digests');
+assert.ok(worker.includes("sceneTruthDigest: input.sceneTruthDigest"), 'Render manifest must retain SceneTruth digest provenance');
+assert.ok(bridge.includes("verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, payload.sceneTruthReceiptRef)"), 'Dedicated bridge must cryptographically verify SceneTruth receipt against project and digest');
+assert.ok(bridge.includes("defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC')"), 'Dedicated bridge must bind SceneTruth HMAC secret');
+
+assert.ok(
+  createJob.includes("studio.render.video must be created through the dedicated authenticated Studio Life Movie bridge"),
+  'Generic Jobs createJob must fail closed instead of bypassing SceneTruth HMAC verification',
+);
+assert.ok(
+  bridge.includes("SCENE_TRUTH_RECEIPT_BINDING_COLLECTION"),
+  'Dedicated bridge must bind each SceneTruth receipt on first use',
+);
+assert.ok(
+  bridge.includes("scene_truth_receipt_replay_conflict"),
+  'Dedicated bridge must reject cross-request SceneTruth receipt replay',
+);
+assert.ok(
+  bridge.includes("requestFingerprint") && bridge.includes("sceneTruthDigest"),
+  'SceneTruth replay binding must include exact request fingerprint and digest',
+);
