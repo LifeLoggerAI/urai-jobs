@@ -160,6 +160,8 @@ function parsePayload(job) {
   const projectId = safeSegment(String(payload.projectId || ''), 'project_id');
   const renderPlanDigest = String(payload.renderPlanDigest || '');
   if (!/^[a-f0-9]{64}$/.test(renderPlanDigest)) throw new Error('invalid_render_plan_digest');
+  const sceneTruthReceiptRef = String(payload.sceneTruthReceiptRef || '');
+  if (!/^str_[A-Za-z0-9_-]{16,128}$/.test(sceneTruthReceiptRef)) throw new Error('invalid_scene_truth_receipt_ref');
   if (payload.publicReleaseAuthorized !== false) throw new Error('public_release_must_be_false');
   if (payload.providerGenerationAuthorized !== false) throw new Error('provider_generation_must_be_false');
   if (payload.spatialRequired !== false) throw new Error('spatial_required_must_be_false');
@@ -259,6 +261,7 @@ function parsePayload(job) {
     tenantId,
     projectId,
     renderPlanDigest,
+    sceneTruthReceiptRef,
     width,
     height,
     fps,
@@ -522,6 +525,7 @@ async function renderLifeMovie(job) {
       tenantId: input.tenantId,
       projectId: input.projectId,
       renderPlanDigest: input.renderPlanDigest,
+      sceneTruthReceiptRef: input.sceneTruthReceiptRef,
       renderEngine: 'ffmpeg',
       providerCalled: false,
       providerSpendAuthorized: false,
@@ -588,6 +592,7 @@ async function renderLifeMovie(job) {
         { kind: 'manifest', ref: `gs://${bucketName}/${outputPaths.manifest}`, mimeType: 'application/json', checksum: manifestHash },
       ],
       renderPlanDigest: input.renderPlanDigest,
+      sceneTruthReceiptRef: input.sceneTruthReceiptRef,
     };
   } catch (error) {
     throw control.signal.aborted ? control.signal.reason : error;
