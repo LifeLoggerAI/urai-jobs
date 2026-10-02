@@ -65,8 +65,10 @@ for(const marker of [
   'CAPTURED_REALITY_ENGINE_TOKEN=',
 ]) assert.ok(deploy.includes(marker), `deploy marker: ${marker}`);
 
+const workerAdmissionLine = deploy.split('\n').map((line) => line.trim()).find((line) => line.startsWith('narrator-worker|'));
+assert.ok(workerAdmissionLine, 'production worker admission case must exist');
 for (const workerName of ['narrator-worker', 'asset-worker', 'studio-worker', 'private-source-worker', 'captured-reality-worker']) {
-  assert.match(deploy, new RegExp(`(^|\\|)${workerName}(\\||\\))`), `worker admission marker: ${workerName}`);
+  assert.ok(workerAdmissionLine.includes(workerName), `worker admission marker: ${workerName}`);
 }
 assert.ok(!/URAI_JOBS_DEPLOY_WORKERS:-[^\n]*captured-reality-worker/.test(deploy), 'Captured Reality must not enter the default production worker set');
 assert.equal(capturedWorkerPackage.dependencies['express-rate-limit'], '^8.7.0');
