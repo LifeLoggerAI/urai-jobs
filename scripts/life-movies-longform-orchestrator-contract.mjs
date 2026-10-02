@@ -30,7 +30,7 @@ for (const marker of [
   "transaction.create(jobDoc(jobId)",
   "transaction.create(jobQueueEntryDoc(jobId)",
   "transaction.getAll(...childRefs)",
-  "action: z.enum(['status', 'cancel', 'playback'])",
+  "action: z.enum(['status', 'cancel', 'playback', 'resume', 'delete-output'])",
   "readPlanPlayback",
   "longform_plan_not_ready_for_playback",
   "longform_output_boundary_mismatch",
@@ -47,6 +47,16 @@ for (const marker of [
   "status: 'CANCELLED'",
   "consent: input.consent",
   "publicReleaseAuthorized: false",
+  "consentRevoked: revoked",
+  "await assertPlanConsentActive(plan)",
+  "async function resumePlan(",
+  "['FAILED', 'DEAD', 'CANCELLED']",
+  "'execution.attemptCount': 0",
+  "async function deletePlanOutputs(",
+  "retainedSourceMedia: true",
+  "output: FieldValue.delete()",
+  "if (parsed.data.action === 'resume')",
+  "if (parsed.data.action === 'delete-output')",
 ]) assert.ok(bridge.includes(marker), `long-form orchestrator missing ${marker}`)
 
 assert.ok(contract.includes('assertLifeMovieLongformTenantPaths'), 'long-form contract must bind source/output paths to tenant authority')
