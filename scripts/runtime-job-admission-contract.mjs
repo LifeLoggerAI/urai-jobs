@@ -15,6 +15,7 @@ const active = [
   'asset-render',
   'asset.render',
   'studio.render.video',
+  'studio.assemble.video',
   'communications.message.send',
   'memory.private-source.transcribe',
   'memory.private-source.index',
@@ -38,6 +39,8 @@ for (const forbidden of [
   check('active registry does not advertise ' + forbidden, !runtime.includes(`'${forbidden}`));
 }
 
+check('assembly remains exact-type admission', runtime.includes("'studio.assemble.video'"));
+check('assembly cannot use generic createJob', createJob.includes("studio.assemble.video must be created through the dedicated authenticated Studio Life Movie long-form bridge"));
 check('createJob uses canonical active runtime admission', createJob.includes('isActiveRuntimeJobType(jobType)'));
 check('createJob broad allowlist removed', !createJob.includes('ALLOWED_JOB_TYPE_PATTERNS'));
 check('executeJob derives env from canonical registry', executeJob.includes('workerEnvKeyForJobType(jobType)'));
