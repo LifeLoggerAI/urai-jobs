@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { Job } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
+import { isConsentBlocked } from './consentRevocation.js';
 
 // URAI Jobs worker routing audit markers.
 // asset/spatial/studio subsystem workers route: '/'
@@ -304,6 +305,11 @@ export const executeJob = onMessagePublished({
     }
 
     const job = jobSnapshot.data() as Job;
+    if (await isConsentBlocked(job, transaction)) {
+      transaction.update(jobRef, { status: 'CANCELLED', updatedAt: FieldValue.serverTimestamp(), error: { message: 'Consent revoked or consent context is missing.' } });
+      transaction.update(queueRef, { status: 'CANCELLED', updatedAt: FieldValue.serverTimestamp() });
+      return { action: 'ignore' as const, reason: 'consent-blocked' };
+    }
     const decision = decideExecutionStart(job, leaseToken);
     if (decision.action === 'ignore') {
       return decision;
