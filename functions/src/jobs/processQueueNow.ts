@@ -6,6 +6,7 @@ import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/sh
 import { returnLeaseAfterPublishFailure } from '../core/dispatchRecovery.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { isTerminalJobStatus } from './executionGuards.js';
+import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 
 const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
 const LEASE_DURATION_MS = 60 * 1000;
@@ -65,6 +66,20 @@ function terminalQueueStatus(status: unknown): JobQueueStatus {
   if (status === 'CANCELLED') return 'CANCELLED';
   if (status === 'DEAD') return 'DEAD';
   return 'DONE';
+}
+
+function jobConsentContexts(job: Job) {
+  const contexts = [
+    ...(isConsentContext(job.consent) ? [job.consent] : []),
+    ...(Array.isArray(job.consents) ? job.consents.filter(isConsentContext) : []),
+  ];
+  const seen = new Set<string>();
+  return contexts.filter((context) => {
+    const key = `${context.purpose}\n${context.policyVersion}\n${context.decisionReceiptId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export const processQueueNow = onCall(callableOptions, async (request) => {
@@ -127,6 +142,32 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
 
       if (job.status !== 'PENDING') {
         return { lease: null, outcome: 'master-not-pending' as const };
+      }
+
+      const consentContexts = jobConsentContexts(job);
+      if (job.ownerUid && consentContexts.length > 0) {
+        const blockSnapshots = await Promise.all(
+          consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
+        );
+        const blockedPurpose = blockSnapshots
+          .map((snapshot, index) => ({ snapshot, purpose: consentContexts[index].purpose }))
+          .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
+        if (blockedPurpose) {
+          transaction.update(masterJobRef, {
+            status: 'CANCELLED',
+            lease: FieldValue.delete(),
+            updatedAt: now,
+            completedAt: now,
+            error: { message: `Consent revoked for purpose ${blockedPurpose} before queue lease.` },
+          });
+          transaction.update(queueRef, {
+            status: 'CANCELLED',
+            lease: FieldValue.delete(),
+            updatedAt: now,
+            'dispatch.lastError': `Consent revoked for purpose ${blockedPurpose} before queue lease.`,
+          });
+          return { lease: null, outcome: 'consent-revoked' as const };
+        }
       }
 
       const newLease = createLease(workerId);
