@@ -5,6 +5,7 @@ import { ulid } from 'ulid';
 import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { canRequeueUnstartedLease, isTerminalJobStatus } from './executionGuards.js';
+import { isConsentBlocked } from './consentRevocation.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
 const MAX_DISPATCH_RETRIES = 3;
@@ -252,6 +253,11 @@ export const processQueueTick = onSchedule('every 1 minutes', async () => {
         return null;
       }
       if (job.status !== 'PENDING') return null;
+      if (await isConsentBlocked(job, transaction)) {
+        transaction.update(masterJobRef, { status: 'CANCELLED', updatedAt: now, error: { message: 'Consent revoked or consent context is missing.' } });
+        transaction.update(queueRef, { status: 'CANCELLED', updatedAt: now, error: { message: 'Consent revoked or consent context is missing.' } });
+        return null;
+      }
 
       const newLease = createLease(tickWorkerId);
       const leaseUpdate = {
