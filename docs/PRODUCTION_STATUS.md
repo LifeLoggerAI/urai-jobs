@@ -2,7 +2,9 @@
 
 Last updated: 2026-05-20
 
-URAI Jobs Runtime is deployed and verified in production on the canonical Firebase Hosting URLs.
+**Historical production evidence — not current V200 release authority.**
+
+This document preserves a prior production deployment/verification record. Current Jobs V200 production lock remains **UNPROVEN / LIVE WORKER PROOF REQUIRED** under `LOCK.md`; historical deployment evidence must not be promoted to current release/runtime proof without fresh exact-SHA evidence.
 
 Successful production deploy workflow run: 26189879850.
 
@@ -49,4 +51,4 @@ Tracking issue:
 
 - issue 50, Route uraijobs.com and www to URAI Jobs Firebase Hosting
 
-Conclusion: the runtime is production deployed and verified. Custom-domain DNS/Firebase Hosting attachment remains external routing work. Optional callable smoke can be enabled after PROD_SMOKE_ID_TOKEN is configured.
+Conclusion: the historical runtime deployment record and smoke evidence remain retained for provenance. Current production deployment/runtime identity and worker proof require fresh exact-SHA evidence. Custom-domain DNS/Firebase Hosting attachment remains external routing work, and optional callable smoke still requires the configured production test authority.
