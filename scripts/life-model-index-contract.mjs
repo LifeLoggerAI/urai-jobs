@@ -16,6 +16,8 @@ check('revocation invalidates derivatives', contract.invariants.consentRevocatio
 check('worker requires canonical schema from index provider', worker.includes("lifeModelSchemaVersion !== 'urai-life-model-v1'"));
 check('worker requires provider synthetic-memory firewall proof', worker.includes('syntheticOutputMayBecomeHistoricalSource !== false'));
 check('worker returns explicit firewall state', worker.includes('syntheticOutputMayBecomeHistoricalSource: false'));
+check('source authority must reject synthetic or UNKNOWN source promotion', worker.includes("authorization.data?.synthetic !== false") && worker.includes('LIFE_MODEL_EVIDENCE_CLASSES') && !worker.includes("'UNKNOWN',"));
+check('source evidence class must survive provider round trip', worker.includes('sourceEvidenceClass') && worker.includes('indexedSourceEvidenceClass !== sourceEvidenceClass'));
 
 if (failed) process.exit(1);
 console.log('[PASS] LIFE_MODEL_INDEX_CONTRACT');
