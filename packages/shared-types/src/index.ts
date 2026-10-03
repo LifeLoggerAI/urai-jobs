@@ -65,6 +65,7 @@ export interface Job {
   retryCount?: number;
   execution?: JobExecutionMeta;
   lease?: JobLease;
+  consent?: JobConsentContext;
   ownerSubsystem?: string;
   createdBy?: string;
   output?: unknown;
