@@ -31,6 +31,8 @@ check('worker validates governed private-source job types', worker.includes("'me
 check('worker requires server-owned owner uid', worker.includes('server-owned ownerUid is required'));
 check('worker rejects arbitrary payload fields', worker.includes('private-source payload contains forbidden fields'));
 check('worker checks purpose-specific source authority', worker.includes('PRIVATE_SOURCE_AUTHORITY_URL') && worker.includes('/authorize'));
+check('source authority must prove a governed non-synthetic evidence class', worker.includes('LIFE_MODEL_EVIDENCE_CLASSES') && worker.includes("authorization.data?.synthetic !== false") && worker.includes('recognized historical evidence class'));
+check('index provider must preserve source evidence class identity', worker.includes('sourceEvidenceClass') && worker.includes('indexedSourceEvidenceClass !== sourceEvidenceClass') && worker.includes('source evidence class does not match source authority'));
 check('worker uses private transcription provider binding', worker.includes('PRIVATE_SOURCE_TRANSCRIBE_URL'));
 check('memory index runtime type is admitted', runtimeTypes.includes("'memory.private-source.index':"));
 check('memory index payload is strict and opaque', createJob.includes('PrivateSourceIndexPayloadSchema') && createJob.includes('transcriptRef') && createJob.includes('provenanceRef'));
