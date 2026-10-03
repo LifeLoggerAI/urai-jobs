@@ -15,6 +15,7 @@ import {
 } from '../core/jobsReliability.js';
 import { StudioLifeMovieRenderPayloadSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
 import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
+import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
 const sceneTruthReceiptSecret = defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC');
@@ -30,6 +31,11 @@ const IdentitySchema = z.object({
 const CreateSchema = IdentitySchema.extend({
   action: z.literal('create'),
   idempotencyKey: z.string().trim().min(8).max(160),
+  consent: z.object({
+    purpose: z.literal('life-movie.render'),
+    policyVersion: z.string().trim().min(1).max(80),
+    decisionReceiptId: z.string().trim().min(1).max(160),
+  }).strict(),
   payload: StudioLifeMovieRenderPayloadSchema,
 }).strict();
 
@@ -130,9 +136,13 @@ function safeJobProjection(job: Job) {
 async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   const payload = assertLifeMovieTenantPaths(input.payload, input.tenantId);
   const sceneTruthReceipt = verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, input.userId, payload.sceneTruthReceiptRef);
+  const consentSnapshot = await consentBlockRef(input.userId, input.consent.purpose).get();
+  if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
+    throw new Error('life_movie_consent_revoked');
+  }
   const ownerBinding = `${input.tenantId}:${input.userId}`;
   const jobType = 'studio.render.video';
-  const fingerprintPayload = { tenantId: input.tenantId, userId: input.userId, payload };
+  const fingerprintPayload = { tenantId: input.tenantId, userId: input.userId, consent: input.consent, payload };
   const requestFingerprint = buildRequestFingerprint(jobType, fingerprintPayload);
   const expectedBinding = { ownerUid: ownerBinding, jobType, requestFingerprint };
   const db = getFirestore();
@@ -160,6 +170,7 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
     payload,
     ownerUid: input.userId,
     tenantId: input.tenantId,
+    consent: input.consent,
     retryCount: 0,
     execution: { attemptCount: 0, maxAttempts: 2 },
     sourceSystem: 'urai-studio',
@@ -298,6 +309,13 @@ function parseGcsRef(ref: unknown) {
 
 async function signedMovieAccess(tenantId: string, userId: string, jobId: string, disposition: 'inline' | 'attachment') {
   const job = await loadBoundJob(tenantId, userId, jobId);
+  if (!isConsentContext(job.consent) || job.consent.purpose !== 'life-movie.render') {
+    throw new Error('life_movie_consent_missing');
+  }
+  const consentSnapshot = await consentBlockRef(userId, job.consent.purpose).get();
+  if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
+    throw new Error('life_movie_consent_revoked');
+  }
   if (String(job.status) !== 'SUCCESS') throw new Error('job_not_ready_for_playback');
   const output = job.output as WorkerOutput | undefined;
   const artifacts = Array.isArray(output?.outputs) ? output!.outputs! : [];
@@ -376,6 +394,7 @@ async function deleteBoundMovieOutput(tenantId: string, userId: string, jobId: s
     }
     transaction.update(ref, {
       output: FieldValue.delete(),
+      result: FieldValue.delete(),
       outputDeletedAt: now,
       outputDeletedBy: userId,
       updatedAt: now,
@@ -493,6 +512,8 @@ export const studioLifeMovieBridge = onRequest({
       : code === 'job_boundary_mismatch' ? 403
       : code === 'idempotency_conflict' ? 409
       : code === 'job_not_ready_for_playback' ? 409
+      : code === 'life_movie_consent_missing' ? 409
+      : code === 'life_movie_consent_revoked' ? 409
       : code === 'output_delete_boundary_mismatch' ? 403
       : code === 'life_movie_output_boundary_mismatch' ? 403
       : code === 'life_movie_output_bucket_authority_unavailable' ? 503
