@@ -47,13 +47,15 @@ child states only; no raw storage refs are exposed. Cancel marks every unfinishe
 child CANCELLED, clears active lease authority, marks its queue entry DONE, and
 cancels the parent.
 
-Still intentionally open before runtime enablement:
-- consent-revocation fan-out beyond the existing child worker authority;
-- durable aggregate playlist/final assembly;
-- subtitle segmentation/merging;
-- long-form private playback;
-- restart/recovery proof against deployed Firestore/worker infrastructure;
-- literal long-form audio/video acceptance.
+Current truth before runtime enablement:
+- consent context is propagated to every child, and parent-level revocation is surfaced fail-closed;
+- private segmented playback is implemented with owner/tenant/bucket/path checks and short-lived signed access;
+- subtitle segmentation, boundary clipping, rebasing, and final merge are implemented fail-closed;
+- final assembly is implemented as a distinct `studio.assemble.video` queue job with checksum verification, gap preservation, caption merge, bounded output authority, cleanup, resume, cancellation, and deletion semantics;
+- source-level restart/resume/recovery contracts are implemented, but deployed Firestore/worker restart evidence is still required before enabling the runtime;
+- literal long-form audio/video acceptance on the frozen deployed worker remains required before production enablement.
+
+`URAI_LIFE_MOVIE_LONGFORM_ENABLED` remains hard-off by default until the remaining deployed-runtime and literal media acceptance evidence exists.
 
 ## Consent propagation
 
