@@ -5,7 +5,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { onRequest } from 'firebase-functions/v2/https';
 import { ulid } from 'ulid';
 import { z } from 'zod';
-import type { Job, JobQueueEntry } from '@urai-jobs/shared-types';
+import type { Job, JobConsentContext, JobQueueEntry } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import {
   bindingMatches,
@@ -135,14 +135,21 @@ function safeJobProjection(job: Job) {
 
 async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   const payload = assertLifeMovieTenantPaths(input.payload, input.tenantId);
+  const purpose = input.consent?.purpose;
+  const policyVersion = input.consent?.policyVersion;
+  const decisionReceiptId = input.consent?.decisionReceiptId;
+  if (purpose !== 'life-movie.render' || !policyVersion || !decisionReceiptId) {
+    throw new Error('life_movie_consent_missing');
+  }
+  const consent: JobConsentContext = { purpose, policyVersion, decisionReceiptId };
   const sceneTruthReceipt = verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, input.userId, payload.sceneTruthReceiptRef);
-  const consentSnapshot = await consentBlockRef(input.userId, input.consent.purpose).get();
+  const consentSnapshot = await consentBlockRef(input.userId, consent.purpose).get();
   if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
     throw new Error('life_movie_consent_revoked');
   }
   const ownerBinding = `${input.tenantId}:${input.userId}`;
   const jobType = 'studio.render.video';
-  const fingerprintPayload = { tenantId: input.tenantId, userId: input.userId, consent: input.consent, payload };
+  const fingerprintPayload = { tenantId: input.tenantId, userId: input.userId, consent, payload };
   const requestFingerprint = buildRequestFingerprint(jobType, fingerprintPayload);
   const expectedBinding = { ownerUid: ownerBinding, jobType, requestFingerprint };
   const db = getFirestore();
@@ -170,7 +177,7 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
     payload,
     ownerUid: input.userId,
     tenantId: input.tenantId,
-    consent: input.consent,
+    consent,
     retryCount: 0,
     execution: { attemptCount: 0, maxAttempts: 2 },
     sourceSystem: 'urai-studio',
