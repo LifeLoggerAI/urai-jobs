@@ -55,6 +55,7 @@ for (const marker of [
   "async function deletePlanOutputs(",
   "retainedSourceMedia: true",
   "output: FieldValue.delete()",
+  "result: FieldValue.delete()",
   "if (parsed.data.action === 'resume')",
   "if (parsed.data.action === 'delete-output')",
   "async function assemblePlan(",
