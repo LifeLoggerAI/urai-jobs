@@ -12,7 +12,7 @@ import {
   buildRequestFingerprint,
   type IdempotencyBinding,
 } from '../core/jobsReliability.js';
-import { StudioLifeMovieRenderPayloadSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
+import { StudioLifeMovieRenderPayloadSchema } from './studioLifeMovieContract.js';
 import { isActiveRuntimeJobType, RUNTIME_JOB_REGISTRY } from '../core/runtimeJobTypes.js';
 
 const MAX_PAYLOAD_BYTES = parseInt(process.env.URAI_JOBS_MAX_PAYLOAD_BYTES || '', 10) || 32768;
@@ -246,11 +246,11 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
         lifeMovieRender.error.flatten()
       );
     }
-  }
     throw httpsError(
       'failed-precondition',
       'studio.render.video must be created through the dedicated authenticated Studio Life Movie bridge so the SceneTruth receipt can be cryptographically verified.'
     );
+  }
 
   const payloadBytes = payloadSizeBytes(payload);
   if (payloadBytes > MAX_PAYLOAD_BYTES) {
@@ -259,21 +259,6 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
 
   const orgId = userOrgId(user);
   const tenantId = userTenantId(user);
-
-  if (jobType === 'studio.render.video') {
-    if (!tenantId) {
-      throw httpsError(
-        'failed-precondition',
-        'Studio Life Movies render jobs require a server-owned tenantId on the authenticated user record.'
-      );
-    }
-    const renderPayload = StudioLifeMovieRenderPayloadSchema.parse(payload);
-    try {
-      assertLifeMovieTenantPaths(renderPayload, tenantId);
-    } catch {
-      throw httpsError('permission-denied', 'Life Movies source and output paths must remain inside the authenticated tenant/project boundary.');
-    }
-  }
 
   const communicationsJob = isCommunicationsJobType(jobType);
   if (communicationsJob && !tenantId) {

@@ -290,6 +290,36 @@ async function main() {
     }, ['permission-denied', 'access']);
     pass('Data Rights intake, hard-off state, audit trail, admin listing, and owner isolation are verified.');
 
+    log('Testing direct Studio creation remains restricted to the authenticated bridges...');
+    const studioPayload = {
+      schemaVersion: 'urai-life-movie-render-v1',
+      projectId: 'e2e-studio',
+      renderPlanDigest: 'a'.repeat(64),
+      sceneTruthReceiptRef: `str_fixturefixture1234_zzzzzzzz_${'A'.repeat(40)}`,
+      sceneTruthDigest: 'b'.repeat(64),
+      outputPrefix: 'tenants/e2e/life-movies/e2e-studio/render',
+      sources: [{
+        id: 'source', bucket: 'private-fixture', objectPath: 'tenants/e2e/source.mp4',
+        mimeType: 'video/mp4', provenance: 'original-source', sourceRefs: ['synthetic-e2e'],
+        consentRef: 'fixture', ownerOrRightsRef: 'fixture',
+      }],
+      timeline: [{ sourceId: 'source', startMs: 0, endMs: 1000 }],
+      spatialRequired: false, publicReleaseAuthorized: false, providerGenerationAuthorized: false,
+    };
+    await expectCallableError('createJob', userToken, {
+      jobType: 'studio.render.video', payload: studioPayload,
+      idempotencyKey: `direct-studio-${E2E_TIMESTAMP}`,
+    }, ['dedicated authenticated Studio Life Movie bridge']);
+    await expectCallableError('createJob', userToken, {
+      jobType: 'studio.assemble.video', payload: {},
+      idempotencyKey: `direct-assembly-${E2E_TIMESTAMP}`,
+    }, ['dedicated authenticated Studio Life Movie long-form bridge']);
+    const rejectedStudioJobs = await db.collection('jobs').where('ownerUid', '==', USER_UID).get();
+    if (rejectedStudioJobs.docs.some((doc) => ['studio.render.video', 'studio.assemble.video'].includes(doc.data().type))) {
+      fail('Direct Studio rejection persisted a job.');
+    }
+    pass('Direct render and assembly requests remain fail-closed without blocking ordinary jobs.');
+
     log('Creating an idempotency-bound job as the permitted user...');
     const createResult = await callCallable('createJob', userToken, {
       jobType: 'narrator.tts',
