@@ -127,7 +127,11 @@ async function createNarratorJob(input: z.infer<typeof CreateSchema>) {
   if (input.payload.provider === 'elevenlabs' && !input.payload.voiceId) {
     throw new Error('elevenlabs_voice_id_required');
   }
-  const consent: JobConsentContext = input.consent;
+  const consent: JobConsentContext = {
+    purpose: input.consent.purpose,
+    policyVersion: input.consent.policyVersion,
+    decisionReceiptId: input.consent.decisionReceiptId,
+  };
   const blocked = await consentBlockRef(input.userId, consent.purpose).get();
   if (blocked.exists && blocked.data()?.active === true) throw new Error('storytime_voiceover_consent_revoked');
 
