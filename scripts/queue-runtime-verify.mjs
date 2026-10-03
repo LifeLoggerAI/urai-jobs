@@ -18,6 +18,7 @@ function requireMarker(path, content, marker) {
 
 const index = read("functions/src/index.ts");
 const executor = read("functions/src/jobs/executeJob.ts");
+const runtimeJobTypes = read("functions/src/core/runtimeJobTypes.ts");
 const queueNow = read("functions/src/jobs/processQueueNow.ts");
 const jobsApi = read("web/src/lib/jobsApi.ts");
 const smoke = read("scripts/urai-jobs-smoke.mjs");
@@ -28,14 +29,32 @@ requireMarker("functions/src/jobs/processQueueNow.ts", queueNow, "JOB_EXECUTION_
 requireMarker("functions/src/jobs/processQueueNow.ts", queueNow, "PENDING");
 requireMarker("functions/src/jobs/processQueueNow.ts", queueNow, "LEASED");
 requireMarker("web/src/lib/jobsApi.ts", jobsApi, "processQueueNow");
-requireMarker("functions/src/jobs/executeJob.ts", executor, "ASSET_WORKER_URL");
-requireMarker("functions/src/jobs/executeJob.ts", executor, "SPATIAL_WORKER_URL");
-requireMarker("functions/src/jobs/executeJob.ts", executor, "STUDIO_WORKER_URL");
-requireMarker("functions/src/jobs/executeJob.ts", executor, "NARRATOR_WORKER_URL");
+requireMarker("functions/src/jobs/executeJob.ts", executor, "workerEnvKeyForJobType(jobType)");
+requireMarker("functions/src/jobs/executeJob.ts", executor, "workerRouteForJobType(jobType)");
 requireMarker("functions/src/jobs/executeJob.ts", executor, "execution.leaseToken");
-requireMarker("functions/src/jobs/executeJob.ts", executor, "route: '/'");
-requireMarker("functions/src/jobs/executeJob.ts", executor, "route: '/execute-job'");
-requireMarker("scripts/urai-jobs-smoke.mjs", smoke, "asset-render routes to asset worker root");
+for (const marker of [
+  "NARRATOR_WORKER_URL",
+  "ASSET_WORKER_URL",
+  "STUDIO_WORKER_URL",
+  "COMMUNICATIONS_WORKER_URL",
+  "PRIVATE_SOURCE_WORKER_URL",
+  "CAPTURED_REALITY_WORKER_URL",
+  "'narrator.tts'",
+  "'asset-render'",
+  "'asset.render'",
+  "'studio.render.video'",
+  "'communications.message.send'",
+  "'memory.private-source.transcribe'",
+  "'memory.private-source.reconstruct-place'",
+  "route: '/'",
+  "route: '/execute-job'",
+  "route: '/executeJob'"
+]) {
+  requireMarker("functions/src/core/runtimeJobTypes.ts", runtimeJobTypes, marker);
+}
+requireMarker("scripts/urai-jobs-smoke.mjs", smoke, "asset.render routes to asset worker root");
+requireMarker("scripts/urai-jobs-smoke.mjs", smoke, "career jobs remain hard-off");
+requireMarker("scripts/urai-jobs-smoke.mjs", smoke, "spatial jobs remain hard-off");
 requireMarker("scripts/urai-jobs-smoke.mjs", smoke, "running update mirrors lease token");
 
 if (failures.length) {

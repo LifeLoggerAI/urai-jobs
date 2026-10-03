@@ -2,51 +2,88 @@ import { ulid } from 'ulid';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { HttpsError, type CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
-import { Job, JobQueueEntry } from '@urai-jobs/shared-types';
+import { Job, JobQueueEntry, type JobConsentContext } from '@urai-jobs/shared-types';
 import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
-import { assertConsentContext } from './consentRevocation.js';
 import {
   bindingMatches,
   buildIdempotencyBindingId,
   buildRequestFingerprint,
   type IdempotencyBinding,
 } from '../core/jobsReliability.js';
+import { StudioLifeMovieRenderPayloadSchema } from './studioLifeMovieContract.js';
+import { isActiveRuntimeJobType, RUNTIME_JOB_REGISTRY } from '../core/runtimeJobTypes.js';
 
 const MAX_PAYLOAD_BYTES = parseInt(process.env.URAI_JOBS_MAX_PAYLOAD_BYTES || '', 10) || 32768;
 const MAX_CREATE_PER_MINUTE = parseInt(process.env.URAI_JOBS_CREATE_RATE_LIMIT_PER_MINUTE || '', 10) || 10;
 const IDEMPOTENCY_COLLECTION = 'jobIdempotencyBindings';
+const COMMUNICATIONS_TENANT_ID_PATTERN = /^tenant_[a-zA-Z0-9_-]{6,64}$/;
 
-const CONSENT_REQUIRED_JOB_TYPE = /^(narrator\.tts|asset[.-]|spatial[.-]|studio[.-]|content[.-]|storytime\.|analytics\.|communications\.)/;
+const PrivateSourcePayloadSchema = z.object({
+  sourceReceiptRef: z.string().trim().regex(/^psr_[A-Za-z0-9_-]{16,128}$/),
+  requestedPurpose: z.enum(['transcribe', 'memory-index']),
+  locale: z.string().trim().min(2).max(35).regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/).optional(),
+  requestReceipt: z.string().trim().regex(/^req_[A-Za-z0-9_-]{12,128}$/).optional(),
+}).strict();
 
-const ALLOWED_JOB_TYPE_PATTERNS = [
-  /^narrator\.tts$/,
-  /^asset[.-]/,
-  /^spatial[.-]/,
-  /^studio[.-]/,
-  /^career\./,
-  /^content[.-]/,
-  /^storytime\./,
-  /^analytics\./,
-  /^communications\./,
-  /^admin\./,
-  /^deployment\./,
-  /^proof\./,
-];
+const PrivateSourceIndexPayloadSchema = z.object({
+  sourceReceiptRef: z.string().trim().regex(/^psr_[A-Za-z0-9_-]{16,128}$/),
+  transcriptRef: z.string().trim().regex(/^private:[A-Za-z0-9_./:-]{8,512}$/),
+  provenanceRef: z.string().trim().regex(/^private:[A-Za-z0-9_./:-]{8,512}$/),
+  priorMemoryIndexRef: z.string().trim().regex(/^private:[A-Za-z0-9_./:-]{8,512}$/).optional(),
+  correlationTrigger: z.enum(['initial-source', 'new-source', 'correction', 'stronger-source']).default('initial-source'),
+  requestedPurpose: z.literal('memory-index'),
+  locale: z.string().trim().min(2).max(35).regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/).optional(),
+  requestReceipt: z.string().trim().regex(/^req_[A-Za-z0-9_-]{12,128}$/).optional(),
+}).strict();
+
+const CapturedRealityReconstructionPayloadSchema = z.object({
+  sourceReceiptRefs: z.array(z.string().trim().min(8).max(256).regex(/^[A-Za-z0-9._:-]+$/)).min(1).max(32),
+  studioProjectRef: z.string().trim().min(8).max(256).regex(/^[A-Za-z0-9._:-]+$/),
+  assetFactoryGovernanceRef: z.string().trim().min(8).max(256).regex(/^[A-Za-z0-9._:-]+$/),
+  spatialAuthorityHead: z.string().trim().regex(/^[0-9a-f]{40}$/),
+  reconstructionMethod: z.enum(['3dgs', 'photogrammetry', 'nerf-derived', 'hybrid']),
+  requestedPurpose: z.literal('reconstruct-place'),
+  providerSpendAuthorized: z.literal(false),
+  publicReleaseAuthorized: z.literal(false),
+}).strict();
+
+const CommunicationsMessagePayloadSchema = z.object({
+  channel: z.literal('email').default('email'),
+  templateId: z.string().trim().min(6).max(128).regex(/^template_[A-Za-z0-9_-]+$/),
+  recipientUid: z.string().trim().min(6).max(128),
+  vars: z.record(z.unknown()).default({}),
+  urgency: z.enum(['normal', 'urgent']).default('normal'),
+}).strict();
+
+
+function isPrivateSourceJobType(jobType: string): boolean {
+  return jobType === 'memory.private-source.transcribe'
+    || jobType === 'memory.private-source.index'
+    || jobType === 'memory.private-source.reconstruct-place';
+}
+
+const JobConsentSchema = z.object({
+  purpose: z.string().trim().min(1).max(160),
+  policyVersion: z.string().trim().min(1).max(80),
+  decisionReceiptId: z.string().trim().min(1).max(160),
+}).strict();
 
 const CreateJobSchema = z.object({
   jobType: z.string().min(3, 'Job type must be at least 3 characters').max(80),
   payload: z.record(z.any()),
   idempotencyKey: z.string().trim().min(1).max(160).optional(),
+  consent: JobConsentSchema.optional(),
+  consents: z.array(JobConsentSchema).min(1).max(8).optional(),
 });
 
 function payloadSizeBytes(payload: unknown): number {
   return Buffer.byteLength(JSON.stringify(payload ?? {}), 'utf8');
 }
 
-function isAllowedJobType(jobType: string): boolean {
-  return ALLOWED_JOB_TYPE_PATTERNS.some((pattern) => pattern.test(jobType));
+function isCommunicationsJobType(jobType: string): boolean {
+  return jobType === 'communications.message.send';
 }
 
 function userRecord(user: unknown): Record<string, unknown> {
@@ -55,7 +92,12 @@ function userRecord(user: unknown): Record<string, unknown> {
 
 function userOrgId(user: unknown): string | null {
   const raw = userRecord(user).orgId;
-  return typeof raw === 'string' && raw.trim() ? raw : null;
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
+function userTenantId(user: unknown): string | null {
+  const raw = userRecord(user).tenantId;
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
 }
 
 function hasJobCreatePermission(user: unknown): boolean {
@@ -108,13 +150,106 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     throw httpsError('invalid-argument', 'Invalid job data.', validationResult.error.flatten());
   }
 
-  const { jobType, payload, idempotencyKey } = validationResult.data;
-  if (CONSENT_REQUIRED_JOB_TYPE.test(jobType)) {
-    const consent = (payload as Record<string, unknown>).consent;
-    if (!consent || typeof consent !== 'object') throw httpsError('failed-precondition', 'Canonical consent context is required for this user-scoped job.');
+  const { jobType, payload, idempotencyKey, consent, consents } = validationResult.data;
+  const canonicalConsent: JobConsentContext | undefined = consent ? {
+    purpose: consent.purpose,
+    policyVersion: consent.policyVersion,
+    decisionReceiptId: consent.decisionReceiptId,
+  } : undefined;
+  const canonicalConsents: JobConsentContext[] | undefined = consents?.map((entry) => ({
+    purpose: entry.purpose,
+    policyVersion: entry.policyVersion,
+    decisionReceiptId: entry.decisionReceiptId,
+  }));
+  if (!isActiveRuntimeJobType(jobType)) {
+    throw httpsError('invalid-argument', `Unsupported or inactive job type: ${jobType}`);
   }
-  if (!isAllowedJobType(jobType)) {
-    throw httpsError('invalid-argument', `Unsupported job type: ${jobType}`);
+  const runtimeDefinition = RUNTIME_JOB_REGISTRY[jobType];
+
+  if (jobType === 'memory.private-source.transcribe' || jobType === 'memory.private-source.index') {
+    if (consents?.length) {
+      throw httpsError(
+        'failed-precondition',
+        'Private-source processing accepts only the canonical single consent field; plural consents are not permitted.'
+      );
+    }
+    if (!consent) {
+      throw httpsError(
+        'failed-precondition',
+        'Private-source processing requires canonical consent context: purpose, policy version, and decision receipt.'
+      );
+    }
+
+    if (jobType === 'memory.private-source.transcribe') {
+      const privateSource = PrivateSourcePayloadSchema.safeParse(payload);
+      if (!privateSource.success) {
+        throw httpsError(
+          'invalid-argument',
+          'Private-source transcription requires an opaque sourceReceiptRef and purpose-only payload; raw media URLs, transcript text, identities, addresses, and arbitrary fields are rejected.',
+          privateSource.error.flatten()
+        );
+      }
+    } else {
+      const privateIndex = PrivateSourceIndexPayloadSchema.safeParse(payload);
+      if (!privateIndex.success) {
+        throw httpsError(
+          'invalid-argument',
+          'Private-source memory indexing requires opaque source/transcript/provenance refs only; raw transcript text, media URLs, identities, addresses, and arbitrary fields are rejected.',
+          privateIndex.error.flatten()
+        );
+      }
+    }
+  }
+
+  if (jobType === 'memory.private-source.reconstruct-place') {
+    if (consent) {
+      throw httpsError(
+        'failed-precondition',
+        'Captured Reality reconstruction requires the plural consents field only; single consent is not permitted.'
+      );
+    }
+    const reconstruction = CapturedRealityReconstructionPayloadSchema.safeParse(payload);
+    if (!reconstruction.success) {
+      throw httpsError('invalid-argument', 'Captured Reality reconstruction accepts opaque receipt/project/governance references only; raw media URLs, exact addresses, identities, provider authorization, and public-release authorization are rejected.', reconstruction.error.flatten());
+    }
+    const purposes = new Set((canonicalConsents || []).map((entry) => entry.purpose));
+    if (purposes.size !== 2 || !purposes.has('memory.storage') || !purposes.has('location.context')) {
+      throw httpsError('failed-precondition', 'Captured Reality reconstruction requires exactly memory.storage and location.context consent receipts.');
+    }
+  }
+
+  if (jobType === 'communications.message.send') {
+    const communicationsMessage = CommunicationsMessagePayloadSchema.safeParse(payload);
+    if (!communicationsMessage.success) {
+      throw httpsError(
+        'invalid-argument',
+        'Communications jobs require the server-supported email channel, templateId, recipientUid, vars, and optional urgency only; raw recipient addresses and caller-owned destinations are rejected.',
+        communicationsMessage.error.flatten()
+      );
+    }
+  }
+
+
+  if (jobType === 'studio.assemble.video') {
+    throw httpsError(
+      'failed-precondition',
+      'studio.assemble.video must be created through the dedicated authenticated Studio Life Movie long-form bridge.'
+    );
+  }
+
+  if (jobType === 'studio.render.video') {
+    const lifeMovieRender = StudioLifeMovieRenderPayloadSchema.safeParse(payload);
+    if (!lifeMovieRender.success) {
+      throw httpsError(
+        'invalid-argument',
+        'studio.render.video requires the provenance-bound URAI Life Movies render contract; arbitrary URLs, public release authorization, provider execution authorization, and Spatial-required jobs are rejected.',
+        lifeMovieRender.error.flatten()
+      );
+    }
+    throw httpsError(
+      'failed-precondition',
+      'studio.render.video must be created through the dedicated authenticated Studio Life Movie bridge so the SceneTruth receipt can be cryptographically verified.'
+    );
   }
 
   const payloadBytes = payloadSizeBytes(payload);
@@ -122,8 +257,30 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     throw httpsError('invalid-argument', `Payload is too large. Max bytes: ${MAX_PAYLOAD_BYTES}`);
   }
 
+  const orgId = userOrgId(user);
+  const tenantId = userTenantId(user);
+
+  const communicationsJob = isCommunicationsJobType(jobType);
+  if (communicationsJob && !tenantId) {
+    throw httpsError(
+      'failed-precondition',
+      'Communications jobs require a server-owned tenantId on the authenticated user record.'
+    );
+  }
+  if (communicationsJob && tenantId && !COMMUNICATIONS_TENANT_ID_PATTERN.test(tenantId)) {
+    throw httpsError(
+      'failed-precondition',
+      'Communications jobs require a canonical server-owned tenantId matching the Communications tenant contract.'
+    );
+  }
+
   const db = getFirestore();
-  const requestFingerprint = buildRequestFingerprint(jobType, payload);
+  const fingerprintPayload = communicationsJob
+    ? { payload, tenantId }
+    : jobType === 'memory.private-source.reconstruct-place'
+      ? { payload, consents: canonicalConsents }
+      : payload;
+  const requestFingerprint = buildRequestFingerprint(jobType, fingerprintPayload);
   const expectedBinding = { ownerUid: uid, jobType, requestFingerprint };
   const bindingRef = idempotencyKey
     ? db.collection(IDEMPOTENCY_COLLECTION).doc(buildIdempotencyBindingId(uid, jobType, idempotencyKey))
@@ -140,7 +297,6 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
 
   const jobId = ulid();
   const now = FieldValue.serverTimestamp();
-  const orgId = userOrgId(user);
 
   const newJob: Job = {
     jobId,
@@ -149,12 +305,14 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     status: 'PENDING',
     payload,
     ownerUid: uid,
+    ...(canonicalConsent ? { consent: canonicalConsent } : {}),
+    ...(canonicalConsents ? { consents: canonicalConsents } : {}),
     ...(orgId ? { orgId } : {}),
+    ...(tenantId ? { tenantId } : {}),
     retryCount: 0,
-    consent: (payload as Record<string, any>).consent as Job['consent'],
     execution: {
       attemptCount: 0,
-      maxAttempts: 3,
+      maxAttempts: runtimeDefinition.maxAttempts,
     },
   };
 
@@ -198,6 +356,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
           jobType,
           ownerUid: uid,
           orgId,
+          tenantId,
           payloadBytes,
           idempotencyBound: Boolean(bindingRef),
         },

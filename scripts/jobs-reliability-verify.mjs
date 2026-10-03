@@ -18,6 +18,9 @@ const requiredSourceTokens = new Map([
     'terminalEventId',
     'context.eventId',
     'transitionId',
+    "schemaVersion: 'urai_job_terminal_analytics_v1'",
+    'analyticsEventId',
+    'analytics: definedEntries(analyticsProjection)',
   ]],
   ['functions/src/events/publishJobTerminalEvents.ts', [
     'job-terminal-events',
@@ -47,6 +50,13 @@ for (const [file, tokens] of requiredSourceTokens) {
   for (const token of tokens) {
     assert.ok(source.includes(token), `${file} is missing reliability contract token: ${token}`);
   }
+}
+
+const terminalSource = fs.readFileSync('functions/src/events/onJobTerminalEvent.ts', 'utf8');
+const projectionBody = terminalSource.match(/const analyticsProjection = \{([\s\S]*?)\n    \};/)?.[1] ?? '';
+assert.ok(projectionBody, 'analytics projection must be statically inspectable');
+for (const forbidden of ['ownerUid', 'tenantId', 'orgId', 'jobId', 'resultRef', 'correlationId']) {
+  assert.ok(!projectionBody.includes(forbidden), `analytics projection must exclude ${forbidden}`);
 }
 
 const build = spawnSync('npm', ['run', 'build', '--prefix', 'functions'], {

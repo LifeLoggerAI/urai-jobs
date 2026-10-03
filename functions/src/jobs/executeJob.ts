@@ -5,8 +5,10 @@ import axios from 'axios';
 import { z } from 'zod';
 import type { Job } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
+import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJobTypes.js';
+import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
 import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
-import { isConsentBlocked } from './consentRevocation.js';
 
 // URAI Jobs worker routing audit markers.
 // asset/spatial/studio subsystem workers route: '/'
@@ -39,28 +41,30 @@ const JobExecutionMessageSchema = z.object({
   leaseToken: z.string().min(1),
 });
 
+function jobConsentContexts(job: Job) {
+  const contexts = [
+    ...(isConsentContext(job.consent) ? [job.consent] : []),
+    ...(Array.isArray(job.consents) ? job.consents.filter(isConsentContext) : []),
+  ];
+  const seen = new Set<string>();
+  return contexts.filter((context) => {
+    const key = `${context.purpose}\n${context.policyVersion}\n${context.decisionReceiptId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function getJobType(job: Job): string {
-  return String(job.type || job.jobType || 'narrator.tts');
+  return String(job.type || job.jobType || '');
 }
 
 function getWorkerEnvKey(jobType: string): string | null {
-  if (jobType === 'narrator.tts') return 'NARRATOR_WORKER_URL';
-  if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) return 'ASSET_WORKER_URL';
-  if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) return 'SPATIAL_WORKER_URL';
-  if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) return 'STUDIO_WORKER_URL';
-  if (jobType.startsWith('career.')) return 'CAREER_WORKER_URL';
-  if (jobType.startsWith('content.') || jobType.startsWith('content-')) return 'CONTENT_WORKER_URL';
-  if (jobType.startsWith('storytime.')) return 'STORYTIME_WORKER_URL';
-  if (jobType.startsWith('analytics.')) return 'ANALYTICS_WORKER_URL';
-  if (jobType.startsWith('communications.')) return 'COMMUNICATIONS_WORKER_URL';
-  return null;
+  return workerEnvKeyForJobType(jobType);
 }
 
 function getWorkerRoute(jobType: string): string {
-  if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) return '/';
-  if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) return '/';
-  if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) return '/';
-  return '/execute-job';
+  return workerRouteForJobType(jobType) || '/execute-job';
 }
 
 function getWorkerTarget(jobType: string): WorkerTarget | null {
@@ -75,7 +79,8 @@ function normalizedEnv(): string {
   return String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
 }
 
-function inlineFallbackAllowed(): boolean {
+function inlineFallbackAllowed(jobType?: string): boolean {
+  if (jobType === 'memory.private-source.transcribe' || jobType === 'memory.private-source.index' || jobType === 'memory.private-source.reconstruct-place') return false;
   if (PRODUCTION_ENVS.has(normalizedEnv())) return false;
   return process.env.URAI_JOBS_ALLOW_INLINE_FALLBACK === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
 }
@@ -98,6 +103,63 @@ function getWorkerAuthHeaders(): Record<string, string> {
 
 function getPayloadRecord(job: Job): Record<string, unknown> {
   return job.payload && typeof job.payload === 'object' ? (job.payload as Record<string, unknown>) : {};
+}
+
+type TrustedNarratorProviderAuthorization = {
+  provider: 'elevenlabs';
+  ownerUid: string;
+  consentReceiptId: string;
+  rightsReceiptId: string;
+  provenanceRef: string;
+  voiceId: string;
+};
+
+async function resolveTrustedNarratorProviderAuthorization(job: Job): Promise<TrustedNarratorProviderAuthorization | null> {
+  const payload = getPayloadRecord(job);
+  if (payload.provider !== 'elevenlabs') return null;
+  if (!job.ownerUid) throw new Error('elevenlabs_owner_required');
+  const consent = job.consent;
+  if (!isConsentContext(consent)) throw new Error('elevenlabs_canonical_consent_required');
+
+  const voiceId = typeof payload.voiceId === 'string' ? payload.voiceId.trim() : '';
+  if (!voiceId) throw new Error('elevenlabs_voice_id_required');
+
+  const authorization = await getFirestore()
+    .doc(`users/${job.ownerUid}/providerAuthorizations/elevenlabs`)
+    .get();
+  if (!authorization.exists) throw new Error('elevenlabs_server_authorization_required');
+
+  const data = authorization.data() || {};
+  const voiceIds = Array.isArray(data.voiceIds) ? data.voiceIds.map((value) => String(value)) : [];
+  const consentPurpose = String(data.consentPurpose || '');
+  const policyVersion = String(data.policyVersion || '');
+  const consentReceiptId = String(data.decisionReceiptId || '');
+  const rightsReceiptId = String(data.rightsReceiptId || '');
+  const provenanceRef = String(data.provenanceRef || '');
+
+  if (
+    data.enabled !== true ||
+    data.provider !== 'elevenlabs' ||
+    data.ownerUid !== job.ownerUid ||
+    consentPurpose !== consent.purpose ||
+    policyVersion !== consent.policyVersion ||
+    consentReceiptId !== consent.decisionReceiptId ||
+    !voiceIds.includes(voiceId) ||
+    !consentReceiptId ||
+    !rightsReceiptId ||
+    !provenanceRef
+  ) {
+    throw new Error('elevenlabs_server_authorization_mismatch');
+  }
+
+  return {
+    provider: 'elevenlabs',
+    ownerUid: job.ownerUid,
+    consentReceiptId,
+    rightsReceiptId,
+    provenanceRef,
+    voiceId,
+  };
 }
 
 function cleanPrefix(value: unknown, fallback: string): string {
@@ -136,7 +198,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
   const outputPrefix = cleanPrefix(payload.outputPrefix, `${jobType.replace(/[^a-z0-9]+/gi, '-')}/${jobId}`);
   const completedAt = new Date().toISOString();
 
-  if (jobType === 'asset-render' || jobType === 'asset.render' || jobType.startsWith('asset')) {
+  if (jobType === 'asset-render' || jobType === 'asset.render') {
     return {
       ok: true,
       mode: 'inline-fallback',
@@ -150,21 +212,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
     };
   }
 
-  if (jobType === 'spatial-index' || jobType === 'spatial.index' || jobType.startsWith('spatial')) {
-    return {
-      ok: true,
-      mode: 'inline-fallback',
-      jobId,
-      jobType,
-      indexUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/spatial-index.json`,
-      manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
-      message: 'Local inline fallback completed. This is not live worker proof.',
-      payloadEcho: payload,
-      completedAt,
-    };
-  }
-
-  if (jobType === 'studio-render' || jobType === 'studio.render' || jobType.startsWith('studio')) {
+  if (jobType === 'studio.render.video') {
     return {
       ok: true,
       mode: 'inline-fallback',
@@ -178,13 +226,13 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
     };
   }
 
-  if (jobType.startsWith('career.')) {
+  if (jobType === 'narrator.tts') {
     return {
       ok: true,
       mode: 'inline-fallback',
       jobId,
       jobType,
-      careerUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/career.json`,
+      transcriptUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/narration.txt`,
       manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
       message: 'Local inline fallback completed. This is not live worker proof.',
       payloadEcho: payload,
@@ -192,17 +240,7 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
     };
   }
 
-  return {
-    ok: true,
-    mode: 'inline-fallback',
-    jobId,
-    jobType,
-    transcriptUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/narration.txt`,
-    manifestUrl: `gs://urai-jobs-inline-artifacts/${outputPrefix}/manifest.json`,
-    message: 'Local inline fallback completed. This is not live worker proof.',
-    payloadEcho: payload,
-    completedAt,
-  };
+  throw new Error(`Inline fallback is not implemented for job type ${jobType}.`);
 }
 
 async function appendJobLog(jobId: string, input: { level: string; message: string; source: string; metadata?: Record<string, unknown> }) {
@@ -235,14 +273,43 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
     }
 
     const now = FieldValue.serverTimestamp();
+    const attemptCount = Number(current.execution?.attemptCount || 0);
+    const maxAttempts = Number(current.execution?.maxAttempts || current.maxAttempts || 3);
+
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || attemptCount >= maxAttempts) {
+      transaction.update(jobRef, {
+        status: 'DEAD',
+        error: { message: errorMessage },
+        lease: FieldValue.delete(),
+        updatedAt: now,
+        completedAt: now,
+        'execution.leaseToken': FieldValue.delete(),
+        'execution.completedAt': now,
+        'execution.asyncCallbackPending': false,
+        'execution.callbackTokenHash': FieldValue.delete(),
+        'execution.callbackLeaseToken': FieldValue.delete(),
+        'execution.callbackDeadlineAt': FieldValue.delete(),
+      });
+      transaction.set(queueRef, {
+        jobId,
+        status: 'DEAD',
+        lease: FieldValue.delete(),
+        updatedAt: now,
+      }, { merge: true });
+      return 'failed';
+    }
+
+    const retryDelayMs = Math.min(60000, 1000 * Math.pow(2, Math.max(1, attemptCount)));
+    const nextAvailableAt = new Date(Date.now() + retryDelayMs);
     transaction.update(jobRef, {
-      status: 'FAILED',
+      status: 'PENDING',
+      retryCount: FieldValue.increment(1),
       error: { message: errorMessage },
       lease: FieldValue.delete(),
       updatedAt: now,
-      completedAt: now,
+      completedAt: FieldValue.delete(),
       'execution.leaseToken': FieldValue.delete(),
-      'execution.completedAt': now,
+      'execution.completedAt': FieldValue.delete(),
       'execution.asyncCallbackPending': false,
       'execution.callbackTokenHash': FieldValue.delete(),
       'execution.callbackLeaseToken': FieldValue.delete(),
@@ -250,7 +317,9 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
     });
     transaction.set(queueRef, {
       jobId,
-      status: 'DONE',
+      status: 'PENDING',
+      availableAt: nextAvailableAt,
+      retryCount: FieldValue.increment(1),
       lease: FieldValue.delete(),
       updatedAt: now,
     }, { merge: true });
@@ -276,7 +345,7 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
   await appendJobLog(jobId, {
     level: 'error',
     source: 'executeJob',
-    message: 'Job execution failed.',
+    message: 'Job execution failed; retry or DEAD transition applied by canonical failure policy.',
     metadata: { error: errorMessage },
   });
 
@@ -285,7 +354,10 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
 
 export const executeJob = onMessagePublished({
   topic: JOB_EXECUTION_TOPIC,
-  secrets: [workerTokenSecret],
+  // Short renders remain capped at 120s. Long-form assembly is a separate bounded job
+  // with a larger lease-fenced transport window; it never expands the short renderer.
+  timeoutSeconds: 540,
+  secrets: [workerTokenSecret, tinyFishApiKeySecret],
 }, async (event) => {
   const validationResult = JobExecutionMessageSchema.safeParse(event.data.message.json);
   if (!validationResult.success) {
@@ -305,14 +377,37 @@ export const executeJob = onMessagePublished({
     }
 
     const job = jobSnapshot.data() as Job;
-    if (await isConsentBlocked(job, transaction)) {
-      transaction.update(jobRef, { status: 'CANCELLED', updatedAt: FieldValue.serverTimestamp(), error: { message: 'Consent revoked or consent context is missing.' } });
-      transaction.update(queueRef, { status: 'CANCELLED', updatedAt: FieldValue.serverTimestamp() });
-      return { action: 'ignore' as const, reason: 'consent-blocked' };
-    }
     const decision = decideExecutionStart(job, leaseToken);
     if (decision.action === 'ignore') {
       return decision;
+    }
+
+    const consentContexts = jobConsentContexts(job);
+    if (job.ownerUid && consentContexts.length > 0) {
+      const blockSnapshots = await Promise.all(
+        consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
+      );
+      const blockedPurpose = blockSnapshots
+        .map((snapshot, index) => ({ snapshot, purpose: consentContexts[index].purpose }))
+        .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
+      if (blockedPurpose) {
+        const now = FieldValue.serverTimestamp();
+        transaction.update(jobRef, {
+          status: 'CANCELLED',
+          lease: FieldValue.delete(),
+          updatedAt: now,
+          completedAt: now,
+          'execution.leaseToken': FieldValue.delete(),
+          'execution.completedAt': now,
+        });
+        transaction.set(queueRef, {
+          jobId,
+          status: 'CANCELLED',
+          lease: FieldValue.delete(),
+          updatedAt: now,
+        }, { merge: true });
+        return { action: 'ignore' as const, reason: 'consent-revoked' as const };
+      }
     }
 
     const now = FieldValue.serverTimestamp();
@@ -364,7 +459,55 @@ export const executeJob = onMessagePublished({
   try {
     let result: unknown;
 
-    if (target) {
+    if (isTinyFishJobType(jobType)) {
+      await appendJobLog(jobId, {
+        level: 'info',
+        source: 'executeJob',
+        message: 'Executing governed TinyFish web job.',
+        metadata: { jobType, provider: 'tinyfish' },
+      });
+      result = await executeTinyFishJob(jobType, getPayloadRecord(job));
+    } else if (target) {
+      const dispatchConsentContexts = jobConsentContexts(job);
+      if (job.ownerUid && dispatchConsentContexts.length > 0) {
+        const blockSnapshots = await Promise.all(
+          dispatchConsentContexts.map((context) => consentBlockRef(job.ownerUid!, context.purpose).get())
+        );
+        const blockedPurpose = blockSnapshots
+          .map((snapshot, index) => ({ snapshot, purpose: dispatchConsentContexts[index].purpose }))
+          .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
+        if (blockedPurpose) {
+          const now = FieldValue.serverTimestamp();
+          await db.runTransaction(async (transaction) => {
+            const currentSnapshot = await transaction.get(jobRef);
+            if (!currentSnapshot.exists) return;
+            const current = currentSnapshot.data() as Job;
+            if (current.status !== 'RUNNING' || current.execution?.leaseToken !== leaseToken) return;
+            transaction.update(jobRef, {
+              status: 'CANCELLED',
+              lease: FieldValue.delete(),
+              updatedAt: now,
+              completedAt: now,
+              'execution.leaseToken': FieldValue.delete(),
+              'execution.completedAt': now,
+            });
+            transaction.set(queueRef, {
+              jobId,
+              status: 'CANCELLED',
+              lease: FieldValue.delete(),
+              updatedAt: now,
+            }, { merge: true });
+          });
+          await appendJobLog(jobId, {
+            level: 'warn',
+            source: 'executeJob',
+            message: 'Worker dispatch blocked because required consent was revoked.',
+            metadata: { jobType, consentPurpose: blockedPurpose },
+          });
+          return;
+        }
+      }
+
       const workerUrl = target.url.replace(/\/$/, '');
       const route = target.route;
 
@@ -375,15 +518,24 @@ export const executeJob = onMessagePublished({
         metadata: { jobType, workerEnvKey: target.envKey, route },
       });
 
+      const providerAuthorization = jobType === 'narrator.tts'
+        ? await resolveTrustedNarratorProviderAuthorization(job)
+        : null;
+
       const response = await axios.post(`${workerUrl}${route}`, {
         ...job,
         jobId,
         leaseToken,
         type: jobType,
         jobType,
+        ...(providerAuthorization ? { providerAuthorization } : {}),
       }, {
         headers: getWorkerAuthHeaders(),
-        timeout: parseInt(process.env.URAI_JOBS_WORKER_TIMEOUT_MS || '', 10) || 120000,
+        timeout: jobType === 'studio.render.video'
+          ? 120000
+          : jobType === 'studio.assemble.video'
+            ? 480000
+            : Math.max(1, Math.min(120000, parseInt(process.env.URAI_JOBS_WORKER_TIMEOUT_MS || '', 10) || 120000)),
         validateStatus: (status) => status >= 200 && status < 300,
       });
 
@@ -404,7 +556,7 @@ export const executeJob = onMessagePublished({
         throw new Error(`No worker mapping is registered for job type ${jobType}.`);
       }
 
-      if (!inlineFallbackAllowed()) {
+      if (!inlineFallbackAllowed(jobType)) {
         throw new Error(`Worker URL ${envKey} is required for ${normalizedEnv()} runtime; inline fallback is disabled.`);
       }
 
