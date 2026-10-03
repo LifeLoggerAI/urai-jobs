@@ -7,7 +7,7 @@ import {
   consentBlockRef,
   consentEventReceiptRef,
 } from './consentBlocks.js';
-import { invalidateLifeMovieDerivativesForConsent } from './lifeMovieDerivativeRevocation.js';
+import { invalidateLifeMovieDerivativesForConsent, type LifeMovieRevocationEvent } from './lifeMovieDerivativeRevocation.js';
 
 const privacyEventToken = defineSecret('URAI_JOBS_PRIVACY_EVENT_TOKEN');
 
@@ -53,6 +53,15 @@ export const ingestConsentRevocation = onRequest({
   }
 
   const event = parsed.data;
+  const eventId = event.eventId;
+  const ownerUid = event.ownerUid;
+  const purpose = event.purpose;
+  const revokedAt = event.revokedAt;
+  if (!eventId || !ownerUid || !purpose || !revokedAt) {
+    response.status(400).json({ ok: false, error: 'invalid-event' });
+    return;
+  }
+  const lifeMovieRevocationEvent: LifeMovieRevocationEvent = { eventId, ownerUid, purpose, revokedAt };
   const db = getFirestore();
   const blockRef = consentBlockRef(event.ownerUid, event.purpose);
   const receiptRef = consentEventReceiptRef(event.eventId);
@@ -101,7 +110,7 @@ export const ingestConsentRevocation = onRequest({
     // Re-run derivative invalidation even for a replayed event receipt. The consent
     // block is already fail-closed, while repeated propagation makes cleanup
     // retryable after transient Storage or Firestore failures.
-    const derivativeInvalidation = await invalidateLifeMovieDerivativesForConsent(event);
+    const derivativeInvalidation = await invalidateLifeMovieDerivativesForConsent(lifeMovieRevocationEvent);
     await receiptRef.set({
       derivativeInvalidation,
       derivativeInvalidationCompletedAt: FieldValue.serverTimestamp(),
