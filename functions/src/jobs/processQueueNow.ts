@@ -6,6 +6,7 @@ import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/sh
 import { returnLeaseAfterPublishFailure } from '../core/dispatchRecovery.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { isTerminalJobStatus } from './executionGuards.js';
+import { isConsentBlocked } from './consentRevocation.js';
 
 const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
 const LEASE_DURATION_MS = 60 * 1000;
@@ -127,6 +128,11 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
 
       if (job.status !== 'PENDING') {
         return { lease: null, outcome: 'master-not-pending' as const };
+      }
+      if (await isConsentBlocked(job, transaction)) {
+        transaction.update(masterJobRef, { status: 'CANCELLED', updatedAt: now, error: { message: 'Consent revoked or consent context is missing.' } });
+        transaction.update(queueRef, { status: 'CANCELLED', updatedAt: now, error: { message: 'Consent revoked or consent context is missing.' } });
+        return { lease: null, outcome: 'consent-blocked' as const };
       }
 
       const newLease = createLease(workerId);
