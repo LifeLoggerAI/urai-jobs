@@ -13,6 +13,7 @@ export { publishJobTerminalEvents } from "./events/publishJobTerminalEvents.js";
 export { createJob } from "./jobs/createJob.js";
 export { getJob } from "./jobs/getJob.js";
 export { cancelJob } from "./jobs/cancelJob.js";
+export { ingestConsentRevocation } from "./jobs/consentRevocation.js";
 export { listJobs, listJobLogs, retryJob } from "./jobs/admin.js";
 
 export { listJobsV2, listJobLogsV2, retryJobV2 } from "./jobs/admin-v2.js";
