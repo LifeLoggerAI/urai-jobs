@@ -119,6 +119,7 @@ async function main() {
     text: 'Hello from URAI Jobs idempotency E2E.',
     format: 'MP3',
     options: { voice: 'default', speed: 1 },
+    consent: { purpose: 'narration', policyVersion: 'storytime.v1', decisionReceiptId: 'e2e-consent-receipt-001', decision: 'granted' },
   };
 
   try {
@@ -150,7 +151,7 @@ async function main() {
     log('Retrying the exact request to prove duplicate suppression...');
     const duplicateResult = await callCallable('createJob', userToken, {
       jobType: 'narrator.tts',
-      payload: { options: { speed: 1, voice: 'default' }, format: 'MP3', text: canonicalPayload.text },
+      payload: canonicalPayload,
       idempotencyKey: `  ${IDEMPOTENCY_KEY}  `,
     });
     if (duplicateResult?.jobId !== jobId || duplicateResult?.deduplicated !== true) {
