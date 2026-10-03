@@ -24,3 +24,5 @@ export { studioLifeMovieLongformBridge } from "./jobs/studioLifeMovieLongformBri
 export { ingestConsentRevocation } from "./privacy/consentRevocation.js";
 
 export { submitDataRightsRequest, getDataRightsRequest, listDataRightsRequests } from "./privacy/dataRights.js";
+
+export { storytimeNarratorBridge } from "./jobs/storytimeNarratorBridge.js";
