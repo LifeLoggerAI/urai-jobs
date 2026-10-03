@@ -33,6 +33,13 @@ export interface JobExecutionMeta {
   completedAt?: unknown;
 }
 
+export interface JobConsentContext {
+  purpose: string;
+  policyVersion: string;
+  decisionReceiptId: string;
+  decision: 'granted';
+}
+
 export interface JobLease {
   leaseId?: string;
   leaseToken?: string;
@@ -58,6 +65,7 @@ export interface Job {
   retryCount?: number;
   execution?: JobExecutionMeta;
   lease?: JobLease;
+  consent?: JobConsentContext;
   ownerSubsystem?: string;
   createdBy?: string;
   output?: unknown;

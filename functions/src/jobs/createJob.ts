@@ -6,6 +6,7 @@ import { Job, JobQueueEntry } from '@urai-jobs/shared-types';
 import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
+import { assertConsentContext } from './consentRevocation.js';
 import {
   bindingMatches,
   buildIdempotencyBindingId,
@@ -16,6 +17,8 @@ import {
 const MAX_PAYLOAD_BYTES = parseInt(process.env.URAI_JOBS_MAX_PAYLOAD_BYTES || '', 10) || 32768;
 const MAX_CREATE_PER_MINUTE = parseInt(process.env.URAI_JOBS_CREATE_RATE_LIMIT_PER_MINUTE || '', 10) || 10;
 const IDEMPOTENCY_COLLECTION = 'jobIdempotencyBindings';
+
+const CONSENT_REQUIRED_JOB_TYPE = /^(narrator\.tts|asset[.-]|spatial[.-]|studio[.-]|content[.-]|storytime\.|analytics\.|communications\.)/;
 
 const ALLOWED_JOB_TYPE_PATTERNS = [
   /^narrator\.tts$/,
@@ -106,6 +109,10 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   }
 
   const { jobType, payload, idempotencyKey } = validationResult.data;
+  if (CONSENT_REQUIRED_JOB_TYPE.test(jobType)) {
+    const consent = (payload as Record<string, unknown>).consent;
+    if (!consent || typeof consent !== 'object') throw httpsError('failed-precondition', 'Canonical consent context is required for this user-scoped job.');
+  }
   if (!isAllowedJobType(jobType)) {
     throw httpsError('invalid-argument', `Unsupported job type: ${jobType}`);
   }
@@ -144,6 +151,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     ownerUid: uid,
     ...(orgId ? { orgId } : {}),
     retryCount: 0,
+    consent: (payload as Record<string, any>).consent as Job['consent'],
     execution: {
       attemptCount: 0,
       maxAttempts: 3,
