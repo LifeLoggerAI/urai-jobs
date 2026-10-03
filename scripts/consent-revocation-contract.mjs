@@ -13,6 +13,8 @@ const ok = (name, condition) => {
 const shared = read("packages/shared-types/src/index.ts");
 const createJob = read("functions/src/jobs/createJob.ts");
 const executeJob = read("functions/src/jobs/executeJob.ts");
+const processQueueNow = read("functions/src/jobs/processQueueNow.ts");
+const processQueueTick = read("functions/src/jobs/processQueueTick.ts");
 const blocks = read("functions/src/privacy/consentBlocks.ts");
 const endpoint = read("functions/src/privacy/consentRevocation.ts");
 const index = read("functions/src/index.ts");
@@ -52,6 +54,20 @@ ok(
   "dispatch path rechecks consent immediately before worker call",
   executeJob.includes("dispatchConsentContexts = jobConsentContexts(job)")
     && executeJob.indexOf("Worker dispatch blocked because required consent was revoked.") < executeJob.indexOf("axios.post")
+);
+ok(
+  "manual queue leasing checks canonical consent blocks before lease",
+  processQueueNow.includes("jobConsentContexts(job)")
+    && processQueueNow.includes("transaction.get(consentBlockRef(job.ownerUid!, context.purpose))")
+    && processQueueNow.indexOf("transaction.get(consentBlockRef(job.ownerUid!, context.purpose))") < processQueueNow.indexOf("const newLease = createLease(workerId)")
+    && processQueueNow.includes("outcome: 'consent-revoked'")
+);
+ok(
+  "scheduled queue leasing checks canonical consent blocks before lease",
+  processQueueTick.includes("jobConsentContexts(job)")
+    && processQueueTick.includes("transaction.get(consentBlockRef(job.ownerUid!, context.purpose))")
+    && processQueueTick.indexOf("transaction.get(consentBlockRef(job.ownerUid!, context.purpose))") < processQueueTick.indexOf("const newLease = createLease(tickWorkerId)")
+    && processQueueTick.includes("Consent revoked for purpose")
 );
 ok("revocation endpoint is exported", index.includes("ingestConsentRevocation"));
 
