@@ -44,8 +44,9 @@ ok("revocation writes active block", endpoint.includes("active: true"));
 ok("revocation returns integrity acknowledgement", endpoint.includes("integrityHash") && endpoint.includes("acknowledgement"));
 ok(
   "revocation retries derivative invalidation even when the event receipt already exists",
-  endpoint.includes("invalidateLifeMovieDerivativesForConsent(event)")
-    && endpoint.indexOf("invalidateLifeMovieDerivativesForConsent(event)") > endpoint.indexOf("const ack = await db.runTransaction")
+  endpoint.includes("invalidateLifeMovieDerivativesForConsent(lifeMovieRevocationEvent)")
+    && endpoint.indexOf("invalidateLifeMovieDerivativesForConsent(lifeMovieRevocationEvent)") > endpoint.indexOf("const ack = await db.runTransaction")
+    && endpoint.includes("const lifeMovieRevocationEvent: LifeMovieRevocationEvent = { eventId, ownerUid, purpose, revokedAt }")
     && endpoint.includes("derivative-invalidation-failed")
 );
 ok(
@@ -66,8 +67,9 @@ ok(
 ok(
   "short Life Movie creation and playback require canonical consent",
   shortMovieBridge.includes("purpose: z.literal('life-movie.render')")
-    && shortMovieBridge.includes("consent: input.consent")
-    && shortMovieBridge.includes("consentBlockRef(input.userId, input.consent.purpose)")
+    && shortMovieBridge.includes("const consent: JobConsentContext = { purpose, policyVersion, decisionReceiptId }")
+    && shortMovieBridge.includes("consentBlockRef(input.userId, consent.purpose)")
+    && shortMovieBridge.includes("consent,")
     && shortMovieBridge.includes("life_movie_consent_missing")
     && shortMovieBridge.includes("life_movie_consent_revoked")
 );
