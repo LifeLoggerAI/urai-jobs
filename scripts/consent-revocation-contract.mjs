@@ -17,6 +17,9 @@ const processQueueNow = read("functions/src/jobs/processQueueNow.ts");
 const processQueueTick = read("functions/src/jobs/processQueueTick.ts");
 const blocks = read("functions/src/privacy/consentBlocks.ts");
 const endpoint = read("functions/src/privacy/consentRevocation.ts");
+const derivativeRevocation = read("functions/src/privacy/lifeMovieDerivativeRevocation.ts");
+const shortMovieBridge = read("functions/src/jobs/studioLifeMovieBridge.ts");
+const longMovieBridge = read("functions/src/jobs/studioLifeMovieLongformBridge.ts");
 const index = read("functions/src/index.ts");
 
 ok("shared Job contract includes consent context", shared.includes("JobConsentContext") && shared.includes("consent?: JobConsentContext"));
@@ -39,6 +42,40 @@ ok("revocation endpoint only admits consent.revoked.v1", endpoint.includes("z.li
 ok("revocation endpoint requires secret bearer auth", endpoint.includes("URAI_JOBS_PRIVACY_EVENT_TOKEN") && endpoint.includes("authorization"));
 ok("revocation writes active block", endpoint.includes("active: true"));
 ok("revocation returns integrity acknowledgement", endpoint.includes("integrityHash") && endpoint.includes("acknowledgement"));
+ok(
+  "revocation retries derivative invalidation even when the event receipt already exists",
+  endpoint.includes("invalidateLifeMovieDerivativesForConsent(event)")
+    && endpoint.indexOf("invalidateLifeMovieDerivativesForConsent(event)") > endpoint.indexOf("const ack = await db.runTransaction")
+    && endpoint.includes("derivative-invalidation-failed")
+);
+ok(
+  "Life Movie derivative invalidation deletes governed Storage objects and scrubs both persisted output aliases",
+  derivativeRevocation.includes("getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true })")
+    && derivativeRevocation.includes("output: FieldValue.delete()")
+    && derivativeRevocation.includes("result: FieldValue.delete()")
+    && derivativeRevocation.includes("expectedPrefix = `tenants/${tenantId}/life-movies/`")
+    && derivativeRevocation.includes("life_movie_revocation_output_boundary_mismatch")
+);
+ok(
+  "revocation cancels live Life Movie jobs and marks long-form plans revoked",
+  derivativeRevocation.includes("patch.status = 'CANCELLED'")
+    && derivativeRevocation.includes("status: 'CANCELLED'")
+    && derivativeRevocation.includes("derivativeAccessState: 'REVOKED'")
+    && derivativeRevocation.includes("studioLifeMovieLongformPlans")
+);
+ok(
+  "short Life Movie creation and playback require canonical consent",
+  shortMovieBridge.includes("purpose: z.literal('life-movie.render')")
+    && shortMovieBridge.includes("consent: input.consent")
+    && shortMovieBridge.includes("consentBlockRef(input.userId, input.consent.purpose)")
+    && shortMovieBridge.includes("life_movie_consent_missing")
+    && shortMovieBridge.includes("life_movie_consent_revoked")
+);
+ok(
+  "manual generated-output deletion removes result aliases in short and long-form Life Movies",
+  shortMovieBridge.includes("result: FieldValue.delete()")
+    && longMovieBridge.includes("result: FieldValue.delete()")
+);
 ok(
   "LEASED to RUNNING path checks all consent blocks",
   executeJob.includes("jobConsentContexts(job)")
