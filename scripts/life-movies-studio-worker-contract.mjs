@@ -52,9 +52,9 @@ assert.ok(sharedContract.includes('assertLifeMovieTenantPaths'), 'Life Movies co
 assert.ok(bridge.includes("defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN')"), 'Studio bridge must use a dedicated Secret Manager identity');
 assert.ok(bridge.includes("action: z.literal('create')"), 'Studio bridge must expose bounded create semantics');
 assert.ok(bridge.includes("purpose: z.literal('life-movie.render')"), 'Short Life Movie creation must require canonical render consent');
-assert.ok(bridge.includes("consentBlockRef(input.userId, input.consent.purpose)"), 'Short Life Movie creation must fail closed on revoked consent');
-assert.ok(bridge.includes("consent: input.consent"), 'Short Life Movie jobs must persist canonical consent context');
-assert.ok(bridge.includes("const fingerprintPayload = { tenantId: input.tenantId, userId: input.userId, consent: input.consent, payload }"), 'Short Life Movie idempotency must bind consent identity');
+assert.ok(bridge.includes("consentBlockRef(input.userId, consent.purpose)"), 'Short Life Movie creation must fail closed on revoked consent');
+assert.ok(bridge.includes("const consent: JobConsentContext = { purpose, policyVersion, decisionReceiptId }") && bridge.includes("    consent,"), 'Short Life Movie jobs must persist canonical consent context');
+assert.ok(bridge.includes("const fingerprintPayload = { tenantId: input.tenantId, userId: input.userId, consent, payload }"), 'Short Life Movie idempotency must bind consent identity');
 assert.ok(bridge.includes("action: z.enum(['status', 'cancel', 'playback', 'download', 'delete-output'])"), 'Studio bridge must expose bounded status/cancel/playback/download/delete semantics');
 const signedAccessStart = bridge.indexOf('async function signedMovieAccess(');
 const signedAccessEnd = bridge.indexOf('async function deleteBoundMovieOutput(', signedAccessStart);
