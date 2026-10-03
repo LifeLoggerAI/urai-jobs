@@ -10,6 +10,21 @@ const REQUEST_RECEIPT = /^req_[A-Za-z0-9_-]{12,128}$/;
 const SOURCE_HANDLE = /^psh_[A-Za-z0-9_-]{16,256}$/;
 const PRIVATE_REF = /^private:[A-Za-z0-9_./:-]{8,512}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
+const LIFE_MODEL_EVIDENCE_CLASSES = new Set([
+  'SOURCE_CAPTURED',
+  'SOURCE_DERIVED',
+  'DIRECT_SUBJECT_TESTIMONY',
+  'ATTRIBUTED_TESTIMONY',
+  'CORROBORATED_INFERENCE',
+  'CONTEXTUAL_RESEARCH',
+]);
+type LifeModelEvidenceClass =
+  | 'SOURCE_CAPTURED'
+  | 'SOURCE_DERIVED'
+  | 'DIRECT_SUBJECT_TESTIMONY'
+  | 'ATTRIBUTED_TESTIMONY'
+  | 'CORROBORATED_INFERENCE'
+  | 'CONTEXTUAL_RESEARCH';
 
 app.use(express.json({ limit: '64kb' }));
 
@@ -217,6 +232,13 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
     if (!SOURCE_HANDLE.test(sourceHandle)) {
       throw new Error('authority returned an invalid opaque source handle');
     }
+    const sourceEvidenceClass = String(authorization.data?.evidenceClass || '');
+    if (!LIFE_MODEL_EVIDENCE_CLASSES.has(sourceEvidenceClass)) {
+      throw new Error('authority did not return a recognized historical evidence class');
+    }
+    if (authorization.data?.synthetic !== false) {
+      throw new Error('authority did not prove the authorized source is non-synthetic');
+    }
 
     if (job.jobType === 'memory.private-source.index') {
       const indexUrl = httpsUrl('PRIVATE_SOURCE_INDEX_URL');
@@ -224,6 +246,7 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
         indexUrl,
         {
           sourceHandle,
+          sourceEvidenceClass,
           transcriptRef: job.payload.transcriptRef,
           provenanceRef: job.payload.provenanceRef,
           requestedPurpose: 'memory-index',
@@ -253,6 +276,7 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
       const checksum = String(provider.data?.checksum || '');
       const lifeModelSchemaVersion = String(provider.data?.lifeModelSchemaVersion || '');
       const syntheticOutputMayBecomeHistoricalSource = provider.data?.syntheticOutputMayBecomeHistoricalSource;
+      const indexedSourceEvidenceClass = String(provider.data?.sourceEvidenceClass || '');
       const sourceFixityRef = String(provider.data?.sourceFixityRef || '');
       const dependencyGraphRef = String(provider.data?.dependencyGraphRef || '');
       const backlogState = String(provider.data?.backlogState || '');
@@ -268,6 +292,9 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
       }
       if (syntheticOutputMayBecomeHistoricalSource !== false) {
         throw new Error('memory index provider did not prove the synthetic-memory firewall');
+      }
+      if (indexedSourceEvidenceClass !== sourceEvidenceClass) {
+        throw new Error('memory index provider source evidence class does not match source authority');
       }
       if (!terminalBacklogStates.has(backlogState)) {
         throw new Error('memory index provider returned a non-terminal backlog state as success');
@@ -297,6 +324,7 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
           checksum,
           lifeModelSchemaVersion,
           syntheticOutputMayBecomeHistoricalSource: false,
+          sourceEvidenceClass: sourceEvidenceClass as LifeModelEvidenceClass,
           sourceFixityRef,
           dependencyGraphRef,
           backlogState,
@@ -312,6 +340,7 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
       transcribeUrl,
       {
         sourceHandle,
+        sourceEvidenceClass,
         requestedPurpose: job.payload.requestedPurpose,
         locale: job.payload.locale,
         idempotencyKey: job.jobId,
@@ -342,6 +371,7 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
         transcriptRef,
         provenanceRef,
         checksum,
+        sourceEvidenceClass: sourceEvidenceClass as LifeModelEvidenceClass,
         requestedPurpose: job.payload.requestedPurpose,
       },
     });

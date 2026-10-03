@@ -793,6 +793,7 @@ async function deletePlanOutputs(planId: string, tenantId: string, userId: strin
   for (const jobId of plan.childJobIds) {
     batch.update(jobDoc(jobId), {
       output: FieldValue.delete(),
+      result: FieldValue.delete(),
       outputDeletedAt: now,
       outputDeletedBy: userId,
       updatedAt: now,
@@ -801,6 +802,7 @@ async function deletePlanOutputs(planId: string, tenantId: string, userId: strin
   if (plan.assemblyJobId) {
     batch.update(jobDoc(plan.assemblyJobId), {
       output: FieldValue.delete(),
+      result: FieldValue.delete(),
       outputDeletedAt: now,
       outputDeletedBy: userId,
       updatedAt: now,
