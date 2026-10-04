@@ -4,7 +4,7 @@
   "repository": "LifeLoggerAI/urai-jobs",
   "authority": "request-control-plane",
   "centralStatus": "pending",
-  "executionState": "HARD_OFF_PENDING_GOVERNED_WORKER",
+  "executionState": "PROTECTED_STAGING_EXECUTOR_SOURCE_READY_HARD_OFF",
   "requestCollection": "dataRightsRequests",
   "requestSurface": [
     "submitDataRightsRequest",
@@ -21,7 +21,16 @@
     "admin-operator-listing",
     "server-only-request-records",
     "server-only-audit-subcollection",
-    "hard-off-execution-state"
+    "hard-off-execution-state",
+    "protected-staging-project-admission",
+    "production-authorization-rejection",
+    "approved-request-precondition",
+    "retention-decision-receipt-precondition",
+    "bounded-owner-job-export",
+    "private-gcs-export-artifact",
+    "bounded-jobs-scope-delete-anonymize",
+    "retryable-execution-receipts",
+    "explicit-unresolved-domain-reporting"
   ],
   "candidateDataDomains": [
     "candidate-profile",
@@ -40,14 +49,11 @@
     "auditLogs"
   ],
   "activationRequirements": [
-    "governed-export-worker",
+    "central-privacy-orchestration-and-final-completion-authority",
     "private-export-delivery-receipt",
-    "governed-delete-anonymize-worker",
     "retention-and-legal-hold-policy",
     "provider-deletion-propagation-where-applicable",
     "cross-tenant-tests",
-    "retry-and-terminal-failure-behavior",
-    "record-count-and-digest-receipts",
     "protected-staging-e2e-proof",
     "backup-restore-recovery-proof",
     "legal-privacy-review",
@@ -57,6 +63,8 @@
     "requestIntakeImplemented": true,
     "exportExecutionActive": false,
     "deletionExecutionActive": false,
-    "crossSystemComplete": false
+    "crossSystemComplete": false,
+    "governedExecutorSourceImplemented": true,
+    "protectedStagingExecutionAdmitted": false
   }
-}
+}\n
