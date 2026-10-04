@@ -132,20 +132,35 @@ Implemented now:
 - explicit `HARD_OFF_PENDING_GOVERNED_WORKER` execution state;
 - deployment precheck coverage for the callable exports and Firestore protection.
 
-Not yet activated:
+Protected-staging executor source now exists in `functions/src/privacy/dataRightsExecution.ts`.
 
-- destructive deletion/anonymization execution;
-- export package generation/download delivery;
+Implemented but hard-off:
+
+- admin/operator-only execution of explicitly APPROVED requests;
+- exact protected-staging project admission through server-owned environment configuration;
+- explicit rejection if production authorization is enabled;
+- retention-decision receipt requirement before execution;
+- bounded owner-scoped Jobs export with recursive secret/token redaction, deterministic SHA-256, and private GCS artifact creation;
+- bounded Jobs-scope deletion/anonymization for owner-bound jobs, job logs, and queue records;
+- explicit unresolved-domain reporting for Firebase Auth, provider derivatives, external artifacts, and data owned by other URAI systems;
+- retryable execution receipts and failure state;
+- no path that marks the ecosystem request globally COMPLETED.
+
+Still not activated:
+
+- protected-staging deployment/E2E admission;
+- central Privacy orchestration and final completion authority;
 - provider-side deletion propagation;
 - completion notification delivery;
-- backup/restore certification.
+- backup/restore certification;
+- legal/privacy approval of retention mappings.
 
-Those operations remain hard-off until the governed worker, retention/legal policy, cross-tenant tests, and recovery evidence exist. Request intake must not be interpreted as completed export/deletion execution.
+Request intake or Jobs-scope execution must not be interpreted as completed ecosystem export/deletion.
 
 ## Remaining implementation tasks
 
-- Implement governed export worker and private delivery receipt.
-- Implement governed deletion/anonymization worker with legal-retention escalation.
+- Execute protected-staging E2E against the exact candidate and retain artifact/readback/failure receipts.
+- Integrate central Privacy orchestration and final completion authority.
 - Add provider deletion propagation where applicable.
 - Add completion notification delivery.
 - Add retention/TTL evidence and backup/restore drill receipt.
@@ -155,4 +170,6 @@ Those operations remain hard-off until the governed worker, retention/legal poli
 
 `prepareDataRightsRequestExport` is internal source preparation for the exact request/audit collections registered by Privacy. It is not exported as a callable, attached to a trigger, or admitted as a runtime job. It does not complete a request or deliver a download. Broader candidate/employer/jobs/queue/provider data is not covered and `crossSystemComplete` remains false.
 
-Preparation queries records for the server-supplied owner UID (future integration must derive it from authenticated authority), checks ownership again, paginates both registered collections, exports only allowlisted receipt fields, and returns counts plus a deterministic payload SHA-256. Notes, fingerprints, actor identities, unknown fields and credentials are omitted. Unregistered schemas, source failures and the 10,000-record bound fail the entire preparation rather than return a successful partial payload. Protected staging evidence and approved scope/retention/legal policy are still required before worker integration or activation.
+Preparation queries records for the server-supplied owner UID, checks ownership again, paginates both registered collections, exports only allowlisted receipt fields, and returns counts plus a deterministic payload SHA-256. Notes, fingerprints, actor identities, unknown fields and credentials are omitted. Unregistered schemas, source failures and the 10,000-record bound fail the entire preparation rather than return a successful partial payload.
+
+The protected executor consumes only an authenticated admin/operator request that has already reached APPROVED state and carries a retention decision receipt. It remains source-ready but runtime-hard-off until protected staging admission and central Privacy orchestration evidence exist.
