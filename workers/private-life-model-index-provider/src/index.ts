@@ -298,19 +298,20 @@ async function persistRevision(request: IndexRequest, extraction: Extraction, so
   const handleHash = stableHash(request.sourceHandle).slice(0, 40);
   const root = db.collection('uraiPrivateLifeModel').doc(handleHash);
   const idempotencyRef = root.collection('idempotency').doc(stableHash(request.idempotencyKey));
-  const existing = await idempotencyRef.get();
-  if (existing.exists) {
-    const data = existing.data() || {};
-    return {
-      handleHash,
-      revision: Number(data.revision),
-      checksum: String(data.checksum),
-      backlogState: String(data.backlogState),
-      replayed: true,
-    };
-  }
 
   const result = await db.runTransaction(async (tx) => {
+    const existing = await tx.get(idempotencyRef);
+    if (existing.exists) {
+      const data = existing.data() || {};
+      return {
+        handleHash,
+        revision: Number(data.revision),
+        checksum: String(data.checksum),
+        backlogState: String(data.backlogState),
+        replayed: true,
+      };
+    }
+
     const currentRef = root.collection('state').doc('current');
     const currentSnap = await tx.get(currentRef);
     const currentRevision = Number(currentSnap.data()?.revision || 0);
