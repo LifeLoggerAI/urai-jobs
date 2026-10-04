@@ -13,8 +13,17 @@ export { publishJobTerminalEvents } from "./events/publishJobTerminalEvents.js";
 export { createJob } from "./jobs/createJob.js";
 export { getJob } from "./jobs/getJob.js";
 export { cancelJob } from "./jobs/cancelJob.js";
-export { ingestConsentRevocation } from "./jobs/consentRevocation.js";
 export { listJobs, listJobLogs, retryJob } from "./jobs/admin.js";
 
 export { listJobsV2, listJobLogsV2, retryJobV2 } from "./jobs/admin-v2.js";
 export { buildInfo } from "./system/buildInfo.js";
+
+export { studioLifeMovieBridge } from "./jobs/studioLifeMovieBridge.js";
+export { studioLifeMovieLongformBridge } from "./jobs/studioLifeMovieLongformBridge.js";
+
+export { ingestConsentRevocation } from "./privacy/consentRevocation.js";
+
+export { submitDataRightsRequest, getDataRightsRequest, listDataRightsRequests } from "./privacy/dataRights.js";
+export { processDataRightsRequest } from "./privacy/dataRightsExecution.js";
+
+export { storytimeNarratorBridge } from "./jobs/storytimeNarratorBridge.js";

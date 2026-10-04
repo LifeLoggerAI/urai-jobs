@@ -66,7 +66,7 @@ export function validateWorkerDeployReceipt(receipt) {
       }
 
       if (!nonEmptyString(service.worker)) failures.push(`${prefix}.worker is required`);
-      if (!['narrator-worker', 'asset-worker'].includes(String(service.worker ?? ''))) failures.push(`${prefix}.worker is not approved`);
+      if (!['narrator-worker', 'asset-worker', 'studio-worker'].includes(String(service.worker ?? ''))) failures.push(`${prefix}.worker is not approved`);
       if (seenWorkers.has(service.worker)) failures.push(`${prefix}.worker duplicates ${service.worker}`);
       seenWorkers.add(service.worker);
       if (!nonEmptyString(service.buildId)) failures.push(`${prefix}.buildId is required`);
@@ -124,10 +124,16 @@ export function validateWorkerDeployReceipt(receipt) {
         imageDigest: service.imageDigest,
         revisionLabels: expectedRevisionLabels,
         secretVersions: service.secretVersions,
+        ...(service.worker === 'studio-worker' ? { sourceBuckets: String(service.configuration?.sourceBuckets || '') } : {}),
       };
       if (!service.configuration || typeof service.configuration !== 'object' || Array.isArray(service.configuration)) {
         failures.push(`${prefix}.configuration is required`);
-      } else if (JSON.stringify(stable(service.configuration)) !== JSON.stringify(stable(expectedConfiguration))) {
+      } else {
+        if (service.worker === 'studio-worker' && !nonEmptyString(service.configuration.sourceBuckets)) {
+          failures.push(`${prefix}.configuration.sourceBuckets is required for studio-worker`);
+        }
+      }
+      if (service.configuration && JSON.stringify(stable(service.configuration)) !== JSON.stringify(stable(expectedConfiguration))) {
         failures.push(`${prefix}.configuration does not match immutable runtime identity, revision labels, and pinned secrets`);
       }
       const expectedFingerprint = fingerprint(expectedConfiguration);

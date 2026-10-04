@@ -82,7 +82,8 @@ for (const marker of [
 ]) assert.ok(execute.includes(marker), `executeJob missing ${marker}`);
 assert.match(execute, /if \(activeAsyncCallbackForLease\(current, leaseToken, Date\.now\(\)\)\) \{\s*return 'callback-pending';\s*\}/);
 assert.match(execute, /status: 'SUCCESS',[\s\S]*lease: FieldValue\.delete\(\),[\s\S]*'execution\.leaseToken': FieldValue\.delete\(\)/);
-assert.match(execute, /status: 'FAILED',[\s\S]*lease: FieldValue\.delete\(\),[\s\S]*'execution\.leaseToken': FieldValue\.delete\(\)/);
+assert.match(execute, /status: 'PENDING',[\s\S]*retryCount: FieldValue\.increment\(1\),[\s\S]*availableAt: nextAvailableAt/);
+assert.match(execute, /status: 'DEAD',[\s\S]*lease: FieldValue\.delete\(\),[\s\S]*'execution\.leaseToken': FieldValue\.delete\(\)/);
 
 for (const marker of [
   "job.status === 'LEASED'",
@@ -146,7 +147,7 @@ console.log('[PASS] transactional creation precedes publication');
 console.log('[PASS] scheduled and manual dispatch preserve master state');
 console.log('[PASS] retryExpiredLeases is the sole LEASED recovery owner');
 console.log('[PASS] stale RUNNING recovery revalidates exact lease and heartbeat');
-console.log('[PASS] ambiguous failures preserve active callbacks and terminal attempts clear authority');
+console.log('[PASS] ambiguous failures preserve active callbacks, retryable failures requeue, and exhausted attempts become DEAD');
 console.log('[PASS] legacy Firebase authority is blocked and one approved worker-token version binds Workers and Functions');
 console.log('[PASS] root and individual worker dependencies are installed by pnpm workspace authority');
 console.log('[PASS] terminal outbox due-time queries have their required composite indexes');

@@ -5,7 +5,7 @@ import { ulid } from 'ulid';
 import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { canRequeueUnstartedLease, isTerminalJobStatus } from './executionGuards.js';
-import { isConsentBlocked } from './consentRevocation.js';
+import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
 const MAX_DISPATCH_RETRIES = 3;
@@ -30,6 +30,20 @@ function terminalQueueStatus(status: unknown): JobQueueStatus {
   if (status === 'CANCELLED') return 'CANCELLED';
   if (status === 'DEAD') return 'DEAD';
   return 'DONE';
+}
+
+function jobConsentContexts(job: Job) {
+  const contexts = [
+    ...(isConsentContext(job.consent) ? [job.consent] : []),
+    ...(Array.isArray(job.consents) ? job.consents.filter(isConsentContext) : []),
+  ];
+  const seen = new Set<string>();
+  return contexts.filter((context) => {
+    const key = `${context.purpose}\n${context.policyVersion}\n${context.decisionReceiptId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function errorMessage(error: unknown): string {
@@ -253,10 +267,31 @@ export const processQueueTick = onSchedule('every 1 minutes', async () => {
         return null;
       }
       if (job.status !== 'PENDING') return null;
-      if (await isConsentBlocked(job, transaction)) {
-        transaction.update(masterJobRef, { status: 'CANCELLED', updatedAt: now, error: { message: 'Consent revoked or consent context is missing.' } });
-        transaction.update(queueRef, { status: 'CANCELLED', updatedAt: now, error: { message: 'Consent revoked or consent context is missing.' } });
-        return null;
+
+      const consentContexts = jobConsentContexts(job);
+      if (job.ownerUid && consentContexts.length > 0) {
+        const blockSnapshots = await Promise.all(
+          consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
+        );
+        const blockedPurpose = blockSnapshots
+          .map((snapshot, index) => ({ snapshot, purpose: consentContexts[index].purpose }))
+          .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
+        if (blockedPurpose) {
+          transaction.update(masterJobRef, {
+            status: 'CANCELLED',
+            lease: FieldValue.delete(),
+            updatedAt: now,
+            completedAt: now,
+            error: { message: `Consent revoked for purpose ${blockedPurpose} before queue lease.` },
+          });
+          transaction.update(queueRef, {
+            status: 'CANCELLED',
+            lease: FieldValue.delete(),
+            updatedAt: now,
+            'dispatch.lastError': `Consent revoked for purpose ${blockedPurpose} before queue lease.`,
+          });
+          return null;
+        }
       }
 
       const newLease = createLease(tickWorkerId);

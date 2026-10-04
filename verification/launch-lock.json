@@ -1,6 +1,6 @@
 {
   "name": "URAI Jobs Launch Verification Lock",
-  "version": 1,
+  "version": 2,
   "status": "locked_until_verified",
   "requiredChecks": [
     "workspace-install",
@@ -13,8 +13,12 @@
     "production-smoke"
   ],
   "requiredSecrets": [
-    "FIREBASE_SERVICE_ACCOUNT_URAI_JOBS",
-    "URAI_JOBS_FIREBASE_PROJECT_ID"
+    "URAI_JOBS_FIREBASE_PROJECT_ID",
+    "GCP_REGION",
+    "GCS_BUCKET_NAME",
+    "API_ALLOWED_ORIGINS",
+    "FIREBASE_HOSTING_SITE",
+    "WORKER_RUNTIME_SERVICE_ACCOUNT"
   ],
   "requiredFirebaseSetup": [
     "Firebase Hosting site connected",
@@ -30,5 +34,11 @@
     "product_launch"
   ],
   "unlockRule": "Do not mark the PR ready, merge, or production deploy until all required checks pass and signoffs.md has no Status: PENDING entries.",
-  "lastUpdated": "2026-05-04"
+  "lastUpdated": "2026-09-25",
+  "requiredVariables": [
+    "GCP_WIF_PROVIDER",
+    "GCP_DEPLOY_SERVICE_ACCOUNT",
+    "FIREBASE_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT"
+  ],
+  "credentialPolicy": "Deployment authority must use GitHub OIDC -> Google Workload Identity Federation. Long-lived Firebase/GCP service-account JSON and Firebase CLI tokens are prohibited."
 }

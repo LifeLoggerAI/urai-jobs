@@ -33,29 +33,31 @@ const requiredRoutes = [
 ];
 
 requiredRoutes.forEach(([version, path]) => {
-  ok(`route manifest includes ${version} ${path}`, routeManifest.includes(`version: "${version}"`) && routeManifest.includes(`path: "${path}"`));
+  ok(`route manifest retains historical ${version} ${path}`, routeManifest.includes(`version: "${version}"`) && routeManifest.includes(`path: "${path}"`));
 });
 
-ok("app routes V1 Career Mirror", app.includes("/career-mirror"));
-ok("app routes V2 Marketplace", app.includes("/career-marketplace"));
-ok("app routes V3 Automation", app.includes("/career-automation"));
-ok("app routes V4 Decision", app.includes("/career-decision"));
-ok("app routes V5 Passport", app.includes("/career-passport"));
-ok("app routes Version Console", app.includes("/career-versions"));
+ok("app retains V1 Career Mirror compatibility route", app.includes("/career-mirror"));
+ok("app retains V2 Marketplace compatibility route", app.includes("/career-marketplace"));
+ok("app retains V3 Automation compatibility route", app.includes("/career-automation"));
+ok("app retains V4 Decision compatibility route", app.includes("/career-decision"));
+ok("app retains V5 Passport compatibility route", app.includes("/career-passport"));
+ok("app retains Version Console compatibility route", app.includes("/career-versions"));
 
-ok("landing links V1", landing.includes("/career-mirror"));
-ok("landing links V2", landing.includes("/career-marketplace"));
-ok("landing links V3", landing.includes("/career-automation"));
-ok("landing links V4", landing.includes("/career-decision"));
-ok("landing links V5", landing.includes("/career-passport"));
-ok("landing keeps internal version console out of the public entry", !landing.includes("/career-versions"));
+ok("canonical landing does not advertise V1 career surface", !landing.includes("/career-mirror"));
+ok("canonical landing does not advertise V2 career surface", !landing.includes("/career-marketplace"));
+ok("canonical landing does not advertise V3 career surface", !landing.includes("/career-automation"));
+ok("canonical landing does not advertise V4 career surface", !landing.includes("/career-decision"));
+ok("canonical landing does not advertise V5 career surface", !landing.includes("/career-passport"));
+ok("canonical landing keeps internal version console out of the public entry", !landing.includes("/career-versions"));
+ok("canonical landing states internal execution role", landing.includes("Internal execution fabric") && landing.includes("not a public careers marketplace"));
+ok("legacy career routes fail into superseded product state", app.includes("Superseded surface") && app.includes("not part of the canonical URAI Jobs runtime"));
 
-ok("version model links V1", versionPlan.includes("/career-mirror"));
-ok("version model links V2", versionPlan.includes("/career-marketplace"));
-ok("version model links V3", versionPlan.includes("/career-automation"));
-ok("version model links V4", versionPlan.includes("/career-decision"));
-ok("version model links V5", versionPlan.includes("/career-passport"));
-ok("version console renders surface links", versionConsole.includes("stage.href"));
+ok("historical version model retains V1", versionPlan.includes("/career-mirror"));
+ok("historical version model retains V2", versionPlan.includes("/career-marketplace"));
+ok("historical version model retains V3", versionPlan.includes("/career-automation"));
+ok("historical version model retains V4", versionPlan.includes("/career-decision"));
+ok("historical version model retains V5", versionPlan.includes("/career-passport"));
+ok("version console retains historical surface links", versionConsole.includes("stage.href"));
 
 ok("completion matrix exists", completionMatrix.includes("URAI Jobs V1-V5 Completion Matrix"));
 ok("completion matrix documents runtime foundation", completionMatrix.includes("Shared runtime foundation"));

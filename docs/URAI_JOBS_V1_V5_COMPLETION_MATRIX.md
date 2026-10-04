@@ -1,9 +1,11 @@
 # URAI Jobs V1-V5 Completion Matrix
 
-Status: repo-side implementation scaffold complete
-Scope: public career product surfaces plus approved URAI Jobs runtime hooks
+Status: **HISTORICAL / RETAINED IMPLEMENTATION / NOT CANONICAL PUBLIC RUNTIME**
+Scope: retained V1-V5 career implementation plus approved URAI Jobs runtime hooks
 
-This matrix records what exists in the repository for each autonomous URAI-Jobs version. It separates repo-side completion from production evidence. Production evidence still requires CI runs, deployment outputs, worker health checks, smoke job IDs, domain checks, and release artifacts.
+This matrix records historical implementation that remains in the repository. It is not a current production-activation claim. The canonical `LifeLoggerAI/urai-jobs` product boundary is the internal execution runtime. On the current convergence line, the canonical navigation no longer exposes V1-V5 career pages; legacy career paths are retained only as superseded compatibility routes unless a separately governed public career product/module is explicitly re-authorized.
+
+Any future activation of these V1-V5 capabilities must re-earn product decision, security, privacy, accessibility, human-control, deployment and exact-head evidence. Employment-related external actions remain fail-closed and user-controlled.
 
 ## Shared runtime foundation
 
@@ -80,10 +82,10 @@ This matrix records what exists in the repository for each autonomous URAI-Jobs 
 
 | Surface | Repo evidence |
 | --- | --- |
-| Top navigation | `web/src/App.tsx` links V1-V5 |
-| Landing page | `web/src/pages/LandingPage.tsx` links V1-V5 |
-| Version Console | `web/src/pages/CareerVersionConsolePage.tsx` renders `stage.href` links |
-| Version model | `web/src/lib/careerLaunchPlan.ts` includes `href` for V1-V5 |
+| Canonical top navigation | `web/src/App.tsx` exposes Runtime/Login and permission-gated Create/Operator surfaces; V1-V5 links are not canonical navigation |
+| Canonical landing page | `web/src/pages/LandingPage.tsx` identifies Jobs as the internal execution fabric and does not advertise V1-V5 |
+| Legacy career routes | `web/src/App.tsx` preserves the historical paths but resolves them to an explicit superseded-product state |
+| Historical Version Console/model | retained in source for provenance and future separated-product work; not canonical public navigation |
 
 ## Commands to verify repo-side completion
 
@@ -114,4 +116,4 @@ These cannot be completed by repository contents alone:
 
 ## Current verdict
 
-The repository now contains the V1-V5 URAI-Jobs product and runtime scaffolding required to continue into CI verification and production deployment evidence. The remaining work is operational verification, not product-surface scaffolding.
+The repository contains substantial V1-V5 career implementation, but those surfaces are **not the canonical URAI Jobs public runtime and are not live-certified**. Current launch authority is the internal execution fabric. The retained career code is future/separated-product foundation only until explicitly re-authorized and independently proven under its own employment/privacy/security/accessibility governance.

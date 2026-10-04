@@ -43,6 +43,8 @@ Production deploy should not set emulator host variables.
 
 ## Predeploy Commands
 
+The governed release control is `URAI_JOBS_DEPLOY_PRECHECK`. It must remain fail-closed until the protected production environment supplies the real deployment identities, bucket, signing secret, and worker origins.
+
 ```bash
 npm run typecheck
 npm run build
@@ -50,6 +52,10 @@ npm run urai-jobs:verify
 npm run urai-jobs:smoke
 npm run urai-jobs:deploy-precheck
 ```
+
+## Managed Worker Runtime
+
+Production execution workers are expected to run as separately governed managed **Cloud Run** services (or an explicitly approved equivalent) behind the worker URLs declared in the protected environment. Repository CI verifies routing and artifact contracts only; it does not invent or substitute live worker URLs. Each deployed worker requires exact-revision identity, least-privilege runtime service account, health readback, monitoring, and rollback evidence before production activation.
 
 ## Deploy Commands
 
