@@ -129,7 +129,7 @@ Implemented now:
 - admin/operator request listing;
 - server-only Firestore request and audit records, created atomically in one batch;
 - declared status/createdAt composite index for filtered operator listing (requires index deployment);
-- explicit `HARD_OFF_PENDING_GOVERNED_WORKER` execution state;
+- explicit `PROTECTED_STAGING_EXECUTOR_SOURCE_READY_HARD_OFF` execution state;
 - deployment precheck coverage for the callable exports and Firestore protection.
 
 Protected-staging executor source now exists in `functions/src/privacy/dataRightsExecution.ts`.
@@ -155,7 +155,9 @@ Still not activated:
 - backup/restore certification;
 - legal/privacy approval of retention mappings.
 
-Request intake or Jobs-scope execution must not be interpreted as completed ecosystem export/deletion.
+Request intake must not be interpreted as completed export/deletion execution.
+
+Jobs-scope execution must not be interpreted as completed ecosystem export/deletion.
 
 ## Remaining implementation tasks
 
