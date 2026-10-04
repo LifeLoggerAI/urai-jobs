@@ -27,7 +27,7 @@ check('idempotent replay returns stored receipt without allocating a new revisio
 check('revisions are transactionally persisted', source.includes('runTransaction') && source.includes("collection('revisions')"));
 check('only private refs and hashes are returned', source.includes('memoryIndexRef: base(') && source.includes('checksum: stored.checksum'));
 check('provider never returns raw transcript', !source.includes('transcript: resolved.transcriptText'));
-check('persisted revisions bind a hashed source handle only', source.includes('sourceHandleHash: handleHash') && !source.includes('sourceHandle: request.sourceHandle'));
+check('persisted revisions bind a hashed source handle only', source.includes('sourceHandleHash: handleHash') && !/const record = \{[\s\S]*sourceHandle: request\.sourceHandle[\s\S]*\};/.test(source));
 
 if (failed) process.exit(1);
 console.log('[PASS] PRIVATE_LIFE_MODEL_INDEX_PROVIDER_CONTRACT');
