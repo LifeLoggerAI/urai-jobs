@@ -12,7 +12,7 @@ assert.equal(contract.contractVersion, '1.0.0');
 assert.equal(contract.system, 'urai-jobs');
 assert.equal(contract.authority, 'request-control-plane');
 assert.equal(contract.centralStatus, 'pending');
-assert.equal(contract.executionState, 'HARD_OFF_PENDING_GOVERNED_WORKER');
+assert.equal(contract.executionState, 'PROTECTED_STAGING_EXECUTOR_SOURCE_READY_HARD_OFF');
 
 assert.deepEqual(contract.requestTypes, ['EXPORT', 'DELETE']);
 for (const name of ['submitDataRightsRequest', 'getDataRightsRequest', 'listDataRightsRequests']) {
@@ -20,7 +20,7 @@ for (const name of ['submitDataRightsRequest', 'getDataRightsRequest', 'listData
   assert.ok(index.includes(name), `Functions entrypoint missing ${name}`);
 }
 
-assert.ok(dataRights.includes("executionState: 'HARD_OFF_PENDING_GOVERNED_WORKER'"));
+assert.ok(dataRights.includes("executionState: 'PROTECTED_STAGING_EXECUTOR_SOURCE_READY_HARD_OFF'"));
 assert.ok(dataRights.includes("z.enum(['EXPORT', 'DELETE'])"));
 assert.ok(workflow.includes('Request intake must not be interpreted as completed export/deletion execution.'));
 
@@ -30,9 +30,13 @@ assert.equal(contract.claims.deletionExecutionActive, false);
 assert.equal(contract.claims.crossSystemComplete, false);
 
 for (const requirement of [
-  'governed-export-worker',
-  'governed-delete-anonymize-worker',
+  'central-privacy-orchestration-and-final-completion-authority',
+  'private-export-delivery-receipt',
+  'retention-and-legal-hold-policy',
+  'provider-deletion-propagation-where-applicable',
+  'cross-tenant-tests',
   'protected-staging-e2e-proof',
+  'backup-restore-recovery-proof',
   'legal-privacy-review',
   'deployment-and-rollback-receipts',
 ]) {
