@@ -21,7 +21,7 @@
     "admin-operator-listing",
     "server-only-request-records",
     "server-only-audit-subcollection",
-    "hard-off-execution-state",
+    "source-ready-protected-staging-hard-off-state",
     "protected-staging-project-admission",
     "production-authorization-rejection",
     "approved-request-precondition",
