@@ -51,7 +51,7 @@ const submitHandler = async (data: unknown, context: CallableContext) => {
     requestedFormat: parsed.data.requestType === 'EXPORT' ? (parsed.data.format || 'json') : null,
     note: parsed.data.note || null,
     status: 'PENDING',
-    executionState: 'HARD_OFF_PENDING_GOVERNED_WORKER',
+    executionState: 'SOURCE_READY_PROTECTED_STAGING_HARD_OFF',
     createdAt: now,
     updatedAt: now,
   };
@@ -95,7 +95,7 @@ const submitHandler = async (data: unknown, context: CallableContext) => {
   return {
     requestId: requestRef.id,
     status: 'PENDING',
-    executionState: 'HARD_OFF_PENDING_GOVERNED_WORKER',
+    executionState: 'SOURCE_READY_PROTECTED_STAGING_HARD_OFF',
   };
 };
 
