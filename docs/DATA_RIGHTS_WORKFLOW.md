@@ -129,7 +129,7 @@ Implemented now:
 - admin/operator request listing;
 - server-only Firestore request and audit records, created atomically in one batch;
 - declared status/createdAt composite index for filtered operator listing (requires index deployment);
-- explicit `HARD_OFF_PENDING_GOVERNED_WORKER` execution state;
+- explicit `SOURCE_READY_PROTECTED_STAGING_HARD_OFF` execution state;
 - deployment precheck coverage for the callable exports and Firestore protection.
 
 Protected-staging executor source now exists in `functions/src/privacy/dataRightsExecution.ts`.
