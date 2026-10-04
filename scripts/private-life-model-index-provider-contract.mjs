@@ -20,6 +20,8 @@ check('synthetic-memory firewall is explicit', source.includes('syntheticOutputM
 check('unknown evidence cannot enter historical source classes', source.includes('ALLOWED_EVIDENCE') && !source.includes("'UNKNOWN',"));
 check('correction triggers are bounded', source.includes('initial-source') && source.includes('stronger-source'));
 check('idempotency is persisted', source.includes("collection('idempotency')"));
+check('idempotency replay is transactionally serialized', source.includes('const existing = await tx.get(idempotencyRef)') && !source.includes('const existing = await idempotencyRef.get()'));
+check('idempotent replay returns stored receipt without allocating a new revision', source.includes('replayed: true') && source.indexOf('const existing = await tx.get(idempotencyRef)') < source.indexOf("const currentRef = root.collection('state').doc('current')"));
 check('revisions are transactionally persisted', source.includes('runTransaction') && source.includes("collection('revisions')"));
 check('only private refs and hashes are returned', source.includes('memoryIndexRef: base(') && source.includes('checksum: stored.checksum'));
 check('provider never returns raw transcript', !source.includes('transcript: resolved.transcriptText'));
