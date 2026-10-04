@@ -320,6 +320,7 @@ async function persistRevision(request: IndexRequest, extraction: Extraction, so
       schemaVersion: 'urai-life-model-v1',
       revision,
       correlationTrigger: request.correlationTrigger || 'initial-source',
+      sourceHandleHash: handleHash,
       sourceEvidenceClass: request.sourceEvidenceClass,
       sourceFixityRef,
       sourceSha256,
