@@ -156,7 +156,7 @@ async function main() {
     const rightsResults = await Promise.all(Array.from({ length: 3 }, () => callCallable('submitDataRightsRequest', userToken, rightsPayload)));
     const rightsId = rightsResults[0]?.requestId;
     if (!rightsId || rightsResults.some(result => result.requestId !== rightsId)) fail('Concurrent rights retries created different requests.');
-    if (rightsResults.some(result => result.executionState !== 'HARD_OFF_PENDING_GOVERNED_WORKER')) fail('Rights retry changed execution boundary.');
+    if (rightsResults.some(result => result.executionState !== 'PROTECTED_STAGING_EXECUTOR_SOURCE_READY_HARD_OFF')) fail('Rights retry changed execution boundary.');
     const rightsRef = db.collection('dataRightsRequests').doc(rightsId);
     const rightsRecord = (await rightsRef.get()).data();
     const rightsAudit = await rightsRef.collection('audit').get();
@@ -253,7 +253,7 @@ async function main() {
     if (!exportRequest?.requestId || exportRequest.status !== 'PENDING') {
       fail(`submitDataRightsRequest returned unexpected result: ${JSON.stringify(exportRequest)}`);
     }
-    if (exportRequest.executionState !== 'HARD_OFF_PENDING_GOVERNED_WORKER') {
+    if (exportRequest.executionState !== 'PROTECTED_STAGING_EXECUTOR_SOURCE_READY_HARD_OFF') {
       fail(`Data Rights request must remain hard-off: ${JSON.stringify(exportRequest)}`);
     }
 
@@ -263,7 +263,7 @@ async function main() {
     if (ownerReadback?.request?.requestId !== exportRequest.requestId || ownerReadback.request.status !== 'PENDING') {
       fail(`Owner-scoped data-rights readback failed: ${JSON.stringify(ownerReadback)}`);
     }
-    if (ownerReadback.request.executionState !== 'HARD_OFF_PENDING_GOVERNED_WORKER') {
+    if (ownerReadback.request.executionState !== 'PROTECTED_STAGING_EXECUTOR_SOURCE_READY_HARD_OFF') {
       fail(`Owner readback lost hard-off execution state: ${JSON.stringify(ownerReadback)}`);
     }
 
