@@ -23,6 +23,7 @@ export { studioLifeMovieLongformBridge } from "./jobs/studioLifeMovieLongformBri
 
 export { ingestConsentRevocation } from "./privacy/consentRevocation.js";
 
-export { submitDataRightsRequest, getDataRightsRequest, listDataRightsRequests } from "./privacy/dataRights.js";\nexport { processDataRightsRequest } from "./privacy/dataRightsExecution.js";
+export { submitDataRightsRequest, getDataRightsRequest, listDataRightsRequests } from "./privacy/dataRights.js";
+export { processDataRightsRequest } from "./privacy/dataRightsExecution.js";
 
 export { storytimeNarratorBridge } from "./jobs/storytimeNarratorBridge.js";
