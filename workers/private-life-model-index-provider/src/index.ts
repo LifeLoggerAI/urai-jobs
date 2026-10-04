@@ -178,6 +178,17 @@ async function resolvePrivateInputs(request: IndexRequest) {
   const payload = await response.json() as any;
   if (payload?.authorized !== true) throw new Error('private ref resolver denied access');
   if (payload?.synthetic !== false) throw new Error('resolved source must be explicitly non-synthetic');
+  if (String(payload.sourceHandle) !== request.sourceHandle) {
+    throw new Error('resolver source handle mismatch');
+  }
+  const resolvedTranscriptRef = String(payload?.transcriptRef || '');
+  const resolvedProvenanceRef = String(payload?.provenanceRef || '');
+  if (resolvedTranscriptRef !== request.transcriptRef) {
+    throw new Error('resolver transcript ref mismatch');
+  }
+  if (resolvedProvenanceRef !== request.provenanceRef) {
+    throw new Error('resolver provenance ref mismatch');
+  }
   if (String(payload?.sourceEvidenceClass || '') !== request.sourceEvidenceClass) {
     throw new Error('resolver evidence class mismatch');
   }
