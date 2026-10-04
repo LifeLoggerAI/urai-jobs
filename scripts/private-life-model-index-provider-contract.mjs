@@ -13,6 +13,8 @@ check('provider is an isolated workspace', pkg.name === 'private-life-model-inde
 check('provider requires bearer auth', source.includes('PRIVATE_SOURCE_INDEX_TOKEN') && source.includes('requireAuth'));
 check('opaque refs are validated', source.includes('PRIVATE_REF') && source.includes('transcriptRef') && source.includes('provenanceRef'));
 check('private resolver is required', source.includes('PRIVATE_SOURCE_REF_RESOLVER_URL') && source.includes('resolve-life-model-inputs'));
+check('resolver output is rebound to requested opaque refs', source.includes("resolvedTranscriptRef !== request.transcriptRef") && source.includes("resolvedProvenanceRef !== request.provenanceRef"));
+check('resolver output cannot switch source handles', source.includes("String(payload.sourceHandle) !== request.sourceHandle"));
 check('raw transcript has a hard bound', source.includes('MAX_TRANSCRIPT_CHARS'));
 check('raw transcript is not included in failure logs', !source.includes('transcriptText,\n      error'));
 check('extractor uses deterministic JSON response mode', source.includes("response_format: { type: 'json_object' }") && source.includes('temperature: 0'));
