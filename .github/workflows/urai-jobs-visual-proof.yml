@@ -73,7 +73,7 @@ jobs:
           printf '{"exactHead":"%s","proof":"jobs-career-responsive-pixels","providerData":"none"}\n' "$EXACT_HEAD" > web/artifacts/jobs-visual/receipt.json
       - name: Upload exact-head visual proof
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: urai-jobs-visual-${{ env.EXACT_HEAD }}
           path: |
