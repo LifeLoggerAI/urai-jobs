@@ -24,13 +24,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: false
-
-      - name: Scrub checkout authentication
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config --local --unset-all http.https://github.com/.extraheader || true
-          test -z "$(git config --local --get-all http.https://github.com/.extraheader || true)"
+          persist-credentials: false
 
       - name: Verify exact clean candidate
         shell: bash
