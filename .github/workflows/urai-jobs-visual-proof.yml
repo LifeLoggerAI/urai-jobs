@@ -35,7 +35,7 @@ jobs:
         with:
           version: 8.15.9
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: pnpm
@@ -73,7 +73,7 @@ jobs:
           printf '{"exactHead":"%s","proof":"jobs-career-responsive-pixels","providerData":"none"}\n' "$EXACT_HEAD" > web/artifacts/jobs-visual/receipt.json
       - name: Upload exact-head visual proof
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: urai-jobs-visual-${{ env.EXACT_HEAD }}
           path: |
