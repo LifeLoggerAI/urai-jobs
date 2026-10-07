@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 
+const SOURCE_EVIDENCE_CLASSES = new Set(['SOURCE_CAPTURED', 'SOURCE_DERIVED', 'DIRECT_SUBJECT_TESTIMONY', 'ATTRIBUTED_TESTIMONY', 'CORROBORATED_INFERENCE', 'CONTEXTUAL_RESEARCH']);
 const MAX_ROOTS = 2000;
 const MAX_EXPORT_RECORDS = 10000;
 const DELETE_PAGE_SIZE = 500;
@@ -60,6 +61,7 @@ export async function canFinalizePrivateSource(db: Firestore, transaction: any, 
     || result.requestedPurpose !== job.payload?.requestedPurpose
     || proof.schemaVersion !== 'urai-private-source-receipt-v2' || proof.ownerUid !== ownerUid || proof.status !== 'ACTIVE'
     || proof.sourceReceiptRef !== job.payload?.sourceReceiptRef || proof.synthetic !== false
+    || !SOURCE_EVIDENCE_CLASSES.has(proof.sourceEvidenceClass) || result.sourceEvidenceClass !== proof.sourceEvidenceClass
     || proof.consent?.purpose !== consent.purpose || proof.consent?.policyVersion !== consent.policyVersion
     || proof.consent?.decisionReceiptId !== consent.decisionReceiptId
     || !Array.isArray(proof.purposes) || !proof.purposes.includes(job.payload?.requestedPurpose)

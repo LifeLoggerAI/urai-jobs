@@ -237,6 +237,22 @@ await check('dispatcher final transaction rejects consent/correction/deletion af
   f.set(receiptPath,{...f.records.get(receiptPath),sourceRevision:2});assert.equal(await final(),false);f.set(receiptPath,{...f.records.get(receiptPath),sourceRevision:1});
   f.set(fencePath,{deleted:true});assert.equal(await final(),false);
 });
+await check('actual private worker results retain identity through canonical finalization and evidence reclassification',async()=>{
+  for(const transcribe of [false,true]){
+    const producer=await workerFixture({transcribe}).execute();assert.equal(producer.status,200);
+    for(const key of ['ownerUid','jobId','sourceReceiptRef'])assert.equal(producer.body.result[key],request[key]);
+    const f=fixture();
+    if(transcribe){
+      f.set('jobs/'+request.jobId,{...f.records.get('jobs/'+request.jobId),type:'memory.private-source.transcribe',
+        payload:{sourceReceiptRef:request.sourceReceiptRef,requestedPurpose:'transcribe'}});
+      f.set(receiptPath,{...f.records.get(receiptPath),purposes:['transcribe','memory-index']});
+    }
+    const finalize=()=>f.db.runTransaction(tx=>loadPrivacy(f).canFinalizePrivateSource(f.db,tx,f.records.get('jobs/'+request.jobId),producer.body));
+    assert.equal(await finalize(),true);
+    f.set(receiptPath,{...f.records.get(receiptPath),sourceEvidenceClass:'SOURCE_DERIVED'});
+    assert.equal(await finalize(),false);
+  }
+});
 await check('worker forwards trusted owner/job/lease and opaque source receipt to index and transcription',async()=>{
   for(const transcribe of [false,true]){const f=workerFixture({transcribe});assert.equal((await f.execute()).status,200);const call=f.calls.find(v=>!v.url.includes('/authorize'));
     for(const key of ['ownerUid','jobId','leaseToken','sourceReceiptRef'])assert.equal(call.body[key],request[key]);assert.equal(f.calls.filter(v=>v.url.includes('/authorize')).length,2);}

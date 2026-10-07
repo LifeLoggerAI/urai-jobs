@@ -335,6 +335,7 @@ app.post('/execute-job', rateLimit({ windowMs: 60000, limit: 60, standardHeaders
         jobId: job.jobId,
         jobType: job.jobType,
         result: {
+          ownerUid: job.ownerUid, jobId: job.jobId, sourceReceiptRef: job.payload.sourceReceiptRef,
           memoryIndexRef,
           entityGraphRef,
           temporalIndexRef,
@@ -405,6 +406,7 @@ app.post('/execute-job', rateLimit({ windowMs: 60000, limit: 60, standardHeaders
       jobId: job.jobId,
       jobType: 'memory.private-source.transcribe',
       result: {
+          ownerUid: job.ownerUid, jobId: job.jobId, sourceReceiptRef: job.payload.sourceReceiptRef,
         transcriptRef,
         provenanceRef,
         checksum,

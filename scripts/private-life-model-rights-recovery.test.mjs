@@ -81,7 +81,7 @@ function fixture(options = {}) {
   records.set('users/operatorFixture', { role: 'operator' }); records.set(`users/${uid}`, { role: 'candidate', privateBiography: 'Fictional owner data only' });
   records.set(requestPath, { ownerUid: uid, requestType: options.requestType || 'EXPORT', status: 'APPROVED' });
   records.set(sourcePath, { schemaVersion: 'urai-private-source-receipt-v2', ownerUid: uid, sourceReceiptRef: sourceRef, sourceHandle: handle,
-    status: 'ACTIVE', synthetic: false, sourceRevision: 1, sourceSha256: 'a'.repeat(64), sourceFixityRef: 'private:fictional/fixity', sourceByteLength: 100, consent, purposes: ['memory-index'] });
+    status: 'ACTIVE', synthetic: false, sourceEvidenceClass: 'SOURCE_CAPTURED', sourceRevision: 1, sourceSha256: 'a'.repeat(64), sourceFixityRef: 'private:fictional/fixity', sourceByteLength: 100, consent, purposes: ['memory-index'] });
   records.set(`${sourcePath}/transcripts/${hash(transcriptRef)}`, { schemaVersion: 'urai-private-source-transcript-v2', ownerUid: uid, sourceReceiptRef: sourceRef,
     transcriptRef, provenanceRef, requestedPurpose: 'memory-index', status: 'CURRENT', synthetic: false, sourceRevision: 1,
     sourceSha256: 'a'.repeat(64), transcriptSha256: 'b'.repeat(64), provenanceSha256: 'c'.repeat(64) });
@@ -97,7 +97,7 @@ function fixture(options = {}) {
   return { records, stats, db, helper, advance: ms => { clock += ms; },
     execute: (data = body, context = { auth: { uid: 'operatorFixture' } }) => handler(data, context),
     finalize: (patch = {}) => db.runTransaction(tx => helper.canFinalizePrivateSource(db, tx, records.get('jobs/fictional_job'), { result: {
-      ownerUid: uid, jobId: 'fictional_job', sourceReceiptRef: sourceRef, requestedPurpose: 'memory-index', sourceRevision: 1,
+      ownerUid: uid, jobId: 'fictional_job', sourceReceiptRef: sourceRef, requestedPurpose: 'memory-index', sourceEvidenceClass: 'SOURCE_CAPTURED', sourceRevision: 1,
       sourceSha256: 'a'.repeat(64), sourceFixityRef: 'private:fictional/fixity', transcriptRef, provenanceRef,
       transcriptSha256: 'b'.repeat(64), provenanceSha256: 'c'.repeat(64), historicalSourceAuthority: false, reviewState: 'OWNER_REVIEW_REQUIRED', ...patch } })) };
 }
@@ -152,7 +152,7 @@ test('owner deletion during export prevents a private output receipt', async () 
   await assert.rejects(f.execute(), error => error.code === 'internal'); assert.equal(f.stats.uploads, 0); });
 test('invalid protected source receipt identity cannot appear as proven exported source lineage', async () => { const f = fixture(); f.records.get(sourcePath).sourceReceiptRef = 'psr_different_receipt_000001';
   await assert.rejects(f.execute(), error => error.code === 'internal'); assert.equal(f.stats.uploads, 0); });
-for (const patch of [{ ownerUid: 'different_owner' }, { jobId: 'different_job' }, { sourceReceiptRef: 'psr_different_receipt_000001' }, { requestedPurpose: 'transcribe' }]) {
+for (const patch of [{ ownerUid: 'different_owner' }, { jobId: 'different_job' }, { sourceReceiptRef: 'psr_different_receipt_000001' }, { requestedPurpose: 'transcribe' }, { sourceEvidenceClass: 'SOURCE_DERIVED' }]) {
   test(`dispatcher source receipt lineage rejects ${Object.keys(patch)[0]} substitution`, async () => { const f = fixture(); assert.equal(await f.finalize(), true); assert.equal(await f.finalize(patch), false); }); }
 
 test('current source consent decision must still match the canonical job at finalization', async () => { const f = fixture(); assert.equal(await f.finalize(), true);
