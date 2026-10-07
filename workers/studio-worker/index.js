@@ -115,8 +115,10 @@ function createRenderControl(job) {
           ]);
           const own = localFence.exists ? localFence.data() : null;
           const central = centralFence.exists ? centralFence.data() : null;
-          if ((localFence.exists && (own?.ownerHash !== ownerHash || own?.deleted === true))
-            || (centralFence.exists && (central?.uid !== current.ownerUid || central?.active === true))) {
+          // Only an exact owner with an explicit inactive boolean is known
+          // authority; missing or malformed fence state remains closed.
+          if ((localFence.exists && (own?.ownerHash !== ownerHash || own?.deleted !== false))
+            || (centralFence.exists && (central?.uid !== current.ownerUid || central?.active !== false))) {
             throw new Error('render_owner_deleted');
           }
           for (const block of blocks) {

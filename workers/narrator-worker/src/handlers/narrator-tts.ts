@@ -124,8 +124,9 @@ async function assertNarratorLifecycle(job: any): Promise<void> {
         ]);
         const own = localFence.exists ? localFence.data() : null;
         const central = centralFence.exists ? centralFence.data() : null;
-        if ((localFence.exists && (own?.ownerHash !== ownerHash || own?.deleted === true))
-          || (centralFence.exists && (central?.uid !== current.ownerUid || central?.active === true))) {
+        // Unknown or malformed durable deletion state grants no authority.
+        if ((localFence.exists && (own?.ownerHash !== ownerHash || own?.deleted !== false))
+          || (centralFence.exists && (central?.uid !== current.ownerUid || central?.active !== false))) {
           throw new Error("narrator_canonical_owner_deleted");
         }
         const valid = (value: any) => value && typeof value === "object"

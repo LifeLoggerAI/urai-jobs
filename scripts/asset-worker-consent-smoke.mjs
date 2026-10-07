@@ -11,6 +11,8 @@ const require = createRequire(import.meta.url);
 const args = process.argv.slice(2), idx = args.indexOf('--source-root');
 const root = idx < 0 ? path.resolve(fileURLToPath(new URL('..', import.meta.url))) : path.resolve(args[idx + 1]);
 const baseline = args.includes('--baseline');
+const ownerFenceBaseline = args.includes('--owner-fence-baseline');
+const ownerFenceOnly = args.includes('--owner-fence-only') || ownerFenceBaseline;
 const source = fs.readFileSync(path.join(root, 'workers/asset-worker/index.js'), 'utf8');
 const types = ['asset.generate', 'asset.validate', 'asset.package', 'asset.publish', 'asset.forge.v1'];
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -49,6 +51,7 @@ function fixture(type, options = {}) {
     docs.set('jobResults/prior-result', { jobId: 'job1', status: job.status, historical: true });
   }
   docs.set('jobs/job1', job); docs.set('jobQueue/job1', { jobId: 'job1', status: 'RUNNING' });
+  for (const [key, value] of options.fences || []) docs.set(key, clone(value));
   if (options.block) docs.set('jobConsentBlocks/' + consentId(options.blockOwner || 'owner1', options.block), { active: options.active !== false });
   const snapshot = ref => ({ exists: docs.has(ref.key), data: () => clone(docs.get(ref.key)) });
   const doc = (collection, id = 'generated-' + ++nextId) => ({ key: collection + '/' + id, id,
@@ -97,6 +100,65 @@ function fixture(type, options = {}) {
 }
 let passed = 0;
 async function check(label, fn) { await fn(); passed++; console.log('[PASS] ' + label); }
+const fencePath = (kind, owner = 'owner1') => kind === 'local'
+  ? 'uraiPrivateLifeModelOwnerFences/' + hash(owner) : 'privacyDeletionTombstones/' + owner;
+const fenceValue = (kind, value, owner = 'owner1') => kind === 'local'
+  ? { ownerHash: hash(owner), ...(value === undefined ? {} : { deleted: value }) }
+  : { uid: owner, ...(value === undefined ? {} : { active: value }) };
+if (!baseline) {
+for (const type of types) {
+  for (const kind of ['local', 'central']) for (const [state, value, foreign] of [
+    ['deleted', true], ['missing state', undefined], ['string state', 'false'],
+    ['numeric state', 0], ['null state', null], ['object state', {}], ['foreign identity', false, true],
+  ]) for (const route of ['registration', 'SUCCESS', 'FAILED', 'duplicate SUCCESS', 'duplicate FAILED']) {
+    await check(type + ' ' + kind + ' owner fence ' + state + ' denies ' + route, async () => {
+      const duplicate = route.startsWith('duplicate'), status = route.endsWith('FAILED') ? 'FAILED' : 'SUCCESS';
+      const data = fenceValue(kind, value, foreign ? 'other-owner' : 'owner1');
+      const f = fixture(type, { callback: route !== 'registration', duplicate, duplicateStatus: status,
+        fences: [[fencePath(kind), data]] });
+      const response = await f.invoke(route === 'registration' ? '/' : '/callback',
+        route === 'registration' ? { jobId: 'job1', leaseToken: 'lease1' } : { jobId: 'job1', status });
+      if (ownerFenceBaseline) {
+        assert.equal(response.code, route === 'registration' ? 202 : 200);
+        assert.equal(f.githubBodies.length, route === 'registration' ? 1 : 0);
+        assert.equal(f.job().status, route === 'registration' ? 'RUNNING' : status);
+      } else {
+        assert.equal(response.code, 409); assert.equal(f.githubBodies.length, 0);
+        assert.equal(f.job().status, 'CANCELLED'); assert.equal(f.docs.get('jobQueue/job1').status, 'CANCELLED');
+        assert.equal(f.job().execution.leaseToken, undefined); assert.equal(f.job().execution.callbackTokenHash, undefined);
+        assert.equal(f.job().execution.completedCallbackTokenHash, undefined); assert.equal(f.job().result?.resultId, undefined);
+        assert.equal([...f.docs.keys()].filter(key => key.startsWith('jobResults/')).length, duplicate ? 1 : 0);
+        if (duplicate) assert.equal(f.docs.get('jobResults/prior-result').historical, true, 'historical bytes/results are not erased by publication fencing');
+      }
+    });
+  }
+  if (ownerFenceBaseline) continue;
+  for (const [label, fences] of [
+    ['inactive exact owner', ['local', 'central'].map(kind => [fencePath(kind), fenceValue(kind, false)])],
+    ['unrelated owner', ['local', 'central'].map(kind => [fencePath(kind, 'other-owner'), fenceValue(kind, true, 'other-owner')])],
+  ]) for (const withoutConsent of [false, true]) for (const route of ['registration', 'SUCCESS', 'FAILED']) {
+    await check(type + ' owner authority isolation ' + label + ' ' + route + ' noConsent=' + withoutConsent, async () => {
+      const f = fixture(type, { fences, withoutConsent, callback: route !== 'registration' });
+      const r = await f.invoke(route === 'registration' ? '/' : '/callback', route === 'registration'
+        ? { jobId: 'job1', leaseToken: 'lease1' } : { jobId: 'job1', status: route });
+      assert.equal(r.code, route === 'registration' ? 202 : 200);
+      assert.equal(f.githubBodies.length, route === 'registration' ? 1 : 0);
+      for (const kind of ['local', 'central']) assert.ok(f.reads.includes(fencePath(kind)), 'canonical owner authority is read even without purpose grants');
+    });
+  }
+  for (const [label, options, authOptions, code] of [
+    ['wrong callback token', { callback: true }, { token: 'wrong' }, 403],
+    ['wrong callback secret', { callback: true }, { auth: 'wrong' }, 403],
+    ['wrong registration secret', {}, { auth: 'wrong' }, 401],
+  ]) await check(type + ' owner deletion does not grant mutation to ' + label, async () => {
+    const f = fixture(type, { ...options, fences: [[fencePath('local'), fenceValue('local', true)]] });
+    const r = await f.invoke(options.callback ? '/callback' : '/', options.callback
+      ? { jobId: 'job1', status: 'SUCCESS' } : { jobId: 'job1', leaseToken: 'lease1' }, authOptions);
+    assert.equal(r.code, code); assert.equal(f.job().status, 'RUNNING'); assert.equal(f.githubBodies.length, 0);
+  });
+}
+}
+if (!ownerFenceOnly) {
 for (const type of types) {
   for (const purpose of [primary.purpose, extra.purpose]) {
     await check(type + ' revoked registration ' + purpose, async () => {
@@ -156,4 +218,6 @@ for (const type of types) {
     assert.equal(f.job().execution.asyncCallbackPending, mode === 'ambiguous');
   });
 }
-console.log('Actual asset-worker synthetic consent/ownership regressions: ' + passed + ' passed; mode=' + (baseline ? 'predecessor defect reproduced' : 'corrected') + '; GitHub/provider network calls: 0; spending: 0.');
+}
+console.log('Actual asset-worker synthetic consent/ownership regressions: ' + passed + ' passed; mode=' + (baseline || ownerFenceBaseline ? 'predecessor defect reproduced' : 'corrected') + '; GitHub/provider network calls: 0; spending: 0.');
+

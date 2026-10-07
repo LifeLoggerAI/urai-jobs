@@ -30,6 +30,18 @@ function git(...args) { return execFileSync('git', ['-C', root, ...args], { enco
 for (const rel of sourcePaths) { const file = path.join(sourceRoot, rel); if (fs.existsSync(file)) { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.copyFileSync(file, path.join(root, rel)); } }
 git('init', '--quiet'); git('add', '.'); git('-c', 'user.name=UrAi Synthetic Test', '-c', 'user.email=synthetic@example.invalid', 'commit', '--quiet', '-m', 'Synthetic actual-leaf fixture');
 const sourceSha = git('rev-parse', 'HEAD');
+// Reuse compiler output for identical source bytes while each fixture receives
+// fresh VM modules and adapters. Repeated compilation must not consume the
+// short real timeout being tested; changed source is always recompiled.
+const compiledSources = new Map();
+function fixtureCode(rel, source) {
+  if (!rel.endsWith('.ts')) return source;
+  const previous = compiledSources.get(rel);
+  if (previous?.source === source) return previous.js;
+  const js = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText;
+  compiledSources.set(rel, { source, js });
+  return js;
+}
 
 function fixture(provider, options = {}, extension = 'ts') {
   const clock = { now: Date.now(), monotonic: 0 }, events = [], submitted = [], stored = [], deleted = [];
@@ -151,7 +163,7 @@ function fixture(provider, options = {}, extension = 'ts') {
   function load(rel) {
     if (modules.has(rel)) return modules.get(rel).exports;
     const source = fs.readFileSync(path.join(sourceRoot, rel), 'utf8');
-    const js = rel.endsWith('.ts') ? ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText : source;
+    const js = fixtureCode(rel, source);
     const module = { exports: {} }; modules.set(rel, module);
     const localRequire = spec => {
       if (spec === '@google-cloud/text-to-speech') return { TextToSpeechClient };
@@ -176,6 +188,33 @@ function fixture(provider, options = {}, extension = 'ts') {
 let count = 0;
 async function test(label, run) { await run(); count++; console.log(`[PASS] ${label}`); }
 async function denied(provider, options, extra, extension = 'ts') { const f = fixture(provider, options, extension); await assert.rejects(f.execute()); assert.equal(f.submitted.length, 0); assert.equal(f.stored.length, 0); extra?.(f); }
+async function malformedOwnerFenceProof(reproduce = false) {
+  for (const extension of ['ts', 'js']) for (const provider of ['google', 'elevenlabs']) {
+    for (const kind of ['local', 'central']) for (const [state, value] of [
+      ['missing', undefined], ['null', null], ['string', 'false'], ['number', 0], ['object', {}], ['array', []],
+    ]) for (const [name, hook, posts, writes, held] of [
+      ['before admission', 'initialCanonical', 0, 0, false],
+      ['during reserve', 'afterReserve', 0, 0, true],
+      ['during Storage write', 'afterStorage', 1, 1, true],
+    ]) await test(extension + ' ' + provider + ' ' + kind + ' malformed ' + state + ' owner state ' + name, async () => {
+      const mutate = ({ canonical, fences }) => {
+        const owner = canonical.ownerUid, path = kind === 'local'
+          ? 'uraiPrivateLifeModelOwnerFences/' + hash(owner) : 'privacyDeletionTombstones/' + owner;
+        const data = kind === 'local' ? { ownerHash: hash(owner) } : { uid: owner };
+        if (value !== undefined) data[kind === 'local' ? 'deleted' : 'active'] = value;
+        fences.set(path, data);
+      };
+      const f = fixture(provider, { [hook]: mutate }, extension);
+      if (reproduce) { await f.execute(); assert.equal(f.submitted.length, 1); assert.equal(f.stored.length, 1); assert.equal(f.deleted.length, 0); }
+      else {
+        await assert.rejects(f.execute(), /narrator_canonical_owner_deleted/);
+        assert.equal(f.submitted.length, posts); assert.equal(f.stored.length, writes); assert.equal(f.held, held);
+        assert.equal(f.deleted.length, writes); if (writes) assert.equal(f.stored[0].live, false);
+        if (held) assert.equal(f.recorded, true);
+      }
+    });
+  }
+}
 async function ownerFenceProof(reproduce = false) {
   const pathFor = (kind, uid) => kind === 'local' ? 'uraiPrivateLifeModelOwnerFences/' + hash(uid) : 'privacyDeletionTombstones/' + uid;
   const deletedFence = (kind, uid) => kind === 'local' ? { ownerHash: hash(uid), deleted: true } : { uid, active: true };
@@ -303,7 +342,8 @@ async function lifecycleProof(reproduce = false) {
 }
 
 try {
-  if (args.includes('--owner-fence-baseline') || args.includes('--owner-fence-only')) { await ownerFenceProof(args.includes('--owner-fence-baseline')); }
+  if (args.includes('--malformed-fence-baseline') || args.includes('--malformed-fence-only')) { await malformedOwnerFenceProof(args.includes('--malformed-fence-baseline')); }
+  else if (args.includes('--owner-fence-baseline') || args.includes('--owner-fence-only')) { await ownerFenceProof(args.includes('--owner-fence-baseline')); }
   else if (args.includes('--lifecycle-baseline') || args.includes('--lifecycle-only')) { await lifecycleProof(args.includes('--lifecycle-baseline')); }
   else if (args.includes('--reproduce')) {
     for (const provider of ['google', 'elevenlabs']) await test(`predecessor ${provider} invokes actual paid leaf without canonical approval`, async () => { const f = fixture(provider, { env: { URAI_NARRATOR_SPEND_BINDINGS_JSON: '{}' } }); await f.execute(); assert.equal(f.events.length, 0); assert.equal(f.submitted.length, 1); });
@@ -434,6 +474,7 @@ try {
     await test('declared SHA cannot substitute for actual clean source', () => denied('google', { env: { URAI_SOURCE_SHA: 'a'.repeat(40) } }));
     for (const rel of ['workers/narrator-worker/src/protected-spend', 'workers/narrator-worker/src/handlers/narrator-tts']) await test(`${rel} tracked JS AST matches actual TS compilation`, async () => { const compiled = ts.transpileModule(fs.readFileSync(path.join(sourceRoot, `${rel}.ts`), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText; const tree = code => { const file = ts.createSourceFile('actual.js', code, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS); assert.equal(file.parseDiagnostics.length, 0); const shape = node => { const children = []; ts.forEachChild(node, child => { children.push(shape(child)); }); return [node.kind, typeof node.text === 'string' ? node.text : null, children]; }; return shape(file); }; assert.deepEqual(tree(fs.readFileSync(path.join(sourceRoot, `${rel}.js`), 'utf8')), tree(compiled)); assert.equal(fs.readFileSync(path.join(sourceRoot, `${rel}.js`), 'utf8'), compiled, 'tracked JS must match compiler bytes'); });
   }
-  if (!args.includes('--lifecycle-baseline') && !args.includes('--lifecycle-only') && !args.includes('--reproduce') && !args.includes('--owner-fence-baseline') && !args.includes('--owner-fence-only')) { await lifecycleProof(); await ownerFenceProof(); }
+  if (!args.includes('--lifecycle-baseline') && !args.includes('--lifecycle-only') && !args.includes('--reproduce') && !args.includes('--owner-fence-baseline') && !args.includes('--owner-fence-only') && !args.includes('--malformed-fence-baseline') && !args.includes('--malformed-fence-only')) { await lifecycleProof(); await ownerFenceProof(); await malformedOwnerFenceProof(); }
   console.log(`Actual narrator paid-leaf synthetic regressions: ${count} passed; provider network calls: 0; spending: 0.`);
 } finally { fs.rmSync(root, { recursive: true, force: true }); }
+

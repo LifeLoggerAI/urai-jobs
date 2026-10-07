@@ -66,6 +66,18 @@ function assetConsentPurposes(job) {
 
 async function assetConsentBlocked(transaction, job) {
   if (!job.ownerUid) return false;
+  // Owner deletion is durable before downstream job cancellation. An existing
+  // fence grants no execution authority unless its exact owner and inactive
+  // boolean state are known; malformed records remain closed.
+  const ownerHash = sha256(job.ownerUid);
+  const [localFence, centralFence] = await Promise.all([
+    transaction.get(db.collection('uraiPrivateLifeModelOwnerFences').doc(ownerHash)),
+    transaction.get(db.collection('privacyDeletionTombstones').doc(job.ownerUid)),
+  ]);
+  const local = localFence.exists ? localFence.data() : null;
+  const central = centralFence.exists ? centralFence.data() : null;
+  if ((localFence.exists && (local?.ownerHash !== ownerHash || local?.deleted !== false))
+    || (centralFence.exists && (central?.uid !== job.ownerUid || central?.active !== false))) return true;
   const snapshots = await Promise.all(assetConsentPurposes(job).map(purpose => transaction.get(
     db.collection('jobConsentBlocks').doc(sha256(job.ownerUid + '\n' + purpose)))));
   return snapshots.some(snapshot => snapshot.exists && snapshot.data()?.active === true);
@@ -75,7 +87,7 @@ function cancelConsentBlockedAsset(transaction, jobRef, queueRef, jobId) {
   const now = serverTimestamp(), remove = admin.firestore.FieldValue.delete();
   transaction.update(jobRef, {
     status: 'CANCELLED', lease: remove, updatedAt: now, completedAt: now,
-    'progress.stage': 'CONSENT_REVOKED', 'progress.message': 'Asset execution consent was revoked',
+    'progress.stage': 'AUTHORITY_REVOKED', 'progress.message': 'Asset execution authority is unavailable or revoked',
     'timestamps.updatedAt': now, 'execution.leaseToken': remove, 'execution.completedAt': now,
     'execution.asyncCallbackPending': false, 'execution.callbackTokenHash': remove,
     'execution.callbackLeaseToken': remove, 'execution.callbackDeadlineAt': remove,
@@ -278,7 +290,7 @@ app.post('/', requireWorkerAuth, async (req, res) => {
     });
 
     if (prepared.consentRevoked === true) {
-      return res.status(409).send({ error: 'Asset execution consent was revoked' });
+      return res.status(409).send({ error: 'Asset execution authority is unavailable or revoked' });
     }
 
     const job = prepared.job;
@@ -525,7 +537,7 @@ app.post('/callback', async (req, res) => {
     });
 
     if (callbackResult.consentRevoked === true) {
-      return res.status(409).send({ error: 'Asset execution consent was revoked' });
+      return res.status(409).send({ error: 'Asset execution authority is unavailable or revoked' });
     }
 
     return res.status(200).send({

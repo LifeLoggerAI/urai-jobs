@@ -8,6 +8,8 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const source = fs.readFileSync(new URL('../workers/studio-worker/index.js', import.meta.url), 'utf8');
 const reproduce = process.argv.includes('--reproduce-predecessor');
+const malformedBaseline = process.argv.includes('--malformed-fence-baseline');
+const malformedOnly = malformedBaseline || process.argv.includes('--malformed-fence-only');
 const digest = value => crypto.createHash('sha256').update(value).digest('hex');
 const consent = { purpose: 'life-movie.render', policyVersion: 'fixture-v1', decisionReceiptId: 'fixture-receipt' };
 let cases = 0;
@@ -55,6 +57,25 @@ const defects = [
   ['foreign canonical document identity', h => { h.current.jobId = 'foreign-job'; }, /render_job_binding_mismatch/],
 ];
 for (const type of ['studio.render.video', 'studio.assemble.video']) {
+  for (const kind of ['local', 'central']) for (const [label, value] of [
+    ['missing', undefined], ['null', null], ['string', 'false'], ['number', 0], ['object', {}], ['array', []],
+  ]) for (const afterStart of [false, true]) {
+    const h = fixture(type), owner = h.job.ownerUid;
+    const key = kind === 'local' ? 'uraiPrivateLifeModelOwnerFences/' + digest(owner) : 'privacyDeletionTombstones/' + owner;
+    const data = kind === 'local' ? { ownerHash: digest(owner) } : { uid: owner };
+    if (value !== undefined) data[kind === 'local' ? 'deleted' : 'active'] = value;
+    try {
+      if (afterStart) await h.control.start();
+      h.docs.set(key, data);
+      if (malformedBaseline || reproduce) await (afterStart ? h.control.check() : h.control.start());
+      else await assert.rejects(afterStart ? h.control.check() : h.control.start(), /render_owner_deleted/);
+      cases++;
+      console.log(`[${malformedBaseline ? 'REPRODUCED' : 'PASS'}] ${type}: ${kind} ${label} state before/during=${afterStart}`);
+    } finally { h.control.stop(); }
+  }
+}
+if (!malformedOnly) {
+for (const type of ['studio.render.video', 'studio.assemble.video']) {
   for (const [label, mutate, expected] of defects) {
     for (const afterStart of [false, true]) {
       const h = fixture(type);
@@ -89,4 +110,6 @@ for (const type of ['studio.render.video', 'studio.assemble.video']) {
     } finally { h.control.stop(); }
   }
 }
-console.log(`${reproduce ? 'Predecessor bypasses reproduced' : 'Actual Studio worker lifecycle cases passed'}: ${cases}; provider calls:0; cloud acceptance:false.`);
+}
+console.log(`${reproduce || malformedBaseline ? 'Predecessor bypasses reproduced' : 'Actual Studio worker lifecycle cases passed'}: ${cases}; provider calls:0; cloud acceptance:false.`);
+
