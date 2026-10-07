@@ -44,7 +44,9 @@ function canonical(value: unknown): string {
 }
 export function narratorRequestDigest(endpoint: string, body: string): string { return narratorDigest(Buffer.concat([Buffer.from(`POST\n${endpoint}\n`), Buffer.from(body, 'utf8')])); }
 export function narratorHeaderBindings(headers: HeadersInit) {
-  const entries = [...new Headers(headers).entries()].sort(([a], [b]) => a.localeCompare(b));
+  const entries: [string, string][] = [];
+  new Headers(headers).forEach((value, key) => entries.push([key, value]));
+  entries.sort(([a], [b]) => a.localeCompare(b));
   const credentialNames = new Set(['authorization', 'xi-api-key', 'x-api-key']);
   const credentials = Object.fromEntries(entries.filter(([key]) => credentialNames.has(key)));
   need(Object.keys(credentials).length > 0, 'provider credential unavailable');

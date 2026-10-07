@@ -69,7 +69,9 @@ function canonical(value) {
 }
 function narratorRequestDigest(endpoint, body) { return narratorDigest(Buffer.concat([Buffer.from(`POST\n${endpoint}\n`), Buffer.from(body, 'utf8')])); }
 function narratorHeaderBindings(headers) {
-    const entries = [...new Headers(headers).entries()].sort(([a], [b]) => a.localeCompare(b));
+    const entries = [];
+    new Headers(headers).forEach((value, key) => entries.push([key, value]));
+    entries.sort(([a], [b]) => a.localeCompare(b));
     const credentialNames = new Set(['authorization', 'xi-api-key', 'x-api-key']);
     const credentials = Object.fromEntries(entries.filter(([key]) => credentialNames.has(key)));
     need(Object.keys(credentials).length > 0, 'provider credential unavailable');
