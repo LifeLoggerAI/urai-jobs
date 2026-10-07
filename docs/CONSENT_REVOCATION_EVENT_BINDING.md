@@ -1,0 +1,9 @@
+# Consent revocation event binding
+
+This focused successor preserves the protected source authority at Jobs #159 `ae114af4709c250d95294e10ba4d2e2876d1c547` and does not replace media, reconstruction or private-source invalidation helpers.
+
+An authenticated duplicate previously returned any receipt at the incoming event ID before propagating the incoming owner/purpose/time. Receipts now retain an immutable versioned SHA-256 binding over type, event ID, owner, purpose, policy, decision receipt, correlation and revocation time. Exact replays can retry cleanup; conflicting or legacy unbound receipts return 409 and require canonical reconciliation. No legacy source or event is promoted by filling in missing authority fields.
+
+Canonical owner/purpose blocks must remain active and have their retained integrity hash at admission, between each derivative phase and before a transactional success receipt. A later legitimate revocation for the same owner/purpose is preserved. Replays neither overwrite newer blocks nor recreate inactive blocks. Response acknowledgements project only bound fields. Unknown database/Storage errors receive fixed responses and logs exclude raw owner/source payloads. The secret, POST-only and strict event schema gates remain.
+
+`scripts/consent-revocation-binding.test.mjs` executes the actual TypeScript handler and actual consent-block helper against serial memory transactions. Fictional records cover six field collisions, tampering, legacy receipts, changed block authority, newer events, retries, concurrency, acknowledgement privacy and fixed database errors. It is included in repository verification. No real private event, production secret, provider or deployment is used. Native exact-head tests must pass before admission; this source repair does not certify deployed propagation, central privacy acknowledgement or all cross-system deletion.
