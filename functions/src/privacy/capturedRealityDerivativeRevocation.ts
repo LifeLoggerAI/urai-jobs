@@ -1,4 +1,5 @@
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
 type Event = { eventId: string; ownerUid: string; purpose: string; revokedAt: string };
 type EngineResponse = { ok?: boolean; artifactsDeleted?: boolean };
@@ -23,9 +24,41 @@ export async function deleteCapturedRealityEngineJob(jobId: string): Promise<voi
   throw new Error('captured_reality_cleanup_pending');
 }
 
+
+export async function deleteCapturedRealityPublishedRuntimeForOwner(ownerUid: string) {
+  const db = getFirestore();
+  const snapshots = await db.collection('capturedRealityRuntimeAdmissions').where('ownerUid', '==', ownerUid).limit(501).get();
+  if (snapshots.size > 500) throw new Error('captured_reality_runtime_admission_limit');
+  let publishedRuntimeDeletionsAcknowledged = 0;
+  for (const snapshot of snapshots.docs) {
+    const data = snapshot.data() as Record<string, unknown>;
+    if (data.ownerUid !== ownerUid) throw new Error('captured_reality_runtime_admission_owner_mismatch');
+    if (data.revokedAt) continue;
+    const bucket = String(data.storageBucket || '');
+    const objectPath = String(data.runtimeObject || '');
+    const expectedPrefix = `private-captured-reality/${ownerUid}/${String(data.assetId || '')}/runtime/`;
+    if (!bucket || bucket.includes('/') || bucket.includes('..') || !objectPath.startsWith(expectedPrefix) || objectPath.includes('..')) {
+      throw new Error('captured_reality_runtime_admission_storage_boundary_invalid');
+    }
+    await getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true });
+    await snapshot.ref.set({
+      releaseState: 'revoked',
+      reviewState: 'revoked',
+      candidateAcceptance: false,
+      publicReleaseAuthorized: false,
+      revokedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    publishedRuntimeDeletionsAcknowledged += 1;
+  }
+  return { publishedRuntimeDeletionsAcknowledged };
+}
+
 export async function invalidateCapturedRealityDerivativesForConsent(event: Event) {
-  const summary = { jobsInvalidated: 0, engineDeletionsAcknowledged: 0 };
+  const summary = { jobsInvalidated: 0, engineDeletionsAcknowledged: 0, publishedRuntimeDeletionsAcknowledged: 0 };
   if (!['memory.storage', 'location.context'].includes(event.purpose)) return summary;
+  const runtimeCleanup = await deleteCapturedRealityPublishedRuntimeForOwner(event.ownerUid);
+  summary.publishedRuntimeDeletionsAcknowledged = runtimeCleanup.publishedRuntimeDeletionsAcknowledged;
   const db = getFirestore();
   const snapshots = await db.collection('jobs').where('ownerUid', '==', event.ownerUid).limit(2001).get();
   if (snapshots.size > 2000) throw new Error('captured_reality_revocation_job_limit');
