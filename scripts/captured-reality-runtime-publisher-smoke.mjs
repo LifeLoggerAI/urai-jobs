@@ -21,6 +21,7 @@ const runtimeSha256 = digest(bytes);
 const objectPath = `private-captured-reality/${ownerUid}/${assetId}/runtime/${runtimeSha256}.splat`;
 const receiptPath = `capturedRealityRuntimeAdmissions/${digest(`${jobId}\n${assetId}`)}`;
 const ownerFencePath = `uraiPrivateLifeModelOwnerFences/${digest(ownerUid)}`;
+const cleanupRequestId = 'synthetic_cr_delete_01';
 const blockPath = purpose => `jobConsentBlocks/${digest(`${ownerUid}\n${purpose}`)}`;
 const clone = value => value === undefined ? undefined : structuredClone(value);
 
@@ -42,7 +43,7 @@ function fixture(hooks = {}) {
     where: (field, operator, value) => {
       let limit = 1000, after;
       const query = { orderBy() { return this; }, limit(value) { limit = value; return this; },
-        startAfter(value) { after = value.ref.path; return this; }, get: async () => {
+        startAfter(value) { after = typeof value === 'string' ? `${path}/${value}` : value.ref.path; return this; }, get: async () => {
           assert.equal(operator, '==');
           const docs = [...records].filter(([key, data]) => key.startsWith(`${path}/`) && !key.slice(path.length + 1).includes('/')
             && data[field] === value && (!after || key > after)).sort(([a], [b]) => a.localeCompare(b))
@@ -92,13 +93,14 @@ function fixture(hooks = {}) {
     },
     async delete(options) {
       calls.delete++;
-      if (hooks.deleteFails) throw new Error('synthetic_storage_cleanup_unavailable');
+      if (hooks.deleteFails || hooks.deleteFailPath === path) throw new Error('synthetic_storage_cleanup_unavailable');
       const object = storage.get(path);
       const expectedGeneration = fileOptions?.generation || options?.ifGenerationMatch;
       if (object && expectedGeneration && String(expectedGeneration) !== object.generation) {
         const error = new Error('synthetic_generation_conflict'); error.code = 412; throw error;
       }
       storage.delete(path);
+      await hooks.afterDelete?.({ records, put, calls, storage, path });
     },
   }) }) };
   const job = {
@@ -108,6 +110,7 @@ function fixture(hooks = {}) {
     execution: { capturedRealityAcceptedCallbackHash: 'b'.repeat(64) },
   };
   put(`jobs/${jobId}`, job);
+  put(`dataRightsRequests/${cleanupRequestId}`, { ownerUid, requestType: 'DELETE', status: 'IN_REVIEW', executionState: 'PROTECTED_STAGING_EXECUTION_IN_PROGRESS' });
   const exports = {};
   const env = {
     URAI_ENV: 'staging', URAI_CAPTURED_REALITY_PUBLISHER_TOKEN: 'synthetic-publisher-token',
@@ -115,11 +118,11 @@ function fixture(hooks = {}) {
     CAPTURED_REALITY_RUNTIME_BUCKET: 'synthetic-private-cr-bucket',
   };
   const context = {
-    exports, Buffer, URL, Uint8Array, AbortSignal, process: { env },
+    exports, Buffer, URL, Uint8Array, AbortSignal, Date: hooks.clock ? { now: hooks.clock } : Date, process: { env },
     console: { error() {} },
     fetch: async () => { calls.fetch++; return new Response(hooks.artifactBytes || bytes); },
     require: name => name === 'firebase-admin/app' ? { getApps: () => [true], initializeApp() {} }
-      : name === 'firebase-admin/firestore' ? { getFirestore: () => db, FieldPath: { documentId: () => '__name__' }, FieldValue: { serverTimestamp: () => 'synthetic_timestamp' } }
+      : name === 'firebase-admin/firestore' ? { getFirestore: () => db, FieldPath: { documentId: () => '__name__' }, FieldValue: { delete: () => undefined, serverTimestamp: () => 'synthetic_timestamp' } }
       : name === 'firebase-admin/storage' ? { getStorage: () => storageApi }
       : name === 'firebase-functions/params' ? { defineSecret: key => ({ value: () => env[key] }) }
       : name === 'firebase-functions/v2/https' ? { onRequest: (_options, handler) => handler }
@@ -139,7 +142,8 @@ function fixture(hooks = {}) {
     return { statusCode, payload };
   };
   return { request, calls, records, storage, put, job, receiptPath, objectPath,
-    cleanup: () => cleanupExports.deleteCapturedRealityPublishedRuntimeForOwner(ownerUid) };
+    cleanupConsent: event => cleanupExports.deleteCapturedRealityPublishedRuntimeForOwner(ownerUid, event),
+    cleanup: () => { put(ownerFencePath, { ...records.get(ownerFencePath), deleted: true, requestId: cleanupRequestId }); return cleanupExports.deleteCapturedRealityPublishedRuntimeForOwner(ownerUid); } };
 }
 
 const successfulReceipt = () => ({
@@ -265,4 +269,108 @@ for (const [label, alter] of [
   console.log('[PASS] bounded owner pages delete more than 500 admissions, preserve foreign records and replay completed cleanup');
 }
 
+function seedCleanup(f, count, collection = 'capturedRealityRuntimeAdmissions') {
+  for (let index = 0; index < count; index++) {
+    const id = `${collection === 'capturedRealityRuntimeCleanup' ? 'synthetic_compensation' : 'synthetic_bounded'}_${String(index).padStart(5, '0')}`;
+    const receipt = { ...successfulReceipt(), assetId: id,
+      schemaVersion: collection === 'capturedRealityRuntimeAdmissions' ? 'urai-captured-reality-runtime-admission-v1' : 'urai-captured-reality-runtime-cleanup-v1',
+      runtimeObject: `private-captured-reality/${ownerUid}/${id}/runtime/${runtimeSha256}.splat`,
+      ...(collection === 'capturedRealityRuntimeCleanup' ? { cleanupPending: true } : {}),
+    };
+    f.put(`${collection}/${id}`, receipt); f.storage.set(receipt.runtimeObject, { generation: '1' });
+  }
+}
+{
+  const f = fixture(); seedCleanup(f, 2203); seedCleanup(f, 603, 'capturedRealityRuntimeCleanup');
+  f.put('capturedRealityRuntimeAdmissions/synthetic_foreign', { ...successfulReceipt(), ownerUid: 'synthetic_other_owner' });
+  await assert.rejects(f.cleanup(), /runtime_cleanup_continuation_pending/);
+  const progress = `dataRightsRequests/${cleanupRequestId}`;
+  assert.equal(f.records.get(progress).capturedRealityAdmissionCleanupCursor, 'synthetic_bounded_00999');
+  await assert.rejects(f.cleanup(), /runtime_cleanup_continuation_pending/);
+  assert.equal(f.records.get(progress).capturedRealityAdmissionCleanupCursor, 'synthetic_bounded_01999');
+  assert.equal((await f.cleanup()).publishedRuntimeDeletionsAcknowledged, 806);
+  assert.equal(f.storage.size, 0); assert.equal(f.calls.delete, 2806);
+  assert.equal(f.records.get(progress).capturedRealityRuntimeCleanupState, 'COMPLETE');
+  assert.equal(f.records.get(progress).capturedRealityAdmissionCleanupCursor, undefined);
+  assert.equal(f.records.get(progress).capturedRealityCompensationCleanupCursor, undefined);
+  assert.equal(f.records.get('capturedRealityRuntimeAdmissions/synthetic_foreign').revokedAt, undefined);
+  console.log('[PASS] bounded runtime cleanup deletes 2203 admissions and 603 compensation targets across three governed continuations');
+}
+{
+  const hooks = {}, f = fixture(hooks); seedCleanup(f, 203);
+  const failedPath = f.records.get('capturedRealityRuntimeAdmissions/synthetic_bounded_00150').runtimeObject;
+  hooks.deleteFailPath = failedPath;
+  await assert.rejects(f.cleanup(), /synthetic_storage_cleanup_unavailable/);
+  assert.equal(f.records.get(`dataRightsRequests/${cleanupRequestId}`).capturedRealityAdmissionCleanupCursor, 'synthetic_bounded_00099');
+  assert.equal(f.records.get('capturedRealityRuntimeAdmissions/synthetic_bounded_00150').cleanupPending, true);
+  hooks.deleteFailPath = undefined;
+  assert.equal((await f.cleanup()).publishedRuntimeDeletionsAcknowledged, 53);
+  assert.equal(f.calls.delete, 204); assert.equal(f.storage.size, 0);
+  console.log('[PASS] runtime cleanup preserves previous acknowledged page and pending exact generation after a middle-page Storage failure');
+}
+{
+  let corrected = false;
+  const hooks = { afterDelete({ records, put, storage, path }) { if (!corrected) { corrected = true;
+    const id = 'capturedRealityRuntimeAdmissions/synthetic_bounded_00000';
+    put(id, { ...records.get(id), storageGeneration: '2' }); storage.set(path, { generation: '2' });
+  } } }, f = fixture(hooks); seedCleanup(f, 1);
+  await assert.rejects(f.cleanup(), /cleanup_target_changed/);
+  assert.equal(f.records.get('capturedRealityRuntimeAdmissions/synthetic_bounded_00000').cleanupAcknowledgedAt, undefined);
+  assert.equal(f.storage.size, 1);
+  assert.equal((await f.cleanup()).publishedRuntimeDeletionsAcknowledged, 1); assert.equal(f.storage.size, 0);
+  console.log('[PASS] changed generation during deletion cannot transfer an old acknowledgement to its replacement and retries current target');
+}
+{
+  const event = { eventId: 'synthetic_cleanup_consent_01', ownerUid, purpose: 'location.context', revokedAt: '2026-10-07T00:00:00.000Z' };
+  const hooks = { afterDelete({ records, put }) { put(blockPath(event.purpose), { ...records.get(blockPath(event.purpose)), active: false }); } };
+  const f = fixture(hooks); seedCleanup(f, 1);
+  const progress = `jobConsentEventReceipts/${digest(event.eventId)}`;
+  f.put(progress, { ...event, status: 'blocked' }); f.put(blockPath(event.purpose), { ...event, active: true });
+  await assert.rejects(f.cleanupConsent(event), /event_authority_invalid/);
+  assert.equal(f.records.get('capturedRealityRuntimeAdmissions/synthetic_bounded_00000').cleanupAcknowledgedAt, undefined);
+  hooks.afterDelete = undefined; f.put(blockPath(event.purpose), { ...event, active: true });
+  assert.equal((await f.cleanupConsent(event)).publishedRuntimeDeletionsAcknowledged, 1);
+  console.log('[PASS] changed canonical consent block during Storage await prevents stale cleanup certification and remains retryable');
+}
+{
+  const hooks = { afterDelete({ records, put }) { const path = `dataRightsRequests/${cleanupRequestId}`; put(path, { ...records.get(path), ownerUid: 'synthetic_foreign_owner' }); } };
+  const f = fixture(hooks); seedCleanup(f, 1);
+  await assert.rejects(f.cleanup(), /delete_authority_invalid/);
+  assert.equal(f.records.get('capturedRealityRuntimeAdmissions/synthetic_bounded_00000').cleanupAcknowledgedAt, undefined);
+  const calls = f.calls.delete; await assert.rejects(f.cleanup(), /delete_authority_invalid/); assert.equal(f.calls.delete, calls);
+  console.log('[PASS] DELETE request reassignment during Storage await cannot grant foreign cleanup authority or a final certificate');
+}
+{
+  let time = 0;
+  const hooks = { clock: () => time, afterDelete() { time = 21000; } }, f = fixture(hooks); seedCleanup(f, 2);
+  await assert.rejects(f.cleanup(), /runtime_cleanup_continuation_pending/);
+  assert.equal(f.calls.delete, 1); assert.equal(f.storage.size, 1);
+  time = 0; hooks.afterDelete = undefined;
+  assert.equal((await f.cleanup()).publishedRuntimeDeletionsAcknowledged, 1); assert.equal(f.calls.delete, 2);
+  console.log('[PASS] runtime cleanup elapsed budget retains unfinished page and resumes without repeating acknowledged generation');
+}
+{
+  const hooks = {}, f = fixture(hooks); seedCleanup(f, 150); seedCleanup(f, 203, 'capturedRealityRuntimeCleanup');
+  hooks.deleteFailPath = f.records.get('capturedRealityRuntimeCleanup/synthetic_compensation_00150').runtimeObject;
+  await assert.rejects(f.cleanup(), /synthetic_storage_cleanup_unavailable/);
+  const progress = `dataRightsRequests/${cleanupRequestId}`;
+  assert.equal(f.records.get(progress).capturedRealityAdmissionCleanupState, 'COMPLETE');
+  assert.equal(f.records.get(progress).capturedRealityCompensationCleanupCursor, 'synthetic_compensation_00099');
+  assert.equal(f.records.get(progress).capturedRealityRuntimeCleanupState, 'PENDING');
+  hooks.deleteFailPath = undefined; assert.equal((await f.cleanup()).publishedRuntimeDeletionsAcknowledged, 53);
+  assert.equal(f.calls.delete, 354); assert.equal(f.storage.size, 0);
+  console.log('[PASS] distinct admission and compensation cursors resume a failed second collection without dropping remaining targets');
+}
+{
+  const event = { eventId: 'synthetic_late_cleanup_01', ownerUid, purpose: 'memory.storage', revokedAt: '2026-10-07T00:00:00.000Z' };
+  const f = fixture(); seedCleanup(f, 1);
+  const progress = `jobConsentEventReceipts/${digest(event.eventId)}`;
+  f.put(progress, { ...event, status: 'blocked' }); f.put(blockPath(event.purpose), { ...event, active: true });
+  assert.equal((await f.cleanupConsent(event)).publishedRuntimeDeletionsAcknowledged, 1);
+  seedCleanup(f, 1, 'capturedRealityRuntimeCleanup');
+  assert.equal((await f.cleanupConsent(event)).publishedRuntimeDeletionsAcknowledged, 1);
+  assert.equal(f.storage.size, 0);
+  assert.equal((await f.cleanupConsent(event)).publishedRuntimeDeletionsAcknowledged, 0);
+  console.log('[PASS] completed canonical replay freshly discovers late compensation and then replays zero remaining cleanup');
+}
 console.log('URAI_CR_PUBLISHER_SYNTHETIC_AUTHORITY_VALIDATION: complete; no private source/provider/runtime/device acceptance');

@@ -15,6 +15,7 @@ const jobPath = index => 'jobs/synthetic_job_' + String(index).padStart(5, '0');
 function fixture(count, hooks = {}) {
   const records = new Map(), calls = [], writes = [], pages = [];
   records.set(progressPath, { ...event, status: 'blocked' });
+  records.set('jobConsentBlocks/' + createHash('sha256').update(event.ownerUid + '\n' + event.purpose).digest('hex'), { ...event, active: true });
   for (let index = 0; index < count; index++) records.set(jobPath(index), { ownerUid: event.ownerUid,
     jobType: 'memory.private-source.reconstruct-place', status: 'SUCCESS', output: { runtime: 'synthetic_opaque_artifact' } });
   records.set('jobs/synthetic_other_owner', { ownerUid: 'foreign_owner', jobType: 'memory.private-source.reconstruct-place', status: 'SUCCESS' });
@@ -42,7 +43,7 @@ function fixture(count, hooks = {}) {
   } }), async runTransaction(fn) {
     await hooks.beforeTransaction?.({ records, calls });
     const pending = [];
-    const result = await fn({ get: target => target.get(), update: (target, patch) => pending.push([target,patch]),
+    const result = await fn({ get: async target => { await hooks.beforeRead?.({ records, calls, target }); return target.get(); }, update: (target, patch) => pending.push([target,patch]),
       set: (target, patch) => pending.push([target,patch]) });
     pending.forEach(([target,patch]) => apply(target,patch)); return result;
   } };
@@ -100,8 +101,8 @@ function fixture(count, hooks = {}) {
 }
 {
   let moved = false;
-  const f = fixture(1, { beforeTransaction({ records }) { if (!moved) { moved = true; records.get(jobPath(0)).ownerUid = 'foreign_owner'; } } });
-  await assert.rejects(f.run(), /owner_mismatch/); assert.equal(f.calls.length, 0); assert.equal(f.writes.length, 0);
+  const f = fixture(1, { beforeRead({ records, target }) { if (!moved && target.path === jobPath(0)) { moved = true; records.get(jobPath(0)).ownerUid = 'foreign_owner'; } } });
+  await assert.rejects(f.run(), /owner_mismatch/); assert.equal(f.calls.length, 0); assert.equal(f.writes.some(path => path.startsWith('jobs/') || path.startsWith('jobQueue/')), false);
   console.log('[PASS] owner reassignment between query and cancellation fails before any job or queue mutation');
 }
 {

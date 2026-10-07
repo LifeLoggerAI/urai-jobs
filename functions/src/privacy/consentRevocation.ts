@@ -35,6 +35,7 @@ function expectedBearer(): string {
 export const ingestConsentRevocation = onRequest({
   secrets: [privacyEventToken],
   cors: false,
+  timeoutSeconds: 120,
 }, async (request, response) => {
   if (request.method !== 'POST') {
     response.status(405).json({ ok: false, error: 'method-not-allowed' });
@@ -144,3 +145,4 @@ export const ingestConsentRevocation = onRequest({
     });
   }
 });
+

@@ -26,50 +26,115 @@ export async function deleteCapturedRealityEngineJob(jobId: string): Promise<voi
 }
 
 
-export async function deleteCapturedRealityPublishedRuntimeForOwner(ownerUid: string) {
+async function runtimeCleanupAuthority(db: ReturnType<typeof getFirestore>, ownerUid: string, event?: Event) {
+  const ownerHash = createHash('sha256').update(ownerUid).digest('hex');
+  const fenceRef = db.collection('uraiPrivateLifeModelOwnerFences').doc(ownerHash);
+  let progressRef: FirebaseFirestore.DocumentReference;
+  let validate: (tx: FirebaseFirestore.Transaction) => Promise<FirebaseFirestore.DocumentData>;
+  if (event) {
+    if (event.ownerUid !== ownerUid || !['memory.storage', 'location.context'].includes(event.purpose)) throw new Error('captured_reality_cleanup_event_authority_invalid');
+    progressRef = db.collection('jobConsentEventReceipts').doc(createHash('sha256').update(event.eventId).digest('hex'));
+    const blockRef = db.collection('jobConsentBlocks').doc(createHash('sha256').update(ownerUid + '\n' + event.purpose).digest('hex'));
+    validate = async tx => {
+      const [receipt, block] = await Promise.all([tx.get(progressRef), tx.get(blockRef)]);
+      const data = receipt.data();
+      if (!receipt.exists || data?.eventId !== event.eventId || data?.ownerUid !== ownerUid || data?.purpose !== event.purpose || data?.status !== 'blocked'
+        || block.get('active') !== true || block.get('ownerUid') !== ownerUid || block.get('purpose') !== event.purpose || block.get('eventId') !== event.eventId) throw new Error('captured_reality_cleanup_event_authority_invalid');
+      return data;
+    };
+  } else {
+    // The governed DELETE executor installs its permanent owner fence before
+    // invoking this helper. Derive its existing request receipt without changing
+    // the separate private-source/finalizer executor or introducing a collection.
+    const fence = await fenceRef.get();
+    const requestId = fence.get('requestId');
+    if (fence.get('deleted') !== true || typeof requestId !== 'string' || requestId.length < 8 || requestId.length > 200 || requestId.includes('/')) throw new Error('captured_reality_cleanup_delete_authority_invalid');
+    progressRef = db.collection('dataRightsRequests').doc(requestId);
+    validate = async tx => {
+      const [currentFence, request] = await Promise.all([tx.get(fenceRef), tx.get(progressRef)]);
+      const data = request.data();
+      if (currentFence.get('deleted') !== true || currentFence.get('requestId') !== requestId || !request.exists
+        || data?.ownerUid !== ownerUid || data?.requestType !== 'DELETE' || data?.status !== 'IN_REVIEW'
+        || !['PROTECTED_STAGING_EXECUTION_IN_PROGRESS', 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE'].includes(String(data?.executionState))) throw new Error('captured_reality_cleanup_delete_authority_invalid');
+      return data;
+    };
+  }
+  const data = await db.runTransaction(validate);
+  return { progressRef, validate, data };
+}
+
+function cleanupTarget(data: FirebaseFirestore.DocumentData, ownerUid: string, collection: string) {
+  if (data.ownerUid !== ownerUid) throw new Error('captured_reality_runtime_admission_owner_mismatch');
+  const schema = collection === 'capturedRealityRuntimeAdmissions' ? 'urai-captured-reality-runtime-admission-v1' : 'urai-captured-reality-runtime-cleanup-v1';
+  if (data.schemaVersion !== schema) throw new Error('captured_reality_runtime_admission_schema_invalid');
+  const bucket = String(data.storageBucket || ''), objectPath = String(data.runtimeObject || ''), generation = String(data.storageGeneration || '');
+  const expectedPrefix = `private-captured-reality/${ownerUid}/${String(data.assetId || '')}/runtime/`;
+  if (!bucket || bucket.includes('/') || bucket.includes('..') || !objectPath.startsWith(expectedPrefix) || objectPath.includes('..')) throw new Error('captured_reality_runtime_admission_storage_boundary_invalid');
+  if (!/^\d+$/.test(generation)) throw new Error('captured_reality_runtime_admission_generation_invalid');
+  return { bucket, objectPath, generation };
+}
+
+export async function deleteCapturedRealityPublishedRuntimeForOwner(ownerUid: string, event?: Event) {
   const db = getFirestore();
-  let publishedRuntimeDeletionsAcknowledged = 0;
-  // Failed publisher compensation retains exact owner/object/generation retry
-  // targets here without granting runtime admission. Both collections are
-  // private server-owned records and are covered by the same privacy lifecycle.
+  const authority = await runtimeCleanupAuthority(db, ownerUid, event);
+  await db.runTransaction(async tx => {
+    await authority.validate(tx);
+    tx.set(authority.progressRef, { capturedRealityRuntimeCleanupState: 'PENDING', capturedRealityRuntimeCleanupUpdatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
+  let publishedRuntimeDeletionsAcknowledged = 0, pages = 0;
+  const deadline = Date.now() + 20000;
   for (const collection of ['capturedRealityRuntimeAdmissions', 'capturedRealityRuntimeCleanup']) {
+    const cursorKey = collection === 'capturedRealityRuntimeAdmissions' ? 'capturedRealityAdmissionCleanupCursor' : 'capturedRealityCompensationCleanupCursor';
+    const stateKey = collection === 'capturedRealityRuntimeAdmissions' ? 'capturedRealityAdmissionCleanupState' : 'capturedRealityCompensationCleanupState';
+    if (authority.data[stateKey] === 'COMPLETE') continue;
+    const cursor = authority.data[stateKey] === 'PENDING' ? authority.data[cursorKey] : undefined;
+    if (cursor !== undefined && (typeof cursor !== 'string' || !/^[A-Za-z0-9._:-]{1,512}$/.test(cursor))) throw new Error('captured_reality_cleanup_cursor_invalid');
     let after: FirebaseFirestore.QueryDocumentSnapshot | undefined;
     for (;;) {
+      if (pages >= 10 || Date.now() >= deadline) throw new Error('captured_reality_runtime_cleanup_continuation_pending');
       let query = db.collection(collection).where('ownerUid', '==', ownerUid).orderBy(FieldPath.documentId()).limit(100);
-      if (after) query = query.startAfter(after);
-      const snapshots = await query.get();
+      if (after) query = query.startAfter(after); else if (cursor) query = query.startAfter(cursor);
+      const snapshots = await query.get(); pages++;
       for (const snapshot of snapshots.docs) {
-        const data = snapshot.data() as Record<string, unknown>;
+        if (Date.now() >= deadline) throw new Error('captured_reality_runtime_cleanup_continuation_pending');
+        const data = snapshot.data();
         if (data.ownerUid !== ownerUid) throw new Error('captured_reality_runtime_admission_owner_mismatch');
         if ((data.revokedAt || data.cleanupAcknowledgedAt) && data.cleanupPending !== true) continue;
-        const bucket = String(data.storageBucket || '');
-        const objectPath = String(data.runtimeObject || '');
-        const expectedPrefix = `private-captured-reality/${ownerUid}/${String(data.assetId || '')}/runtime/`;
-        if (!bucket || bucket.includes('/') || bucket.includes('..') || !objectPath.startsWith(expectedPrefix) || objectPath.includes('..')) {
-          throw new Error('captured_reality_runtime_admission_storage_boundary_invalid');
-        }
-        const generation = String(data.storageGeneration || '');
-        if (!/^\d+$/.test(generation)) throw new Error('captured_reality_runtime_admission_generation_invalid');
-        // Fence access before any Storage await. If deletion fails, the next
-        // canonical revocation/delete delivery retries this retained generation.
-        await snapshot.ref.set({
-          releaseState: 'revoked',
-          reviewState: 'revoked',
-          candidateAcceptance: false,
-          publicReleaseAuthorized: false,
-          revokedAt: FieldValue.serverTimestamp(),
-          cleanupPending: true,
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-        await getStorage().bucket(bucket).file(objectPath, { generation }).delete({ ignoreNotFound: true });
-        await snapshot.ref.set({ cleanupPending: false, cleanupAcknowledgedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-        publishedRuntimeDeletionsAcknowledged += 1;
+        const target = cleanupTarget(data, ownerUid, collection);
+        await db.runTransaction(async tx => {
+          await authority.validate(tx);
+          const fresh = await tx.get(snapshot.ref);
+          if (!fresh.exists || JSON.stringify(cleanupTarget(fresh.data()!, ownerUid, collection)) !== JSON.stringify(target)) throw new Error('captured_reality_cleanup_target_changed');
+          tx.set(snapshot.ref, { releaseState: 'revoked', reviewState: 'revoked', candidateAcceptance: false, publicReleaseAuthorized: false,
+            revokedAt: FieldValue.serverTimestamp(), cleanupPending: true, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        });
+        await getStorage().bucket(target.bucket).file(target.objectPath, { generation: target.generation }).delete({ ignoreNotFound: true });
+        await db.runTransaction(async tx => {
+          await authority.validate(tx);
+          const fresh = await tx.get(snapshot.ref);
+          if (!fresh.exists || JSON.stringify(cleanupTarget(fresh.data()!, ownerUid, collection)) !== JSON.stringify(target)) throw new Error('captured_reality_cleanup_target_changed');
+          tx.set(snapshot.ref, { cleanupPending: false, cleanupAcknowledgedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        });
+        publishedRuntimeDeletionsAcknowledged++;
       }
+      await db.runTransaction(async tx => {
+        await authority.validate(tx);
+        tx.set(authority.progressRef, { [stateKey]: snapshots.size < 100 ? 'COMPLETE' : 'PENDING',
+          [cursorKey]: snapshots.size < 100 ? FieldValue.delete() : snapshots.docs[snapshots.docs.length - 1].id,
+          capturedRealityRuntimeCleanupUpdatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      });
       if (snapshots.size < 100) break;
       after = snapshots.docs[snapshots.docs.length - 1];
     }
   }
+  // Only the fully scanned pair resets its continuation fields. A later
+  // canonical replay performs a fresh scan, including late compensation rows.
+  await db.runTransaction(async tx => {
+    await authority.validate(tx);
+    tx.set(authority.progressRef, { capturedRealityAdmissionCleanupState: FieldValue.delete(), capturedRealityAdmissionCleanupCursor: FieldValue.delete(),
+      capturedRealityCompensationCleanupState: FieldValue.delete(), capturedRealityCompensationCleanupCursor: FieldValue.delete(),
+      capturedRealityRuntimeCleanupState: 'COMPLETE', capturedRealityRuntimeCleanupUpdatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
   return { publishedRuntimeDeletionsAcknowledged };
 }
 
@@ -84,7 +149,7 @@ export async function invalidateCapturedRealityDerivativesForConsent(event: Even
   const progressData = progressReceipt.data();
   if (!progressReceipt.exists || progressData?.eventId !== event.eventId || progressData?.ownerUid !== event.ownerUid
     || progressData?.purpose !== event.purpose || progressData?.status !== 'blocked') throw new Error('captured_reality_cleanup_event_authority_invalid');
-  const runtimeCleanup = await deleteCapturedRealityPublishedRuntimeForOwner(event.ownerUid);
+  const runtimeCleanup = await deleteCapturedRealityPublishedRuntimeForOwner(event.ownerUid, event);
   summary.publishedRuntimeDeletionsAcknowledged = runtimeCleanup.publishedRuntimeDeletionsAcknowledged;
   const deadline = Date.now() + 40000;
   const cursor = progressData.capturedRealityCleanupState === 'PENDING' ? progressData.capturedRealityCleanupCursor : undefined;
