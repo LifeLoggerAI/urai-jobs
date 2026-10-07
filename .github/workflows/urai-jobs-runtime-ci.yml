@@ -108,6 +108,17 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Verify exact narrator container source without provider execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          context="$RUNNER_TEMP/narrator-exact-context-$TARGET_SHA"
+          node scripts/prepare-narrator-build-context.mjs --source-sha "$TARGET_SHA" --output "$context"
+          docker build --file "$context/Dockerfile" --tag "urai-jobs-narrator-verify:$TARGET_SHA" "$context"
+          docker run --rm --network none --env URAI_SOURCE_SHA="$TARGET_SHA" --entrypoint node \
+            "urai-jobs-narrator-verify:$TARGET_SHA" \
+            -e 'const {narratorExecutorSourceSha}=require("./dist/protected-spend.js");if(narratorExecutorSourceSha()!==process.env.URAI_SOURCE_SHA)throw new Error("Narrator runtime source mismatch");'
+
       - name: Unit tests
         run: pnpm test
 

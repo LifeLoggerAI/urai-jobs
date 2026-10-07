@@ -99,3 +99,4 @@ assert.ok(deploy.includes('if [ "$worker" = "narrator-worker" ]; then'));
 
 console.log('Governed ElevenLabs narrator provider contract passed');
 execFileSync(process.execPath, [fileURLToPath(new URL('./narrator-paid-leaf-smoke.mjs', import.meta.url))], { stdio: 'inherit' });
+execFileSync(process.execPath, ['--test', fileURLToPath(new URL('./narrator-build-context.test.mjs', import.meta.url))], { stdio: 'inherit' });
