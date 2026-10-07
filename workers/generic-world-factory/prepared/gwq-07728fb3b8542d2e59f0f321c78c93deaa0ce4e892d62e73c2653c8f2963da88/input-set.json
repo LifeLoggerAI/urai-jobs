@@ -1,0 +1,225 @@
+{
+  "authoritySha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+  "implementation": [
+    {
+      "name": "factory.mjs",
+      "sha256": "c832ab45efc53dffaba662dcb939f235087dd72d9fe0e78e5e8769d318531cbb"
+    },
+    {
+      "name": "cli.mjs",
+      "sha256": "5d3e4cc48463bfe774c2a46f90a23577e5d6aac4d18a0968c006b5238a8554c1"
+    },
+    {
+      "name": "package.json",
+      "sha256": "08aedcbf100595cb5e250bbf5fa83969ee69dd99c27260805fb8cdc5194d5a6e"
+    }
+  ],
+  "preparationVersion": "1.0.0",
+  "provider": "meshy",
+  "schemaVersion": "urai-generic-world-provider-queue-v1",
+  "worlds": [
+    {
+      "batch": 2,
+      "id": "gw-airport-concourse",
+      "relativePath": "gw-airport-concourse.json",
+      "sha256": "594fdc25053fca03788e5bd09f18711fcbdc5dd75e9672a3715d6c2f19d9ddcb",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-apartment-living",
+      "relativePath": "gw-apartment-living.json",
+      "sha256": "be1d87488467924f4a870d71df43c1d78f2b701d780327d184b102cf89320f0a",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-backyard-garage-workshop",
+      "relativePath": "gw-backyard-garage-workshop.json",
+      "sha256": "e1447787a6305e9f5351fd893026a7fb6954dedefcc59742e7d23b619fdae34d",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-beach-boardwalk",
+      "relativePath": "gw-beach-boardwalk.json",
+      "sha256": "c427c724409d1346c7bd521cb6a26e260824e2ab2ae8de152a0f843475a77e48",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-bedroom-era",
+      "relativePath": "gw-bedroom-era.json",
+      "sha256": "5e1cc357f63a41d719e5f1e982d4ba8e57beabd5346d9bf1b2c741e77fb6c496",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-cemetery",
+      "relativePath": "gw-cemetery.json",
+      "sha256": "411ac6db194fce1f7476d53ef9bfa27ffe33e1d057b82c1394988e320912705c",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-church-sanctuary-fellowship",
+      "relativePath": "gw-church-sanctuary-fellowship.json",
+      "sha256": "3f00153258a34f902d5237b9dc5917bf79081596ae0ff5c8c3ab1fc4260a0b48",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-clinic-waiting-room",
+      "relativePath": "gw-clinic-waiting-room.json",
+      "sha256": "306dfda86046a954415a5936a4a8d6913c45b7e4a064fcb14717c6f0804dbab0",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-college-dorm-campus",
+      "relativePath": "gw-college-dorm-campus.json",
+      "sha256": "3f8b52efe5f435f688c0ce29111fb6f1c3686d9ef67e8f161723c34875ea531a",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-courthouse-public-hall",
+      "relativePath": "gw-courthouse-public-hall.json",
+      "sha256": "604cc513d720caa358a55e78a378d993838cd80e885a08b9ce9b95932c19d962",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-diner-cafe",
+      "relativePath": "gw-diner-cafe.json",
+      "sha256": "974021af1b7d57ea01219027abf813b576d6ef094b02538dd36c01c43e507f15",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-east-texas-living-room",
+      "relativePath": "gw-east-texas-living-room.json",
+      "sha256": "faa57ef86a9d1d5629aacf1ee6ad03280546a73e60d9b760f33ca726122b0857",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-east-texas-residential-street",
+      "relativePath": "gw-east-texas-residential-street.json",
+      "sha256": "19b70ac77b1c62b6bc5efbcf0f775a465796174e6e9856f08d7576ba23591815",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-factory-floor",
+      "relativePath": "gw-factory-floor.json",
+      "sha256": "9b2feb2aafbe95d7bdf6ebe1018581316a7f3daf3b2e6f1fe046719babdbd431",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-family-kitchen-dining",
+      "relativePath": "gw-family-kitchen-dining.json",
+      "sha256": "14dd8392b2b9589f4d6d6145ff065e160003df31bd4e27cbde48cf7ad46a3037",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-forest-trail",
+      "relativePath": "gw-forest-trail.json",
+      "sha256": "631cf458f8e06f074f29d46e1fd19a0144f2ac9c1b0bbe9ae7edc1d6c46ec4b0",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-gas-station",
+      "relativePath": "gw-gas-station.json",
+      "sha256": "fdac334d879acdf17fd7c541ac77e1c14dbe9a3e24e9debfd978b4a3e31e3a16",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-grocery-store",
+      "relativePath": "gw-grocery-store.json",
+      "sha256": "a8a7382bde860263e0a7e8e86cc86f0345a5000adc50f549cdb45bf3a6231510",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-hospital-room-corridor",
+      "relativePath": "gw-hospital-room-corridor.json",
+      "sha256": "882565ad9641d9df900d64a86ee685e13bf5c5b5fbafb7df386c1580db1bf3fa",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-lake-dock-shoreline",
+      "relativePath": "gw-lake-dock-shoreline.json",
+      "sha256": "436f75fa4b110036b0e82708d8a6e79bf019c0c3de6280b5f8e50fedebd481ce",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-military-admin-operations",
+      "relativePath": "gw-military-admin-operations.json",
+      "sha256": "64754f87113e68c7b2b4ee729b8ea4e1161963f070efd181428d55561466c992",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-military-barracks",
+      "relativePath": "gw-military-barracks.json",
+      "sha256": "04ac8f734291497b091cd67d07ad02d93728af396e3bdf73b7f092db7c9ec48e",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-motel-room-walkway",
+      "relativePath": "gw-motel-room-walkway.json",
+      "sha256": "ba6c87fbf8bfc9421428699852d759e4a49c79203c9b18819c9982ee12b57ab8",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-office-workplace",
+      "relativePath": "gw-office-workplace.json",
+      "sha256": "73e6887aac79b33f9e0df93cb701985fcaac9d62f86720e78c9688022dd30688",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-park-playground",
+      "relativePath": "gw-park-playground.json",
+      "sha256": "e3708cd946acc6f4cdbfd14f9435d49f679c19224265d79f8ef7fb97b3843a40",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-rural-house-porch",
+      "relativePath": "gw-rural-house-porch.json",
+      "sha256": "a120bd15740676e7ff286bed1efdf88936bd4382b1d6638f859b5a1c8ea466d8",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-rural-road",
+      "relativePath": "gw-rural-road.json",
+      "sha256": "23c7e89379a543794b73a82faca52756b9380b3da5088d56b6ce45b6a4849297",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-school-classroom-hallway",
+      "relativePath": "gw-school-classroom-hallway.json",
+      "sha256": "1ca5e0ac9db50cce43872e1debaac1a66c3197baa1538f7d51a24ef0e10c3e11",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-warehouse",
+      "relativePath": "gw-warehouse.json",
+      "sha256": "25dce089395052787b26dccbddff761fa6bc3118e0b84fe365f54436ae874bb6",
+      "version": "1.0.0"
+    }
+  ]
+}

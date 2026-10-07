@@ -218,6 +218,8 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  workers/generic-world-factory: {}
+
   workers/narrator-worker:
     dependencies:
       '@google-cloud/storage':
