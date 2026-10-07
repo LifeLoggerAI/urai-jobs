@@ -8,6 +8,9 @@ import { createRequire } from 'node:module';
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
 const ts = require('typescript');
 const compile = source => ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
+// Execute the production graph validator in this pre-build authority fixture.
+const graphContract = {};
+vm.runInNewContext(compile(fs.readFileSync('workers/private-life-model-index-provider/src/contracts.ts', 'utf8')), { exports: graphContract, Buffer });
 const hash = input => crypto.createHash('sha256').update(input).digest('hex');
 const canonical = value => Array.isArray(value) ? '[' + value.map(canonical).join(',') + ']' : value && typeof value === 'object'
   ? '{' + Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>JSON.stringify(k)+':'+canonical(v)).join(',') + '}' : JSON.stringify(value);
@@ -81,7 +84,7 @@ function fixture({onExtract, resolver, env = {}, indexSource=source}={}) {
     URAI_PRIVATE_SOURCE_CONTRACT:'urai-private-source-receipt-v2',URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED:'true',URAI_PRIVATE_LIFE_MODEL_EXECUTION_AUTHORITY_REF:'private:synthetic/execution',...env}};
   vm.runInNewContext(compile(indexSource)+'\nObject.assign(exports,{assertRequest,resolvePrivateInputs,validateExtraction,readiness,...(typeof reserveExtraction === "function" ? {reserveExtraction,persistRevision,requireCurrentAuthority,quarantinedImport} : {})});',{
     exports,process,Buffer,URL,AbortSignal,Response,setTimeout,clearTimeout,console:{log:v=>logs.push(v),error:v=>logs.push(v)},
-    require:name=>name==='express-rate-limit'?{rateLimit:()=>()=>{}}:name==='express'?express:name==='./protected-source-provider'?{registerProtectedSourceRoutes(){}}:name==='firebase-admin/app'?{getApps:()=>[1],initializeApp(){},applicationDefault(){}}:
+    require:name=>name==='express-rate-limit'?{rateLimit:()=>()=>{}}:name==='express'?express:name==='./protected-source-provider'?{registerProtectedSourceRoutes(){}}:name==='./contracts.js'?graphContract:name==='firebase-admin/app'?{getApps:()=>[1],initializeApp(){},applicationDefault(){}}:
       name==='firebase-admin/firestore'?{getFirestore:()=>data.db,FieldValue:{serverTimestamp:()=> 'synthetic-time'}}:require(name),
     fetch:async(url,options)=>{fetches.push({url,body:JSON.parse(options.body)});if(url.includes('resolve-life-model-inputs'))return new Response(JSON.stringify(resolver?await resolver(data):resolverProof),{status:200});
       await onExtract?.(data);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(extraction)}}]}),{status:200});}
