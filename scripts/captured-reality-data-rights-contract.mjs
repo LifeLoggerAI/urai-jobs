@@ -98,7 +98,7 @@ assert.equal(retried.replay, false); assert.equal(engineCalls, 2); assert.equal(
 assert.ok(jobRecord.ownerUid.startsWith('deleted:')); assert.equal((await rightsExports.processDataRightsRequest(request, {})).replay, true); assert.equal(engineCalls, 2);
 const executionPath = [...requestRecords.keys()].find((key) => key.includes('/audit/execution-'));
 const boundExecution = { ...requestRecords.get(executionPath) };
-requestRecords.set(executionPath, { ...boundExecution, event: 'DATA_RIGHTS_EXECUTION_FAILED', attemptNumber: 3 });
+requestRecords.set(executionPath, { ...boundExecution, event: 'DATA_RIGHTS_EXECUTION_FAILED', attemptNumber: 3, failureAttempts: 3, continuationDeliveries: 0 });
 requestRecords.set(`dataRightsRequests/${requestId}`, { ownerUid, requestType: 'DELETE', status: 'IN_REVIEW', executionState: 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE' });
 await assert.rejects(rightsExports.processDataRightsRequest(request, {}), (error) => error.code === 'resource-exhausted');
 requestRecords.set(executionPath, { ...boundExecution, event: 'DATA_RIGHTS_EXECUTION_STARTED', attemptNumber: 1, leaseExpiresAtMs: Date.now() + 180000 });
