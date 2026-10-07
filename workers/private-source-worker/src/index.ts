@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { rateLimit } from 'express-rate-limit';
 import axios from 'axios';
 import express, { type NextFunction, type Request, type Response } from 'express';
 
@@ -225,7 +226,8 @@ async function recheckAuthorization(job: ReturnType<typeof validateJob>, before:
   }
 }
 
-app.post('/execute-job', requireWorkerAuth, async (req, res) => {
+app.post('/execute-job', rateLimit({ windowMs: 60000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false,
+  ipv6Subnet: 56, passOnStoreError: false, message: { ok: false, code: 'PRIVATE_SOURCE_RATE_LIMIT' } }), requireWorkerAuth, async (req, res) => {
   let job: ReturnType<typeof validateJob>;
   try {
     job = validateJob(req.body);

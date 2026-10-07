@@ -17,6 +17,7 @@ function harness() {
   const express = () => app;
   express.json = () => (_req, _res, next) => next();
   const loaded = { 'node:crypto': crypto, express,
+  'express-rate-limit': { rateLimit: () => (_req, _res, next) => next() },
     './protected-source-provider': { registerProtectedSourceRoutes() {} },
     './contracts.js': require(path.join(__dirname, '../dist/contracts.js')),
     'firebase-admin/app': { getApps: () => [1], initializeApp() {}, applicationDefault() {} },

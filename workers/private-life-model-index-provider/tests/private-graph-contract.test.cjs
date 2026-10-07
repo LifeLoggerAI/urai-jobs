@@ -8,6 +8,7 @@ const source = fs.readFileSync(path.join(__dirname, '../dist/index.js'), 'utf8')
 const app = { use() {}, get() {}, post() {}, listen() {} };
 const express = () => app; express.json = () => () => {};
 const loaded = { 'node:crypto': crypto, express,
+  'express-rate-limit': { rateLimit: () => (_req, _res, next) => next() },
   './protected-source-provider': { registerProtectedSourceRoutes() {} }, './contracts.js': require(path.join(__dirname, '../dist/contracts.js')),
   'firebase-admin/app': { getApps: () => [1], initializeApp() {}, applicationDefault() {} },
   'firebase-admin/firestore': { FieldValue: {}, getFirestore() { throw new Error('unexpected Firestore call'); } } };

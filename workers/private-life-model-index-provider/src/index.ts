@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { rateLimit } from 'express-rate-limit';
 import { registerProtectedSourceRoutes } from './protected-source-provider';
 import { validateExtraction as validateExtractionGraph } from './contracts.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
@@ -28,6 +29,8 @@ const TRANSCRIPT_CONTRACT = 'urai-private-source-transcript-v2';
 
 // Opaque private refs and authority responses must not be retained by caches.
 app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+app.use(rateLimit({ windowMs: 60000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false,
+  ipv6Subnet: 56, passOnStoreError: false, message: { ok: false, code: 'PRIVATE_SOURCE_RATE_LIMIT' } }));
 app.use(express.json({ limit: '96kb' }));
 
 function runtimeEnv(): string {
