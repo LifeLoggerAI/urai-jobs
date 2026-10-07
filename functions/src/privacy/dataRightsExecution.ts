@@ -140,12 +140,7 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
   let queueDeletes = 0;
   let logDeletes = 0;
   let jobsAnonymized = 0;
-  let capturedRealityPublishedRuntimeDeleted = false;
-
-  if (requestRecord.requestType === 'DELETE') {
-    await deleteCapturedRealityPublishedRuntimeForOwner(ownerUid);
-    capturedRealityPublishedRuntimeDeleted = true;
-  }
+  await deleteCapturedRealityPublishedRuntimeForOwner(ownerUid);
 
   for (const document of jobs) {
     const currentJob = document.data();
