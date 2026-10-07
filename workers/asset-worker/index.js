@@ -56,6 +56,36 @@ function sha256(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
 }
 
+// Match the canonical job consent context and owner/purpose block identity.
+function assetConsentPurposes(job) {
+  const valid = value => value && typeof value === 'object'
+    && ['purpose', 'policyVersion', 'decisionReceiptId'].every(key => typeof value[key] === 'string' && value[key].length > 0);
+  return [...new Set([job.consent, ...(Array.isArray(job.consents) ? job.consents : [])]
+    .filter(valid).map(value => value.purpose))];
+}
+
+async function assetConsentBlocked(transaction, job) {
+  if (!job.ownerUid) return false;
+  const snapshots = await Promise.all(assetConsentPurposes(job).map(purpose => transaction.get(
+    db.collection('jobConsentBlocks').doc(sha256(job.ownerUid + '\n' + purpose)))));
+  return snapshots.some(snapshot => snapshot.exists && snapshot.data()?.active === true);
+}
+
+function cancelConsentBlockedAsset(transaction, jobRef, queueRef, jobId) {
+  const now = serverTimestamp(), remove = admin.firestore.FieldValue.delete();
+  transaction.update(jobRef, {
+    status: 'CANCELLED', lease: remove, updatedAt: now, completedAt: now,
+    'progress.stage': 'CONSENT_REVOKED', 'progress.message': 'Asset execution consent was revoked',
+    'timestamps.updatedAt': now, 'execution.leaseToken': remove, 'execution.completedAt': now,
+    'execution.asyncCallbackPending': false, 'execution.callbackTokenHash': remove,
+    'execution.callbackLeaseToken': remove, 'execution.callbackDeadlineAt': remove,
+    'execution.completedCallbackTokenHash': remove, 'execution.completedCallbackResultId': remove,
+    'execution.completedCallbackStatus': remove, 'execution.completedCallbackAt': remove,
+    'result.resultId': remove, 'result.outputRefs': remove,
+  });
+  transaction.set(queueRef, { jobId, status: 'CANCELLED', lease: remove, updatedAt: now }, { merge: true });
+}
+
 function timestampMillis(value) {
   if (value instanceof Date) return value.getTime();
   if (value && typeof value.toMillis === 'function') return value.toMillis();
@@ -206,7 +236,7 @@ app.post('/', requireWorkerAuth, async (req, res) => {
   let dispatchAccepted = false;
 
   try {
-    const job = await db.runTransaction(async (transaction) => {
+    const prepared = await db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(jobRef);
       const current = snapshot.exists ? snapshot.data() : null;
       if (!current || current.execution?.leaseToken !== leaseToken) {
@@ -217,6 +247,11 @@ app.post('/', requireWorkerAuth, async (req, res) => {
       }
       if (!allowedTypes.has(current.type)) {
         throw new CallbackRejected(422, `Unsupported asset job type: ${current.type}`);
+      }
+
+      if (await assetConsentBlocked(transaction, current)) {
+        cancelConsentBlockedAsset(transaction, jobRef, queueRef, jobId);
+        return { consentRevoked: true };
       }
 
       transaction.update(jobRef, {
@@ -239,9 +274,14 @@ app.post('/', requireWorkerAuth, async (req, res) => {
         'lease.heartbeatAt': serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      return current;
+      return { job: current };
     });
 
+    if (prepared.consentRevoked === true) {
+      return res.status(409).send({ error: 'Asset execution consent was revoked' });
+    }
+
+    const job = prepared.job;
     const payload = job.payload && typeof job.payload === 'object'
       ? job.payload
       : (job.payloadInline && typeof job.payloadInline === 'object' ? job.payloadInline : {});
@@ -380,19 +420,24 @@ app.post('/callback', async (req, res) => {
       const activeLeaseToken = String(execution.leaseToken || '');
       const callbackDeadlineMillis = timestampMillis(execution.callbackDeadlineAt);
 
-      if (
-        completedCallbackTokenHash &&
-        timingSafeEqual(presentedCallbackTokenHash, completedCallbackTokenHash)
-      ) {
+      const duplicate = Boolean(completedCallbackTokenHash
+        && timingSafeEqual(presentedCallbackTokenHash, completedCallbackTokenHash));
+      if (!duplicate && !timingSafeEqual(presentedCallbackTokenHash, expectedTokenHash)) {
+        throw new CallbackRejected(403, 'Invalid callback token');
+      }
+      // Revocation can commit before asynchronous job cancellation reaches this
+      // callback. Read canonical blocks in the same transaction before publishing
+      // any new terminal result or returning a completed-result duplicate.
+      if (await assetConsentBlocked(transaction, job)) {
+        cancelConsentBlockedAsset(transaction, jobRef, queueRef, jobId);
+        return { consentRevoked: true };
+      }
+      if (duplicate) {
         return {
           duplicate: true,
           resultId: String(execution.completedCallbackResultId || ''),
           status: String(execution.completedCallbackStatus || ''),
         };
-      }
-
-      if (!timingSafeEqual(presentedCallbackTokenHash, expectedTokenHash)) {
-        throw new CallbackRejected(403, 'Invalid callback token');
       }
       if (
         job.status !== 'RUNNING' ||
@@ -478,6 +523,10 @@ app.post('/callback', async (req, res) => {
       }, { merge: true });
       return { duplicate: false, resultId: resultRef.id, status };
     });
+
+    if (callbackResult.consentRevoked === true) {
+      return res.status(409).send({ error: 'Asset execution consent was revoked' });
+    }
 
     return res.status(200).send({
       success: true,
