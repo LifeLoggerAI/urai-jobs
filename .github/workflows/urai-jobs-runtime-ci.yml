@@ -86,6 +86,15 @@ jobs:
           node scripts/life-movies-media-timing-smoke.mjs
           node scripts/life-movies-cancellation-smoke.mjs
           node scripts/life-movies-render-budget-smoke.mjs
+          URAI_SOURCE_SHA="$TARGET_SHA" node scripts/life-movies-assembly-media-smoke.mjs --evidence-dir "$RUNNER_TEMP/life-movies-assembly-proof"
+
+      - name: Retain exact-head synthetic assembly evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: urai-life-movie-assembly-source-${{ env.TARGET_SHA }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/life-movies-assembly-proof/
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Verify activation readiness guardrails
         run: pnpm activation:verify

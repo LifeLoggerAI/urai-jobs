@@ -287,6 +287,8 @@ function parsePayload(job) {
 
 const LIFE_MOVIE_ASSEMBLY_BUDGET = {
   maxSegments: 180,
+  maxSegmentDurationMs: 15_000,
+  maxDurationMs: 45 * 60 * 1000,
   maxVideoBytes: 640 * 1024 * 1024,
   maxSubtitleBytes: 16 * 1024 * 1024,
 };
@@ -333,7 +335,8 @@ function parseAssemblyPayload(job) {
 
   const outputPrefix = safeOutputPrefix(String(payload.outputPrefix || ''), tenantId, projectId);
   const requiredFinalPrefix = `tenants/${tenantId}/life-movies/${projectId}/final/`;
-  if (!outputPrefix.startsWith(requiredFinalPrefix)) throw new Error('assembly_output_prefix_mismatch');
+  if (outputPrefix !== requiredFinalPrefix.slice(0, -1)
+    && !outputPrefix.startsWith(requiredFinalPrefix)) throw new Error('assembly_output_prefix_mismatch');
 
   const segments = Array.isArray(payload.segments) ? payload.segments : [];
   if (!segments.length || segments.length > LIFE_MOVIE_ASSEMBLY_BUDGET.maxSegments) {
@@ -348,6 +351,10 @@ function parseAssemblyPayload(job) {
     const endMs = Number(segment.endMs);
     if (!Number.isInteger(startMs) || !Number.isInteger(endMs) || startMs < previousEnd || endMs <= startMs) {
       throw new Error('assembly_segment_timeline_invalid');
+    }
+    if (endMs - startMs > LIFE_MOVIE_ASSEMBLY_BUDGET.maxSegmentDurationMs
+      || endMs > LIFE_MOVIE_ASSEMBLY_BUDGET.maxDurationMs) {
+      throw new Error('assembly_duration_budget_exceeded');
     }
     previousEnd = endMs;
     const video = parsePrivateGcsRef(segment.videoRef, 'assembly_video_ref');
@@ -373,7 +380,7 @@ function parseAssemblyPayload(job) {
 
 function parseSrtTime(value) {
   const match = /^(\d{2}):(\d{2}):(\d{2}),(\d{3})$/.exec(String(value).trim());
-  if (!match) throw new Error('assembly_subtitle_invalid');
+  if (!match || Number(match[2]) > 59 || Number(match[3]) > 59) throw new Error('assembly_subtitle_invalid');
   return (((Number(match[1]) * 60 + Number(match[2])) * 60 + Number(match[3])) * 1000) + Number(match[4]);
 }
 
@@ -386,7 +393,7 @@ function formatSrtTime(value) {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
 }
 
-function shiftSrt(value, offsetMs, nextIndex) {
+function shiftSrt(value, offsetMs, nextIndex, durationMs) {
   const normalized = String(value || '').replace(/\r\n?/g, '\n').trim();
   if (!normalized) return { text: '', nextIndex };
   const out = [];
@@ -397,9 +404,12 @@ function shiftSrt(value, offsetMs, nextIndex) {
     const match = /^(\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2},\d{3})(?:\s+.*)?$/.exec(String(lines[timingIndex] || '').trim());
     const text = lines.slice(timingIndex + 1).join('\n').trim();
     if (!match || !text) throw new Error('assembly_subtitle_invalid');
-    const start = parseSrtTime(match[1]) + offsetMs;
-    const end = parseSrtTime(match[2]) + offsetMs;
-    if (end <= start) throw new Error('assembly_subtitle_invalid');
+    const localStart = parseSrtTime(match[1]);
+    const localEnd = parseSrtTime(match[2]);
+    if (localEnd <= localStart) throw new Error('assembly_subtitle_invalid');
+    if (localEnd > durationMs) throw new Error('assembly_subtitle_outside_segment');
+    const start = localStart + offsetMs;
+    const end = localEnd + offsetMs;
     out.push(`${cursor}\n${formatSrtTime(start)} --> ${formatSrtTime(end)}\n${text}`);
     cursor += 1;
   }
@@ -472,8 +482,69 @@ function probeStreams(filePath) {
   };
 }
 
+// Hash equality proves fixity, not that a child can safely be concatenated.
+// Only admit the exact H.264/AAC profile produced by this bounded renderer.
+function probeNormalizedMovie(filePath, input, durationMs, expectedProfile) {
+  const result = spawnSync('ffprobe', [
+    '-v', 'error', '-show_data_hash', 'sha256',
+    '-show_entries', 'stream=codec_type,codec_name,width,height,pix_fmt,sample_aspect_ratio,r_frame_rate,avg_frame_rate,time_base,profile,level,extradata_hash,sample_rate,channels,channel_layout,start_time,duration,nb_frames:format=duration',
+    '-of', 'json', filePath,
+  ], { encoding: 'utf8', timeout: 5000, maxBuffer: 1024 * 1024 });
+  if (result.status !== 0) throw new Error('assembly_media_probe_failed');
+  const parsed = JSON.parse(result.stdout || '{}');
+  const streams = Array.isArray(parsed.streams) ? parsed.streams : [];
+  const video = streams.find((stream) => stream.codec_type === 'video');
+  const audio = streams.find((stream) => stream.codec_type === 'audio');
+  const durationSeconds = durationMs / 1000;
+  const [rateNumerator, rateDenominator] = String(video?.avg_frame_rate || '').split('/').map(Number);
+  const averageFps = rateNumerator / rateDenominator;
+  if (streams.length !== 2 || !video || !audio
+    || video.codec_name !== 'h264' || video.pix_fmt !== 'yuv420p'
+    || video.width !== input.width || video.height !== input.height
+    || video.sample_aspect_ratio !== '1:1' || !Number.isFinite(averageFps)
+    || Math.abs(averageFps - input.fps) * durationSeconds > 1.01
+    || audio.codec_name !== 'aac' || audio.profile !== 'LC'
+    || Number(audio.sample_rate) !== 48000 || audio.channels !== 2 || audio.channel_layout !== 'stereo') {
+    throw new Error('assembly_media_profile_mismatch');
+  }
+  // CFR video rounds to a frame and AAC rounds to a 1024-sample packet.
+  // This tolerance applies to one artifact; it must never accumulate per child.
+  const tolerance = 1 / input.fps + 1024 / 48000 + 0.002;
+  for (const actual of [parsed.format?.duration, video.duration, audio.duration]) {
+    if (!Number.isFinite(Number(actual)) || Math.abs(Number(actual) - durationSeconds) > tolerance) {
+      throw new Error('assembly_media_duration_mismatch');
+    }
+  }
+  for (const stream of [video, audio]) {
+    if (!Number.isFinite(Number(stream.start_time)) || Number(stream.start_time) < -0.002
+      || Number(stream.start_time) > tolerance) throw new Error('assembly_media_start_mismatch');
+  }
+  if (!Number.isInteger(Number(video.nb_frames))
+    || Math.abs(Number(video.nb_frames) - durationSeconds * input.fps) > 1.01) {
+    throw new Error('assembly_media_frame_count_mismatch');
+  }
+  const profile = {
+    video: { codec: video.codec_name, pixelFormat: video.pix_fmt, width: video.width, height: video.height,
+      sampleAspectRatio: video.sample_aspect_ratio, expectedFps: input.fps, timeBase: video.time_base,
+      profile: video.profile, level: video.level, configurationHash: video.extradata_hash },
+    audio: { codec: audio.codec_name, profile: audio.profile, sampleRate: Number(audio.sample_rate),
+      channels: audio.channels, channelLayout: audio.channel_layout, timeBase: audio.time_base,
+      configurationHash: audio.extradata_hash },
+  };
+  if (![video.extradata_hash, audio.extradata_hash].every((value) => /^SHA256:[a-f0-9]{64}$/.test(String(value)))) {
+    throw new Error('assembly_media_configuration_missing');
+  }
+  if (expectedProfile && canonicalJson(profile) !== canonicalJson(expectedProfile)) {
+    throw new Error('assembly_media_configuration_mismatch');
+  }
+  // FFprobe's guessed r_frame_rate can increase at concat packet boundaries;
+  // retain that measurement while admitting by actual frame count/average rate.
+  return { profile, durationMs: Number(parsed.format.duration) * 1000, videoFrames: Number(video.nb_frames),
+    averageFrameRate: video.avg_frame_rate, inferredFrameRate: video.r_frame_rate };
+}
+
 function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, height, fps) {
-  const visualFilter = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,fps=${fps},format=yuv420p`;
+  const visualFilter = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=${fps},format=yuv420p`;
   if (mimeType.startsWith('image/')) {
     return [
       '-y', '-loop', '1', '-framerate', String(fps), '-i', inputPath,
@@ -618,22 +689,34 @@ async function assembleLifeMovie(job) {
     const subtitleBlocks = [];
     let subtitleIndex = 1;
     let previousEnd = 0;
+    let mediaProfile;
 
     for (const segment of input.segments) {
       await control.check();
       if (segment.startMs > previousEnd) {
         const gapPath = path.join(workDir, `gap-${String(segment.index).padStart(4, '0')}.mp4`);
-        await run('ffmpeg', gapArgs(gapPath, (segment.startMs - previousEnd) / 1000, input.width, input.height, input.fps), { signal: control.signal });
-        concatEntries.push(gapPath);
+        const gapDurationMs = segment.startMs - previousEnd;
+        await run('ffmpeg', gapArgs(gapPath, gapDurationMs / 1000, input.width, input.height, input.fps), { signal: control.signal });
+        const gapMedia = probeNormalizedMovie(gapPath, input, gapDurationMs, mediaProfile);
+        mediaProfile = gapMedia.profile;
+        concatEntries.push({ filePath: gapPath, durationMs: gapDurationMs });
       }
 
       const videoPath = path.join(workDir, `segment-${String(segment.index).padStart(4, '0')}.mp4`);
       const subtitlePath = path.join(workDir, `segment-${String(segment.index).padStart(4, '0')}.srt`);
       const videoBytes = await downloadVerified(segment.video, segment.videoChecksum, videoPath, videoBudget);
       const subtitleBytes = await downloadVerified(segment.subtitle, segment.subtitleChecksum, subtitlePath, subtitleBudget);
-      concatEntries.push(videoPath);
+      const durationMs = segment.endMs - segment.startMs;
+      const media = probeNormalizedMovie(videoPath, input, durationMs, mediaProfile);
+      // Container metadata can survive a damaged media packet. Decode each
+      // bounded child with fatal-error handling before admitting its bytes.
+      await run('ffmpeg', ['-v', 'error', '-xerror', '-i', videoPath,
+        '-map', '0:v:0', '-map', '0:a:0', '-fps_mode', 'passthrough', '-f', 'null', '-'],
+      { signal: control.signal });
+      mediaProfile = media.profile;
+      concatEntries.push({ filePath: videoPath, durationMs });
 
-      const shifted = shiftSrt(fs.readFileSync(subtitlePath, 'utf8'), segment.startMs, subtitleIndex);
+      const shifted = shiftSrt(fs.readFileSync(subtitlePath, 'utf8'), segment.startMs, subtitleIndex, durationMs);
       if (shifted.text) subtitleBlocks.push(shifted.text);
       subtitleIndex = shifted.nextIndex;
       segmentAuthority.push({
@@ -644,17 +727,26 @@ async function assembleLifeMovie(job) {
         subtitleChecksum: segment.subtitleChecksum,
         videoBytes,
         subtitleBytes,
+        media,
       });
       previousEnd = segment.endMs;
     }
 
     const concatPath = path.join(workDir, 'assembly-concat.txt');
-    fs.writeFileSync(concatPath, concatEntries.map((entry) => `file '${entry.replace(/'/g, "'\\''")}'`).join('\n') + '\n');
+    // Position every segment by declared timeline duration instead of allowing
+    // frame/container rounding to compound across up to 180 child artifacts.
+    fs.writeFileSync(concatPath, concatEntries.map((entry) =>
+      `file '${entry.filePath.replace(/'/g, "'\\''")}'\nduration ${entry.durationMs / 1000}`
+    ).join('\n') + '\n');
     const moviePath = path.join(workDir, 'life-movie-final.mp4');
     await run('ffmpeg', [
       '-y', '-f', 'concat', '-safe', '0', '-i', concatPath,
+      '-copyts',
+      '-t', String(previousEnd / 1000),
       '-c', 'copy', '-movflags', '+faststart', moviePath,
     ], { signal: control.signal });
+    await control.check();
+    const finalMedia = probeNormalizedMovie(moviePath, input, previousEnd, mediaProfile);
 
     const subtitlePath = path.join(workDir, 'life-movie-final.srt');
     fs.writeFileSync(subtitlePath, subtitleBlocks.join('\n\n') + (subtitleBlocks.length ? '\n' : ''), 'utf8');
@@ -676,6 +768,12 @@ async function assembleLifeMovie(job) {
       publicReleaseAuthorized: false,
       segmentCount: input.segments.length,
       segmentAuthority,
+      mediaContract: 'urai-life-movie-normalized-media-v1',
+      timelineDurationMs: previousEnd,
+      finalMedia,
+      literalMediaAccepted: false,
+      identityAccepted: false,
+      productionAccepted: false,
       outputs: {
         mp4: { sha256: movieHash, mimeType: 'video/mp4' },
         srt: { sha256: subtitleHash, mimeType: 'application/x-subrip' },
@@ -792,14 +890,18 @@ async function renderLifeMovie(job) {
         const sourcePath = localBySource.get(item.sourceId);
         await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps), { signal: control.signal });
       }
-      clipPaths.push(clipPath);
+      clipPaths.push({ filePath: clipPath, durationMs: item.endMs - item.startMs });
     }
 
     const concatPath = path.join(workDir, 'concat.txt');
-    fs.writeFileSync(concatPath, clipPaths.map((clipPath) => `file '${clipPath.replace(/'/g, "'\\''")}'`).join('\n') + '\n');
+    fs.writeFileSync(concatPath, clipPaths.map((clip) =>
+      `file '${clip.filePath.replace(/'/g, "'\\''")}'\nduration ${clip.durationMs / 1000}`
+    ).join('\n') + '\n');
+    const timelineDurationMs = input.timeline[input.timeline.length - 1].endMs;
     const baseMoviePath = path.join(workDir, 'life-movie-base.mp4');
     await run('ffmpeg', [
       '-y', '-f', 'concat', '-safe', '0', '-i', concatPath,
+      '-copyts', '-t', String(timelineDurationMs / 1000),
       // Every segment already has the same H.264/AAC output profile. Remux it;
       // encoding the full movie again doubles CPU work and loses quality.
       '-c', 'copy',
@@ -808,6 +910,8 @@ async function renderLifeMovie(job) {
 
     const moviePath = path.join(workDir, 'life-movie.mp4');
     await mixAudioCues(baseMoviePath, moviePath, input.audioCues, localBySource, input.sourceById, control.signal);
+    await control.check();
+    const media = probeNormalizedMovie(moviePath, input, timelineDurationMs);
 
     const subtitlePath = path.join(workDir, 'life-movie.srt');
     fs.writeFileSync(subtitlePath, input.subtitleText, 'utf8');
@@ -834,6 +938,12 @@ async function renderLifeMovie(job) {
       audioCues: input.audioCues,
       gapTreatment: 'black-video-silent-audio',
       shortSourceTreatment: 'hold-last-video-frame-and-pad-silent-audio-to-declared-duration',
+      mediaContract: 'urai-life-movie-normalized-media-v1',
+      timelineDurationMs,
+      media,
+      literalMediaAccepted: false,
+      identityAccepted: false,
+      productionAccepted: false,
       sources: input.sources.map((source) => ({
         id: source.id,
         bucket: source.bucket,
