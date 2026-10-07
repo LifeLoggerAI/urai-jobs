@@ -7,7 +7,7 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 import type { Job, JobQueueEntry, JobStatus } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
-import { consentBlockRef } from '../privacy/consentBlocks.js';
+import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import {
   bindingMatches,
   buildIdempotencyBindingId,
@@ -16,6 +16,7 @@ import {
 } from '../core/jobsReliability.js';
 import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 import {
+  LIFE_MOVIE_LONGFORM_BUDGET,
   StudioLifeMovieLongformPayloadSchema,
   assertLifeMovieLongformTenantPaths,
   planLifeMovieLongformSegments,
@@ -119,6 +120,9 @@ type StoredPlan = {
   planId: string;
   schemaVersion: 'urai-life-movie-longform-plan-v1';
   status: 'PENDING' | 'CANCELLED';
+  sourceSystem?: string;
+  derivativeAccessState?: string;
+  outputDeletionState?: string;
   ownerUid: string;
   tenantId: string;
   projectId: string;
@@ -532,14 +536,77 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
   });
 }
 
+async function loadPlanPlaybackAuthority(planId: string, tenantId: string, userId: string, expectedFingerprint?: string) {
+  return getFirestore().runTransaction(async (transaction) => {
+    const parentSnapshot = await transaction.get(planRef(planId));
+    if (!parentSnapshot.exists) throw new Error('longform_plan_not_found');
+    const plan = assertPlanOwner(parentSnapshot.data() as StoredPlan, tenantId, userId);
+    if (plan.status === 'CANCELLED' || ['REVOKED', 'DELETED'].includes(String(plan.derivativeAccessState))
+      || ['PENDING', 'COMPLETE'].includes(String(plan.outputDeletionState))) throw new Error('longform_plan_not_ready_for_playback');
+    if (plan.planId !== planId || plan.sourceSystem !== 'urai-studio'
+      || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(plan.projectId)
+      || !Array.isArray(plan.childJobIds) || !plan.childJobIds.length || plan.childJobIds.length > LIFE_MOVIE_LONGFORM_BUDGET.maxSegments
+      || new Set(plan.childJobIds).size !== plan.childJobIds.length
+      || !Array.isArray(plan.segments) || plan.segments.length !== plan.childJobIds.length) {
+      throw new Error('longform_plan_boundary_mismatch');
+    }
+    if (!isConsentContext(plan.consent) || plan.consent.purpose !== 'life-movie.render') {
+      throw new Error('life_movie_longform_consent_missing');
+    }
+    const [consentSnapshot, snapshots, assemblySnapshot] = await Promise.all([
+      transaction.get(consentBlockRef(userId, plan.consent.purpose)),
+      transaction.getAll(...plan.childJobIds.map((id) => jobDoc(id))),
+      plan.assemblyJobId ? transaction.get(jobDoc(plan.assemblyJobId)) : Promise.resolve(null),
+    ]);
+    if (consentSnapshot.exists && consentSnapshot.data()?.active === true) throw new Error('life_movie_longform_consent_revoked');
+    const jobs = snapshots.map((snapshot) => snapshot.exists ? snapshot.data() as Job : undefined);
+    if (jobs.some((job) => !job || job.status !== 'SUCCESS')) throw new Error('longform_plan_not_ready_for_playback');
+    const assembly = assemblySnapshot?.exists ? assemblySnapshot.data() as Job : undefined;
+    const allowedBuckets = allowedLifeMovieOutputBuckets();
+    const consentFingerprint = buildRequestFingerprint('studio.render.longform', plan.consent);
+    const validateJob = (job: Job, id: string, type: string, role: 'segments' | 'final') => {
+      if (job.jobId !== id || job.ownerUid !== userId || job.tenantId !== tenantId || job.sourceSystem !== 'urai-studio'
+        || (job.jobType || job.type) !== type || job.execution?.parentJobId !== planId || job.execution?.rootJobId !== planId
+        || (job.payload as { projectId?: unknown } | undefined)?.projectId !== plan.projectId
+        || !isConsentContext(job.consent) || buildRequestFingerprint('studio.render.longform', job.consent) !== consentFingerprint) {
+        throw new Error('longform_segment_binding_mismatch');
+      }
+      const access = job as Job & { derivativeAccessState?: string; outputDeletionState?: string };
+      if (['REVOKED', 'DELETED'].includes(String(access.derivativeAccessState))
+        || ['PENDING', 'COMPLETE'].includes(String(access.outputDeletionState))) throw new Error('longform_plan_not_ready_for_playback');
+      if (job.status !== 'SUCCESS') return;
+      const requiredPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/${role}/`;
+      for (const kind of ['mp4', 'srt'] as const) {
+        const location = parseGcsRef(boundedArtifact(job.output, kind).ref);
+        if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(requiredPrefix)
+          || location.objectPath.includes('..') || location.objectPath.includes('\\')) throw new Error('longform_output_boundary_mismatch');
+      }
+    };
+    for (const [index, job] of jobs.entries()) {
+      if (!job || plan.segments[index].jobId !== plan.childJobIds[index]) throw new Error('longform_segment_binding_mismatch');
+      validateJob(job, plan.childJobIds[index], 'studio.render.video', 'segments');
+    }
+    if (assembly) validateJob(assembly, plan.assemblyJobId!, 'studio.assemble.video', 'final');
+    const jobBinding = (job: Job | undefined) => job && ({
+      jobId: job.jobId, status: job.status, consent: job.consent, payload: job.payload, output: job.output,
+      ownerUid: job.ownerUid, tenantId: job.tenantId, sourceSystem: job.sourceSystem, jobType: job.jobType || job.type,
+      parentJobId: job.execution?.parentJobId, rootJobId: job.execution?.rootJobId,
+    });
+    const fingerprint = buildRequestFingerprint('studio.render.longform', {
+      planId, schemaVersion: plan.schemaVersion, status: plan.status, sourceSystem: plan.sourceSystem,
+      ownerUid: plan.ownerUid, tenantId: plan.tenantId, projectId: plan.projectId, consent: plan.consent,
+      renderPlanDigest: plan.renderPlanDigest, sceneTruthDigest: plan.sceneTruthDigest, sceneTruthReceiptRef: plan.sceneTruthReceiptRef,
+      width: plan.width, height: plan.height, fps: plan.fps, childJobIds: plan.childJobIds, segments: plan.segments,
+      assemblyJobId: plan.assemblyJobId, jobs: jobs.map(jobBinding), assembly: jobBinding(assembly),
+    });
+    if (expectedFingerprint && expectedFingerprint !== fingerprint) throw new Error('life_movie_longform_delivery_changed');
+    return { plan, jobs, assembly, fingerprint };
+  });
+}
+
 async function readPlanPlayback(planId: string, tenantId: string, userId: string, disposition: 'inline' | 'attachment' = 'inline') {
-  const plan = await loadPlan(planId, tenantId, userId);
-  await assertPlanConsentActive(plan);
-  const db = getFirestore();
-  const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
-  const jobs = snapshots.map((snapshot) => snapshot.exists ? snapshot.data() : undefined);
-  const statuses = jobs.map((job) => (job?.status ?? 'DEAD') as JobStatus);
-  if (deriveStatus(plan, statuses) !== 'SUCCESS') throw new Error('longform_plan_not_ready_for_playback');
+  const authority = await loadPlanPlaybackAuthority(planId, tenantId, userId);
+  const { plan, jobs, assembly } = authority;
 
   const expiresAtMs = Date.now() + 5 * 60 * 1000;
   const requiredPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/segments/`;
@@ -548,34 +615,28 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
     video: { url: string; mimeType: string; checksum?: string };
     subtitles: { url: string; mimeType: string; checksum?: string };
   } = null;
-  if (plan.assemblyJobId) {
-    const assemblySnapshot = await jobDoc(plan.assemblyJobId).get();
-    if (assemblySnapshot.exists) {
-      const assembly = assemblySnapshot.data() as Job;
-      if (assembly.status === 'SUCCESS') {
-        const video = boundedArtifact(assembly.output, 'mp4');
-        const subtitle = boundedArtifact(assembly.output, 'srt');
-        const finalPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/final/`;
-        const videoLocation = parseGcsRef(video.ref);
-        const subtitleLocation = parseGcsRef(subtitle.ref);
-        if (!allowedBuckets.has(videoLocation.bucket)
-          || !allowedBuckets.has(subtitleLocation.bucket)
-          || !videoLocation.objectPath.startsWith(finalPrefix)
-          || !subtitleLocation.objectPath.startsWith(finalPrefix)) {
-          throw new Error('longform_output_boundary_mismatch');
-        }
-        const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
-          action: 'read', expires: expiresAtMs, responseDisposition: disposition, responseType: video.mimeType,
-        });
-        const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).getSignedUrl({
-          action: 'read', expires: expiresAtMs, responseDisposition: disposition, responseType: subtitle.mimeType,
-        });
-        finalFile = {
-          video: { url: videoUrl, mimeType: video.mimeType, checksum: video.checksum },
-          subtitles: { url: subtitleUrl, mimeType: subtitle.mimeType, checksum: subtitle.checksum },
-        };
-      }
+  if (assembly?.status === 'SUCCESS') {
+    const video = boundedArtifact(assembly.output, 'mp4');
+    const subtitle = boundedArtifact(assembly.output, 'srt');
+    const finalPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/final/`;
+    const videoLocation = parseGcsRef(video.ref);
+    const subtitleLocation = parseGcsRef(subtitle.ref);
+    if (!allowedBuckets.has(videoLocation.bucket)
+      || !allowedBuckets.has(subtitleLocation.bucket)
+      || !videoLocation.objectPath.startsWith(finalPrefix)
+      || !subtitleLocation.objectPath.startsWith(finalPrefix)) {
+      throw new Error('longform_output_boundary_mismatch');
     }
+    const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
+      action: 'read', expires: expiresAtMs, responseDisposition: disposition, responseType: video.mimeType,
+    });
+    const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).getSignedUrl({
+      action: 'read', expires: expiresAtMs, responseDisposition: disposition, responseType: subtitle.mimeType,
+    });
+    finalFile = {
+      video: { url: videoUrl, mimeType: video.mimeType, checksum: video.checksum },
+      subtitles: { url: subtitleUrl, mimeType: subtitle.mimeType, checksum: subtitle.checksum },
+    };
   }
   const segmentAuthority: Array<{
     index: number;
@@ -643,6 +704,12 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
     segments: segmentAuthority,
   })).digest('hex');
 
+  // A parent cancellation, source correction, output deletion or canonical
+  // consent block can commit while any signature is awaited. The final coherent
+  // snapshot binds all delivered jobs and artifacts before exposing the playlist.
+  await loadPlanPlaybackAuthority(planId, tenantId, userId, authority.fingerprint);
+  if (Date.now() >= expiresAtMs) throw new Error('life_movie_longform_delivery_expired');
+
   return {
     schemaVersion: 'urai-life-movie-private-playlist-v1',
     planId,
@@ -664,6 +731,13 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
   const db = getFirestore();
   const childRefs = plan.childJobIds.map((jobId) => jobDoc(jobId));
   return db.runTransaction(async (transaction) => {
+    // A resume may have loaded the parent before an owner deletion/cancel.
+    // Re-read its durable authority inside the same transaction as every write.
+    const currentPlanSnapshot = await transaction.get(planRef(planId));
+    if (!currentPlanSnapshot.exists) throw new Error('longform_plan_not_found');
+    const currentPlan = assertPlanOwner(currentPlanSnapshot.data() as StoredPlan, tenantId, userId);
+    if (currentPlan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
+    if (currentPlan.assemblyJobId !== plan.assemblyJobId) throw new Error('longform_plan_changed');
     const [snapshots, assemblySnapshot] = await Promise.all([
       childRefs.length ? transaction.getAll(...childRefs) : Promise.resolve([]),
       plan.assemblyJobId ? transaction.get(jobDoc(plan.assemblyJobId)) : Promise.resolve(null),
@@ -749,66 +823,84 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
 }
 
 async function deletePlanOutputs(planId: string, tenantId: string, userId: string) {
-  const plan = await loadPlan(planId, tenantId, userId);
   const db = getFirestore();
-  const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
-  const assemblySnapshotForDelete = plan.assemblyJobId ? await jobDoc(plan.assemblyJobId).get() : null;
   const allowedBuckets = allowedLifeMovieOutputBuckets();
-  const requiredPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/segments/`;
-  const deletions: Array<{ bucket: string; objectPath: string }> = [];
+  // Fence the parent and all attempts before an awaited storage operation. Keep
+  // output/result references until cleanup succeeds so a failure remains retryable.
+  const fenced = await db.runTransaction(async (transaction) => {
+    const parentSnapshot = await transaction.get(planRef(planId));
+    if (!parentSnapshot.exists) throw new Error('longform_plan_not_found');
+    const plan = assertPlanOwner(parentSnapshot.data() as StoredPlan, tenantId, userId);
+    const ids = [...plan.childJobIds, ...(plan.assemblyJobId ? [plan.assemblyJobId] : [])];
+    const refs = ids.map((id) => jobDoc(id));
+    const snapshots = refs.length ? await transaction.getAll(...refs) : [];
+    const locations = new Map<string, { bucket: string; objectPath: string }>();
+    const jobs: Array<{ id: string; ref: ReturnType<typeof jobDoc>; type: string; previousStatus: JobStatus; completedAt: unknown }> = [];
 
-  for (const snapshot of snapshots) {
-    if (!snapshot.exists) continue;
-    const job = snapshot.data() as Job;
-    const output = job.output as WorkerOutput | undefined;
-    for (const artifact of Array.isArray(output?.outputs) ? output!.outputs! : []) {
-      if (typeof artifact?.ref !== 'string' || !artifact.ref.startsWith('gs://')) continue;
-      const location = parseGcsRef(artifact.ref);
-      if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(requiredPrefix)) {
-        throw new Error('longform_output_boundary_mismatch');
+    for (const [index, snapshot] of snapshots.entries()) {
+      if (!snapshot.exists) continue;
+      const job = snapshot.data() as Job & { result?: unknown; outputDeletionPreviousStatus?: JobStatus };
+      const type = index < plan.childJobIds.length ? 'studio.render.video' : 'studio.assemble.video';
+      if (job.ownerUid !== userId || job.tenantId !== tenantId || (job.jobType || job.type) !== type
+        || job.sourceSystem !== 'urai-studio' || job.execution?.parentJobId !== planId
+        || job.execution?.rootJobId !== planId
+        || (job.payload as { projectId?: unknown } | undefined)?.projectId !== plan.projectId) {
+        throw new Error('longform_segment_binding_mismatch');
       }
-      deletions.push(location);
-    }
-  }
-
-  if (assemblySnapshotForDelete?.exists) {
-    const assembly = assemblySnapshotForDelete.data() as Job;
-    const output = assembly.output as WorkerOutput | undefined;
-    const finalPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/final/`;
-    for (const artifact of Array.isArray(output?.outputs) ? output!.outputs! : []) {
-      if (typeof artifact?.ref !== 'string' || !artifact.ref.startsWith('gs://')) continue;
-      const location = parseGcsRef(artifact.ref);
-      if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(finalPrefix)) {
-        throw new Error('longform_output_boundary_mismatch');
+      const requiredPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/${type === 'studio.render.video' ? 'segments' : 'final'}/`;
+      for (const value of [job.output, job.result]) {
+        const output = value as WorkerOutput | undefined;
+        for (const artifact of Array.isArray(output?.outputs) ? output!.outputs! : []) {
+          if (typeof artifact?.ref !== 'string' || !artifact.ref.startsWith('gs://')) continue;
+          const location = parseGcsRef(artifact.ref);
+          if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(requiredPrefix)
+            || location.objectPath.includes('..') || location.objectPath.includes('\\')) {
+            throw new Error('longform_output_boundary_mismatch');
+          }
+          locations.set(`${location.bucket}/${location.objectPath}`, location);
+        }
       }
-      deletions.push(location);
+      jobs.push({ id: ids[index], ref: refs[index], type,
+        previousStatus: job.outputDeletionPreviousStatus || job.status, completedAt: job.completedAt });
     }
-  }
+    const now = FieldValue.serverTimestamp();
+    for (const job of jobs) {
+      transaction.update(job.ref, {
+        status: 'CANCELLED', derivativeAccessState: 'DELETED', outputDeletionState: 'PENDING',
+        outputDeletionRequestedAt: now, outputDeletedBy: userId, updatedAt: now, completedAt: job.completedAt || now,
+        outputDeletionPreviousStatus: job.previousStatus,
+        lease: FieldValue.delete(), 'execution.leaseToken': FieldValue.delete(),
+        'execution.asyncCallbackPending': false, 'execution.callbackTokenHash': FieldValue.delete(),
+        'execution.callbackLeaseToken': FieldValue.delete(), 'execution.callbackDeadlineAt': FieldValue.delete(),
+      });
+      transaction.set(jobQueueEntryDoc(job.id), {
+        jobId: job.id, jobType: job.type, status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: now,
+      }, { merge: true });
+    }
+    transaction.update(planRef(planId), {
+      status: 'CANCELLED', derivativeAccessState: 'DELETED', outputDeletionState: 'PENDING',
+      outputDeletionRequestedAt: now, outputDeletedBy: userId, updatedAt: now,
+    });
+    return { jobs: jobs.map((job) => job.id), deletions: [...locations.values()] };
+  });
 
-  await Promise.all(deletions.map(({ bucket, objectPath }) =>
+  await Promise.all(fenced.deletions.map(({ bucket, objectPath }) =>
     getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true })));
 
   const now = FieldValue.serverTimestamp();
   const batch = db.batch();
-  for (const jobId of plan.childJobIds) {
+  for (const jobId of fenced.jobs) {
     batch.update(jobDoc(jobId), {
       output: FieldValue.delete(),
       result: FieldValue.delete(),
-      outputDeletedAt: now,
-      outputDeletedBy: userId,
-      updatedAt: now,
-    });
-  }
-  if (plan.assemblyJobId) {
-    batch.update(jobDoc(plan.assemblyJobId), {
-      output: FieldValue.delete(),
-      result: FieldValue.delete(),
+      outputDeletionState: 'COMPLETE',
       outputDeletedAt: now,
       outputDeletedBy: userId,
       updatedAt: now,
     });
   }
   batch.update(planRef(planId), {
+    outputDeletionState: 'COMPLETE',
     outputDeletedAt: now,
     outputDeletedBy: userId,
     updatedAt: now,
@@ -817,7 +909,7 @@ async function deletePlanOutputs(planId: string, tenantId: string, userId: strin
 
   return {
     planId,
-    deletedObjectCount: deletions.length,
+    deletedObjectCount: fenced.deletions.length,
     retainedSourceMedia: true,
   };
 }
@@ -978,6 +1070,10 @@ export const studioLifeMovieLongformBridge = onRequest({
       : code === 'idempotency_conflict' ? 409
       : code === 'life_movie_longform_disabled' ? 503
       : code === 'life_movie_longform_consent_revoked' ? 409
+      : code === 'life_movie_longform_consent_missing' ? 409
+      : code === 'life_movie_longform_delivery_changed' ? 409
+      : code === 'life_movie_longform_delivery_expired' ? 409
+      : code === 'longform_segment_binding_mismatch' ? 403
       : code === 'scene_truth_receipt_authority_unavailable' ? 503
       : code === 'scene_truth_receipt_expired' ? 409
       : code === 'invalid_scene_truth_receipt_signature' ? 403

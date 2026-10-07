@@ -86,6 +86,15 @@ jobs:
           node scripts/life-movies-media-timing-smoke.mjs
           node scripts/life-movies-cancellation-smoke.mjs
           node scripts/life-movies-render-budget-smoke.mjs
+          URAI_SOURCE_SHA="$TARGET_SHA" node scripts/life-movies-assembly-media-smoke.mjs --evidence-dir "$RUNNER_TEMP/life-movies-assembly-proof"
+
+      - name: Retain exact-head synthetic assembly evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: urai-life-movie-assembly-source-${{ env.TARGET_SHA }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/life-movies-assembly-proof/
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Verify activation readiness guardrails
         run: pnpm activation:verify
@@ -173,7 +182,7 @@ jobs:
           set +e
           printf 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT=%s\nURAI_JOBS_PRIVACY_EVENT_TOKEN=%s\n' "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" "$URAI_JOBS_PRIVACY_EVENT_TOKEN" > functions/.env.demo-urai-jobs
           trap 'rm -f functions/.env.demo-urai-jobs' EXIT
-          timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" --project demo-urai-jobs emulators:exec --only firestore,auth,functions "node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
+          timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" --project demo-urai-jobs emulators:exec --only firestore,auth,functions "node scripts/life-movies-derivative-revocation-smoke.mjs --emulator && node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
           status=$?
           rm -f functions/.env.demo-urai-jobs
           trap - EXIT

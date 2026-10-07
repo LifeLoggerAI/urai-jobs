@@ -314,24 +314,51 @@ function parseGcsRef(ref: unknown) {
   return { bucket, objectPath };
 }
 
+async function loadMoviePlaybackAuthority(tenantId: string, userId: string, jobId: string, expectedFingerprint?: string) {
+  return getFirestore().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(jobDoc(jobId));
+    if (!snapshot.exists) throw new Error('job_not_found');
+    const job = snapshot.data() as Job & { derivativeAccessState?: string; outputDeletionState?: string };
+    if (job.sourceSystem !== 'urai-studio' || job.tenantId !== tenantId || job.ownerUid !== userId
+      || job.jobId !== jobId || (job.jobType || job.type) !== 'studio.render.video') throw new Error('job_boundary_mismatch');
+    if (!isConsentContext(job.consent) || job.consent.purpose !== 'life-movie.render') {
+      throw new Error('life_movie_consent_missing');
+    }
+    if (job.status !== 'SUCCESS' || ['REVOKED', 'DELETED'].includes(String(job.derivativeAccessState))
+      || ['PENDING', 'COMPLETE'].includes(String(job.outputDeletionState))) throw new Error('job_not_ready_for_playback');
+    const consentSnapshot = await transaction.get(consentBlockRef(userId, job.consent.purpose));
+    if (consentSnapshot.exists && consentSnapshot.data()?.active === true) throw new Error('life_movie_consent_revoked');
+    const projectId = (job.payload as { projectId?: unknown } | undefined)?.projectId;
+    if (typeof projectId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(projectId)) {
+      throw new Error('job_boundary_mismatch');
+    }
+    const fingerprint = buildRequestFingerprint('studio.render.video', {
+      jobId, tenantId, ownerUid: userId, consent: job.consent, payload: job.payload, output: job.output,
+    });
+    if (expectedFingerprint && expectedFingerprint !== fingerprint) throw new Error('life_movie_delivery_changed');
+    return { job, projectId, fingerprint };
+  });
+}
+
 async function signedMovieAccess(tenantId: string, userId: string, jobId: string, disposition: 'inline' | 'attachment') {
-  const job = await loadBoundJob(tenantId, userId, jobId);
-  if (!isConsentContext(job.consent) || job.consent.purpose !== 'life-movie.render') {
-    throw new Error('life_movie_consent_missing');
-  }
-  const consentSnapshot = await consentBlockRef(userId, job.consent.purpose).get();
-  if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
-    throw new Error('life_movie_consent_revoked');
-  }
-  if (String(job.status) !== 'SUCCESS') throw new Error('job_not_ready_for_playback');
+  const authority = await loadMoviePlaybackAuthority(tenantId, userId, jobId);
+  const { job } = authority;
   const output = job.output as WorkerOutput | undefined;
+  if (output?.publicReleaseAuthorized === true) throw new Error('life_movie_output_boundary_mismatch');
   const artifacts = Array.isArray(output?.outputs) ? output!.outputs! : [];
   const video = artifacts.find((artifact) => artifact?.kind === 'mp4');
   if (!video?.ref) throw new Error('life_movie_video_output_missing');
   const videoLocation = parseGcsRef(video.ref);
+  const expectedPrefix = `tenants/${tenantId}/life-movies/${authority.projectId}/`;
   const allowedBuckets = allowedLifeMovieOutputBuckets();
-  const expectedPrefix = `tenants/${tenantId}/life-movies/`;
-  if (!allowedBuckets.has(videoLocation.bucket) || !videoLocation.objectPath.startsWith(expectedPrefix)) {
+  if (!allowedBuckets.has(videoLocation.bucket) || !videoLocation.objectPath.startsWith(expectedPrefix)
+    || videoLocation.objectPath.includes('\\')) {
+    throw new Error('life_movie_output_boundary_mismatch');
+  }
+  const subtitle = artifacts.find((artifact) => artifact?.kind === 'srt');
+  const subtitleLocation = subtitle?.ref ? parseGcsRef(subtitle.ref) : null;
+  if (subtitleLocation && (!allowedBuckets.has(subtitleLocation.bucket)
+    || !subtitleLocation.objectPath.startsWith(expectedPrefix) || subtitleLocation.objectPath.includes('\\'))) {
     throw new Error('life_movie_output_boundary_mismatch');
   }
 
@@ -343,17 +370,18 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
     responseType: typeof video.mimeType === 'string' ? video.mimeType : 'video/mp4',
   });
 
-  const subtitle = artifacts.find((artifact) => artifact?.kind === 'srt');
   let subtitleText = '';
-  if (subtitle?.ref) {
-    const subtitleLocation = parseGcsRef(subtitle.ref);
-    if (!allowedBuckets.has(subtitleLocation.bucket) || !subtitleLocation.objectPath.startsWith(expectedPrefix)) {
-      throw new Error('life_movie_output_boundary_mismatch');
-    }
+  if (subtitleLocation) {
     const [bytes] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).download();
     if (bytes.length > 2 * 1024 * 1024) throw new Error('life_movie_subtitles_too_large');
     subtitleText = bytes.toString('utf8');
   }
+
+  // Signing and subtitle downloads await external services. Re-read the same
+  // owner/source/output and canonical consent atomically after every such await
+  // has finished, before releasing any signed URL or private caption text.
+  await loadMoviePlaybackAuthority(tenantId, userId, jobId, authority.fingerprint);
+  if (Date.now() >= expiresAtMs) throw new Error('life_movie_delivery_expired');
 
   return {
     expiresAt: new Date(expiresAtMs).toISOString(),
@@ -370,26 +398,51 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
 }
 
 async function deleteBoundMovieOutput(tenantId: string, userId: string, jobId: string) {
-  const job = await loadBoundJob(tenantId, userId, jobId);
-  const output = job.output as WorkerOutput | undefined;
-  const artifacts = Array.isArray(output?.outputs) ? output!.outputs! : [];
-  const locations = artifacts
-    .map((artifact) => artifact?.ref)
-    .filter((ref): ref is string => typeof ref === 'string' && ref.startsWith('gs://'))
-    .map(parseGcsRef);
-
-  const expectedPrefix = `tenants/${tenantId}/life-movies/`;
+  const db = getFirestore();
   const allowedBuckets = allowedLifeMovieOutputBuckets();
-  for (const location of locations) {
-    if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(expectedPrefix)) {
-      throw new Error('output_delete_boundary_mismatch');
+  const locations = await db.runTransaction(async (transaction) => {
+    const ref = jobDoc(jobId);
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new Error('job_not_found');
+    const job = snapshot.data() as Job & { result?: unknown; outputDeletionPreviousStatus?: Job['status'] };
+    if (job.sourceSystem !== 'urai-studio' || job.tenantId !== tenantId || job.ownerUid !== userId
+      || (job.jobType || job.type) !== 'studio.render.video') throw new Error('job_boundary_mismatch');
+    const projectId = (job.payload as { projectId?: unknown } | undefined)?.projectId;
+    if (typeof projectId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(projectId)) {
+      throw new Error('job_boundary_mismatch');
     }
-  }
+    const expectedPrefix = `tenants/${tenantId}/life-movies/${projectId}/`;
+    const locations = new Map<string, { bucket: string; objectPath: string }>();
+    for (const value of [job.output, job.result]) {
+      const output = value as WorkerOutput | undefined;
+      for (const artifact of Array.isArray(output?.outputs) ? output!.outputs! : []) {
+        if (typeof artifact?.ref !== 'string' || !artifact.ref.startsWith('gs://')) continue;
+        const location = parseGcsRef(artifact.ref);
+        if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(expectedPrefix)
+          || location.objectPath.includes('..') || location.objectPath.includes('\\')) {
+          throw new Error('output_delete_boundary_mismatch');
+        }
+        locations.set(`${location.bucket}/${location.objectPath}`, location);
+      }
+    }
+    const now = FieldValue.serverTimestamp();
+    transaction.update(ref, {
+      status: 'CANCELLED', derivativeAccessState: 'DELETED', outputDeletionState: 'PENDING',
+      outputDeletionRequestedAt: now, outputDeletedBy: userId, updatedAt: now, completedAt: job.completedAt || now,
+      outputDeletionPreviousStatus: job.outputDeletionPreviousStatus || job.status,
+      lease: FieldValue.delete(), 'execution.leaseToken': FieldValue.delete(),
+      'execution.asyncCallbackPending': false, 'execution.callbackTokenHash': FieldValue.delete(),
+      'execution.callbackLeaseToken': FieldValue.delete(), 'execution.callbackDeadlineAt': FieldValue.delete(),
+    });
+    transaction.set(jobQueueEntryDoc(jobId), {
+      jobId, jobType: 'studio.render.video', status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: now,
+    }, { merge: true });
+    return [...locations.values()];
+  });
 
   await Promise.all(locations.map(({ bucket, objectPath }) =>
     getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true })));
 
-  const db = getFirestore();
   const now = FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
     const ref = jobDoc(jobId);
@@ -402,6 +455,7 @@ async function deleteBoundMovieOutput(tenantId: string, userId: string, jobId: s
     transaction.update(ref, {
       output: FieldValue.delete(),
       result: FieldValue.delete(),
+      outputDeletionState: 'COMPLETE',
       outputDeletedAt: now,
       outputDeletedBy: userId,
       updatedAt: now,
@@ -521,6 +575,8 @@ export const studioLifeMovieBridge = onRequest({
       : code === 'job_not_ready_for_playback' ? 409
       : code === 'life_movie_consent_missing' ? 409
       : code === 'life_movie_consent_revoked' ? 409
+      : code === 'life_movie_delivery_changed' ? 409
+      : code === 'life_movie_delivery_expired' ? 409
       : code === 'output_delete_boundary_mismatch' ? 403
       : code === 'life_movie_output_boundary_mismatch' ? 403
       : code === 'life_movie_output_bucket_authority_unavailable' ? 503
