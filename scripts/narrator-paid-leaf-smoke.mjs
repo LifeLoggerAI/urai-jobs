@@ -116,6 +116,8 @@ function fixture(provider, options = {}, extension = 'ts') {
       if (spec === '@google-cloud/storage') return { Storage };
       if (spec === '../protected-spend.js') return load(`workers/narrator-worker/src/protected-spend.${extension}`);
       if (spec === 'node:perf_hooks') return { performance: { now: () => clock.monotonic } };
+      if (spec === '../runtime-source-proof.cjs') return require(path.join(sourceRoot, 'workers/narrator-worker/runtime-source-proof.cjs'));
+      if (spec === 'node:child_process' && options.gitUnavailable) return { execFileSync() { throw new Error('synthetic Git unavailable'); } };
       if (spec.startsWith('node:')) return require(spec);
       throw new Error(`Unexpected actual-leaf dependency ${spec}`);
     };
@@ -166,6 +168,7 @@ try {
     }
     for (const extension of ['ts', 'js']) for (const provider of ['google', 'elevenlabs']) {
       const label = extension + ' ' + provider;
+      await test(label + ' Git-less runtime without exact sealed source proof blocks paid execution', () => denied(provider, { gitUnavailable: true }, f => assert.equal(f.events.length, 0), extension));
       await test(label + ' missing protected issuer origin sends no worker secret', () => denied(provider, { env: { ASSET_FORGE_SPEND_GATEWAY_ORIGIN: '' } }, f => assert.equal(f.events.length, 0), extension));
       await test(label + ' inconsistent issuer origin sends no worker secret', () => denied(provider, { env: { ASSET_FORGE_SPEND_GATEWAY_ORIGIN: 'https://foreign.example' } }, f => assert.equal(f.events.length, 0), extension));
       await test(label + ' stale server reservation cannot authorize a new POST', () => denied(provider, { reservedAt: Date.now() - 1000 }, f => assert.equal(f.held, true), extension));

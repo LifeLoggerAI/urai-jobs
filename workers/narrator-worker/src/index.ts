@@ -3,6 +3,7 @@ dotenv.config();
 
 import express from 'express';
 import { handleJob } from './handlers/index.js';
+import { narratorExecutorSourceSha } from './protected-spend.js';
 import { ConcurrencyGovernor } from './concurrency-governor.js';
 import { logStructured } from './structured-logger.js';
 import {
@@ -70,6 +71,7 @@ app.get('/readyz', (_req: any, res: any) => {
       ? configured.workerToken && configured.gcsBucket && configured.elevenLabsApiKey && configured.elevenLabsVoiceAllowlist
       : true,
     sourceShaExact: productionRuntime ? sourceShaExact : true,
+    sourceIntegrity: productionRuntime ? (() => { try { return narratorExecutorSourceSha() === sourceSha; } catch { return false; } })() : true,
     runtimeRevision: productionRuntime ? runtimeRevisionPresent : true,
     capacityAvailable: governor.canAcceptJob(),
   };

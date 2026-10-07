@@ -71,3 +71,16 @@ The new synthetic cases execute actual TypeScript and tracked JavaScript leaves 
 The component convergence now retains the private-media/offline-world source from #176, narrator source from #175/#178, the stronger #177 issuer-origin/pricing checks, and the exact #174 canon provenance document. Both issuer mapping `gateway_url` and `ASSET_FORGE_SPEND_GATEWAY_ORIGIN` must agree. Runtime ends at the earliest verified preflight, request pricing, signed rate, local pre-reservation runtime or server reservation expiry. Server reservation time must lie within the current local reservation interval, with a positive admission interval. Source, credential, issuer mapping and input are rechecked after credential awaits and through provider, Storage and observation awaits. No donor workflow result is transferred to the combined tree.
 
 The combined actual-leaf synthetic suite passes 208 TS/JS behavior and compiler-parity groups on Node 24.19.0 with zero provider network requests. Complete-workspace typecheck passes with the frozen pnpm 8.15.9 graph. Six actual Git build-context groups prove the unchanged paid-leaf source guard, byte-identical repeated exports, dirty/mismatched/symlink denial, destination preservation and protected Docker wiring. Native exact-head Jobs CI, compiled container proof, emulator, deployment controls and paired Factory source admission remain separate gates. Genuine deployed source/control/account/approval readback remains required.
+
+## Source/artifact attestation successor
+
+The canonical sparse Git builder and frozen dependency path are retained. The
+current source/package implementation in `NARRATOR_RUNTIME_SOURCE_PACKAGE.md`
+adds exact Git object membership, complete source coverage, pinned base image,
+and a compiler-emitted artifact seal. Production/staging source checks require
+both genuine source and sealed output integrity; `/readyz` reflects that check.
+The local27package/6builder/232actual paid-leaf tests are synthetic machine evidence,
+not an independently signed image or genuine provider/account readiness proof.
+No Docker engine/image readback is available here. Native exact-head image/runtime
+verification, deployment/control signatures and protected approvals remain required;
+paid execution is closed until these separate gates legitimately pass.

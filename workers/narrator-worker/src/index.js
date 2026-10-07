@@ -40,10 +40,16 @@ const dotenv = __importStar(require("dotenv"));
 dotenv.config();
 const express_1 = __importDefault(require("express"));
 const index_js_1 = require("./handlers/index.js");
+const protected_spend_js_1 = require("./protected-spend.js");
 const concurrency_governor_js_1 = require("./concurrency-governor.js");
 const structured_logger_js_1 = require("./structured-logger.js");
 const runtime_js_1 = require("./runtime.js");
-(0, runtime_js_1.validateRequiredEnv)([]);
+const runtimeEnv = String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
+const sourceSha = String(process.env.URAI_SOURCE_SHA || '');
+const productionRuntime = ['prod', 'production', 'staging'].includes(runtimeEnv);
+const sourceShaExact = /^[0-9a-f]{40}$/.test(sourceSha);
+const runtimeRevisionPresent = Boolean(process.env.K_REVISION);
+(0, runtime_js_1.validateRequiredEnv)(productionRuntime ? ['URAI_JOBS_WORKER_TOKEN', 'GCS_BUCKET_NAME'] : []);
 const app = (0, express_1.default)();
 const governor = new concurrency_governor_js_1.ConcurrencyGovernor({
     maxConcurrentJobs: Number(process.env.WORKER_MAX_CONCURRENT_JOBS || 8),
@@ -52,12 +58,63 @@ const governor = new concurrency_governor_js_1.ConcurrencyGovernor({
 app.use(express_1.default.json({ limit: '1mb' }));
 app.use(runtime_js_1.requestIdMiddleware);
 app.get('/', (_req, res) => {
-    res.status(200).send({ service: 'narrator-worker', ok: true });
+    res.status(200).send({ service: 'narrator-worker', ok: true, sourceSha });
 });
+function narratorConfiguration() {
+    const elevenLabsEnabled = process.env.URAI_NARRATOR_ELEVENLABS_ENABLED === 'true';
+    return {
+        workerToken: Boolean(process.env.URAI_JOBS_WORKER_TOKEN),
+        gcsBucket: Boolean(process.env.GCS_BUCKET_NAME),
+        elevenLabsEnabled,
+        elevenLabsApiKey: !elevenLabsEnabled || Boolean(process.env.ELEVENLABS_API_KEY),
+        elevenLabsVoiceAllowlist: !elevenLabsEnabled || Boolean(process.env.ELEVENLABS_ALLOWED_VOICE_IDS),
+    };
+}
 app.get('/healthz', (_req, res) => {
-    res.status(200).send({ ok: true, governor: governor.getStats() });
+    const configured = narratorConfiguration();
+    const ok = productionRuntime
+        ? configured.workerToken && configured.gcsBucket && configured.elevenLabsApiKey && configured.elevenLabsVoiceAllowlist
+        : true;
+    res.set('Cache-Control', 'no-store');
+    res.status(ok ? 200 : 503).send({
+        ok,
+        sourceSha,
+        runtimeEnv,
+        configured,
+        governor: governor.getStats(),
+    });
 });
-app.post('/execute-job', (0, runtime_js_1.asyncHandler)(async (req, res) => {
+app.get('/readyz', (_req, res) => {
+    const configured = narratorConfiguration();
+    const checks = {
+        configuration: productionRuntime
+            ? configured.workerToken && configured.gcsBucket && configured.elevenLabsApiKey && configured.elevenLabsVoiceAllowlist
+            : true,
+        sourceShaExact: productionRuntime ? sourceShaExact : true,
+        sourceIntegrity: productionRuntime ? (() => { try {
+            return (0, protected_spend_js_1.narratorExecutorSourceSha)() === sourceSha;
+        }
+        catch {
+            return false;
+        } })() : true,
+        runtimeRevision: productionRuntime ? runtimeRevisionPresent : true,
+        capacityAvailable: governor.canAcceptJob(),
+    };
+    const ok = Object.values(checks).every(Boolean);
+    res.set('Cache-Control', 'no-store');
+    res.status(ok ? 200 : 503).send({
+        ok,
+        sourceSha,
+        runtimeEnv,
+        configured,
+        checks,
+        governor: governor.getStats(),
+    });
+});
+app.get('/authz', runtime_js_1.requireWorkerAuth, (_req, res) => {
+    res.status(200).send({ ok: true, service: 'narrator-worker', authorized: true });
+});
+app.post('/execute-job', runtime_js_1.requireWorkerAuth, (0, runtime_js_1.asyncHandler)(async (req, res) => {
     const jobId = req.body?.jobId || req.body?.id;
     const jobType = req.body?.type || req.body?.jobType;
     const requestId = req.requestId;
@@ -157,6 +214,7 @@ app.listen(port, host, () => {
         metadata: {
             host,
             port,
+            runtimeEnv,
             governor: governor.getStats(),
         },
     });

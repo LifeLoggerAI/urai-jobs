@@ -70,7 +70,19 @@ export function narratorExecutorSourceSha(): string {
     const tracked = git('ls-files', '--error-unmatch', '--', ...SOURCE_PATHS).split('\n');
     need(tracked.length === SOURCE_PATHS.length && SOURCE_PATHS.every(p => tracked.includes(p)), 'narrator protected source untracked');
     need(!git('status', '--porcelain', '--untracked-files=all', '--', ...SOURCE_PATHS), 'narrator protected source dirty');
-  } catch (error) { if (error instanceof NarratorSpendRejected) throw error; throw new NarratorSpendRejected('actual clean narrator source unavailable'); }
+    if (['prod', 'production', 'staging'].includes(String(process.env.URAI_ENV || process.env.NODE_ENV || '').toLowerCase())) {
+      const proof = require('../runtime-source-proof.cjs');
+      need(proof.verifyRuntimeSourceProof(root, expected) === expected, 'narrator sealed artifact source changed');
+    }
+  } catch (error) {
+    if (error instanceof NarratorSpendRejected) throw error;
+    try {
+      // Packaged runtimes prove source membership with the exact Git commit/tree bytes,
+      // then verify the frozen compiler's sealed output. No environment-only SHA path.
+      const proof = require('../runtime-source-proof.cjs');
+      need(proof.verifyRuntimeSourceProof(require('node:path').resolve(__dirname, '../../..'), expected) === expected, 'narrator artifact source changed');
+    } catch { throw new NarratorSpendRejected('actual clean narrator source or sealed runtime artifact unavailable'); }
+  }
   return expected;
 }
 function current(session: Session) {
