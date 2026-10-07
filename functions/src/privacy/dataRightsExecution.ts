@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { uploadToGcs } from '../core/gcs.js';
-import { deleteCapturedRealityEngineJob } from './capturedRealityDerivativeRevocation.js';
+import { deleteCapturedRealityEngineJob, deleteCapturedRealityPublishedRuntimeForOwner } from './capturedRealityDerivativeRevocation.js';
 import { assertPrivateDataRightsExportDestination, deleteOwnedPrivateLifeModel, exportOwnedPrivateLifeModel } from './privateLifeModelDataRights.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
@@ -140,6 +140,12 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
   let queueDeletes = 0;
   let logDeletes = 0;
   let jobsAnonymized = 0;
+  let capturedRealityPublishedRuntimeDeleted = false;
+
+  if (requestRecord.requestType === 'DELETE') {
+    await deleteCapturedRealityPublishedRuntimeForOwner(ownerUid);
+    capturedRealityPublishedRuntimeDeleted = true;
+  }
 
   for (const document of jobs) {
     const currentJob = document.data();
