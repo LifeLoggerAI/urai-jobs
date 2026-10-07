@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.NarratorSpendRejected = void 0;
 exports.narratorDigest = narratorDigest;
 exports.narratorSourceJson = narratorSourceJson;
+exports.narratorSemanticInputDigest = narratorSemanticInputDigest;
 exports.narratorRequestDigest = narratorRequestDigest;
 exports.narratorHeaderBindings = narratorHeaderBindings;
 exports.narratorExecutorSourceSha = narratorExecutorSourceSha;
@@ -67,6 +68,14 @@ function canonical(value) {
     const object = record(value), keys = Object.keys(object).sort();
     need(keys.every(k => /^[A-Za-z_][A-Za-z0-9_]*$/.test(k)), 'ambiguous protected key');
     return `{${keys.map(k => `${canonical(k)}:${canonical(object[k])}`).join(',')}}`;
+}
+function narratorSemanticInputDigest(body) {
+    try {
+        return narratorDigest(narratorSourceJson(JSON.parse(body)));
+    }
+    catch {
+        throw new NarratorSpendRejected('invalid narrator semantic JSON input');
+    }
 }
 function narratorRequestDigest(endpoint, body) { return narratorDigest(Buffer.concat([Buffer.from(`POST\n${endpoint}\n`), Buffer.from(body, 'utf8')])); }
 function narratorHeaderBindings(headers) {
@@ -191,7 +200,7 @@ async function paidNarratorFetch(provider, model, request) {
     const gatewaySource = sha(process.env.ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA, 40), gatewayUrl = config.gatewayUrl;
     const gatewayOrigin = nonempty(process.env.ASSET_FORGE_SPEND_GATEWAY_ORIGIN);
     need(new URL(gatewayUrl).origin === gatewayOrigin && new URL(gatewayOrigin).origin === gatewayOrigin, 'gateway differs from protected issuer origin');
-    const fields = { job_id: config.jobId, worker_id: config.workerId, executor_repository: REPOSITORY, executor_source_sha: sourceSha, gateway_repository: GATEWAY_REPOSITORY, gateway_source_sha: gatewaySource, consumer: 'jobs-narrator', tenant_sha256: narratorDigest(nonempty(session.job.tenantId)), provider, account_id: config.accountId, ...accountHeaders, source_input_sha256: session.inputDigest, content_type: nonempty(headers.get('content-type')), request_sha256: requestDigest, endpoint, model: nonempty(model), asset: `${nonempty(session.job.tenantId)}/${nonempty(session.job.jobId)}/narrator.tts`, request_size: String(Buffer.byteLength(body)) };
+    const fields = { job_id: config.jobId, worker_id: config.workerId, executor_repository: REPOSITORY, executor_source_sha: sourceSha, gateway_repository: GATEWAY_REPOSITORY, gateway_source_sha: gatewaySource, consumer: 'jobs-narrator', tenant_sha256: narratorDigest(nonempty(session.job.tenantId)), provider, account_id: config.accountId, ...accountHeaders, source_input_sha256: session.inputDigest, semantic_input_sha256: narratorSemanticInputDigest(body), content_type: nonempty(headers.get('content-type')), request_sha256: requestDigest, endpoint, model: nonempty(model), asset: `${nonempty(session.job.tenantId)}/${nonempty(session.job.jobId)}/narrator.tts`, request_size: String(Buffer.byteLength(body)) };
     const verifyBinding = () => {
         current(session);
         need(narratorExecutorSourceSha() === sourceSha && process.env.ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA === gatewaySource, 'narrator execution source changed');
@@ -212,11 +221,11 @@ async function paidNarratorFetch(provider, model, request) {
     const envelope = record(prepared.envelope), job = record(envelope.job), executor = record(job.executor), authority = record(job.authority), budget = record(job.budget);
     need(job.job_id === config.jobId && job.provider === provider && job.account_id === config.accountId && job.model_version === model && job.consumer === fields.consumer && job.rights_reviewed === true, 'protected narrator job changed');
     need(executor.binding_version === 2 && authority.repository === REPOSITORY && authority.sha === sourceSha, 'protected narrator source authority changed');
-    const bound = { job_id: job.job_id, worker_id: executor.worker_id, executor_repository: executor.repository, executor_source_sha: executor.source_sha, gateway_repository: executor.gateway_repository, gateway_source_sha: executor.gateway_source_sha, consumer: job.consumer, tenant_sha256: executor.tenant_sha256, provider: job.provider, account_id: job.account_id, credential_sha256: executor.credential_sha256, source_input_sha256: executor.source_input_sha256, semantic_headers_sha256: executor.semantic_headers_sha256, content_type: executor.content_type, request_sha256: executor.request_sha256, endpoint: executor.endpoint, model: job.model_version, asset: executor.asset, request_size: executor.request_size };
+    const bound = { job_id: job.job_id, worker_id: executor.worker_id, executor_repository: executor.repository, executor_source_sha: executor.source_sha, gateway_repository: executor.gateway_repository, gateway_source_sha: executor.gateway_source_sha, consumer: job.consumer, tenant_sha256: executor.tenant_sha256, provider: job.provider, account_id: job.account_id, credential_sha256: executor.credential_sha256, source_input_sha256: executor.source_input_sha256, semantic_input_sha256: executor.semantic_input_sha256, semantic_headers_sha256: executor.semantic_headers_sha256, content_type: executor.content_type, request_sha256: executor.request_sha256, endpoint: executor.endpoint, model: job.model_version, asset: executor.asset, request_size: executor.request_size };
     need(narratorSourceJson(bound) === narratorSourceJson(fields), 'protected narrator exact request binding changed');
     const price = record(envelope.protected_pricing), rates = record(price.rates);
     need(price.provider === provider && price.account_id === config.accountId && price.model_version === model && price.request_sha256 === requestDigest && price.trusted_readback === true, 'protected narrator pricing request changed');
-    for (const key of ['credential_sha256', 'semantic_headers_sha256', 'source_input_sha256', 'content_type'])
+    for (const key of ['credential_sha256', 'semantic_headers_sha256', 'source_input_sha256', 'semantic_input_sha256', 'content_type'])
         need(price[key] === fields[key], 'protected narrator pricing transport changed');
     nonempty(price.receipt);
     fresh(price, 'observed_at');

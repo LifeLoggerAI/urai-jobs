@@ -47,11 +47,11 @@ function fixture(provider, options = {}, extension = 'ts') {
   let protectedJob, held = false, recorded = false, verifiedPreflightExpiry;
   const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
   function protectedEnvelope(fields) {
-    const executor = { binding_version: 2, worker_id: fields.worker_id, repository: fields.executor_repository, source_sha: fields.executor_source_sha, gateway_repository: fields.gateway_repository, gateway_source_sha: fields.gateway_source_sha, tenant_sha256: fields.tenant_sha256, credential_sha256: fields.credential_sha256, source_input_sha256: fields.source_input_sha256, semantic_headers_sha256: fields.semantic_headers_sha256, content_type: fields.content_type, request_sha256: fields.request_sha256, endpoint: fields.endpoint, asset: fields.asset, request_size: fields.request_size, deployment_ref: 'c'.repeat(64), controls_ref: 'd'.repeat(64) };
+    const executor = { binding_version: 2, worker_id: fields.worker_id, repository: fields.executor_repository, source_sha: fields.executor_source_sha, gateway_repository: fields.gateway_repository, gateway_source_sha: fields.gateway_source_sha, tenant_sha256: fields.tenant_sha256, credential_sha256: fields.credential_sha256, source_input_sha256: fields.source_input_sha256, semantic_input_sha256: fields.semantic_input_sha256, semantic_headers_sha256: fields.semantic_headers_sha256, content_type: fields.content_type, request_sha256: fields.request_sha256, endpoint: fields.endpoint, asset: fields.asset, request_size: fields.request_size, deployment_ref: 'c'.repeat(64), controls_ref: 'd'.repeat(64) };
     const rates = { usd_micros_per_unit: 1, credits_per_unit: 0, receipt: 'synthetic-price-rate', verified_at: new Date(clock.now - 1000).toISOString(), expires_at: new Date(clock.now + 3_600_000).toISOString() };
     protectedJob = { schema_version: 1, job_id: fields.job_id, provider: fields.provider, account_id: fields.account_id, model_version: fields.model, consumer: fields.consumer, rights_reviewed: true, authority: { repository: fields.executor_repository, sha: fields.executor_source_sha }, executor, input_sha256: [fields.source_input_sha256, fields.request_sha256], budget: { max_runtime_seconds: options.runtime || 45, rates }, attempts: [] };
     options.mutateEnvelope?.(protectedJob, fields, clock);
-    const price = { provider: fields.provider, account_id: fields.account_id, model_version: fields.model, request_sha256: fields.request_sha256, credential_sha256: fields.credential_sha256, semantic_headers_sha256: fields.semantic_headers_sha256, source_input_sha256: fields.source_input_sha256, content_type: fields.content_type, trusted_readback: true, receipt: 'synthetic-protected-price', observed_at: new Date(clock.now - 1000).toISOString(), expires_at: new Date(clock.now + 3_600_000).toISOString(), rates: structuredClone(rates) };
+    const price = { provider: fields.provider, account_id: fields.account_id, model_version: fields.model, request_sha256: fields.request_sha256, credential_sha256: fields.credential_sha256, semantic_headers_sha256: fields.semantic_headers_sha256, source_input_sha256: fields.source_input_sha256, semantic_input_sha256: fields.semantic_input_sha256, content_type: fields.content_type, trusted_readback: true, receipt: 'synthetic-protected-price', observed_at: new Date(clock.now - 1000).toISOString(), expires_at: new Date(clock.now + 3_600_000).toISOString(), rates: structuredClone(rates) };
     options.mutatePricing?.(price, clock);
     verifiedPreflightExpiry = options.preflightExpiry === undefined ? clock.now + 3_600_000 : options.preflightExpiry;
     return { ok: true, ...(options.missingPreflightExpiry ? {} : { admission_expires_at: new Date(verifiedPreflightExpiry).toISOString() }), envelope: { job: protectedJob, ...(options.missingPricing ? {} : { protected_pricing: price }) }, provider_call_authorized: false, execution_performed: false };
@@ -123,7 +123,7 @@ function fixture(provider, options = {}, extension = 'ts') {
     return module.exports;
   }
   const handler = load(`workers/narrator-worker/src/handlers/narrator-tts.${extension}`);
-  return { job, env, adc, events, submitted, stored, endpoint, body, clock, execute: () => handler.handleNarratorTts(job), get held() { return held; }, get recorded() { return recorded; } };
+  return { job, env, adc, events, submitted, stored, endpoint, body, clock, helper: load('workers/narrator-worker/src/protected-spend.' + extension), execute: () => handler.handleNarratorTts(job), get held() { return held; }, get recorded() { return recorded; } };
 }
 
 let count = 0;
@@ -143,7 +143,7 @@ try {
     }
     for (const provider of ['google', 'elevenlabs']) {
       await test(`${provider} missing genuine protected pricing blocks paid POST`, () => denied(provider, { missingPricing: true }));
-      for (const field of ['provider', 'account_id', 'model_version', 'request_sha256', 'credential_sha256', 'semantic_headers_sha256', 'source_input_sha256', 'content_type', 'receipt']) await test(`${provider} actual protected pricing ${field} drift blocks paid POST`, () => denied(provider, { mutatePricing: price => { price[field] = field === 'receipt' ? '' : 'foreign'; } }));
+      for (const field of ['provider', 'account_id', 'model_version', 'request_sha256', 'credential_sha256', 'semantic_headers_sha256', 'source_input_sha256', 'semantic_input_sha256', 'content_type', 'receipt']) await test(`${provider} actual protected pricing ${field} drift blocks paid POST`, () => denied(provider, { mutatePricing: price => { price[field] = field === 'receipt' ? '' : 'foreign'; } }));
       await test(`${provider} untrusted pricing readback blocks paid POST`, () => denied(provider, { mutatePricing: price => { price.trusted_readback = false; } }));
       await test(`${provider} stale pricing blocks paid POST`, () => denied(provider, { mutatePricing: (price, clock) => { price.expires_at = new Date(clock.now).toISOString(); } }));
       await test(`${provider} future pricing readback blocks paid POST`, () => denied(provider, { mutatePricing: (price, clock) => { price.observed_at = new Date(clock.now + 1000).toISOString(); } }));
@@ -155,7 +155,7 @@ try {
       await test(`${provider} authorizing preflight is rejected`, () => denied(provider, { authorizingPreflight: true }));
       await test(`${provider} rejected reserve blocks provider`, () => denied(provider, { reserveDenied: true }));
       await test(`${provider} malformed reserve blocks provider and keeps hold`, () => denied(provider, { badReserve: true }, f => assert.equal(f.held, true)));
-      for (const field of ['source_sha', 'gateway_source_sha', 'repository', 'tenant_sha256', 'worker_id', 'credential_sha256', 'semantic_headers_sha256', 'source_input_sha256', 'request_sha256', 'content_type', 'endpoint', 'asset', 'request_size']) await test(`${provider} protected ${field} drift blocks paid POST`, () => denied(provider, { mutateEnvelope: job => { job.executor[field] = 'foreign'; } }));
+      for (const field of ['source_sha', 'gateway_source_sha', 'repository', 'tenant_sha256', 'worker_id', 'credential_sha256', 'semantic_headers_sha256', 'source_input_sha256', 'semantic_input_sha256', 'request_sha256', 'content_type', 'endpoint', 'asset', 'request_size']) await test(`${provider} protected ${field} drift blocks paid POST`, () => denied(provider, { mutateEnvelope: job => { job.executor[field] = 'foreign'; } }));
       await test(`${provider} raw owner input mutation after preflight blocks reserve`, () => denied(provider, { afterPreflight: ({ job }) => { job.ownerUid = 'foreign-owner'; } }, f => assert.deepEqual(f.events.map(e => e.action), ['preflight'])));
       await test(`${provider} raw payload mutation after reserve keeps hold without POST`, () => denied(provider, { afterReserve: ({ job }) => { job.payload.text = 'foreign text'; } }, f => { assert.equal(f.held, true); assert.equal(f.recorded, true); assert.equal(f.events.at(-1).fields.status, 'failed'); }));
       await test(`${provider} provider response loss records uncertainty and prevents duplicate`, async () => { const f = fixture(provider, { providerLost: true }); await assert.rejects(f.execute()); assert.equal(f.submitted.length, 1); assert.equal(f.stored.length, 0); assert.equal(f.events.at(-1).fields.status, 'failed'); assert.equal(f.held, true); await assert.rejects(f.execute()); assert.equal(f.submitted.length, 1); assert.equal(f.held, true); });
@@ -193,6 +193,36 @@ try {
       await test(label + ' monotonic expiry during record withholds stale success', async () => { const f = fixture(provider, { runtime: 1, afterRecord: ({ clock }) => { clock.monotonic += 2000; } }, extension); await assert.rejects(f.execute()); assert.equal(f.submitted.length, 1); assert.equal(f.held, true); });
       await test(label + ' expiry during record await withholds successful response', async () => { const f = fixture(provider, { runtime: 1, afterRecord: ({ clock }) => { clock.now += 2000; } }, extension); await assert.rejects(f.execute()); assert.equal(f.submitted.length, 1); assert.equal(f.held, true); });
       await test(label + ' source input drift during record await withholds response', async () => { const f = fixture(provider, { afterRecord: ({ job }) => { job.leaseToken = 'changed-lease'; } }, extension); await assert.rejects(f.execute()); assert.equal(f.submitted.length, 1); assert.equal(f.held, true); });
+    }
+    for (const extension of ['ts', 'js']) for (const provider of ['google', 'elevenlabs']) {
+      const label = extension + ' ' + provider;
+      await test(label + ' semantic JSON excludes renamed source jobs and leases', async () => {
+        const first = fixture(provider, {}, extension);
+        const renamed = fixture(provider, { job: { jobId: 'renamed-synthetic-job', leaseToken: 'renamed-synthetic-lease' } }, extension);
+        await first.execute(); await renamed.execute();
+        const a = first.events[0].fields, b = renamed.events[0].fields;
+        assert.notEqual(a.source_input_sha256, b.source_input_sha256);
+        assert.equal(a.semantic_input_sha256, hash(stable(JSON.parse(first.body))));
+        assert.equal(a.semantic_input_sha256, b.semantic_input_sha256);
+        assert.equal(a.semantic_input_sha256, first.events.find(e => e.action === 'reserve').fields.semantic_input_sha256);
+        assert.equal(a.semantic_input_sha256, first.events.find(e => e.action === 'record').fields.semantic_input_sha256);
+      });
+      await test(label + ' equivalent JSON key order and whitespace have one semantic identity', async () => {
+        const f = fixture(provider, {}, extension);
+        assert.equal(f.helper.narratorSemanticInputDigest('{"z":"é","a":[2,{"d":false,"b":1.5}]}'),
+          f.helper.narratorSemanticInputDigest('{ "a" : [2, { "b": 1.5, "d": false }], "z" : "é" }'));
+        assert.notEqual(f.helper.narratorSemanticInputDigest('{"a":[1,2]}'), f.helper.narratorSemanticInputDigest('{"a":[2,1]}'));
+      });
+      await test(label + ' missing protected semantic executor binding blocks paid POST',
+        () => denied(provider, { mutateEnvelope: job => { delete job.executor.semantic_input_sha256; } }, undefined, extension));
+      await test(label + ' missing protected semantic pricing blocks paid POST',
+        () => denied(provider, { mutatePricing: price => { delete price.semantic_input_sha256; } }, undefined, extension));
+      await test(label + ' changed provider semantic payload changes identity', async () => {
+        const f = fixture(provider, {}, extension);
+        assert.notEqual(f.helper.narratorSemanticInputDigest('{"text":"original"}'), f.helper.narratorSemanticInputDigest('{"text":"corrected"}'));
+        assert.throws(() => f.helper.narratorSemanticInputDigest('{"broken":'), /semantic JSON/);
+        assert.throws(() => f.helper.narratorSemanticInputDigest('{"numeric":1e400}'), /semantic JSON/);
+      });
     }
     for (const field of ['token', 'principal', 'quota', 'expiresAt']) await test(`Google actual ADC ${field} drift after reserve blocks provider`, () => denied('google', { afterReserve: ({ adc }) => { adc[field] = field === 'expiresAt' ? adc[field] + 1 : 'foreign'; } }, f => { assert.equal(f.held, true); assert.equal(f.recorded, true); }));
     for (const [field, value] of [['token', ''], ['principal', ''], ['quota', ''], ['expiresAt', 0]]) await test(`Google missing authentic ADC ${field} blocks provider`, () => denied('google', { adc: { [field]: value } }));
