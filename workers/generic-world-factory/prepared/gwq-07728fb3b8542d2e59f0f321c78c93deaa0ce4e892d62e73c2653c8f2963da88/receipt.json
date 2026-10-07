@@ -1,0 +1,46 @@
+{
+  "actualAssetsGenerated": 0,
+  "assetAccepted": false,
+  "blockedDependencies": [
+    "Explicit provider spend authorization",
+    "Governed provider credential",
+    "Current cost quote",
+    "Governed references for final-art intent",
+    "Actual provider output",
+    "Visual, rights and full asset QA acceptance"
+  ],
+  "checks": [
+    "Generic truth boundary",
+    "Specification state",
+    "Version and identifiers",
+    "Metric target dimensions",
+    "Shared-kit exact content consistency",
+    "Existing Model Forge adapter IDs",
+    "Model Forge input format and prompt size",
+    "Exact authority and input SHA-256 bindings",
+    "One-attempt bound",
+    "Zero execution and spend"
+  ],
+  "contentManifestSha256": "4f7c3c8108d4097df1b7c5520650a6d7de9aa873f1b5af400987764d0242ae68",
+  "generatedAt": "2026-10-07T00:24:29.669Z",
+  "independentlyApproved": false,
+  "inputSetSha256": "07728fb3b8542d2e59f0f321c78c93deaa0ce4e892d62e73c2653c8f2963da88",
+  "machineValidationScope": "Specification and offline packet integrity only; no generated geometry, visual quality, runtime or device validation",
+  "packageId": "gwq-07728fb3b8542d2e59f0f321c78c93deaa0ce4e892d62e73c2653c8f2963da88",
+  "paidProviderCalls": 0,
+  "previewRendersCreated": 0,
+  "providerJobsPrepared": 136,
+  "providerSubmissionIds": [],
+  "releaseAccepted": false,
+  "runtimeIntegrated": false,
+  "schemaVersion": "urai-generic-world-preparation-receipt-v1",
+  "totalSpent": 0,
+  "truthClassification": "GENERIC",
+  "uniqueModularKitsPrepared": 136,
+  "worldFamilyBatches": [
+    1,
+    2
+  ],
+  "worldsPrepared": 29,
+  "xrCertified": false
+}

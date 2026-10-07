@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-backyard-garage-workshop-ground-shell:v1",
+    "sourceKitSha256": "a884a94dbd53f9ed4bd302a80bd267b3836b34401dcd32c20bcd37e3799d29e9",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 1,
+        "id": "gw-backyard-garage-workshop",
+        "specSha256": "e1447787a6305e9f5351fd893026a7fb6954dedefcc59742e7d23b619fdae34d",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 2827266381
+  },
+  "id": "kit-gw-backyard-garage-workshop-ground-shell-v1-a884a94dbd53f9ed",
+  "prompt": "Original generic modular ground-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Broad garage opening toward yard plus visible side exit; level threshold. Workshop perimeter storage leaves a central 1.8 m route; no loose tools, extension leads, or trip clutter along the route. Target bounding dimensions 18m wide x 0.3m high x 20m deep. Materials: soil-muted. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 20,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

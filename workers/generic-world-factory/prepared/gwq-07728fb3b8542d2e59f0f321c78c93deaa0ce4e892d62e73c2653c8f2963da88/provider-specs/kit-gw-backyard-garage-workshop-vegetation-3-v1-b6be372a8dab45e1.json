@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-backyard-garage-workshop-vegetation-3:v1",
+    "sourceKitSha256": "b6be372a8dab45e1d668fb1e8a8fc927efc801b5399d852f11b65f16eb6e98c4",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 1,
+        "id": "gw-backyard-garage-workshop",
+        "specSha256": "e1447787a6305e9f5351fd893026a7fb6954dedefcc59742e7d23b619fdae34d",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 3065919274
+  },
+  "id": "kit-gw-backyard-garage-workshop-vegetation-3-v1-b6be372a8dab45e1",
+  "prompt": "Original generic modular vegetation; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. plain low hedge; region/species assumption, visual review required; use proper silhouette and leaf geometry, not low-quality filler Target bounding dimensions 1.6m wide x 1.5m high x 1.6m deep. Materials: leaf-neutral. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 1.6,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

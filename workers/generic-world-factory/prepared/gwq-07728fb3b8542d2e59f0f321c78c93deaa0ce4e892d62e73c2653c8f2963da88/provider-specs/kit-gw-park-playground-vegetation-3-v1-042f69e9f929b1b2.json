@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-park-playground-vegetation-3:v1",
+    "sourceKitSha256": "042f69e9f929b1b232fd5655662884b9a5ea7405641b4781542741e9fde9254a",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-park-playground",
+        "specSha256": "e3708cd946acc6f4cdbfd14f9435d49f679c19224265d79f8ef7fb97b3843a40",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 70216169
+  },
+  "id": "kit-gw-park-playground-vegetation-3-v1-042f69e9f929b1b2",
+  "prompt": "Original generic modular vegetation; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. low shrubs; region/species assumption, visual review required; use proper silhouette and leaf geometry, not low-quality filler Target bounding dimensions 1.6m wide x 1.5m high x 1.6m deep. Materials: leaf-neutral. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 1.6,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "urai-generic-world-offline-test-receipt-v1",
+  "executedAt": "2026-10-07T00:22:49.290975+00:00",
+  "command": [
+    "node",
+    "--test",
+    "--test-reporter=junit",
+    "/workspace/scratch/7ade76f0bb8d/world-factory-jobs/workers/generic-world-factory/test/factory.test.mjs"
+  ],
+  "nodeVersion": "v24.19.0",
+  "exitCode": 0,
+  "testCases": 19,
+  "passed": 19,
+  "failed": 0,
+  "skipped": 0,
+  "sourceFiles": [
+    {
+      "path": "factory.mjs",
+      "sha256": "c832ab45efc53dffaba662dcb939f235087dd72d9fe0e78e5e8769d318531cbb",
+      "bytes": 43196
+    },
+    {
+      "path": "cli.mjs",
+      "sha256": "5d3e4cc48463bfe774c2a46f90a23577e5d6aac4d18a0968c006b5238a8554c1",
+      "bytes": 2361
+    },
+    {
+      "path": "package.json",
+      "sha256": "08aedcbf100595cb5e250bbf5fa83969ee69dd99c27260805fb8cdc5194d5a6e",
+      "bytes": 392
+    },
+    {
+      "path": "README.md",
+      "sha256": "37ceffd084ab4968a2f5249ce4b53381add398e742cb30c4ea87881c41ca144e",
+      "bytes": 7754
+    },
+    {
+      "path": "test/factory.test.mjs",
+      "sha256": "e25f303f1ffe60c7005999f2f3711c47a9747d676e02853f3886d7af58d68998",
+      "bytes": 13415
+    }
+  ],
+  "junitSha256": "fadf6913b54f8c30b50dd3e8808e74f109211ba3f4d9cc2c09fb3f033988fce1",
+  "scope": "Offline queue and quarantine correctness; disposable marked fixtures; not actual provider or production art acceptance",
+  "actualProviderCalls": 0,
+  "totalSpent": 0,
+  "runtimeMutated": false
+}

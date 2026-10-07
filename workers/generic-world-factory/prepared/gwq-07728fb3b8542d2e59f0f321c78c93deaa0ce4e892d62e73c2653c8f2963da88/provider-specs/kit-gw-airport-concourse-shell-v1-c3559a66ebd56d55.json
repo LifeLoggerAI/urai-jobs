@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-airport-concourse-shell:v1",
+    "sourceKitSha256": "c3559a66ebd56d559c77032594a840e7909508eec0cc8815aede8fa864143526",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-airport-concourse",
+        "specSha256": "594fdc25053fca03788e5bd09f18711fcbdc5dd75e9672a3715d6c2f19d9ddcb",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 3277167206
+  },
+  "id": "kit-gw-airport-concourse-shell-v1-c3559a66ebd56d55",
+  "prompt": "Original generic modular architecture-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Broad central path, glazed side wall and readable exit landmark. Escalators and baggage machinery omitted from navigable default. Target bounding dimensions 24m wide x 5m high x 12m deep. Materials: vinyl-tile-muted. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 24,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}
