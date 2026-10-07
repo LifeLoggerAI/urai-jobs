@@ -71,6 +71,7 @@ function fixture(options = {}) {
       if (name === './firestore-paths.js') return { userDoc: owner => db.collection('users').doc(owner) };
       if (name === '../core/errors.js' || name === './errors.js') return { httpsError: (code, message) => Object.assign(new Error(message), { code }) };
       if (name === './privateLifeModelDataRights.js') return load('privacy/privateLifeModelDataRights');
+      if (name === './dataRightsContinuationPolicy.js') return load('privacy/dataRightsContinuationPolicy');
       if (name === './capturedRealityDerivativeRevocation.js') return { deleteCapturedRealityEngineJob: async () => { throw new Error('Reconstruction is outside these fixtures'); } };
       if (name === '../core/gcs.js') return { uploadToGcs: async (bytes, destination) => { const call = ++stats.uploads;
         stats.destinations.push(destination);
