@@ -29,7 +29,7 @@ function fixture(hooks = {}) {
   const records = new Map();
   const versions = new Map();
   const storage = new Map();
-  const calls = { fetch: 0, save: 0, delete: 0, transaction: 0, retries: 0 };
+  const calls = { fetch: 0, save: 0, delete: 0, metadata: 0, transaction: 0, retries: 0 };
   let generation = 0;
   const put = (path, value) => { records.set(path, clone(value)); versions.set(path, (versions.get(path) || 0) + 1); };
   const snapshot = ref => {
@@ -65,13 +65,15 @@ function fixture(hooks = {}) {
           get: async document => { reads.set(document.path, versions.get(document.path) || 0); return snapshot(document); },
           create: (document, value) => writes.push({ document, value, create: true }),
           set: (document, value, options) => writes.push({ document, value, options }),
+          delete: document => writes.push({ document, remove: true }),
         };
         const result = await callback(tx);
-        await hooks.beforeCommit?.({ records, put, calls, storage, reads, attempt });
+        await hooks.beforeCommit?.({ records, put, calls, storage, reads, writes, attempt });
         if ([...reads].some(([path, version]) => (versions.get(path) || 0) !== version)) { calls.retries++; continue; }
         for (const write of writes) {
           if (write.create && records.has(write.document.path)) throw new Error('synthetic_create_conflict');
-          put(write.document.path, write.options?.merge ? { ...records.get(write.document.path), ...write.value } : write.value);
+          if (write.remove) { records.delete(write.document.path); versions.set(write.document.path, (versions.get(write.document.path) || 0) + 1); }
+          else put(write.document.path, write.options?.merge ? { ...records.get(write.document.path), ...write.value } : write.value);
         }
         return result;
       }
@@ -87,9 +89,13 @@ function fixture(hooks = {}) {
       await hooks.afterSave?.({ records, put, calls, storage });
     },
     async getMetadata() {
+      calls.metadata++;
+      if (hooks.metadataFails) throw new Error('synthetic_metadata_unavailable');
       const object = storage.get(path);
-      if (!object) throw new Error('synthetic_missing_object');
-      return [{ ...object.metadata, generation: object.generation, size: String(object.bytes.length) }];
+      if (!object) { const error = new Error('synthetic_missing_object'); error.code = 404; throw error; }
+      const result = { ...object.metadata, generation: object.generation, size: String(object.bytes.length) };
+      await hooks.afterGetMetadata?.({ records, put, calls, storage, path });
+      return [result];
     },
     async delete(options) {
       calls.delete++;
@@ -372,5 +378,59 @@ function seedCleanup(f, count, collection = 'capturedRealityRuntimeAdmissions') 
   assert.equal(f.storage.size, 0);
   assert.equal((await f.cleanupConsent(event)).publishedRuntimeDeletionsAcknowledged, 0);
   console.log('[PASS] completed canonical replay freshly discovers late compensation and then replays zero remaining cleanup');
+}
+{
+  const hooks = { metadataFails: true }, f = fixture(hooks);
+  assert.equal((await f.request()).statusCode, 409); assert.equal(f.storage.size, 1);
+  assert.equal(f.records.has(receiptPath), false);
+  const pending = [...f.records].find(([path]) => path.startsWith('capturedRealityRuntimeCleanup/'));
+  assert.ok(pending, 'successful save followed by metadata outage must retain a pre-write cleanup intent');
+  assert.equal(pending[1].cleanupPending, true); assert.equal(pending[1].publicationPending, true);
+  hooks.metadataFails = false;
+  assert.equal((await f.cleanup()).publishedRuntimeDeletionsAcknowledged, 1); assert.equal(f.storage.size, 0);
+  assert.equal(f.records.get(pending[0]).publicationPending, false);
+  assert.equal((await f.cleanup()).publishedRuntimeDeletionsAcknowledged, 0);
+  console.log('[PASS] metadata outage after successful save retains non-admission intent and recovers exact generation for cleanup');
+}
+{
+  const hooks = { metadataFails: true }, f = fixture(hooks);
+  assert.equal((await f.request()).statusCode, 409); hooks.metadataFails = false;
+  const object = f.storage.get(objectPath), saved = object.metadata.metadata.uraiRuntimeAuthorityHash;
+  object.metadata.metadata.uraiRuntimeAuthorityHash = 'e'.repeat(64);
+  await assert.rejects(f.cleanup(), /publication_identity_changed/); assert.equal(f.calls.delete, 0);
+  assert.equal(f.storage.size, 1);
+  object.metadata.metadata.uraiRuntimeAuthorityHash = saved;
+  assert.equal((await f.cleanup()).publishedRuntimeDeletionsAcknowledged, 1);
+  console.log('[PASS] unknown generation recovery refuses foreign metadata and never deletes an unbound object');
+}
+{
+  const f = fixture({ beforeCommit({ writes, calls }) {
+    if (!calls.save && writes.some(write => write.document.path.startsWith('capturedRealityRuntimeCleanup/'))) throw new Error('synthetic_intent_unavailable');
+  } });
+  assert.equal((await f.request()).statusCode, 409); assert.equal(f.calls.save, 0); assert.equal(f.storage.size, 0);
+  console.log('[PASS] unavailable durable cleanup intent prevents every private Storage write');
+}
+{
+  const hooks = { metadataFails: true }, f = fixture(hooks);
+  assert.equal((await f.request()).statusCode, 409); hooks.metadataFails = false; f.storage.clear();
+  await assert.rejects(f.cleanup(), /runtime_cleanup_continuation_pending/);
+  const pending = [...f.records].find(([path]) => path.startsWith('capturedRealityRuntimeCleanup/'));
+  assert.equal(pending[1].cleanupPending, true); assert.equal(pending[1].cleanupAcknowledgedAt, undefined);
+  console.log('[PASS] an unresolved write with currently absent bytes cannot issue a physical cleanup acknowledgement');
+}
+{
+  const hooks = { metadataFails: true }, f = fixture(hooks);
+  assert.equal((await f.request()).statusCode, 409); hooks.metadataFails = false;
+  const event = { eventId: 'synthetic_metadata_consent_01', ownerUid, purpose: 'location.context', revokedAt: '2026-10-07T00:00:00.000Z' };
+  f.put(`jobConsentEventReceipts/${digest(event.eventId)}`, { ...event, status: 'blocked' });
+  f.put(blockPath(event.purpose), { ...event, active: true });
+  hooks.afterGetMetadata = ({ put }) => put(blockPath(event.purpose), { ...event, active: false });
+  await assert.rejects(f.cleanupConsent(event), /event_authority_invalid/); assert.equal(f.calls.delete, 0); assert.equal(f.storage.size, 1);
+  console.log('[PASS] generation discovery rechecks canonical authority after metadata awaits before adopting or deleting');
+}
+{
+  const f = fixture(); assert.equal((await f.request()).statusCode, 200);
+  assert.equal([...f.records].filter(([path]) => path.startsWith('capturedRealityRuntimeCleanup/')).length, 0);
+  console.log('[PASS] successful admission atomically removes only its own non-admission publication intent');
 }
 console.log('URAI_CR_PUBLISHER_SYNTHETIC_AUTHORITY_VALIDATION: complete; no private source/provider/runtime/device acceptance');

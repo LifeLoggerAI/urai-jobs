@@ -70,8 +70,21 @@ function cleanupTarget(data: FirebaseFirestore.DocumentData, ownerUid: string, c
   const bucket = String(data.storageBucket || ''), objectPath = String(data.runtimeObject || ''), generation = String(data.storageGeneration || '');
   const expectedPrefix = `private-captured-reality/${ownerUid}/${String(data.assetId || '')}/runtime/`;
   if (!bucket || bucket.includes('/') || bucket.includes('..') || !objectPath.startsWith(expectedPrefix) || objectPath.includes('..')) throw new Error('captured_reality_runtime_admission_storage_boundary_invalid');
-  if (!/^\d+$/.test(generation)) throw new Error('captured_reality_runtime_admission_generation_invalid');
-  return { bucket, objectPath, generation };
+  if (!/^\d+$/.test(generation)) {
+    // Only a server-owned pre-write publication intent may recover an unknown
+    // generation. Legacy admissions never gain authority through this path.
+    if (collection !== 'capturedRealityRuntimeCleanup' || data.publicationPending !== true
+      || !/^[a-f0-9]{64}$/.test(String(data.runtimeAuthorityHash || ''))
+      || !/^[a-f0-9]{64}$/.test(String(data.runtimeSha256 || ''))
+      || !/^[a-f0-9]{40}$/.test(String(data.spatialAuthorityHead || ''))
+      || !/^[A-Za-z0-9._:-]{8,512}$/.test(String(data.jobId || ''))
+      || !/^[A-Za-z0-9._-]{1,128}$/.test(String(data.assetId || ''))
+      || !Number.isSafeInteger(data.runtimeByteSize) || data.runtimeByteSize < 1 || data.runtimeByteSize > 512 * 1024 * 1024
+      || objectPath !== `${expectedPrefix}${data.runtimeSha256}.splat`) throw new Error('captured_reality_runtime_admission_generation_invalid');
+    return { bucket, objectPath, generation: '', publicationPending: true, runtimeAuthorityHash: data.runtimeAuthorityHash,
+      runtimeSha256: data.runtimeSha256, spatialAuthorityHead: data.spatialAuthorityHead, jobId: data.jobId, runtimeByteSize: data.runtimeByteSize };
+  }
+  return { bucket, objectPath, generation, publicationPending: false };
 }
 
 export async function deleteCapturedRealityPublishedRuntimeForOwner(ownerUid: string, event?: Event) {
@@ -100,7 +113,7 @@ export async function deleteCapturedRealityPublishedRuntimeForOwner(ownerUid: st
         const data = snapshot.data();
         if (data.ownerUid !== ownerUid) throw new Error('captured_reality_runtime_admission_owner_mismatch');
         if ((data.revokedAt || data.cleanupAcknowledgedAt) && data.cleanupPending !== true) continue;
-        const target = cleanupTarget(data, ownerUid, collection);
+        let target = cleanupTarget(data, ownerUid, collection);
         await db.runTransaction(async tx => {
           await authority.validate(tx);
           const fresh = await tx.get(snapshot.ref);
@@ -108,6 +121,32 @@ export async function deleteCapturedRealityPublishedRuntimeForOwner(ownerUid: st
           tx.set(snapshot.ref, { releaseState: 'revoked', reviewState: 'revoked', candidateAcceptance: false, publicReleaseAuthorized: false,
             revokedAt: FieldValue.serverTimestamp(), cleanupPending: true, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
         });
+        if (!target.generation) {
+          let metadata;
+          try { [metadata] = await getStorage().bucket(target.bucket).file(target.objectPath).getMetadata(); }
+          catch (error: any) {
+            // An unresolved writer may still finish. Absence at this instant
+            // cannot issue an acknowledgement or discard its durable intent.
+            if (error?.code === 404) throw new Error('captured_reality_runtime_cleanup_continuation_pending');
+            throw error;
+          }
+          if (String(metadata.metadata?.uraiRuntimeSha256 || '') !== target.runtimeSha256
+            || String(metadata.metadata?.uraiCapturedRealityJobId || '') !== target.jobId
+            || String(metadata.metadata?.uraiSpatialAuthorityHead || '') !== target.spatialAuthorityHead
+            || String(metadata.metadata?.uraiRuntimeAuthorityHash || '') !== target.runtimeAuthorityHash
+            || Number(metadata.size) !== target.runtimeByteSize || !/^\d+$/.test(String(metadata.generation || ''))) {
+            throw new Error('captured_reality_cleanup_publication_identity_changed');
+          }
+          const generation = String(metadata.generation);
+          await db.runTransaction(async tx => {
+            await authority.validate(tx);
+            const fresh = await tx.get(snapshot.ref);
+            if (!fresh.exists || JSON.stringify(cleanupTarget(fresh.data()!, ownerUid, collection)) !== JSON.stringify(target)) throw new Error('captured_reality_cleanup_target_changed');
+            tx.set(snapshot.ref, { storageGeneration: generation, publicationPending: false,
+              publicationGenerationRecoveredAt: FieldValue.serverTimestamp() }, { merge: true });
+          });
+          target = { bucket: target.bucket, objectPath: target.objectPath, generation, publicationPending: false };
+        }
         await getStorage().bucket(target.bucket).file(target.objectPath, { generation: target.generation }).delete({ ignoreNotFound: true });
         await db.runTransaction(async tx => {
           await authority.validate(tx);

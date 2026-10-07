@@ -136,6 +136,7 @@ export const publishCapturedRealityRuntime=onRequest({
   if(!parsed.success){response.status(400).json({ok:false,error:'invalid-request'});return;}
   const {jobId,assetId,expectedRuntimeSha256}=parsed.data;
   let publishedObject:{bucketName:string;objectPath:string;generation:string;binding:RuntimeBinding}|undefined;
+  let publicationIntent:FirebaseFirestore.DocumentReference|undefined;
   try{
     const db=getFirestore();
     const jobRef=db.collection('jobs').doc(jobId);
@@ -158,6 +159,28 @@ export const publishCapturedRealityRuntime=onRequest({
 
     const bytes=await boundedArtifact(jobId,artifactRef,runtimeSha,byteSize);
     if(!(await runtimeConsentCurrent(ownerUid))) throw new Error('captured_reality_consent_changed_before_publish');
+    // Reserve a durable, private non-admission target BEFORE Storage can hold
+    // bytes. A successful save followed by a metadata outage must remain owned.
+    const cleanupId=createHash('sha256').update(jobId+'\n'+assetId+'\n'+authorityHash(binding)).digest('hex');
+    publicationIntent=db.collection('capturedRealityRuntimeCleanup').doc(cleanupId);
+    const intentRef=publicationIntent;
+    await db.runTransaction(async tx=>{
+      await currentAuthority(tx,db,jobRef,expectedRuntimeSha256,binding);
+      const existing=await tx.get(intentRef);
+      if(existing.exists){
+        if(existing.get('schemaVersion')!=='urai-captured-reality-runtime-cleanup-v1'||existing.get('ownerUid')!==ownerUid
+          ||existing.get('jobId')!==jobId||existing.get('assetId')!==assetId||existing.get('storageBucket')!==bucketName
+          ||existing.get('runtimeObject')!==objectPath||existing.get('runtimeAuthorityHash')!==authorityHash(binding)
+          ||existing.get('revokedAt')||existing.get('cleanupAcknowledgedAt')) throw new Error('captured_reality_publication_intent_conflict');
+        return;
+      }
+      tx.create(intentRef,{
+        schemaVersion:'urai-captured-reality-runtime-cleanup-v1',ownerUid,jobId,assetId,
+        runtimeSha256:runtimeSha,runtimeByteSize:byteSize,spatialAuthorityHead,runtimeAuthorityHash:authorityHash(binding),
+        storageBucket:bucketName,runtimeObject:objectPath,publicationPending:true,cleanupPending:true,
+        candidateAcceptance:false,publicReleaseAuthorized:false,createdAt:FieldValue.serverTimestamp(),
+      });
+    });
     const file=getStorage().bucket(bucketName).file(objectPath);
     let generation='';
     try{
@@ -184,7 +207,9 @@ export const publishCapturedRealityRuntime=onRequest({
       await currentAuthority(tx,db,jobRef,expectedRuntimeSha256,binding);
       const freshReceipt=await tx.get(receiptRef);
       if(freshReceipt.exists){
-        return {replayed:true,generation:replayGeneration(freshReceipt,binding,jobId,assetId,bucketName,objectPath)};
+        const admittedGeneration=replayGeneration(freshReceipt,binding,jobId,assetId,bucketName,objectPath);
+        tx.delete(intentRef);
+        return {replayed:true,generation:admittedGeneration};
       }
       tx.create(receiptRef,{
         schemaVersion:'urai-captured-reality-runtime-admission-v1',ownerUid,jobId,assetId,
@@ -194,6 +219,7 @@ export const publishCapturedRealityRuntime=onRequest({
         candidateAcceptance:false,publicReleaseAuthorized:false,metricScaleVerified:false,navigationAccepted:false,
         browserCertified:false,mobileCertified:false,xrCertified:false,createdAt:FieldValue.serverTimestamp(),
       });
+      tx.delete(intentRef);
       return {replayed:false,generation};
     });
     publishedObject=undefined;
@@ -205,17 +231,19 @@ export const publishCapturedRealityRuntime=onRequest({
         // rejected admission. A simultaneous identical winner is replayed above.
         await getStorage().bucket(publishedObject.bucketName).file(publishedObject.objectPath)
           .delete({ignoreNotFound:true,ifGenerationMatch:publishedObject.generation});
+        if(publicationIntent) await publicationIntent.set({storageGeneration:publishedObject.generation,
+          publicationPending:false,cleanupPending:false,cleanupAcknowledgedAt:FieldValue.serverTimestamp()}, {merge:true});
       }catch{
         // Persist exact cleanup identity separately from admissions. A rejected
         // publication must never be represented as a usable runtime receipt,
         // and a Storage outage must leave a durable owner-scoped retry target.
-        const cleanupId=createHash('sha256').update(jobId+'\n'+assetId+'\n'+publishedObject.generation).digest('hex');
         try{
-          await getFirestore().collection('capturedRealityRuntimeCleanup').doc(cleanupId).set({
+          if(!publicationIntent) throw new Error('captured_reality_publication_intent_missing');
+          await publicationIntent.set({
             schemaVersion:'urai-captured-reality-runtime-cleanup-v1',ownerUid:publishedObject.binding.ownerUid,
             jobId,assetId,runtimeSha256:publishedObject.binding.runtimeSha,
             storageBucket:publishedObject.bucketName,runtimeObject:publishedObject.objectPath,
-            storageGeneration:publishedObject.generation,cleanupPending:true,
+            storageGeneration:publishedObject.generation,publicationPending:false,cleanupPending:true,
             candidateAcceptance:false,publicReleaseAuthorized:false,createdAt:FieldValue.serverTimestamp(),
           },{merge:true});
         }catch{
