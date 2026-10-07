@@ -72,6 +72,33 @@ The component convergence now retains the private-media/offline-world source fro
 
 The combined actual-leaf synthetic suite passes 208 TS/JS behavior and compiler-parity groups on Node 24.19.0 with zero provider network requests. Complete-workspace typecheck passes with the frozen pnpm 8.15.9 graph. Six actual Git build-context groups prove the unchanged paid-leaf source guard, byte-identical repeated exports, dirty/mismatched/symlink denial, destination preservation and protected Docker wiring. Native exact-head Jobs CI, compiled container proof, emulator, deployment controls and paired Factory source admission remain separate gates. Genuine deployed source/control/account/approval readback remains required.
 
+## Current semantic input and private delivery successor
+
+The current canonical gateway source candidate is Factory #421
+`8fbc356ed190de99e336d64c18d068e8992020d3`. Narrator v2 requests now bind
+`semantic_input_sha256` separately from source and exact transport hashes. The
+semantic hash is SHA256 of compact UTF-8 JSON with recursively sorted object
+keys, preserved array order and finite numeric values. It must match the
+executor, signed deployment/control binding, protected pricing and reserve
+echo. Current controls are checked again across awaits and their absolute
+expiry also bounds the paid lifetime. All 324 actual TS/JS paid-leaf synthetic
+cases pass under Node 22.23.3 with zero provider calls or spending. Genuine
+protected production records remain mandatory.
+
+Short/long Life Movie and Storytime narrator playback now return strict
+authenticated delivery descriptors instead of Storage signed URLs. The same
+protected bridge accepts `action:deliver`; descriptors bind exact live
+authority, generation and expiry but grant no bytes by possession. Each
+admitted chunk is at most 64 KiB and rereads current consent, permanent own
+and central deletion fences, source/output identity and the existing bridge
+credential, including a credential check after transaction awaits. The
+controller retains its 60-second native timeout and a byte request has a
+55-second cleanup deadline. Already delivered bytes cannot be recalled.
+The 38 retained delivery cases plus 42 byte-stream cases use real handlers,
+Storage stream/Writable behavior and synthetic owner/consent fixtures. Native
+exact-head CI, actual private runtime/provider readback and independent
+release review remain required; no source result freezes component runtime
+or authorizes main admission, paid calls, deployment or Golden Master claims.
 ## Source/artifact attestation successor
 
 The canonical sparse Git builder and frozen dependency path are retained. The
@@ -84,3 +111,13 @@ not an independently signed image or genuine provider/account readiness proof.
 No Docker engine/image readback is available here. Native exact-head image/runtime
 verification, deployment/control signatures and protected approvals remain required;
 paid execution is closed until these separate gates legitimately pass.
+
+The latest owner source also retains 27 compiler/source artifact attestation
+cases, 118 actual dispatcher/Axios loopback cases, and 170 actual asset-worker
+consent/callback cases. The redirect regression loads the declared Functions
+workspace TypeScript/Axios graph rather than relying on undeclared root
+hoisting. The combined Node 22 verification reached the offline-world phase
+before shared disk exhaustion; that phase then passed 17 cases with two
+explicit external ModelForge-validator skips, and all following smoke,
+workspace build, execution/queue, deployment-precheck and Functions type
+phases were rerun. Hosted exact-head acceptance remains pending.

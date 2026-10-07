@@ -104,18 +104,19 @@ function harness(status = 'RUNNING') {
     } else source = fs.readFileSync(new URL(`../functions/src/jobs/${filename}`, import.meta.url), 'utf8');
     source += `\nexport const testApi = { ${names.join(', ')} };`;
     vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
-      exports, Buffer, console, process: { env: { GCS_BUCKET_NAME: bucket, URAI_ENV: 'test' } },
+      exports, Buffer, console, setTimeout, clearTimeout, AbortController, process: { env: { GCS_BUCKET_NAME: bucket, URAI_ENV: 'test' } },
       require(name) {
         if (name === 'firebase-admin/firestore') return { FieldValue, getFirestore: () => db };
         if (name === 'firebase-admin/storage') return { getStorage: () => storage };
         if (name === 'firebase-functions/params') return { defineSecret: () => ({ value: () => 'fixture-secret' }) };
         if (name === 'firebase-functions/v2/https') return { onRequest: (_options, handler) => handler };
         if (name.endsWith('/firestore-paths.js')) return { jobDoc: (id) => ref(`jobs/${id}`), jobQueueEntryDoc: (id) => ref(`jobQueueEntries/${id}`) };
-        if (name.endsWith('/consentBlocks.js')) return { consentBlockRef: () => ref('jobConsentBlocks/fixture') };
+        if (name.endsWith('/consentBlocks.js')) return { consentBlockRef: () => ref('jobConsentBlocks/fixture'), isConsentContext: value => !!value && ['purpose', 'policyVersion', 'decisionReceiptId'].every(key => typeof value[key] === 'string' && value[key].length > 0) };
         if (name.endsWith('/jobsReliability.js')) return { bindingMatches: () => false,
           buildIdempotencyBindingId: digest, buildRequestFingerprint: (_type, value) => digest(value) };
         if (name.endsWith('/sceneTruthReceipt.js')) return { assertSceneTruthReceiptValue() {} };
         if (name.endsWith('/studioLifeMovieLongformContract.js')) return { StudioLifeMovieLongformPayloadSchema: z.any() };
+        if (name.endsWith('/privateMediaDelivery.js')) return loadBridge('privateMediaDelivery.ts', ['assertPrivateMediaOwnerActive', 'inspectPrivateMedia', 'privateMediaDescriptor', 'streamPrivateMedia']);
         if (name.endsWith('/studioLifeMovieContract.js')) return { StudioLifeMovieRenderPayloadSchema: z.any() };
         return require(name);
       },

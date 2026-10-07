@@ -16,6 +16,7 @@ import {
 import { StudioLifeMovieRenderPayloadSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
 import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { assertPrivateMediaOwnerActive, inspectPrivateMedia, privateMediaDescriptor, streamPrivateMedia } from './privateMediaDelivery.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
 const sceneTruthReceiptSecret = defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC');
@@ -44,7 +45,12 @@ const JobActionSchema = IdentitySchema.extend({
   jobId: z.string().trim().min(10).max(64).regex(/^[A-Za-z0-9_-]+$/),
 }).strict();
 
-const RequestSchema = z.union([CreateSchema, JobActionSchema]);
+const DeliverSchema = IdentitySchema.extend({ action: z.literal('deliver'),
+  jobId: JobActionSchema.shape.jobId, kind: z.enum(['mp4', 'srt']),
+  authorityHash: z.string().regex(/^[a-f0-9]{64}$/), expiresAt: z.number().int().positive(),
+  generation: z.string().regex(/^[1-9][0-9]*$/), disposition: z.enum(['inline', 'attachment']).default('inline'),
+}).strict();
+const RequestSchema = z.union([CreateSchema, JobActionSchema, DeliverSchema]);
 
 function productionRuntime() {
   return new Set(['staging', 'prod', 'production']).has(String(process.env.URAI_ENV || process.env.NODE_ENV || '').toLowerCase());
@@ -328,6 +334,7 @@ async function loadMoviePlaybackAuthority(tenantId: string, userId: string, jobI
       || ['PENDING', 'COMPLETE'].includes(String(job.outputDeletionState))) throw new Error('job_not_ready_for_playback');
     const consentSnapshot = await transaction.get(consentBlockRef(userId, job.consent.purpose));
     if (consentSnapshot.exists && consentSnapshot.data()?.active === true) throw new Error('life_movie_consent_revoked');
+    await assertPrivateMediaOwnerActive(transaction, getFirestore(), userId);
     const projectId = (job.payload as { projectId?: unknown } | undefined)?.projectId;
     if (typeof projectId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(projectId)) {
       throw new Error('job_boundary_mismatch');
@@ -340,7 +347,7 @@ async function loadMoviePlaybackAuthority(tenantId: string, userId: string, jobI
   });
 }
 
-async function signedMovieAccess(tenantId: string, userId: string, jobId: string, disposition: 'inline' | 'attachment') {
+async function privateMovieAccess(tenantId: string, userId: string, jobId: string, disposition: 'inline' | 'attachment') {
   const authority = await loadMoviePlaybackAuthority(tenantId, userId, jobId);
   const { job } = authority;
   const output = job.output as WorkerOutput | undefined;
@@ -363,12 +370,7 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
   }
 
   const expiresAtMs = Date.now() + 5 * 60 * 1000;
-  const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
-    action: 'read',
-    expires: expiresAtMs,
-    responseDisposition: disposition,
-    responseType: typeof video.mimeType === 'string' ? video.mimeType : 'video/mp4',
-  });
+  const videoMetadata = await inspectPrivateMedia(videoLocation);
 
   let subtitleText = '';
   if (subtitleLocation) {
@@ -379,7 +381,7 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
 
   // Signing and subtitle downloads await external services. Re-read the same
   // owner/source/output and canonical consent atomically after every such await
-  // has finished, before releasing any signed URL or private caption text.
+  // has finished, before releasing any descriptor or private caption text.
   await loadMoviePlaybackAuthority(tenantId, userId, jobId, authority.fingerprint);
   if (Date.now() >= expiresAtMs) throw new Error('life_movie_delivery_expired');
 
@@ -387,7 +389,7 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
     expiresAt: new Date(expiresAtMs).toISOString(),
     disposition,
     video: {
-      url: videoUrl,
+      delivery: { ...privateMediaDescriptor('mp4', authority.fingerprint, expiresAtMs, videoMetadata.generation), jobId, disposition },
       mimeType: typeof video.mimeType === 'string' ? video.mimeType : 'video/mp4',
       checksum: typeof video.checksum === 'string' ? video.checksum : undefined,
     },
@@ -395,6 +397,26 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
     renderPlanDigest: typeof output?.renderPlanDigest === 'string' ? output.renderPlanDigest : undefined,
     publicReleaseAuthorized: false,
   };
+}
+
+async function deliverMovie(input: z.infer<typeof DeliverSchema>, request: any, response: any) {
+  const authority = await loadMoviePlaybackAuthority(input.tenantId, input.userId, input.jobId, input.authorityHash);
+  const output = authority.job.output as WorkerOutput;
+  const artifact = output?.outputs?.find(value => value.kind === input.kind);
+  if (!artifact?.ref) throw new Error('life_movie_video_output_missing');
+  const location = parseGcsRef(artifact.ref);
+  const prefix = `tenants/${input.tenantId}/life-movies/${authority.projectId}/`;
+  if (!allowedLifeMovieOutputBuckets().has(location.bucket) || !location.objectPath.startsWith(prefix)
+    || location.objectPath.includes('\\')) throw new Error('life_movie_output_boundary_mismatch');
+  await streamPrivateMedia({ descriptor: { authorityHash: input.authorityHash, expiresAt: input.expiresAt, generation: input.generation }, location,
+    mimeType: input.kind === 'mp4' ? 'video/mp4' : 'application/x-subrip',
+    checksum: typeof artifact.checksum === 'string' ? artifact.checksum : undefined, disposition: input.disposition,
+    revalidate: async () => {
+      if (!authorized(request.get('authorization') || '')) throw new Error('unauthorized');
+      const current = await loadMoviePlaybackAuthority(input.tenantId, input.userId, input.jobId, input.authorityHash);
+      if (!authorized(request.get('authorization') || '')) throw new Error('unauthorized');
+      return current;
+    }, request, response });
 }
 
 async function deleteBoundMovieOutput(tenantId: string, userId: string, jobId: string) {
@@ -535,6 +557,9 @@ export const studioLifeMovieBridge = onRequest({
   }
 
   try {
+    if (parsed.data.action === 'deliver') {
+      await deliverMovie(parsed.data, req, res); return;
+    }
     if (parsed.data.action === 'create') {
       const result = await createLifeMovieJob(parsed.data);
       res.status(result.deduplicated ? 200 : 202).json({ ok: true, status: 'queued', ...result });
@@ -548,13 +573,13 @@ export const studioLifeMovieBridge = onRequest({
     }
 
     if (parsed.data.action === 'playback') {
-      const playback = await signedMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'inline');
+      const playback = await privateMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'inline');
       res.status(200).json({ ok: true, playback });
       return;
     }
 
     if (parsed.data.action === 'download') {
-      const download = await signedMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'attachment');
+      const download = await privateMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'attachment');
       res.status(200).json({ ok: true, download });
       return;
     }
@@ -568,7 +593,9 @@ export const studioLifeMovieBridge = onRequest({
     const job = await cancelBoundJob(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId);
     res.status(200).json({ ok: true, job });
   } catch (error) {
-    const code = error instanceof Error ? error.message : 'bridge_failed';
+    if (res.headersSent || res.destroyed) return;
+    const rawCode = error instanceof Error ? error.message : '';
+    const code = /^[a-z0-9_]{1,120}$/.test(rawCode) ? rawCode : 'private_media_delivery_unavailable';
     const status = code === 'job_not_found' ? 404
       : code === 'job_boundary_mismatch' ? 403
       : code === 'idempotency_conflict' ? 409

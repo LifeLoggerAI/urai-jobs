@@ -53,8 +53,10 @@ function fixture(provider, options = {}, extension = 'ts') {
     options.mutateEnvelope?.(protectedJob, fields, clock);
     const price = { provider: fields.provider, account_id: fields.account_id, model_version: fields.model, request_sha256: fields.request_sha256, credential_sha256: fields.credential_sha256, semantic_headers_sha256: fields.semantic_headers_sha256, source_input_sha256: fields.source_input_sha256, semantic_input_sha256: fields.semantic_input_sha256, content_type: fields.content_type, trusted_readback: true, receipt: 'synthetic-protected-price', observed_at: new Date(clock.now - 1000).toISOString(), expires_at: new Date(clock.now + 3_600_000).toISOString(), rates: structuredClone(rates) };
     options.mutatePricing?.(price, clock);
+    const controls = { provider: fields.provider, account_id: fields.account_id, trusted_readback: true, verified: true, enforcement_source_sha: gatewaySha, binding: Object.fromEntries(Object.entries(fields).filter(([key]) => key !== 'action')), credential_sha256: fields.credential_sha256, semantic_headers_sha256: fields.semantic_headers_sha256, source_input_sha256: fields.source_input_sha256, semantic_input_sha256: fields.semantic_input_sha256, content_type: fields.content_type, observed_at: new Date(clock.now - 1000).toISOString(), expires_at: new Date(clock.now + 3_600_000).toISOString() };
+    options.mutateControls?.(controls, clock);
     verifiedPreflightExpiry = options.preflightExpiry === undefined ? clock.now + 3_600_000 : options.preflightExpiry;
-    return { ok: true, ...(options.missingPreflightExpiry ? {} : { admission_expires_at: new Date(verifiedPreflightExpiry).toISOString() }), envelope: { job: protectedJob, ...(options.missingPricing ? {} : { protected_pricing: price }) }, provider_call_authorized: false, execution_performed: false };
+    return { ok: true, ...(options.missingPreflightExpiry ? {} : { admission_expires_at: new Date(verifiedPreflightExpiry).toISOString() }), envelope: { job: protectedJob, ...(options.missingControls ? {} : { protected_controls: controls }), ...(options.missingPricing ? {} : { protected_pricing: price }) }, provider_call_authorized: false, execution_performed: false };
   }
   const fetch = async (url, init) => {
     if (String(url).startsWith('https://synthetic-gateway.example')) {
@@ -74,7 +76,8 @@ function fixture(provider, options = {}, extension = 'ts') {
         const digest = hash(canonical(Object.fromEntries(Object.entries(protectedJob).filter(([key]) => key !== 'approval' && key !== 'attempts'))));
         assert.equal(fields.job_digest, digest);
         const reservedAt = clock.now, admittedExpiry = Math.min(verifiedPreflightExpiry, reservedAt + (options.runtime || 45) * 1000);
-        const result = { ok: true, ...(options.missingReserveTimes ? {} : { reserved_at: new Date(options.reservedAt === undefined ? reservedAt : options.reservedAt).toISOString(), admission_expires_at: new Date(options.reserveExpiry === undefined ? admittedExpiry : options.reserveExpiry).toISOString() }), attempt_id: 'synthetic-attempt', provider_call_authorized: true, execution_performed: false, job_digest: digest, executor_source_sha: sourceSha, gateway_source_sha: gatewaySha, worker_id: fields.worker_id, max_runtime_seconds: options.runtime || 45 };
+        const result = { ok: true, ...(options.missingReserveTimes ? {} : { reserved_at: new Date(options.reservedAt === undefined ? reservedAt : options.reservedAt).toISOString(), admission_expires_at: new Date(options.reserveExpiry === undefined ? admittedExpiry : options.reserveExpiry).toISOString() }), attempt_id: 'synthetic-attempt', provider_call_authorized: true, execution_performed: false, job_digest: digest, executor_source_sha: sourceSha, gateway_source_sha: gatewaySha, worker_id: fields.worker_id, account_id: fields.account_id, credential_sha256: fields.credential_sha256, semantic_headers_sha256: fields.semantic_headers_sha256, source_input_sha256: fields.source_input_sha256, semantic_input_sha256: fields.semantic_input_sha256, content_type: fields.content_type, max_runtime_seconds: options.runtime || 45 };
+        options.mutateReserve?.(result);
         options.afterReserve?.({ env, job, adc, clock });
         return json(options.badReserve ? { ...result, worker_id: 'foreign-worker' } : result);
       }
@@ -125,7 +128,7 @@ function fixture(provider, options = {}, extension = 'ts') {
     return module.exports;
   }
   const handler = load(`workers/narrator-worker/src/handlers/narrator-tts.${extension}`);
-  return { job, env, adc, events, submitted, stored, endpoint, body, clock, helper: load('workers/narrator-worker/src/protected-spend.' + extension), execute: () => handler.handleNarratorTts(job), get held() { return held; }, get recorded() { return recorded; } };
+  return { job, env, adc, events, submitted, stored, endpoint, body, clock, helper: load(`workers/narrator-worker/src/protected-spend.${extension}`), execute: () => handler.handleNarratorTts(job), get held() { return held; }, get recorded() { return recorded; } };
 }
 
 let count = 0;
@@ -141,7 +144,7 @@ try {
       await test(`${prefix} configured credentials and forged caller approval grant no spend`, () => denied(provider, { env: { URAI_NARRATOR_SPEND_BINDINGS_JSON: '{}' }, job: { approval: { status: 'APPROVED' }, providerCallAuthorized: true } }, undefined, extension));
       await test(`${prefix} gateway denial blocks actual provider`, () => denied(provider, { preflightDenied: true }, undefined, extension));
       await test(`${prefix} uncertain reservation never dispatches or releases hold`, () => denied(provider, { reserveLost: true }, f => { assert.equal(f.held, true); assert.equal(f.recorded, false); }, extension));
-      await test(`${prefix} exact synthetic reservation precedes one frozen POST`, async () => { const f = fixture(provider, {}, extension); const result = await f.execute(); assert.equal(f.submitted.length, 1); assert.equal(f.submitted[0].sdk, undefined); assert.equal(f.submitted[0].init.body, f.body); assert.equal(f.submitted[0].init.redirect, 'error'); assert.deepEqual(f.events.map(e => e.action), ['preflight', 'reserve', 'record']); assert.equal(f.events[2].fields.status, 'succeeded'); assert.equal(f.held, true); assert.equal(f.stored.length, 1); assert.equal(result.provider, provider); assert.equal(result.consentRef, provider === 'elevenlabs' ? 'synthetic-consent' : null); assert.equal(result.rightsRef, provider === 'elevenlabs' ? 'synthetic-rights' : null); const field = f.events[0].fields; assert.equal(field.request_size, String(Buffer.byteLength(f.body))); assert.equal(field.request_sha256, requestDigest(f.endpoint, f.body)); assert.equal(field.source_input_sha256, hash(stable(f.job))); if (provider === 'google') { const h = new Headers(f.submitted[0].init.headers); assert.equal(h.get('x-goog-user-project'), f.adc.quota); assert.equal(h.get('authorization'), `Bearer ${f.adc.token}`); assert.deepEqual(JSON.parse(f.body), { input: { text: f.job.payload.text }, voice: { languageCode: 'en-GB', name: 'en-GB-Standard-A' }, audioConfig: { audioEncoding: 'OGG_OPUS' } }); } });
+      await test(`${prefix} exact synthetic reservation precedes one frozen POST`, async () => { const f = fixture(provider, {}, extension); const result = await f.execute(); assert.equal(f.submitted.length, 1); assert.equal(f.submitted[0].sdk, undefined); assert.equal(f.submitted[0].init.body, f.body); assert.equal(f.submitted[0].init.redirect, 'error'); assert.deepEqual(f.events.map(e => e.action), ['preflight', 'reserve', 'record']); assert.equal(f.events[2].fields.status, 'succeeded'); assert.equal(f.held, true); assert.equal(f.stored.length, 1); assert.equal(result.provider, provider); assert.equal(result.consentRef, provider === 'elevenlabs' ? 'synthetic-consent' : null); assert.equal(result.rightsRef, provider === 'elevenlabs' ? 'synthetic-rights' : null); const field = f.events[0].fields; assert.equal(field.request_size, String(Buffer.byteLength(f.body))); assert.equal(field.request_sha256, requestDigest(f.endpoint, f.body)); assert.equal(field.source_input_sha256, hash(stable(f.job))); assert.equal(field.semantic_input_sha256, hash(stable(JSON.parse(f.body)))); if (provider === 'google') { const h = new Headers(f.submitted[0].init.headers); assert.equal(h.get('x-goog-user-project'), f.adc.quota); assert.equal(h.get('authorization'), `Bearer ${f.adc.token}`); assert.deepEqual(JSON.parse(f.body), { input: { text: f.job.payload.text }, voice: { languageCode: 'en-GB', name: 'en-GB-Standard-A' }, audioConfig: { audioEncoding: 'OGG_OPUS' } }); } });
     }
     for (const provider of ['google', 'elevenlabs']) {
       await test(`${provider} missing genuine protected pricing blocks paid POST`, () => denied(provider, { missingPricing: true }));
@@ -168,6 +171,16 @@ try {
     }
     for (const extension of ['ts', 'js']) for (const provider of ['google', 'elevenlabs']) {
       const label = extension + ' ' + provider;
+      await test(label + ' missing signed gateway controls blocks provider', () => denied(provider, { missingControls: true }, f => assert.equal(f.held, false), extension));
+      for (const field of ['semantic_input_sha256', 'source_input_sha256', 'semantic_headers_sha256', 'credential_sha256', 'content_type']) {
+        await test(label + ' controls ' + field + ' drift blocks provider', () => denied(provider, { mutateControls: controls => { controls[field] = 'foreign'; } }, f => assert.equal(f.held, false), extension));
+      }
+      await test(label + ' signed deployment semantic input drift blocks provider', () => denied(provider, { mutateControls: controls => { controls.binding.semantic_input_sha256 = 'f'.repeat(64); } }, f => assert.equal(f.held, false), extension));
+      await test(label + ' control deadline during reservation cannot dispatch', () => denied(provider, { mutateControls: (controls, clock) => { controls.expires_at = new Date(clock.now + 500).toISOString(); }, afterReserve: ({ clock }) => { clock.now += 600; } }, f => assert.equal(f.held, true), extension));
+      for (const field of ['account_id', 'credential_sha256', 'semantic_headers_sha256', 'source_input_sha256', 'semantic_input_sha256', 'content_type']) {
+        await test(label + ' reservation ' + field + ' drift retains hold without provider', () => denied(provider, { mutateReserve: reserve => { reserve[field] = 'foreign'; } }, f => assert.equal(f.held, true), extension));
+      }
+      await test(label + ' missing reserved semantic identity cannot dispatch', () => denied(provider, { mutateReserve: reserve => { delete reserve.semantic_input_sha256; } }, f => assert.equal(f.held, true), extension));
       await test(label + ' Git-less runtime without exact sealed source proof blocks paid execution', () => denied(provider, { gitUnavailable: true }, f => assert.equal(f.events.length, 0), extension));
       await test(label + ' missing protected issuer origin sends no worker secret', () => denied(provider, { env: { ASSET_FORGE_SPEND_GATEWAY_ORIGIN: '' } }, f => assert.equal(f.events.length, 0), extension));
       await test(label + ' inconsistent issuer origin sends no worker secret', () => denied(provider, { env: { ASSET_FORGE_SPEND_GATEWAY_ORIGIN: 'https://foreign.example' } }, f => assert.equal(f.events.length, 0), extension));
@@ -196,6 +209,18 @@ try {
       await test(label + ' monotonic expiry during record withholds stale success', async () => { const f = fixture(provider, { runtime: 1, afterRecord: ({ clock }) => { clock.monotonic += 2000; } }, extension); await assert.rejects(f.execute()); assert.equal(f.submitted.length, 1); assert.equal(f.held, true); });
       await test(label + ' expiry during record await withholds successful response', async () => { const f = fixture(provider, { runtime: 1, afterRecord: ({ clock }) => { clock.now += 2000; } }, extension); await assert.rejects(f.execute()); assert.equal(f.submitted.length, 1); assert.equal(f.held, true); });
       await test(label + ' source input drift during record await withholds response', async () => { const f = fixture(provider, { afterRecord: ({ job }) => { job.leaseToken = 'changed-lease'; } }, extension); await assert.rejects(f.execute()); assert.equal(f.submitted.length, 1); assert.equal(f.held, true); });
+    }
+    for (const extension of ['ts', 'js']) {
+      const helper = fixture('google', {}, extension).helper;
+      await test(extension + ' semantic identity ignores JSON key order and transport whitespace', async () => {
+        const a = '{"z":[{"b":2,"a":"é"},true,null],"a":1.25}', b = '{ "a":1.25, "z":[{"a":"é","b":2},true,null] }';
+        assert.equal(helper.narratorSemanticInputDigest(a, 'application/json'), helper.narratorSemanticInputDigest(b, 'Application/JSON; charset=utf-8'));
+        assert.notEqual(requestDigest('https://synthetic.example/voice', a), requestDigest('https://synthetic.example/voice', b));
+        assert.notEqual(helper.narratorSemanticInputDigest(a, 'application/json'), helper.narratorSemanticInputDigest('{"z":[null,true,{"b":2,"a":"é"}],"a":1.25}', 'application/json'));
+      });
+      for (const [body, contentType] of [['{', 'application/json'], ['{"value":1e999}', 'application/json'], ['{}', 'text/plain']]) {
+        await test(extension + ' invalid semantic input fails closed ' + body, async () => { assert.throws(() => helper.narratorSemanticInputDigest(body, contentType)); });
+      }
     }
     for (const extension of ['ts', 'js']) for (const provider of ['google', 'elevenlabs']) {
       const label = extension + ' ' + provider;

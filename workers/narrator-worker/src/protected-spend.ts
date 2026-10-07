@@ -43,11 +43,14 @@ function canonical(value: unknown): string {
   need(keys.every(k => /^[A-Za-z_][A-Za-z0-9_]*$/.test(k)), 'ambiguous protected key');
   return `{${keys.map(k => `${canonical(k)}:${canonical(object[k])}`).join(',')}}`;
 }
-export function narratorSemanticInputDigest(body: string): string {
-  try { return narratorDigest(narratorSourceJson(JSON.parse(body))); }
-  catch { throw new NarratorSpendRejected('invalid narrator semantic JSON input'); }
-}
 export function narratorRequestDigest(endpoint: string, body: string): string { return narratorDigest(Buffer.concat([Buffer.from(`POST\n${endpoint}\n`), Buffer.from(body, 'utf8')])); }
+/** Matches the canonical gateway's permanent semantic input identity. Exact
+ * transport bytes and the leased source packet remain separately bound. */
+export function narratorSemanticInputDigest(body: string, contentType: string | null = 'application/json'): string {
+  need(contentType?.split(';')[0].trim().toLowerCase() === 'application/json', 'narrator semantic JSON content type required');
+  try { return narratorDigest(narratorSourceJson(JSON.parse(body))); }
+  catch { throw new NarratorSpendRejected('invalid narrator semantic JSON'); }
+}
 export function narratorHeaderBindings(headers: HeadersInit) {
   const entries: [string, string][] = [];
   new Headers(headers).forEach((value, key) => entries.push([key, value]));
@@ -128,12 +131,13 @@ export async function paidNarratorFetch(provider: 'google' | 'elevenlabs', model
   need(provider === 'google' ? endpoint === 'https://texttospeech.googleapis.com/v1/text:synthesize' : parsed.origin === 'https://api.elevenlabs.io' && /^\/v1\/text-to-speech\/[^/]+$/.test(parsed.pathname), 'provider endpoint changed');
   need(typeof request.body === 'string' && Buffer.byteLength(request.body) > 0 && Buffer.byteLength(request.body) <= 1_048_576, 'exact bounded narrator bytes required');
   const body = request.body, headers = new Headers(request.headers), sourceSha = narratorExecutorSourceSha();
-  const requestDigest = narratorRequestDigest(endpoint, body), config = protectedBinding(requestDigest), accountHeaders = narratorHeaderBindings(headers);
+  const requestDigest = narratorRequestDigest(endpoint, body), semanticInputDigest = narratorSemanticInputDigest(body, headers.get('content-type'));
+  const config = protectedBinding(requestDigest), accountHeaders = narratorHeaderBindings(headers);
   if (provider === 'google') need(request.actualAccountId === config.accountId, 'protected Google account differs from actual ADC principal and quota project');
   const gatewaySource = sha(process.env.ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA, 40), gatewayUrl = config.gatewayUrl;
   const gatewayOrigin = nonempty(process.env.ASSET_FORGE_SPEND_GATEWAY_ORIGIN);
   need(new URL(gatewayUrl).origin === gatewayOrigin && new URL(gatewayOrigin).origin === gatewayOrigin, 'gateway differs from protected issuer origin');
-  const fields = { job_id: config.jobId, worker_id: config.workerId, executor_repository: REPOSITORY, executor_source_sha: sourceSha, gateway_repository: GATEWAY_REPOSITORY, gateway_source_sha: gatewaySource, consumer: 'jobs-narrator', tenant_sha256: narratorDigest(nonempty(session.job.tenantId)), provider, account_id: config.accountId, ...accountHeaders, source_input_sha256: session.inputDigest, semantic_input_sha256: narratorSemanticInputDigest(body), content_type: nonempty(headers.get('content-type')), request_sha256: requestDigest, endpoint, model: nonempty(model), asset: `${nonempty(session.job.tenantId)}/${nonempty(session.job.jobId)}/narrator.tts`, request_size: String(Buffer.byteLength(body)) };
+  const fields = { job_id: config.jobId, worker_id: config.workerId, executor_repository: REPOSITORY, executor_source_sha: sourceSha, gateway_repository: GATEWAY_REPOSITORY, gateway_source_sha: gatewaySource, consumer: 'jobs-narrator', tenant_sha256: narratorDigest(nonempty(session.job.tenantId)), provider, account_id: config.accountId, ...accountHeaders, source_input_sha256: session.inputDigest, semantic_input_sha256: semanticInputDigest, content_type: nonempty(headers.get('content-type')), request_sha256: requestDigest, endpoint, model: nonempty(model), asset: `${nonempty(session.job.tenantId)}/${nonempty(session.job.jobId)}/narrator.tts`, request_size: String(Buffer.byteLength(body)) };
   const verifyBinding = () => {
     current(session);
     need(narratorExecutorSourceSha() === sourceSha && process.env.ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA === gatewaySource, 'narrator execution source changed');
@@ -156,6 +160,14 @@ export async function paidNarratorFetch(provider: 'google' | 'elevenlabs', model
   need(executor.binding_version === 2 && authority.repository === REPOSITORY && authority.sha === sourceSha, 'protected narrator source authority changed');
   const bound = { job_id: job.job_id, worker_id: executor.worker_id, executor_repository: executor.repository, executor_source_sha: executor.source_sha, gateway_repository: executor.gateway_repository, gateway_source_sha: executor.gateway_source_sha, consumer: job.consumer, tenant_sha256: executor.tenant_sha256, provider: job.provider, account_id: job.account_id, credential_sha256: executor.credential_sha256, source_input_sha256: executor.source_input_sha256, semantic_input_sha256: executor.semantic_input_sha256, semantic_headers_sha256: executor.semantic_headers_sha256, content_type: executor.content_type, request_sha256: executor.request_sha256, endpoint: executor.endpoint, model: job.model_version, asset: executor.asset, request_size: executor.request_size };
   need(narratorSourceJson(bound) === narratorSourceJson(fields), 'protected narrator exact request binding changed');
+  const controls = record(envelope.protected_controls);
+  need(controls.provider === provider && controls.account_id === config.accountId && controls.trusted_readback === true
+    && controls.verified === true && controls.enforcement_source_sha === gatewaySource
+    && narratorSourceJson(controls.binding) === narratorSourceJson(fields), 'protected narrator deployment control binding changed');
+  fresh(controls, 'observed_at');
+  for (const key of ['credential_sha256', 'semantic_headers_sha256', 'source_input_sha256', 'semantic_input_sha256', 'content_type'] as const) {
+    need(controls[key] === fields[key], 'protected narrator controls transport changed');
+  }
   const price = record(envelope.protected_pricing), rates = record(price.rates);
   need(price.provider === provider && price.account_id === config.accountId && price.model_version === model && price.request_sha256 === requestDigest && price.trusted_readback === true, 'protected narrator pricing request changed');
   for (const key of ['credential_sha256', 'semantic_headers_sha256', 'source_input_sha256', 'semantic_input_sha256', 'content_type'] as const) need(price[key] === fields[key], 'protected narrator pricing transport changed');
@@ -168,13 +180,16 @@ export async function paidNarratorFetch(provider: 'google' | 'elevenlabs', model
   if (request.credentialExpiresAt !== undefined) need(Number.isFinite(request.credentialExpiresAt) && request.credentialExpiresAt > Date.now() + runtime * 1000, 'provider credential expires inside approved lifetime');
   const jobDigest = narratorDigest(canonical(Object.fromEntries(Object.entries(job).filter(([key]) => key !== 'approval' && key !== 'attempts'))));
   await verifyCurrent();
-  const reservationStartedAt = Date.now(), localDeadline = Math.min(preflightExpiry, timestamp(price.expires_at), timestamp(rates.expires_at), reservationStartedAt + runtime * 1000);
+  const reservationStartedAt = Date.now(), localDeadline = Math.min(preflightExpiry, timestamp(controls.expires_at), timestamp(price.expires_at), timestamp(rates.expires_at), reservationStartedAt + runtime * 1000);
   session.deadline = localDeadline;
   session.monotonicDeadline = Math.min(session.monotonicDeadline as number, performance.now() + localDeadline - reservationStartedAt);
-  session.verifyCurrent = async () => { await verifyCurrent(); fresh(price, 'observed_at'); fresh(rates, 'verified_at'); };
+  session.verifyCurrent = async () => { await verifyCurrent(); fresh(controls, 'observed_at'); fresh(price, 'observed_at'); fresh(rates, 'verified_at'); };
   await session.verifyCurrent();
   const admitted = await gateway('reserve', { ...fields, job_digest: jobDigest }, config.token, gatewayUrl);
   need(admitted.provider_call_authorized === true && admitted.execution_performed === false && admitted.executor_source_sha === sourceSha && admitted.gateway_source_sha === gatewaySource && admitted.worker_id === config.workerId && admitted.job_digest === jobDigest && admitted.max_runtime_seconds === runtime, 'invalid authenticated narrator reservation');
+  for (const key of ['account_id', 'credential_sha256', 'semantic_headers_sha256', 'source_input_sha256', 'semantic_input_sha256', 'content_type'] as const) {
+    need(admitted[key] === fields[key], 'protected narrator reserved request changed');
+  }
   session.fields = fields; session.token = config.token; session.gatewayUrl = gatewayUrl; session.attemptId = nonempty(admitted.attempt_id);
   const reservedAt = timestamp(admitted.reserved_at), admittedExpiry = timestamp(admitted.admission_expires_at);
   need(reservedAt >= reservationStartedAt && reservedAt <= Date.now() && admittedExpiry > reservedAt && admittedExpiry <= preflightExpiry && admittedExpiry <= reservedAt + runtime * 1000, 'protected reservation extends verified lifetime');

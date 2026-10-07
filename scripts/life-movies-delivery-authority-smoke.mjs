@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import crypto from 'node:crypto';
+import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
@@ -15,15 +16,15 @@ const sourceDir = sourceArg < 0 ? fileURLToPath(new URL('../', import.meta.url))
 const baseline = process.argv.includes('--prove-baseline');
 const clone = (value) => structuredClone(value);
 const digest = (value) => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const tenantId = 'synthetic-tenant', userId = 'synthetic-owner', projectId = 'synthetic-project';
+export const tenantId = 'synthetic-tenant', userId = 'synthetic-owner', projectId = 'synthetic-project';
 const planId = `lmp_${'a'.repeat(24)}`, childIds = ['synthetic-child-0001', 'synthetic-child-0002'];
 const assemblyId = 'synthetic-assembly-0001', bucket = 'synthetic-private-bucket';
 const consent = { purpose: 'life-movie.render', policyVersion: 'fixture-v1', decisionReceiptId: 'fixture-receipt' };
 const prefix = `tenants/${tenantId}/life-movies/${projectId}`;
 
-function harness() {
+export function harness() {
   const documents = new Map(), versions = new Map(), objects = new Map();
-  const state = { signs: [], downloads: 0, storageDeletes: 0, onSign: null, onDownload: null, beforeTransaction: null, now: Date.now() };
+  const state = { signs: [], metadataReads: [], downloads: 0, storageDeletes: 0, onObservation: null, onDownload: null, beforeTransaction: null, token: 'synthetic-token', now: Date.now() };
   class FixtureDate extends Date {
     constructor(...args) { super(...(args.length ? args : [state.now])); }
     static now() { return state.now; }
@@ -74,7 +75,7 @@ function harness() {
   };
   function artifact(kind, role, id) {
     const value = { kind, ref: `gs://${bucket}/${prefix}/${role}/${id}.${kind}`,
-      mimeType: kind === 'mp4' ? 'video/mp4' : 'application/x-subrip', checksum: 'a'.repeat(64) };
+      mimeType: kind === 'mp4' ? 'video/mp4' : 'application/x-subrip', checksum: crypto.createHash('sha256').update(kind === 'srt' ? '1\n00:00:00,000 --> 00:00:01,000\nSynthetic caption\n' : 'synthetic-video').digest('hex') };
     objects.set(value.ref, Buffer.from(kind === 'srt' ? '1\n00:00:00,000 --> 00:00:01,000\nSynthetic caption\n' : 'synthetic-video'));
     return value;
   }
@@ -92,11 +93,28 @@ function harness() {
     width: 320, height: 320, fps: 30, assemblyJobId: assemblyId, childJobIds: clone(childIds),
     segments: childIds.map((id, index) => ({ index, startMs: index * 15000, endMs: (index + 1) * 15000,
       childDigest: 'd'.repeat(64), jobId: id })) });
-  const storage = { bucket: (bucketName) => ({ file: (objectPath) => ({
+  const narratorId = 'synthetic-narrator-0001', sessionId = 'synthetic-session', narratorScriptId = 'synthetic-script';
+  const narratorRef = `gs://${bucket}/storytime/${userId}/${sessionId}/${narratorScriptId}/audio.mp3`;
+  objects.set(narratorRef, Buffer.from('synthetic-audio'));
+  set(`jobs/${narratorId}`, { jobId: narratorId, type: 'narrator.tts', jobType: 'narrator.tts', status: 'SUCCESS', ownerUid: userId, sourceSystem: 'urai-storytime', sourceSessionId: sessionId, sourceNarratorScriptId: narratorScriptId, consent: { ...consent, purpose: 'storytime.voiceover' }, payload: { text: 'synthetic story' }, output: { artifactPath: narratorRef, mimeType: 'audio/mpeg', size: 15 } });
+  const storage = { bucket: (bucketName) => ({ file: (objectPath, options) => ({
+    async getMetadata() {
+      if (options?.generation && options.generation !== '1') throw new Error('private_media_missing');
+      state.metadataReads.push(`gs://${bucketName}/${objectPath}`);
+      await state.onObservation?.(state.metadataReads.length);
+      const body = objects.get(`gs://${bucketName}/${objectPath}`);
+      if (!body) throw new Error('private_media_missing');
+      return [{ generation: options?.generation || '1', size: body.length }];
+    },
     async getSignedUrl(options) {
       state.signs.push({ ref: `gs://${bucketName}/${objectPath}`, options });
-      await state.onSign?.(state.signs.length);
+      await state.onObservation?.(state.signs.length);
       return [`https://fixture.invalid/private/${state.signs.length}`];
+    },
+    createReadStream() {
+      const body = objects.get(`gs://${bucketName}/${objectPath}`);
+      if (!body) throw new Error('private_media_missing');
+      return Readable.from((function* () { for (let i = 0; i < body.length; i += 64 * 1024) yield body.subarray(i, i + 64 * 1024); })(), { objectMode: false });
     },
     async download() { state.downloads++; await state.onDownload?.(); return [objects.get(`gs://${bucketName}/${objectPath}`) || Buffer.from('')]; },
     async delete() { state.storageDeletes++; objects.delete(`gs://${bucketName}/${objectPath}`); },
@@ -107,11 +125,11 @@ function harness() {
     const source = fs.readFileSync(path.join(sourceDir, 'functions/src/jobs', filename), 'utf8');
     vm.runInNewContext(ts.transpileModule(source, { compilerOptions: {
       module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
-    } }).outputText, { exports, Buffer, console, Date: FixtureDate, process: { env: { GCS_BUCKET_NAME: bucket, URAI_ENV: 'test' } },
+    } }).outputText, { exports, Buffer, console, Date: FixtureDate, setTimeout, clearTimeout, AbortController, process: { env: { GCS_BUCKET_NAME: bucket, URAI_ENV: 'test' } },
       require(name) {
         if (name === 'firebase-admin/firestore') return { FieldValue, getFirestore: () => db };
         if (name === 'firebase-admin/storage') return { getStorage: () => storage };
-        if (name === 'firebase-functions/params') return { defineSecret: () => ({ value: () => 'synthetic-token' }) };
+        if (name === 'firebase-functions/params') return { defineSecret: () => ({ value: () => state.token }) };
         if (name === 'firebase-functions/v2/https') return { onRequest: (_options, handler) => handler };
         if (name === 'ulid') return { ulid: () => 'synthetic-unused-id' };
         if (name.endsWith('/firestore-paths.js')) return { jobDoc: (id) => ref(`jobs/${id}`), jobQueueEntryDoc: (id) => ref(`jobQueue/${id}`) };
@@ -121,14 +139,16 @@ function harness() {
           buildIdempotencyBindingId: digest, buildRequestFingerprint: (_type, value) => digest(value) };
         if (name.endsWith('/sceneTruthReceipt.js')) return { assertSceneTruthReceiptValue() {} };
         if (name.endsWith('/studioLifeMovieLongformContract.js')) return { StudioLifeMovieLongformPayloadSchema: z.any(), LIFE_MOVIE_LONGFORM_BUDGET: { maxSegments: 180 } };
+        if (name.endsWith('/privateMediaDelivery.js')) return load('privateMediaDelivery.ts');
         if (name.endsWith('/studioLifeMovieContract.js')) return { StudioLifeMovieRenderPayloadSchema: z.any() };
         return require(name);
       },
     });
-    return exports[exported];
+    return exported ? exports[exported] : exports;
   }
   const bridges = { short: load('studioLifeMovieBridge.ts', 'studioLifeMovieBridge'),
-    long: load('studioLifeMovieLongformBridge.ts', 'studioLifeMovieLongformBridge') };
+    long: load('studioLifeMovieLongformBridge.ts', 'studioLifeMovieLongformBridge'),
+    narrator: load('storytimeNarratorBridge.ts', 'storytimeNarratorBridge') };
   async function invoke(form, action) {
     const req = { method: 'POST', get: () => 'Bearer synthetic-token',
       body: { action, tenantId, userId, ...(form === 'short' ? { jobId: childIds[0] } : { planId }) } };
@@ -137,7 +157,7 @@ function harness() {
     await bridges[form](req, response); return response;
   }
   function change(name, update) { const value = clone(documents.get(name)); update(value); set(name, value); }
-  return { state, invoke, change, set, get: (name) => clone(documents.get(name)) };
+  return { state, invoke, change, set, bridges, objects, identities: { tenantId, userId, projectId, planId, childIds, assemblyId, narratorId, sessionId, narratorScriptId, narratorRef }, get: (name) => clone(documents.get(name)) };
 }
 
 let groups = 0, baselineLeaks = 0;
@@ -156,7 +176,11 @@ for (const form of ['short', 'long']) for (const action of ['playback', 'downloa
   const h = harness(), result = await h.invoke(form, action);
   assert.equal(result.statusCode, 200);
   assert.ok(result.body[action === 'playback' ? 'playback' : 'download']);
-  assert.equal(h.state.signs.every((entry) => entry.options.responseDisposition === (action === 'download' ? 'attachment' : 'inline')), true);
+  if (!baseline) {
+    assert.equal(h.state.signs.length, 0);
+    assert.equal(JSON.stringify(result.body).includes('requiresAuthorization'), true);
+    assert.equal(JSON.stringify(result.body).includes('gs://'), false);
+  }
   groups++;
 }
 console.log('[PASS] Ordinary owner playback and attachment export retain private deliveries on both bridges');
@@ -173,8 +197,8 @@ console.log('[PASS] Owner status projections contain neither raw object referenc
 
 for (const form of ['short', 'long']) for (const action of ['playback', 'download']) {
   const h = harness();
-  h.state.onSign = async () => {
-    h.state.onSign = null;
+  h.state.onObservation = async () => {
+    h.state.onObservation = null;
     const deleted = await h.invoke(form, 'delete-output'); assert.equal(deleted.statusCode, 200);
   };
   denied(await h.invoke(form, action), `${form} ${action} must not deliver after awaited owner deletion`);
@@ -184,11 +208,11 @@ console.log(baseline ? '[REPRODUCED] Storage signing can overlap owner output de
 
 for (const form of ['short', 'long']) for (const action of ['playback', 'download']) {
   const h = harness();
-  h.state.onSign = async () => { h.state.onSign = null; h.set('jobConsentBlocks/synthetic', { active: true }); };
+  h.state.onObservation = async () => { h.state.onObservation = null; h.set('jobConsentBlocks/synthetic', { active: true }); };
   denied(await h.invoke(form, action), `${form} ${action} must not deliver after canonical consent block`);
   groups++;
 }
-console.log(baseline ? '[REPRODUCED] Canonical consent revocation during signing can return predecessor media' : '[PASS] Canonical consent revocation during signing suppresses playback and export');
+console.log(baseline ? '[REPRODUCED] Canonical consent revocation during signing can return predecessor media' : '[PASS] Canonical consent revocation during metadata observation suppresses playback and export');
 
 for (const action of ['playback', 'download']) {
   const h = harness();
@@ -206,8 +230,8 @@ for (const form of ['short', 'long']) for (const mutate of [
   (job) => { job.derivativeAccessState = 'REVOKED'; },
   (job) => { job.outputDeletionState = 'PENDING'; },
 ]) {
-  const h = harness(); h.state.onSign = async () => {
-    h.state.onSign = null; h.change(`jobs/${form === 'short' ? childIds[0] : assemblyId}`, mutate);
+  const h = harness(); h.state.onObservation = async () => {
+    h.state.onObservation = null; h.change(`jobs/${form === 'short' ? childIds[0] : assemblyId}`, mutate);
   };
   denied(await h.invoke(form, 'playback'), `${form} changed output or authority must reject stale delivery`);
   groups++;
@@ -219,7 +243,7 @@ for (const mutate of [
   (plan) => { plan.segments[0].endMs = 14000; },
   (plan) => { plan.derivativeAccessState = 'DELETED'; },
 ]) {
-  const h = harness(); h.state.onSign = async () => { h.state.onSign = null; h.change(`studioLifeMovieLongformPlans/${planId}`, mutate); };
+  const h = harness(); h.state.onObservation = async () => { h.state.onObservation = null; h.change(`studioLifeMovieLongformPlans/${planId}`, mutate); };
   denied(await h.invoke('long', 'download'), 'changed parent authority cannot return a previous export');
   groups++;
 }
@@ -229,7 +253,7 @@ for (const form of ['short', 'long']) {
   const h = harness();
   h.change(`jobs/${childIds[0]}`, (job) => { job.output.outputs[0].ref = `gs://${bucket}/tenants/${tenantId}/life-movies/foreign-project/segments/private.mp4`; });
   const result = await h.invoke(form, 'playback'); denied(result, 'same-tenant foreign-project artifact must not be signed');
-  if (!baseline) assert.equal(h.state.signs.length, 0, 'validate all output locations before any signing');
+  if (!baseline) assert.equal(h.state.metadataReads.length, 0, 'validate all output locations before Storage observation');
   groups++;
 }
 for (const field of ['ownerUid', 'parentJobId', 'rootJobId']) {
@@ -239,15 +263,15 @@ for (const field of ['ownerUid', 'parentJobId', 'rootJobId']) {
   if (!baseline) assert.equal(h.state.signs.length, 0);
   groups++;
 }
-console.log(baseline ? '[REPRODUCED] Same-tenant foreign project or foreign child can be delivered' : '[PASS] Initial project, owner and parent validation precedes every Storage signature');
+console.log(baseline ? '[REPRODUCED] Same-tenant foreign project or foreign child can be delivered' : '[PASS] Initial project, owner and parent validation precedes Storage observation');
 
 for (const form of ['short', 'long']) {
-  const h = harness(); h.state.onSign = async () => { h.state.onSign = null; h.state.now += 5 * 60 * 1000 + 1; };
+  const h = harness(); h.state.onObservation = async () => { h.state.onObservation = null; h.state.now += 5 * 60 * 1000 + 1; };
   denied(await h.invoke(form, 'download'), 'expired delivery must not return unusable credentials'); groups++;
 }
-console.log(baseline ? '[REPRODUCED] Slow signing can return expired predecessor URLs' : '[PASS] Slow signing cannot return already expired delivery credentials');
+console.log(baseline ? '[REPRODUCED] Slow signing can return expired predecessor URLs' : '[PASS] Slow metadata observation cannot return expired delivery descriptors');
 
 if (baseline) {
   assert.ok(baselineLeaks >= 10, `expected concrete predecessor leaks, saw ${baselineLeaks}`);
   console.log(`Reproduced ${baselineLeaks} stale/foreign deliveries against predecessor HTTP source using synthetic adapters.`);
-} else console.log(`Life Movie delivery authority passed ${groups} actual HTTP-handler cases with synthetic transactional Firestore and Storage; deployed revocation, retained URL invalidation and real private playback remain unproven.`);
+} else console.log(`Life Movie delivery authority passed ${groups} actual HTTP-handler cases with synthetic transactional Firestore and Storage; no Storage signing; live deployment and real private playback remain unproven.`);

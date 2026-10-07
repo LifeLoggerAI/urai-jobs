@@ -49,7 +49,7 @@ cancels the parent.
 
 Current truth before runtime enablement:
 - consent context is propagated to every child, and parent-level revocation is surfaced fail-closed;
-- private segmented playback is implemented with owner/tenant/bucket/path checks and short-lived signed access;
+- private segmented playback is implemented with owner/tenant/bucket/path checks and short-lived authenticated byte access;
 - subtitle segmentation, boundary clipping, rebasing, and final merge are implemented fail-closed;
 - final assembly is implemented as a distinct `studio.assemble.video` queue job with checksum verification, gap preservation, caption merge, bounded output authority, cleanup, resume, cancellation, and deletion semantics;
 - source-level restart/resume/recovery contracts are implemented, but deployed Firestore/worker restart evidence is still required before enabling the runtime;
@@ -81,14 +81,14 @@ The hard-off long-form bridge now has an owner/tenant-bound `playback` action.
 It only succeeds when every child render is SUCCESS. It validates every child
 against the parent segment identity, requires video and SRT objects to remain
 under the exact tenant/project/segments prefix, and issues five-minute inline
-signed URLs. Raw storage refs are not returned. The playlist preserves each
+nonbearer delivery descriptors. Raw storage refs are not returned. The playlist preserves each
 segment's absolute start/end time and `gapBeforeMs`, plus video/subtitle
 checksums and a deterministic playlist digest.
 
 This is private segmented playback, not final single-file export and not public
 release authority.
 
-## Output signing authority
+## Private output byte authority
 
 Short and long-form Life Movie access now both require the output bucket to be
 explicitly configured by `GCS_BUCKET_NAME` or `URAI_STUDIO_OUTPUT_BUCKETS`
@@ -111,3 +111,10 @@ The long-form bridge also provides explicit resume for terminal failed children/
 Playback and attachment export now read coherent transactional authority before Storage work and again after signing/subtitle awaits, before releasing any URL or private captions. The response remains bound to the same owner, tenant, project, consent receipt, source payload, exact outputs and parent/child timeline. Permanent deletion/revocation fences reject delivery even if a stale success status remains. Every long-form child and final assembly is checked against its owner/project/parent binding and all artifact locations before the first signature. Slow signing cannot return already expired five-minute credentials. A changed authority returns an error without the prepared media response.
 
 `scripts/life-movies-delivery-authority-smoke.mjs` runs 38 actual HTTP-handler cases against synthetic transactional Firestore and Storage, covering owner deletion during signing, consent revocation during signing and subtitle downloads, source correction/output changes, permanent fences, foreign project/parent/owner bindings, ordinary private playback/export and expired credentials. The retained #170 predecessor source blobs reproduce 31 stale or foreign deliveries in the same fixtures. The new regression is part of `urai-jobs:verify`. This proves source behavior, not deployed Firestore concurrency, private playback, native device acceptance, or a final family movie. Signed URLs delivered before a later revocation still require object erasure or expiry; this bridge check does not certify immediate invalidation of previously delivered URLs.
+
+Private delivery now uses the existing authenticated bridge `deliver` action.
+Every admitted chunk rechecks the full parent/child consent, owner/deletion,
+source and output fingerprint. Immutable GCS generations are pinned. The
+controller retains its original 60-second timeout and each byte request has a
+55-second cleanup deadline within the descriptor expiry. Already delivered
+bytes cannot be recalled. No signed Storage URL is issued.

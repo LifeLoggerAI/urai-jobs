@@ -6,7 +6,9 @@ import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-const require = createRequire(import.meta.url);
+// Execute with the Functions workspace's declared frozen TypeScript/Axios graph.
+// Root dependency hoisting is not part of the canonical pnpm installation.
+const require = createRequire(new URL('../functions/package.json', import.meta.url));
 const ts = require('typescript');
 const axios = require('axios').create({ proxy: false, adapter: 'http' });
 const root = new URL('../', import.meta.url);

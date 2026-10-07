@@ -8,6 +8,7 @@ import { z } from 'zod';
 import type { Job, JobQueueEntry, JobStatus } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { assertPrivateMediaOwnerActive, inspectPrivateMedia, privateMediaDescriptor, streamPrivateMedia } from './privateMediaDelivery.js';
 import {
   bindingMatches,
   buildIdempotencyBindingId,
@@ -51,7 +52,13 @@ const PlanActionSchema = IdentitySchema.extend({
   planId: z.string().trim().regex(/^lmp_[A-Za-z0-9_-]{20,64}$/),
 }).strict();
 
-const RequestSchema = z.union([CreateSchema, PlanActionSchema]);
+const DeliverSchema = IdentitySchema.extend({ action: z.literal('deliver'),
+  planId: PlanActionSchema.shape.planId, kind: z.enum(['mp4', 'srt']),
+  artifact: z.string().regex(/^(?:final|segment:(?:0|[1-9][0-9]{0,2}))$/),
+  authorityHash: z.string().regex(/^[a-f0-9]{64}$/), expiresAt: z.number().int().positive(),
+  generation: z.string().regex(/^[1-9][0-9]*$/), disposition: z.enum(['inline', 'attachment']).default('inline'),
+}).strict();
+const RequestSchema = z.union([CreateSchema, PlanActionSchema, DeliverSchema]);
 
 function productionRuntime() {
   return new Set(['staging', 'prod', 'production']).has(String(process.env.URAI_ENV || process.env.NODE_ENV || '').toLowerCase());
@@ -559,6 +566,7 @@ async function loadPlanPlaybackAuthority(planId: string, tenantId: string, userI
       plan.assemblyJobId ? transaction.get(jobDoc(plan.assemblyJobId)) : Promise.resolve(null),
     ]);
     if (consentSnapshot.exists && consentSnapshot.data()?.active === true) throw new Error('life_movie_longform_consent_revoked');
+    await assertPrivateMediaOwnerActive(transaction, getFirestore(), userId);
     const jobs = snapshots.map((snapshot) => snapshot.exists ? snapshot.data() as Job : undefined);
     if (jobs.some((job) => !job || job.status !== 'SUCCESS')) throw new Error('longform_plan_not_ready_for_playback');
     const assembly = assemblySnapshot?.exists ? assemblySnapshot.data() as Job : undefined;
@@ -612,8 +620,8 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
   const requiredPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/segments/`;
   const allowedBuckets = allowedLifeMovieOutputBuckets();
   let finalFile: null | {
-    video: { url: string; mimeType: string; checksum?: string };
-    subtitles: { url: string; mimeType: string; checksum?: string };
+    video: { delivery: Record<string, unknown>; mimeType: string; checksum?: string };
+    subtitles: { delivery: Record<string, unknown>; mimeType: string; checksum?: string };
   } = null;
   if (assembly?.status === 'SUCCESS') {
     const video = boundedArtifact(assembly.output, 'mp4');
@@ -627,15 +635,11 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
       || !subtitleLocation.objectPath.startsWith(finalPrefix)) {
       throw new Error('longform_output_boundary_mismatch');
     }
-    const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
-      action: 'read', expires: expiresAtMs, responseDisposition: disposition, responseType: video.mimeType,
-    });
-    const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).getSignedUrl({
-      action: 'read', expires: expiresAtMs, responseDisposition: disposition, responseType: subtitle.mimeType,
-    });
+    const videoMetadata = await inspectPrivateMedia(videoLocation);
+    const subtitleMetadata = await inspectPrivateMedia(subtitleLocation);
     finalFile = {
-      video: { url: videoUrl, mimeType: video.mimeType, checksum: video.checksum },
-      subtitles: { url: subtitleUrl, mimeType: subtitle.mimeType, checksum: subtitle.checksum },
+      video: { delivery: { ...privateMediaDescriptor('mp4', authority.fingerprint, expiresAtMs, videoMetadata.generation), planId, artifact: 'final', disposition }, mimeType: video.mimeType, checksum: video.checksum },
+      subtitles: { delivery: { ...privateMediaDescriptor('srt', authority.fingerprint, expiresAtMs, subtitleMetadata.generation), planId, artifact: 'final', disposition }, mimeType: subtitle.mimeType, checksum: subtitle.checksum },
     };
   }
   const segmentAuthority: Array<{
@@ -663,18 +667,8 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
       throw new Error('longform_output_boundary_mismatch');
     }
 
-    const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
-      action: 'read',
-      expires: expiresAtMs,
-      responseDisposition: disposition,
-      responseType: video.mimeType,
-    });
-    const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).getSignedUrl({
-      action: 'read',
-      expires: expiresAtMs,
-      responseDisposition: disposition,
-      responseType: subtitle.mimeType,
-    });
+    const videoMetadata = await inspectPrivateMedia(videoLocation);
+    const subtitleMetadata = await inspectPrivateMedia(subtitleLocation);
 
     const previousEnd = index > 0 ? plan.segments[index - 1].endMs : 0;
     const gapBeforeMs = Math.max(0, descriptor.startMs - previousEnd);
@@ -691,8 +685,8 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
       startMs: descriptor.startMs,
       endMs: descriptor.endMs,
       gapBeforeMs,
-      video: { url: videoUrl, mimeType: video.mimeType, checksum: video.checksum },
-      subtitles: { url: subtitleUrl, mimeType: subtitle.mimeType, checksum: subtitle.checksum },
+      video: { delivery: { ...privateMediaDescriptor('mp4', authority.fingerprint, expiresAtMs, videoMetadata.generation), planId, artifact: `segment:${index}`, disposition }, mimeType: video.mimeType, checksum: video.checksum },
+      subtitles: { delivery: { ...privateMediaDescriptor('srt', authority.fingerprint, expiresAtMs, subtitleMetadata.generation), planId, artifact: `segment:${index}`, disposition }, mimeType: subtitle.mimeType, checksum: subtitle.checksum },
     });
   }
 
@@ -721,6 +715,28 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
     finalFile,
     segments,
   };
+}
+
+async function deliverPlanMedia(input: z.infer<typeof DeliverSchema>, request: any, response: any) {
+  const authority = await loadPlanPlaybackAuthority(input.planId, input.tenantId, input.userId, input.authorityHash);
+  const index = input.artifact === 'final' ? -1 : Number(input.artifact.split(':')[1]);
+  const job = index === -1 ? authority.assembly : authority.jobs[index];
+  if (!job || job.status !== 'SUCCESS' || (index >= 0 && index >= authority.plan.segments.length)) {
+    throw new Error('longform_plan_not_ready_for_playback');
+  }
+  const artifact = boundedArtifact(job.output, input.kind);
+  const location = parseGcsRef(artifact.ref);
+  const prefix = `tenants/${input.tenantId}/life-movies/${authority.plan.projectId}/${index === -1 ? 'final' : 'segments'}/`;
+  if (!allowedLifeMovieOutputBuckets().has(location.bucket) || !location.objectPath.startsWith(prefix)
+    || location.objectPath.includes('..') || location.objectPath.includes('\\')) throw new Error('longform_output_boundary_mismatch');
+  await streamPrivateMedia({ descriptor: { authorityHash: input.authorityHash, expiresAt: input.expiresAt, generation: input.generation }, location, mimeType: artifact.mimeType, checksum: artifact.checksum,
+    disposition: input.disposition,
+    revalidate: async () => {
+      if (!authorized(request.get('authorization') || '')) throw new Error('unauthorized');
+      const current = await loadPlanPlaybackAuthority(input.planId, input.tenantId, input.userId, input.authorityHash);
+      if (!authorized(request.get('authorization') || '')) throw new Error('unauthorized');
+      return current;
+    }, request, response });
 }
 
 async function resumePlan(planId: string, tenantId: string, userId: string) {
@@ -1016,6 +1032,9 @@ export const studioLifeMovieLongformBridge = onRequest({
   }
 
   try {
+    if (parsed.data.action === 'deliver') {
+      await deliverPlanMedia(parsed.data, req, res); return;
+    }
     if (parsed.data.action === 'create') {
       const result = await createPlan(parsed.data);
       res.status(result.deduplicated ? 200 : 202).json({ ok: true, status: 'queued', ...result });
@@ -1055,7 +1074,9 @@ export const studioLifeMovieLongformBridge = onRequest({
     const result = await cancelPlan(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);
     res.status(200).json({ ok: true, cancellation: result });
   } catch (error) {
-    const code = error instanceof Error ? error.message : 'longform_bridge_failed';
+    if (res.headersSent || res.destroyed) return;
+    const rawCode = error instanceof Error ? error.message : '';
+    const code = /^[a-z0-9_]{1,120}$/.test(rawCode) ? rawCode : 'private_media_delivery_unavailable';
     const status = code === 'longform_plan_not_found' ? 404
       : code === 'longform_plan_boundary_mismatch' ? 403
       : code === 'longform_output_boundary_mismatch' ? 403
