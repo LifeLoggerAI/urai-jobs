@@ -1,6 +1,11 @@
 const SH0 = 0.28209479177387814;
 const FIELD_SIZES = { float: 4, float32: 4, double: 8, float64: 8, uchar: 1, uint8: 1 };
 const REQUIRED = ['x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity', 'scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3'];
+// Match Spatial's bounded streaming decoder; accepted producer bytes must be
+// valid inputs to the consumer before private runtime admission is considered.
+const MAX_ABS_POSITION = 1e7;
+const MAX_GAUSSIAN_SCALE = 1e4;
+const MIN_GAUSSIAN_SCALE = 1e-7;
 
 function packageGaussian(input, { maxRecords = 2000000, maxBytes = 512 * 1024 * 1024 } = {}) {
   if (!Buffer.isBuffer(input) || input.length > maxBytes) throw new Error('GAUSSIAN_SIZE_LIMIT');
@@ -25,6 +30,7 @@ function packageGaussian(input, { maxRecords = 2000000, maxBytes = 512 * 1024 * 
   const start = end + 'end_header\n'.length;
   if (input.length !== start + count * stride || REQUIRED.some((name) => !fields.some((field) => field.name === name))) throw new Error('GAUSSIAN_LAYOUT_INVALID');
   const output = Buffer.alloc(count * 32), min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  let visible = 0;
   const byte = (value) => Math.max(0, Math.min(255, Math.round(value)));
   for (let i = 0; i < count; i++) {
     const values = {};
@@ -36,18 +42,22 @@ function packageGaussian(input, { maxRecords = 2000000, maxBytes = 512 * 1024 * 
     }
     const base = i * 32;
     for (let axis = 0; axis < 3; axis++) {
-      const position = values[['x', 'y', 'z'][axis]], scale = Math.exp(values[`scale_${axis}`]);
-      if (!Number.isFinite(scale) || Math.fround(scale) <= 0 || scale > 1e6 || Math.abs(position) > 1e9) throw new Error('GAUSSIAN_RANGE_INVALID');
+      const position = values[['x', 'y', 'z'][axis]], scale = Math.fround(Math.exp(values[`scale_${axis}`]));
+      if (!Number.isFinite(scale) || scale < MIN_GAUSSIAN_SCALE || scale > MAX_GAUSSIAN_SCALE
+        || !Number.isFinite(Math.fround(scale * scale)) || Math.fround(scale * scale) === 0
+        || Math.abs(position) > MAX_ABS_POSITION) throw new Error('GAUSSIAN_RANGE_INVALID');
       output.writeFloatLE(position, base + axis * 4); output.writeFloatLE(scale, base + 12 + axis * 4);
       output[base + 24 + axis] = byte((0.5 + SH0 * values[`f_dc_${axis}`]) * 255);
       min[axis] = Math.min(min[axis], position - 3 * scale); max[axis] = Math.max(max[axis], position + 3 * scale);
     }
     output[base + 27] = byte(255 / (1 + Math.exp(-values.opacity)));
+    if (output[base + 27]) visible++;
     const rotation = [0, 1, 2, 3].map((axis) => values[`rot_${axis}`]);
     const length = Math.hypot(...rotation);
     if (!Number.isFinite(length) || length < 1e-12) throw new Error('GAUSSIAN_ROTATION_INVALID');
     rotation.forEach((value, axis) => { output[base + 28 + axis] = byte(128 + 128 * value / length); });
   }
+  if (!visible) throw new Error('GAUSSIAN_HAS_NO_VISIBLE_POINTS');
   return { runtime: output, records: count, bounds: { min, max } };
 }
 
