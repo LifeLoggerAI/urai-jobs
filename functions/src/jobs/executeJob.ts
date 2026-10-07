@@ -582,6 +582,30 @@ export const executeJob = onMessagePublished({
         return false;
       }
 
+      // Canonical revocation must win atomically even if the worker finished
+      // before asynchronous owner cleanup reaches this job.
+      const finalConsentContexts = jobConsentContexts(current);
+      if (current.ownerUid && finalConsentContexts.length > 0) {
+        const finalBlocks = await Promise.all(finalConsentContexts.map(context =>
+          transaction.get(consentBlockRef(current.ownerUid!, context.purpose))));
+        if (finalBlocks.some(snapshot => snapshot.exists && snapshot.data()?.active === true)) {
+          const cancelledAt = FieldValue.serverTimestamp();
+          transaction.update(jobRef, {
+            status: 'CANCELLED', lease: FieldValue.delete(),
+            updatedAt: cancelledAt, completedAt: cancelledAt,
+            'execution.leaseToken': FieldValue.delete(), 'execution.completedAt': cancelledAt,
+            'execution.asyncCallbackPending': false,
+            'execution.callbackTokenHash': FieldValue.delete(),
+            'execution.callbackLeaseToken': FieldValue.delete(),
+            'execution.callbackDeadlineAt': FieldValue.delete(),
+          });
+          transaction.set(queueRef, {
+            jobId, status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: cancelledAt,
+          }, { merge: true });
+          return false;
+        }
+      }
+
       if (['memory.private-source.transcribe','memory.private-source.index'].includes(jobType)
         && !await canFinalizePrivateSource(db, transaction, current, result)) return false;
 
@@ -614,7 +638,7 @@ export const executeJob = onMessagePublished({
       await appendJobLog(jobId, {
         level: 'warn',
         source: 'executeJob',
-        message: 'Worker result was not applied because the job state or lease changed.',
+        message: 'Worker result was not applied because job state, lease or canonical consent changed.',
         metadata: { jobType },
       });
       return;

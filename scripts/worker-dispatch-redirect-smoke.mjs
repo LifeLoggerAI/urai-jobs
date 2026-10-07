@@ -13,6 +13,7 @@ const root = new URL('../', import.meta.url);
 const baselinePath = process.argv.find(value => value.startsWith('--baseline-source='));
 const original = fs.readFileSync(baselinePath ? baselinePath.slice('--baseline-source='.length) : new URL('functions/src/jobs/executeJob.ts', root), 'utf8');
 let cases = 0;
+const reproduceFinalRevocation = process.argv.includes('--reproduce-final-revocation');
 function compile(source, dependencies, environment) {
   const exports = {};
   const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
@@ -70,7 +71,7 @@ function fixture(jobType, origin, extra = {}) {
   };
   imports['../privacy/consentBlocks.js'] = compile(fs.readFileSync(new URL('functions/src/privacy/consentBlocks.ts', root), 'utf8'), name => name === 'node:crypto' ? require(name) : imports[name], environment);
   const handler = compile(original, name => { assert.ok(Object.hasOwn(imports, name), name); return imports[name]; }, environment).executeJob;
-  return { docs, logs, job, execute: () => handler({ data: { message: { json: { jobId: job.jobId, leaseToken: 'synthetic-lease' } } } }) };
+  return { docs, logs, job, revokeConsent: () => docs.set(imports['../privacy/consentBlocks.js'].consentBlockRef(job.ownerUid, job.consent.purpose).path, { active: true }), execute: () => handler({ data: { message: { json: { jobId: job.jobId, leaseToken: 'synthetic-lease' } } } }) };
 }
 async function listen(server) { server.listen(0, '127.0.0.1'); await once(server, 'listening'); return 'http://127.0.0.1:' + server.address().port; }
 async function close(server) { server.closeAllConnections(); await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
@@ -86,7 +87,7 @@ async function scenario(jobType, status, sameOrigin, mode = 'redirect') {
     received.push(input);
     if (mode === 'redirect') { res.writeHead(status, { location: (sameOrigin ? origin : sinkOrigin) + '/redirected' }); res.end(); }
     else if (mode === 'hang') { /* The synthetic timeout closes this request. */ }
-    else { res.writeHead(status, { 'content-type': 'application/json' }); res.end('{"ok":true,"fixture":"owned-worker-response"}'); }
+    else { if (mode === 'revoked') f.revokeConsent(); res.writeHead(status, { 'content-type': 'application/json' }); res.end('{"ok":true,"fixture":"owned-worker-response"}'); }
   });
   origin = await listen(worker);
   const f = fixture(jobType, origin, mode === 'hang' ? { URAI_JOBS_WORKER_TIMEOUT_MS: '40' } : {});
@@ -99,14 +100,21 @@ async function scenario(jobType, status, sameOrigin, mode = 'redirect') {
     assert.equal(JSON.parse(received[0].body).payload.text, f.job.payload.text);
     assert.equal(received[0].path, registry.workerRouteForJobType(jobType));
     const final = f.docs.get('jobs/' + f.job.jobId);
-    if (baselinePath && mode === 'redirect') {
+    if (reproduceFinalRevocation && mode === 'revoked') {
+      assert.equal(final.status, 'SUCCESS', 'predecessor finalized after canonical revocation');
+      assert.equal(final.output.fixture, 'owned-worker-response');
+    } else if (baselinePath && mode === 'redirect') {
       assert.equal(escaped.length, 1, 'baseline redispatch must be reproduced');
       assert.equal(JSON.parse(escaped[0].body).payload.text, f.job.payload.text, 'actual private body was replayed');
       if (sameOrigin) assert.equal(escaped[0].authorization, received[0].authorization, 'same-origin worker authority was replayed');
       assert.equal(final.status, 'SUCCESS');
     } else {
       assert.equal(escaped.length, 0, 'private body and worker authority must never reach a redirect target');
-      if (mode === 'redirect' || mode === 'hang') { assert.equal(final.status, 'DEAD'); assert.equal(final.output, undefined); assert.equal(final.result, undefined); }
+      if (mode === 'revoked') {
+        assert.equal(final.status, 'CANCELLED'); assert.equal(final.output, undefined); assert.equal(final.result, undefined);
+        assert.equal(final.execution.leaseToken, undefined); assert.equal(final.execution.asyncCallbackPending, false);
+        assert.equal(f.docs.get('jobQueue/' + f.job.jobId).status, 'CANCELLED');
+      } else if (mode === 'redirect' || mode === 'hang') { assert.equal(final.status, 'DEAD'); assert.equal(final.output, undefined); assert.equal(final.result, undefined); }
       else if (status === 202) { assert.equal(final.status, 'RUNNING'); assert.equal(final.output, undefined); }
       else { assert.equal(final.status, 'SUCCESS'); assert.equal(final.output.fixture, 'owned-worker-response'); }
     }
@@ -114,7 +122,11 @@ async function scenario(jobType, status, sameOrigin, mode = 'redirect') {
     console.log('[PASS] ' + jobType + ' ' + mode + ' ' + status + ' ' + (sameOrigin ? 'same-origin' : 'cross-origin'));
   } finally { await close(worker); await close(sink); }
 }
-if (baselinePath) {
+if (reproduceFinalRevocation) {
+  assert.ok(baselinePath, 'reproduction requires exact predecessor source');
+  for (const [jobType] of routes) await scenario(jobType, 200, true, 'revoked');
+  console.log('[REPRODUCED] ' + cases + ' actual dispatcher results committed after canonical consent revocation');
+} else if (baselinePath) {
   for (const status of [307, 308]) for (const sameOrigin of [true, false]) await scenario('studio.render.video', status, sameOrigin);
   console.log('[REPRODUCED] ' + cases + ' actual Axios worker redirect redispatches from exact predecessor source');
 } else {
@@ -122,6 +134,7 @@ if (baselinePath) {
     for (const status of [301, 302, 303, 307, 308]) for (const sameOrigin of [true, false]) await scenario(jobType, status, sameOrigin);
     await scenario(jobType, 200, true, 'success');
     await scenario(jobType, 202, true, 'accepted');
+    await scenario(jobType, 200, true, 'revoked');
   }
   await scenario('narrator.tts', 0, true, 'hang');
   console.log('[PASS] Actual dispatcher/Axios loopback boundary: ' + cases + ' cases; no provider or private source used');
