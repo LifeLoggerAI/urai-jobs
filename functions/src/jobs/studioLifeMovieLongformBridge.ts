@@ -664,6 +664,13 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
   const db = getFirestore();
   const childRefs = plan.childJobIds.map((jobId) => jobDoc(jobId));
   return db.runTransaction(async (transaction) => {
+    // A resume may have loaded the parent before an owner deletion/cancel.
+    // Re-read its durable authority inside the same transaction as every write.
+    const currentPlanSnapshot = await transaction.get(planRef(planId));
+    if (!currentPlanSnapshot.exists) throw new Error('longform_plan_not_found');
+    const currentPlan = assertPlanOwner(currentPlanSnapshot.data() as StoredPlan, tenantId, userId);
+    if (currentPlan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
+    if (currentPlan.assemblyJobId !== plan.assemblyJobId) throw new Error('longform_plan_changed');
     const [snapshots, assemblySnapshot] = await Promise.all([
       childRefs.length ? transaction.getAll(...childRefs) : Promise.resolve([]),
       plan.assemblyJobId ? transaction.get(jobDoc(plan.assemblyJobId)) : Promise.resolve(null),
@@ -749,66 +756,84 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
 }
 
 async function deletePlanOutputs(planId: string, tenantId: string, userId: string) {
-  const plan = await loadPlan(planId, tenantId, userId);
   const db = getFirestore();
-  const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
-  const assemblySnapshotForDelete = plan.assemblyJobId ? await jobDoc(plan.assemblyJobId).get() : null;
   const allowedBuckets = allowedLifeMovieOutputBuckets();
-  const requiredPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/segments/`;
-  const deletions: Array<{ bucket: string; objectPath: string }> = [];
+  // Fence the parent and all attempts before an awaited storage operation. Keep
+  // output/result references until cleanup succeeds so a failure remains retryable.
+  const fenced = await db.runTransaction(async (transaction) => {
+    const parentSnapshot = await transaction.get(planRef(planId));
+    if (!parentSnapshot.exists) throw new Error('longform_plan_not_found');
+    const plan = assertPlanOwner(parentSnapshot.data() as StoredPlan, tenantId, userId);
+    const ids = [...plan.childJobIds, ...(plan.assemblyJobId ? [plan.assemblyJobId] : [])];
+    const refs = ids.map((id) => jobDoc(id));
+    const snapshots = refs.length ? await transaction.getAll(...refs) : [];
+    const locations = new Map<string, { bucket: string; objectPath: string }>();
+    const jobs: Array<{ id: string; ref: ReturnType<typeof jobDoc>; type: string; previousStatus: JobStatus; completedAt: unknown }> = [];
 
-  for (const snapshot of snapshots) {
-    if (!snapshot.exists) continue;
-    const job = snapshot.data() as Job;
-    const output = job.output as WorkerOutput | undefined;
-    for (const artifact of Array.isArray(output?.outputs) ? output!.outputs! : []) {
-      if (typeof artifact?.ref !== 'string' || !artifact.ref.startsWith('gs://')) continue;
-      const location = parseGcsRef(artifact.ref);
-      if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(requiredPrefix)) {
-        throw new Error('longform_output_boundary_mismatch');
+    for (const [index, snapshot] of snapshots.entries()) {
+      if (!snapshot.exists) continue;
+      const job = snapshot.data() as Job & { result?: unknown; outputDeletionPreviousStatus?: JobStatus };
+      const type = index < plan.childJobIds.length ? 'studio.render.video' : 'studio.assemble.video';
+      if (job.ownerUid !== userId || job.tenantId !== tenantId || (job.jobType || job.type) !== type
+        || job.sourceSystem !== 'urai-studio' || job.execution?.parentJobId !== planId
+        || job.execution?.rootJobId !== planId
+        || (job.payload as { projectId?: unknown } | undefined)?.projectId !== plan.projectId) {
+        throw new Error('longform_segment_binding_mismatch');
       }
-      deletions.push(location);
-    }
-  }
-
-  if (assemblySnapshotForDelete?.exists) {
-    const assembly = assemblySnapshotForDelete.data() as Job;
-    const output = assembly.output as WorkerOutput | undefined;
-    const finalPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/final/`;
-    for (const artifact of Array.isArray(output?.outputs) ? output!.outputs! : []) {
-      if (typeof artifact?.ref !== 'string' || !artifact.ref.startsWith('gs://')) continue;
-      const location = parseGcsRef(artifact.ref);
-      if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(finalPrefix)) {
-        throw new Error('longform_output_boundary_mismatch');
+      const requiredPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/${type === 'studio.render.video' ? 'segments' : 'final'}/`;
+      for (const value of [job.output, job.result]) {
+        const output = value as WorkerOutput | undefined;
+        for (const artifact of Array.isArray(output?.outputs) ? output!.outputs! : []) {
+          if (typeof artifact?.ref !== 'string' || !artifact.ref.startsWith('gs://')) continue;
+          const location = parseGcsRef(artifact.ref);
+          if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(requiredPrefix)
+            || location.objectPath.includes('..') || location.objectPath.includes('\\')) {
+            throw new Error('longform_output_boundary_mismatch');
+          }
+          locations.set(`${location.bucket}/${location.objectPath}`, location);
+        }
       }
-      deletions.push(location);
+      jobs.push({ id: ids[index], ref: refs[index], type,
+        previousStatus: job.outputDeletionPreviousStatus || job.status, completedAt: job.completedAt });
     }
-  }
+    const now = FieldValue.serverTimestamp();
+    for (const job of jobs) {
+      transaction.update(job.ref, {
+        status: 'CANCELLED', derivativeAccessState: 'DELETED', outputDeletionState: 'PENDING',
+        outputDeletionRequestedAt: now, outputDeletedBy: userId, updatedAt: now, completedAt: job.completedAt || now,
+        outputDeletionPreviousStatus: job.previousStatus,
+        lease: FieldValue.delete(), 'execution.leaseToken': FieldValue.delete(),
+        'execution.asyncCallbackPending': false, 'execution.callbackTokenHash': FieldValue.delete(),
+        'execution.callbackLeaseToken': FieldValue.delete(), 'execution.callbackDeadlineAt': FieldValue.delete(),
+      });
+      transaction.set(jobQueueEntryDoc(job.id), {
+        jobId: job.id, jobType: job.type, status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: now,
+      }, { merge: true });
+    }
+    transaction.update(planRef(planId), {
+      status: 'CANCELLED', derivativeAccessState: 'DELETED', outputDeletionState: 'PENDING',
+      outputDeletionRequestedAt: now, outputDeletedBy: userId, updatedAt: now,
+    });
+    return { jobs: jobs.map((job) => job.id), deletions: [...locations.values()] };
+  });
 
-  await Promise.all(deletions.map(({ bucket, objectPath }) =>
+  await Promise.all(fenced.deletions.map(({ bucket, objectPath }) =>
     getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true })));
 
   const now = FieldValue.serverTimestamp();
   const batch = db.batch();
-  for (const jobId of plan.childJobIds) {
+  for (const jobId of fenced.jobs) {
     batch.update(jobDoc(jobId), {
       output: FieldValue.delete(),
       result: FieldValue.delete(),
-      outputDeletedAt: now,
-      outputDeletedBy: userId,
-      updatedAt: now,
-    });
-  }
-  if (plan.assemblyJobId) {
-    batch.update(jobDoc(plan.assemblyJobId), {
-      output: FieldValue.delete(),
-      result: FieldValue.delete(),
+      outputDeletionState: 'COMPLETE',
       outputDeletedAt: now,
       outputDeletedBy: userId,
       updatedAt: now,
     });
   }
   batch.update(planRef(planId), {
+    outputDeletionState: 'COMPLETE',
     outputDeletedAt: now,
     outputDeletedBy: userId,
     updatedAt: now,
@@ -817,7 +842,7 @@ async function deletePlanOutputs(planId: string, tenantId: string, userId: strin
 
   return {
     planId,
-    deletedObjectCount: deletions.length,
+    deletedObjectCount: fenced.deletions.length,
     retainedSourceMedia: true,
   };
 }
