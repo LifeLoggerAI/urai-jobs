@@ -3,9 +3,10 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
+import { performance } from 'node:perf_hooks';
 
 type RecordValue = Record<string, unknown>;
-type Session = { job: RecordValue; inputDigest: string; submitted: boolean; controller: AbortController; deadline?: number; fields?: RecordValue; token?: string; attemptId?: string; requestId?: string; verifyCurrent?: () => Promise<void> };
+type Session = { job: RecordValue; inputDigest: string; submitted: boolean; controller: AbortController; deadline?: number; monotonicDeadline?: number; latestWallTime: number; fields?: RecordValue; token?: string; attemptId?: string; requestId?: string; verifyCurrent?: () => Promise<void> };
 const sessions = new AsyncLocalStorage<Session>();
 const SOURCE_PATHS = ['workers/narrator-worker/src/protected-spend.ts', 'workers/narrator-worker/src/protected-spend.js', 'workers/narrator-worker/src/handlers/narrator-tts.ts', 'workers/narrator-worker/src/handlers/narrator-tts.js'];
 const REPOSITORY = 'LifeLoggerAI/urai-jobs';
@@ -73,7 +74,10 @@ export function narratorExecutorSourceSha(): string {
   return expected;
 }
 function current(session: Session) {
-  need(!session.controller.signal.aborted && (!session.deadline || Date.now() < session.deadline), 'narrator deadline expired; reconcile before retry');
+  const now = Date.now();
+  need(now >= session.latestWallTime, 'narrator clock moved backwards; reconcile before retry');
+  session.latestWallTime = now;
+  need(!session.controller.signal.aborted && (!session.deadline || now < session.deadline) && (!session.monotonicDeadline || performance.now() < session.monotonicDeadline), 'narrator deadline expired; reconcile before retry');
   need(narratorDigest(narratorSourceJson(session.job)) === session.inputDigest, 'narrator source input changed');
 }
 async function boundedJson(response: Response) {
@@ -128,6 +132,7 @@ export async function paidNarratorFetch(provider: 'google' | 'elevenlabs', model
   const authorizationDeadline = timestamp(prepared.admission_expires_at);
   need(Date.now() < authorizationDeadline, 'protected preflight authorization expired');
   session.deadline = authorizationDeadline;
+  session.monotonicDeadline = performance.now() + authorizationDeadline - Date.now();
   const envelope = record(prepared.envelope), job = record(envelope.job), executor = record(job.executor), authority = record(job.authority), budget = record(job.budget);
   need(job.job_id === config.jobId && job.provider === provider && job.account_id === config.accountId && job.model_version === model && job.consumer === fields.consumer && job.rights_reviewed === true, 'protected narrator job changed');
   need(executor.binding_version === 2 && authority.repository === REPOSITORY && authority.sha === sourceSha, 'protected narrator source authority changed');
@@ -147,6 +152,7 @@ export async function paidNarratorFetch(provider: 'google' | 'elevenlabs', model
   // Anchor runtime before the awaited reservation; late delivery never restarts it.
   const reservationStartedAt = Date.now();
   session.deadline = Math.min(authorizationDeadline, timestamp(price.expires_at), timestamp(rates.expires_at), reservationStartedAt + runtime * 1000);
+  session.monotonicDeadline = Math.min(session.monotonicDeadline as number, performance.now() + session.deadline - reservationStartedAt);
   session.verifyCurrent = async () => { await verifyCurrent(); fresh(price, 'observed_at'); fresh(rates, 'verified_at'); };
   await session.verifyCurrent();
   const admitted = await gateway('reserve', { ...fields, job_digest: jobDigest }, config.token);
@@ -155,6 +161,7 @@ export async function paidNarratorFetch(provider: 'google' | 'elevenlabs', model
   const reservedAt = timestamp(admitted.reserved_at), admissionDeadline = timestamp(admitted.admission_expires_at);
   need(reservedAt >= reservationStartedAt && reservedAt <= Date.now() && admissionDeadline > reservedAt && admissionDeadline <= authorizationDeadline && admissionDeadline <= reservedAt + runtime * 1000, 'invalid protected reservation window');
   session.deadline = Math.min(session.deadline, admissionDeadline);
+  session.monotonicDeadline = Math.min(session.monotonicDeadline as number, performance.now() + session.deadline - Date.now());
   await session.verifyCurrent();
   if (request.credentialExpiresAt !== undefined) need(request.credentialExpiresAt > session.deadline, 'provider credential expired after reservation');
   // Freeze exact bytes/headers. Redirects and transport errors cannot trigger a second POST.
@@ -170,10 +177,10 @@ export async function withProtectedNarratorSession<T>(jobValue: unknown, run: ()
   for (const key of ['jobId', 'tenantId', 'ownerUid', 'leaseToken']) nonempty(job[key]);
   need((job.type || job.jobType) === 'narrator.tts', 'narrator job type required');
   need(!sessions.getStore(), 'nested narrator paid execution rejected');
-  const session: Session = { job, inputDigest: narratorDigest(narratorSourceJson(job)), submitted: false, controller: new AbortController() };
+  const session: Session = { job, inputDigest: narratorDigest(narratorSourceJson(job)), submitted: false, controller: new AbortController(), latestWallTime: Date.now() };
   return sessions.run(session, async () => {
     let outcome: 'succeeded' | 'failed' = 'failed';
-    const timer = setInterval(() => { if (session.deadline && Date.now() >= session.deadline) session.controller.abort(); }, 25);
+    const timer = setInterval(() => { if ((session.deadline && Date.now() >= session.deadline) || (session.monotonicDeadline && performance.now() >= session.monotonicDeadline) || Date.now() < session.latestWallTime) session.controller.abort(); }, 25);
     const wait = (work: Promise<T>) => new Promise<T>((resolve, reject) => {
       const abort = () => reject(new NarratorSpendRejected('narrator execution timed out; charge reconciliation required'));
       session.controller.signal.addEventListener('abort', abort, { once: true });

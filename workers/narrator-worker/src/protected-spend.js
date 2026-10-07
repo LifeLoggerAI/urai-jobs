@@ -13,6 +13,7 @@ const node_async_hooks_1 = require("node:async_hooks");
 const node_child_process_1 = require("node:child_process");
 const node_crypto_1 = require("node:crypto");
 const node_net_1 = require("node:net");
+const node_perf_hooks_1 = require("node:perf_hooks");
 const sessions = new node_async_hooks_1.AsyncLocalStorage();
 const SOURCE_PATHS = ['workers/narrator-worker/src/protected-spend.ts', 'workers/narrator-worker/src/protected-spend.js', 'workers/narrator-worker/src/handlers/narrator-tts.ts', 'workers/narrator-worker/src/handlers/narrator-tts.js'];
 const REPOSITORY = 'LifeLoggerAI/urai-jobs';
@@ -111,7 +112,10 @@ function narratorExecutorSourceSha() {
     return expected;
 }
 function current(session) {
-    need(!session.controller.signal.aborted && (!session.deadline || Date.now() < session.deadline), 'narrator deadline expired; reconcile before retry');
+    const now = Date.now();
+    need(now >= session.latestWallTime, 'narrator clock moved backwards; reconcile before retry');
+    session.latestWallTime = now;
+    need(!session.controller.signal.aborted && (!session.deadline || now < session.deadline) && (!session.monotonicDeadline || node_perf_hooks_1.performance.now() < session.monotonicDeadline), 'narrator deadline expired; reconcile before retry');
     need(narratorDigest(narratorSourceJson(session.job)) === session.inputDigest, 'narrator source input changed');
 }
 async function boundedJson(response) {
@@ -202,6 +206,7 @@ async function paidNarratorFetch(provider, model, request) {
     const authorizationDeadline = timestamp(prepared.admission_expires_at);
     need(Date.now() < authorizationDeadline, 'protected preflight authorization expired');
     session.deadline = authorizationDeadline;
+    session.monotonicDeadline = node_perf_hooks_1.performance.now() + authorizationDeadline - Date.now();
     const envelope = record(prepared.envelope), job = record(envelope.job), executor = record(job.executor), authority = record(job.authority), budget = record(job.budget);
     need(job.job_id === config.jobId && job.provider === provider && job.account_id === config.accountId && job.model_version === model && job.consumer === fields.consumer && job.rights_reviewed === true, 'protected narrator job changed');
     need(executor.binding_version === 2 && authority.repository === REPOSITORY && authority.sha === sourceSha, 'protected narrator source authority changed');
@@ -226,6 +231,7 @@ async function paidNarratorFetch(provider, model, request) {
     // Anchor runtime before the awaited reservation; late delivery never restarts it.
     const reservationStartedAt = Date.now();
     session.deadline = Math.min(authorizationDeadline, timestamp(price.expires_at), timestamp(rates.expires_at), reservationStartedAt + runtime * 1000);
+    session.monotonicDeadline = Math.min(session.monotonicDeadline, node_perf_hooks_1.performance.now() + session.deadline - reservationStartedAt);
     session.verifyCurrent = async () => { await verifyCurrent(); fresh(price, 'observed_at'); fresh(rates, 'verified_at'); };
     await session.verifyCurrent();
     const admitted = await gateway('reserve', { ...fields, job_digest: jobDigest }, config.token);
@@ -236,6 +242,7 @@ async function paidNarratorFetch(provider, model, request) {
     const reservedAt = timestamp(admitted.reserved_at), admissionDeadline = timestamp(admitted.admission_expires_at);
     need(reservedAt >= reservationStartedAt && reservedAt <= Date.now() && admissionDeadline > reservedAt && admissionDeadline <= authorizationDeadline && admissionDeadline <= reservedAt + runtime * 1000, 'invalid protected reservation window');
     session.deadline = Math.min(session.deadline, admissionDeadline);
+    session.monotonicDeadline = Math.min(session.monotonicDeadline, node_perf_hooks_1.performance.now() + session.deadline - Date.now());
     await session.verifyCurrent();
     if (request.credentialExpiresAt !== undefined)
         need(request.credentialExpiresAt > session.deadline, 'provider credential expired after reservation');
@@ -254,10 +261,10 @@ async function withProtectedNarratorSession(jobValue, run) {
         nonempty(job[key]);
     need((job.type || job.jobType) === 'narrator.tts', 'narrator job type required');
     need(!sessions.getStore(), 'nested narrator paid execution rejected');
-    const session = { job, inputDigest: narratorDigest(narratorSourceJson(job)), submitted: false, controller: new AbortController() };
+    const session = { job, inputDigest: narratorDigest(narratorSourceJson(job)), submitted: false, controller: new AbortController(), latestWallTime: Date.now() };
     return sessions.run(session, async () => {
         let outcome = 'failed';
-        const timer = setInterval(() => { if (session.deadline && Date.now() >= session.deadline)
+        const timer = setInterval(() => { if ((session.deadline && Date.now() >= session.deadline) || (session.monotonicDeadline && node_perf_hooks_1.performance.now() >= session.monotonicDeadline) || Date.now() < session.latestWallTime)
             session.controller.abort(); }, 25);
         const wait = (work) => new Promise((resolve, reject) => {
             const abort = () => reject(new NarratorSpendRejected('narrator execution timed out; charge reconciliation required'));
