@@ -1,10 +1,13 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { defineSecret } from 'firebase-functions/params';
 import { onRequest } from 'firebase-functions/v2/https';
 import { z } from 'zod';
 import { consentBlockRef } from '../privacy/consentBlocks.js';
+
+if (getApps().length === 0) initializeApp();
 
 const publisherToken = defineSecret('URAI_CAPTURED_REALITY_PUBLISHER_TOKEN');
 const engineToken = defineSecret('CAPTURED_REALITY_ENGINE_TOKEN');
