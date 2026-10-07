@@ -161,6 +161,16 @@ for (const form of ['short', 'long']) for (const action of ['playback', 'downloa
 }
 console.log('[PASS] Ordinary owner playback and attachment export retain private deliveries on both bridges');
 
+for (const form of ['short', 'long']) {
+  const result = await harness().invoke(form, 'status');
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body?.ok, true);
+  assert.equal(JSON.stringify(result.body).includes('gs://'), false);
+  assert.equal(JSON.stringify(result.body).includes('fixture.invalid'), false);
+  groups++;
+}
+console.log('[PASS] Owner status projections contain neither raw object references nor signed URLs');
+
 for (const form of ['short', 'long']) for (const action of ['playback', 'download']) {
   const h = harness();
   h.state.onSign = async () => {
