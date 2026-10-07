@@ -66,6 +66,15 @@ const db = {
   },
   batch: () => ({ delete() {}, set(target, patch) { if (target === jobRef) Object.assign(jobRecord, patch); }, commit: async () => {} }),
 };
+const policySource = fs.readFileSync('functions/src/privacy/dataRightsContinuationPolicy.ts', 'utf8');
+const policyExports = {};
+vm.runInNewContext(ts.transpileModule(policySource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
+  exports: policyExports,
+  require: (name) => require(name),
+  Error,
+  Number,
+  String,
+});
 const rightsExports = {};
 vm.runInNewContext(ts.transpileModule(rights, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
   exports: rightsExports, process: { env: { URAI_JOBS_DATA_RIGHTS_EXECUTION_MODE: 'protected-staging', GCLOUD_PROJECT: 'demo-private-staging', URAI_JOBS_DATA_RIGHTS_ALLOWED_PROJECT: 'demo-private-staging' } }, Buffer,
@@ -74,6 +83,7 @@ vm.runInNewContext(ts.transpileModule(rights, { compilerOptions: { module: ts.Mo
     : name === '../core/errors.js' ? { httpsError: (code, message) => Object.assign(new Error(message), { code }) }
     : name === '../core/gcs.js' ? { uploadToGcs: async () => 'opaque-private-export' }
     : name === './privateLifeModelDataRights.js' ? { assertPrivateDataRightsExportDestination: async () => {}, deleteOwnedPrivateLifeModel: async () => ({ unresolvedDomains: [] }), exportOwnedPrivateLifeModel: async () => ({ records: [], unresolvedDomains: [] }) }
+    : name === './dataRightsContinuationPolicy.js' ? policyExports
     : name === './capturedRealityDerivativeRevocation.js' ? { deleteCapturedRealityEngineJob: async () => { engineCalls++; if (failEngineOnce) { failEngineOnce = false; throw new Error('synthetic-engine-unavailable'); } } }
     : require(name),
 });
