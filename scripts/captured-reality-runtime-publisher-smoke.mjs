@@ -433,4 +433,24 @@ function seedCleanup(f, count, collection = 'capturedRealityRuntimeAdmissions') 
   assert.equal([...f.records].filter(([path]) => path.startsWith('capturedRealityRuntimeCleanup/')).length, 0);
   console.log('[PASS] successful admission atomically removes only its own non-admission publication intent');
 }
+{
+  const f = fixture({ afterSave({ records, put }) {
+    const [path, intent] = [...records].find(([path]) => path.startsWith('capturedRealityRuntimeCleanup/'));
+    put(path, { ...intent, ownerUid: 'synthetic_foreign_owner' });
+  } });
+  assert.equal((await f.request()).statusCode, 409); assert.equal(f.storage.size, 0);
+  assert.equal(f.records.has(receiptPath), false);
+  const foreign = [...f.records].find(([path]) => path.startsWith('capturedRealityRuntimeCleanup/'))[1];
+  assert.equal(foreign.ownerUid, 'synthetic_foreign_owner'); assert.equal(foreign.cleanupAcknowledgedAt, undefined);
+  assert.equal(foreign.publicationPending, true);
+  console.log('[PASS] final admission and compensation cannot erase or overwrite a reassigned publication intent');
+}
+{
+  const f = fixture({ afterSave({ records, put }) {
+    const [path, intent] = [...records].find(([path]) => path.startsWith('capturedRealityRuntimeCleanup/'));
+    put(path, { ...intent, runtimeByteSize: intent.runtimeByteSize + 1 });
+  } });
+  assert.equal((await f.request()).statusCode, 409); assert.equal(f.storage.size, 0); assert.equal(f.records.has(receiptPath), false);
+  console.log('[PASS] final admission binds the complete current publication intent rather than its old digest alone');
+}
 console.log('URAI_CR_PUBLISHER_SYNTHETIC_AUTHORITY_VALIDATION: complete; no private source/provider/runtime/device acceptance');

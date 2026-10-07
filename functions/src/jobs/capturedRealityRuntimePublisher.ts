@@ -126,6 +126,14 @@ function replayGeneration(receipt:any,binding:RuntimeBinding,jobId:string,assetI
     ||!/^\d+$/.test(String(receipt.get('storageGeneration')||''))) throw new Error('captured_reality_runtime_admission_conflict');
   return String(receipt.get('storageGeneration'));
 }
+function validatePublicationIntent(intent:any,binding:RuntimeBinding,jobId:string,assetId:string,bucketName:string,objectPath:string,allowFenced=false){
+  if(intent.get('schemaVersion')!=='urai-captured-reality-runtime-cleanup-v1'||intent.get('ownerUid')!==binding.ownerUid
+    ||intent.get('jobId')!==jobId||intent.get('assetId')!==assetId||intent.get('storageBucket')!==bucketName
+    ||intent.get('runtimeObject')!==objectPath||intent.get('runtimeAuthorityHash')!==authorityHash(binding)
+    ||intent.get('runtimeSha256')!==binding.runtimeSha||intent.get('runtimeByteSize')!==binding.byteSize
+    ||intent.get('spatialAuthorityHead')!==binding.spatialAuthorityHead
+    ||(!allowFenced&&(intent.get('revokedAt')||intent.get('cleanupAcknowledgedAt')))) throw new Error('captured_reality_publication_intent_conflict');
+}
 
 export const publishCapturedRealityRuntime=onRequest({
   secrets:[publisherToken,engineToken],cors:false,timeoutSeconds:120,memory:'1GiB',
@@ -168,10 +176,7 @@ export const publishCapturedRealityRuntime=onRequest({
       await currentAuthority(tx,db,jobRef,expectedRuntimeSha256,binding);
       const existing=await tx.get(intentRef);
       if(existing.exists){
-        if(existing.get('schemaVersion')!=='urai-captured-reality-runtime-cleanup-v1'||existing.get('ownerUid')!==ownerUid
-          ||existing.get('jobId')!==jobId||existing.get('assetId')!==assetId||existing.get('storageBucket')!==bucketName
-          ||existing.get('runtimeObject')!==objectPath||existing.get('runtimeAuthorityHash')!==authorityHash(binding)
-          ||existing.get('revokedAt')||existing.get('cleanupAcknowledgedAt')) throw new Error('captured_reality_publication_intent_conflict');
+        validatePublicationIntent(existing,binding,jobId,assetId,bucketName,objectPath);
         return;
       }
       tx.create(intentRef,{
@@ -205,7 +210,9 @@ export const publishCapturedRealityRuntime=onRequest({
 
     const result=await db.runTransaction(async tx=>{
       await currentAuthority(tx,db,jobRef,expectedRuntimeSha256,binding);
-      const freshReceipt=await tx.get(receiptRef);
+      const [freshReceipt,freshIntent]=await Promise.all([tx.get(receiptRef),tx.get(intentRef)]);
+      if(freshIntent.exists) validatePublicationIntent(freshIntent,binding,jobId,assetId,bucketName,objectPath);
+      else if(!freshReceipt.exists) throw new Error('captured_reality_publication_intent_missing');
       if(freshReceipt.exists){
         const admittedGeneration=replayGeneration(freshReceipt,binding,jobId,assetId,bucketName,objectPath);
         tx.delete(intentRef);
@@ -231,21 +238,34 @@ export const publishCapturedRealityRuntime=onRequest({
         // rejected admission. A simultaneous identical winner is replayed above.
         await getStorage().bucket(publishedObject.bucketName).file(publishedObject.objectPath)
           .delete({ignoreNotFound:true,ifGenerationMatch:publishedObject.generation});
-        if(publicationIntent) await publicationIntent.set({storageGeneration:publishedObject.generation,
-          publicationPending:false,cleanupPending:false,cleanupAcknowledgedAt:FieldValue.serverTimestamp()}, {merge:true});
+        if(publicationIntent){
+          const target=publishedObject,intentRef=publicationIntent;
+          await getFirestore().runTransaction(async tx=>{
+            const intent=await tx.get(intentRef);
+            if(!intent.exists) throw new Error('captured_reality_publication_intent_missing');
+            validatePublicationIntent(intent,target.binding,jobId,assetId,target.bucketName,target.objectPath,true);
+            tx.set(intentRef,{storageGeneration:target.generation,publicationPending:false,cleanupPending:false,
+              cleanupAcknowledgedAt:FieldValue.serverTimestamp()}, {merge:true});
+          });
+        }
       }catch{
         // Persist exact cleanup identity separately from admissions. A rejected
         // publication must never be represented as a usable runtime receipt,
         // and a Storage outage must leave a durable owner-scoped retry target.
         try{
           if(!publicationIntent) throw new Error('captured_reality_publication_intent_missing');
-          await publicationIntent.set({
+          const target=publishedObject,intentRef=publicationIntent;
+          await getFirestore().runTransaction(async tx=>{
+          const intent=await tx.get(intentRef);
+          if(intent.exists) validatePublicationIntent(intent,target.binding,jobId,assetId,target.bucketName,target.objectPath,true);
+          tx.set(intentRef,{
             schemaVersion:'urai-captured-reality-runtime-cleanup-v1',ownerUid:publishedObject.binding.ownerUid,
             jobId,assetId,runtimeSha256:publishedObject.binding.runtimeSha,
             storageBucket:publishedObject.bucketName,runtimeObject:publishedObject.objectPath,
             storageGeneration:publishedObject.generation,publicationPending:false,cleanupPending:true,
             candidateAcceptance:false,publicReleaseAuthorized:false,createdAt:FieldValue.serverTimestamp(),
           },{merge:true});
+          });
         }catch{
           console.error('Captured Reality rejected-runtime cleanup persistence failed',{jobId,assetId,code:'CR_RUNTIME_CLEANUP_PERSISTENCE_FAILED'});
         }
