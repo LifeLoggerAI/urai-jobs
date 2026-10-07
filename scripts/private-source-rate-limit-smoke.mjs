@@ -6,6 +6,9 @@ import { once } from 'node:events';
 const baseRequire=createRequire(new URL('../functions/package.json',import.meta.url));
 const ts=baseRequire('typescript');
 const compile=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
+// The index fixture loads the real production graph validator before worker build.
+const graphContract={};
+vm.runInNewContext(compile(fs.readFileSync('workers/private-life-model-index-provider/src/contracts.ts','utf8')),{exports:graphContract,Buffer});
 for(const workspace of ['private-source-worker','private-life-model-index-provider']){
   const require=createRequire(new URL(`../workers/${workspace}/package.json`,import.meta.url));
   const actualExpress=require('express');let server;
@@ -16,7 +19,7 @@ for(const workspace of ['private-source-worker','private-life-model-index-provid
     require:name=>name==='express'?express:name==='./protected-source-provider'?{
       registerProtectedSourceRoutes(app,deps){const exports={};vm.runInNewContext(compile(fs.readFileSync('workers/private-life-model-index-provider/src/protected-source-provider.ts','utf8')),
         {...context,exports,require});exports.registerProtectedSourceRoutes(app,deps);}
-    }:require(name)};
+    }:name==='./contracts.js'?graphContract:require(name)};
   vm.runInNewContext(compile(fs.readFileSync(`workers/${workspace}/src/index.ts`,'utf8')),context);
   assert.ok(server);await once(server,'listening');
   const url=`http://127.0.0.1:${server.address().port}${workspace==='private-source-worker'?'/execute-job':'/'}`;
@@ -29,6 +32,7 @@ for(const workspace of ['private-source-worker','private-life-model-index-provid
       assert.equal(result.status,503,'admitted requests still fail readiness without grants/keys');await result.text();}
     const blocked=await fetch(url,{method:'POST',headers:{authorization:'Bearer synthetic-rate-limit-token','content-type':'application/json'},body:JSON.stringify(body)});
     assert.equal(blocked.status,429);assert.equal((await blocked.json()).code,'PRIVATE_SOURCE_RATE_LIMIT');assert.ok(blocked.headers.get('ratelimit'));
+    if(workspace==='private-life-model-index-provider')assert.equal(blocked.headers.get('cache-control'),'no-store','rate-limited private responses must not be cached');
   }finally{await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}
   console.log(`[PASS] ${workspace}: actual HTTP admission capped at 60/minute before protected work; no provider/private execution`);
 }
