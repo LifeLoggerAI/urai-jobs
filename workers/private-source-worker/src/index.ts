@@ -10,6 +10,7 @@ const REQUEST_RECEIPT = /^req_[A-Za-z0-9_-]{12,128}$/;
 const SOURCE_HANDLE = /^psh_[A-Za-z0-9_-]{16,256}$/;
 const PRIVATE_REF = /^private:[A-Za-z0-9_./:-]{8,512}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
+const SOURCE_CONTRACT = 'urai-private-source-receipt-v2';
 const LIFE_MODEL_EVIDENCE_CLASSES = new Set([
   'SOURCE_CAPTURED',
   'SOURCE_DERIVED',
@@ -78,17 +79,19 @@ type PrivatePayload = {
   correlationTrigger?: 'initial-source' | 'new-source' | 'correction' | 'stronger-source';
 };
 
-function validateJob(body: any): { jobId: string; jobType: 'memory.private-source.transcribe' | 'memory.private-source.index'; ownerUid: string; payload: PrivatePayload } {
+function validateJob(body: any): { jobId: string; jobType: 'memory.private-source.transcribe' | 'memory.private-source.index'; ownerUid: string; leaseToken: string; payload: PrivatePayload } {
   const jobId = String(body?.jobId || body?.id || '').trim();
   const jobType = String(body?.jobType || body?.type || '').trim();
   const ownerUid = String(body?.ownerUid || '').trim();
+  const leaseToken = String(body?.leaseToken || '').trim();
   const payload = body?.payload && typeof body.payload === 'object' ? body.payload : {};
 
-  if (!jobId) throw new Error('jobId is required');
+  if (!/^[A-Za-z0-9._:-]{8,200}$/.test(jobId)) throw new Error('jobId is required');
+  if (!/^[A-Za-z0-9._:-]{8,256}$/.test(leaseToken)) throw new Error('trusted execution lease is required');
   if (!['memory.private-source.transcribe', 'memory.private-source.index'].includes(jobType)) {
     throw new Error('unsupported private-source job type');
   }
-  if (!ownerUid) throw new Error('server-owned ownerUid is required');
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(ownerUid)) throw new Error('server-owned ownerUid is required');
 
   const allowed = jobType === 'memory.private-source.index'
     ? ['correlationTrigger', 'locale', 'priorMemoryIndexRef', 'provenanceRef', 'requestReceipt', 'requestedPurpose', 'sourceReceiptRef', 'transcriptRef']
@@ -117,6 +120,7 @@ function validateJob(body: any): { jobId: string; jobType: 'memory.private-sourc
     jobId,
     jobType: jobType as 'memory.private-source.transcribe' | 'memory.private-source.index',
     ownerUid,
+    leaseToken,
     payload: {
       sourceReceiptRef: String(payload.sourceReceiptRef),
       requestedPurpose: String(payload.requestedPurpose) as PrivatePayload['requestedPurpose'],
@@ -136,7 +140,10 @@ function validateJob(body: any): { jobId: string; jobType: 'memory.private-sourc
 
 function readiness(jobType?: 'memory.private-source.transcribe' | 'memory.private-source.index') {
   const checks = {
-    workerAuth: Boolean(process.env.URAI_JOBS_WORKER_TOKEN) || !productionRuntime(),
+    workerAuth: Boolean(process.env.URAI_JOBS_WORKER_TOKEN),
+    sourceContract: process.env.URAI_PRIVATE_SOURCE_CONTRACT === SOURCE_CONTRACT,
+    executionEnabled: process.env.URAI_PRIVATE_SOURCE_EXECUTION_ENABLED === 'true',
+    executionAuthority: PRIVATE_REF.test(String(process.env.URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF || '')),
     sourceShaExact: exactSha() || !productionRuntime(),
     runtimeRevision: Boolean(process.env.K_REVISION) || !productionRuntime(),
     authorityUrl: Boolean(process.env.PRIVATE_SOURCE_AUTHORITY_URL),
@@ -150,7 +157,7 @@ function readiness(jobType?: 'memory.private-source.transcribe' | 'memory.privat
     && checks.sourceShaExact
     && checks.runtimeRevision
     && checks.authorityUrl
-    && checks.authorityToken;
+    && checks.authorityToken && checks.sourceContract && checks.executionEnabled && checks.executionAuthority;
   const transcribeReady = checks.transcribeUrl && checks.transcribeToken;
   const indexReady = checks.indexUrl && checks.indexToken;
 
@@ -188,6 +195,36 @@ app.get('/authz', requireWorkerAuth, (_req, res) => {
   res.status(200).send({ ok: true, service: 'private-source-worker', authorized: true });
 });
 
+async function authorize(job: ReturnType<typeof validateJob>) {
+  const authorityUrl = httpsUrl('PRIVATE_SOURCE_AUTHORITY_URL');
+  const authorization = await axios.post(`${authorityUrl}/authorize`, {
+    schemaVersion: SOURCE_CONTRACT, jobId: job.jobId, ownerUid: job.ownerUid, leaseToken: job.leaseToken,
+    sourceReceiptRef: job.payload.sourceReceiptRef, requestedPurpose: job.payload.requestedPurpose,
+    requestReceipt: job.payload.requestReceipt, idempotencyKey: job.jobId,
+  }, { timeout: 15000, maxRedirects: 0, maxContentLength: 96 * 1024,
+    headers: { Authorization: `Bearer ${process.env.PRIVATE_SOURCE_AUTHORITY_TOKEN}` }, validateStatus: () => true });
+  if (authorization.status !== 200 || authorization.data?.authorized !== true) throw new Error('private source denied');
+  const proof = authorization.data;
+  if (proof.schemaVersion !== SOURCE_CONTRACT || proof.ownerUid !== job.ownerUid || proof.jobId !== job.jobId
+    || proof.sourceReceiptRef !== job.payload.sourceReceiptRef || proof.requestedPurpose !== job.payload.requestedPurpose
+    || proof.leaseTokenHash !== crypto.createHash('sha256').update(job.leaseToken).digest('hex')
+    || proof.idempotencyKey !== job.jobId || proof.currentConsent !== true || proof.currentCorrection !== true) throw new Error('source authority ownership/purpose binding mismatch');
+  if (!SOURCE_HANDLE.test(String(proof.sourceHandle || ''))) throw new Error('authority returned an invalid opaque source handle');
+  if (!LIFE_MODEL_EVIDENCE_CLASSES.has(String(proof.evidenceClass || ''))) throw new Error('authority did not return a recognized historical evidence class');
+  if (authorization.data?.synthetic !== false) throw new Error('authority did not prove the authorized source is non-synthetic');
+  if (!SHA256.test(String(proof.sourceSha256 || '')) || !PRIVATE_REF.test(String(proof.sourceFixityRef || ''))
+    || !Number.isSafeInteger(proof.sourceByteLength) || proof.sourceByteLength < 1 || proof.sourceByteLength > 2 * 1024 ** 3
+    || !Number.isSafeInteger(proof.sourceRevision) || proof.sourceRevision < 1) throw new Error('source authority fixity binding mismatch');
+  return proof;
+}
+
+async function recheckAuthorization(job: ReturnType<typeof validateJob>, before: any) {
+  const after = await authorize(job);
+  for (const key of ['sourceHandle','evidenceClass','sourceFixityRef','sourceSha256','sourceByteLength','sourceRevision']) {
+    if (after[key] !== before[key]) throw new Error('source corrected/revoked during provider execution');
+  }
+}
+
 app.post('/execute-job', requireWorkerAuth, async (req, res) => {
   let job: ReturnType<typeof validateJob>;
   try {
@@ -207,44 +244,18 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
   }
 
   try {
-    const authorityUrl = httpsUrl('PRIVATE_SOURCE_AUTHORITY_URL');
-
-    const authorization = await axios.post(
-      `${authorityUrl}/authorize`,
-      {
-        sourceReceiptRef: job.payload.sourceReceiptRef,
-        ownerUid: job.ownerUid,
-        requestedPurpose: job.payload.requestedPurpose,
-        requestReceipt: job.payload.requestReceipt,
-      },
-      {
-        timeout: 15_000,
-        headers: { Authorization: `Bearer ${process.env.PRIVATE_SOURCE_AUTHORITY_TOKEN}` },
-        validateStatus: () => true,
-      },
-    );
-
-    if (authorization.status !== 200 || authorization.data?.authorized !== true) {
-      return res.status(403).send({ ok: false, code: 'PRIVATE_SOURCE_NOT_AUTHORIZED', error: 'Private source authorization denied.' });
-    }
-
-    const sourceHandle = String(authorization.data?.sourceHandle || '');
-    if (!SOURCE_HANDLE.test(sourceHandle)) {
-      throw new Error('authority returned an invalid opaque source handle');
-    }
-    const sourceEvidenceClass = String(authorization.data?.evidenceClass || '');
-    if (!LIFE_MODEL_EVIDENCE_CLASSES.has(sourceEvidenceClass)) {
-      throw new Error('authority did not return a recognized historical evidence class');
-    }
-    if (authorization.data?.synthetic !== false) {
-      throw new Error('authority did not prove the authorized source is non-synthetic');
-    }
+    const sourceProof = await authorize(job);
+    const sourceHandle = String(sourceProof.sourceHandle);
+    const sourceEvidenceClass = String(sourceProof.evidenceClass);
 
     if (job.jobType === 'memory.private-source.index') {
       const indexUrl = httpsUrl('PRIVATE_SOURCE_INDEX_URL');
       const provider = await axios.post(
         indexUrl,
         {
+          ownerUid: job.ownerUid, jobId: job.jobId, leaseToken: job.leaseToken, sourceReceiptRef: job.payload.sourceReceiptRef,
+          sourceSha256: sourceProof.sourceSha256, sourceFixityRef: sourceProof.sourceFixityRef,
+          sourceByteLength: sourceProof.sourceByteLength, sourceRevision: sourceProof.sourceRevision,
           sourceHandle,
           sourceEvidenceClass,
           transcriptRef: job.payload.transcriptRef,
@@ -256,7 +267,7 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
           idempotencyKey: job.jobId,
         },
         {
-          timeout: 120_000,
+          timeout: 120_000, maxRedirects: 0, maxContentLength: 96 * 1024,
           headers: { Authorization: `Bearer ${process.env.PRIVATE_SOURCE_INDEX_TOKEN}` },
           validateStatus: () => true,
         },
@@ -282,7 +293,14 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
       const backlogState = String(provider.data?.backlogState || '');
       const correlationRevision = Number(provider.data?.correlationRevision);
       const correlationTrigger = String(provider.data?.correlationTrigger || '');
-      const terminalBacklogStates = new Set(['INDEXED', 'DUPLICATE', 'CONFLICTED']);
+      const terminalBacklogStates = new Set(['QUARANTINED_OWNER_REVIEW', 'QUARANTINED_CONFLICTED']);
+      if (provider.data.ownerUid !== job.ownerUid || provider.data.jobId !== job.jobId
+        || provider.data.sourceReceiptRef !== job.payload.sourceReceiptRef || provider.data.requestedPurpose !== 'memory-index'
+        || provider.data.historicalSourceAuthority !== false || provider.data.reviewState !== 'OWNER_REVIEW_REQUIRED'
+        || !SHA256.test(String(provider.data.lineageSha256 || ''))
+        || provider.data.sourceSha256 !== sourceProof.sourceSha256 || provider.data.sourceRevision !== sourceProof.sourceRevision
+        || !SHA256.test(String(provider.data.transcriptSha256 || '')) || !SHA256.test(String(provider.data.provenanceSha256 || ''))
+        || provenanceRef !== job.payload.provenanceRef || sourceFixityRef !== sourceProof.sourceFixityRef) throw new Error('index provider owner/quarantine/lineage binding mismatch');
       const refs = [memoryIndexRef, entityGraphRef, temporalIndexRef, placeIndexRef, conflictSetRef, sceneTruthRef, provenanceRef, sourceFixityRef, dependencyGraphRef];
       if (refs.some((ref) => !PRIVATE_REF.test(ref)) || !SHA256.test(checksum)) {
         throw new Error('memory index provider response is missing private refs or integrity checksum');
@@ -309,6 +327,7 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
         throw new Error('memory index provider correlation trigger does not match the requested recorrelation cause');
       }
 
+      await recheckAuthorization(job, sourceProof);
       return res.status(200).send({
         ok: true,
         jobId: job.jobId,
@@ -331,6 +350,9 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
           correlationRevision,
           correlationTrigger,
           requestedPurpose: 'memory-index',
+          historicalSourceAuthority: false, reviewState: 'OWNER_REVIEW_REQUIRED', lineageSha256: provider.data.lineageSha256,
+          sourceSha256: sourceProof.sourceSha256, sourceRevision: sourceProof.sourceRevision,
+          transcriptSha256: provider.data.transcriptSha256, provenanceSha256: provider.data.provenanceSha256,
         },
       });
     }
@@ -339,6 +361,10 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
     const provider = await axios.post(
       transcribeUrl,
       {
+        schemaVersion: 'urai-private-source-transcript-v2', ownerUid: job.ownerUid, jobId: job.jobId,
+        leaseToken: job.leaseToken, sourceReceiptRef: job.payload.sourceReceiptRef,
+        sourceSha256: sourceProof.sourceSha256, sourceByteLength: sourceProof.sourceByteLength,
+        sourceFixityRef: sourceProof.sourceFixityRef, sourceRevision: sourceProof.sourceRevision,
         sourceHandle,
         sourceEvidenceClass,
         requestedPurpose: job.payload.requestedPurpose,
@@ -346,7 +372,7 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
         idempotencyKey: job.jobId,
       },
       {
-        timeout: 120_000,
+        timeout: 120_000, maxRedirects: 0, maxContentLength: 96 * 1024,
         headers: { Authorization: `Bearer ${process.env.PRIVATE_SOURCE_TRANSCRIBE_TOKEN}` },
         validateStatus: () => true,
       },
@@ -356,6 +382,14 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
       throw new Error(`private transcription provider failed with status ${provider.status}`);
     }
 
+    if (provider.data?.schemaVersion !== 'urai-private-source-transcript-v2' || provider.data.ownerUid !== job.ownerUid
+      || provider.data.jobId !== job.jobId || provider.data.sourceReceiptRef !== job.payload.sourceReceiptRef
+      || provider.data.requestedPurpose !== job.payload.requestedPurpose || provider.data.synthetic !== false
+      || provider.data.sourceSha256 !== sourceProof.sourceSha256 || provider.data.sourceRevision !== sourceProof.sourceRevision
+      || provider.data.leaseTokenHash !== crypto.createHash('sha256').update(job.leaseToken).digest('hex')
+      || !SHA256.test(String(provider.data.transcriptSha256 || '')) || !SHA256.test(String(provider.data.provenanceSha256 || ''))
+      || !Number.isSafeInteger(provider.data.transcriptByteLength) || provider.data.transcriptByteLength < 1
+      || provider.data.transcriptByteLength > 960000) throw new Error('transcription provider owner/fixity binding mismatch');
     const transcriptRef = String(provider.data?.transcriptRef || '');
     const provenanceRef = String(provider.data?.provenanceRef || '');
     const checksum = String(provider.data?.checksum || '');
@@ -363,6 +397,7 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
       throw new Error('provider response is missing private references or integrity checksum');
     }
 
+    await recheckAuthorization(job, sourceProof);
     return res.status(200).send({
       ok: true,
       jobId: job.jobId,
@@ -371,6 +406,9 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
         transcriptRef,
         provenanceRef,
         checksum,
+        historicalSourceAuthority: false, reviewState: 'OWNER_REVIEW_REQUIRED',
+        transcriptSha256: provider.data.transcriptSha256, provenanceSha256: provider.data.provenanceSha256,
+        sourceFixityRef: sourceProof.sourceFixityRef, sourceSha256: sourceProof.sourceSha256, sourceRevision: sourceProof.sourceRevision,
         sourceEvidenceClass: sourceEvidenceClass as LifeModelEvidenceClass,
         requestedPurpose: job.payload.requestedPurpose,
       },
@@ -379,8 +417,7 @@ app.post('/execute-job', requireWorkerAuth, async (req, res) => {
     console.error(JSON.stringify({
       event: 'private-source.execution.failed',
       service: 'private-source-worker',
-      jobId: job.jobId,
-      error: error instanceof Error ? error.message : String(error),
+      failureCode: 'PRIVATE_SOURCE_EXECUTION_FAILED',
     }));
     return res.status(502).send({ ok: false, error: 'Private-source processing failed.' });
   }

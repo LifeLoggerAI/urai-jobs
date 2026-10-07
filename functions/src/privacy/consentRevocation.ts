@@ -9,6 +9,7 @@ import {
 } from './consentBlocks.js';
 import { invalidateLifeMovieDerivativesForConsent, type LifeMovieRevocationEvent } from './lifeMovieDerivativeRevocation.js';
 import { invalidateCapturedRealityDerivativesForConsent } from './capturedRealityDerivativeRevocation.js';
+import { invalidatePrivateLifeModelForConsent } from './privateLifeModelDataRights.js';
 
 const privacyEventToken = defineSecret('URAI_JOBS_PRIVACY_EVENT_TOKEN');
 
@@ -113,9 +114,11 @@ export const ingestConsentRevocation = onRequest({
     // retryable after transient Storage or Firestore failures.
     const derivativeInvalidation = await invalidateLifeMovieDerivativesForConsent(lifeMovieRevocationEvent);
     const capturedRealityInvalidation = await invalidateCapturedRealityDerivativesForConsent(lifeMovieRevocationEvent);
+    const privateLifeModelInvalidation = await invalidatePrivateLifeModelForConsent(lifeMovieRevocationEvent);
     await receiptRef.set({
       derivativeInvalidation,
       capturedRealityInvalidation,
+      privateLifeModelInvalidation,
       derivativeInvalidationCompletedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
     response.status(200).json({
@@ -124,6 +127,7 @@ export const ingestConsentRevocation = onRequest({
         ...ack,
         derivativeInvalidation,
         capturedRealityInvalidation,
+        privateLifeModelInvalidation,
       },
     });
   } catch (error) {

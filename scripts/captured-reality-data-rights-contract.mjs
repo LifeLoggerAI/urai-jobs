@@ -69,6 +69,7 @@ vm.runInNewContext(ts.transpileModule(rights, { compilerOptions: { module: ts.Mo
     : name === '../core/auth.js' ? { withAuthenticatedRole: (_roles, handler) => handler }
     : name === '../core/errors.js' ? { httpsError: (code, message) => Object.assign(new Error(message), { code }) }
     : name === '../core/gcs.js' ? { uploadToGcs: async () => 'opaque-private-export' }
+    : name === './privateLifeModelDataRights.js' ? { assertPrivateDataRightsExportDestination: async () => {}, deleteOwnedPrivateLifeModel: async () => ({ unresolvedDomains: [] }), exportOwnedPrivateLifeModel: async () => ({ records: [], unresolvedDomains: [] }) }
     : name === './capturedRealityDerivativeRevocation.js' ? { deleteCapturedRealityEngineJob: async () => { engineCalls++; if (failEngineOnce) { failEngineOnce = false; throw new Error('synthetic-engine-unavailable'); } } }
     : require(name),
 });

@@ -6,6 +6,7 @@ import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { uploadToGcs } from '../core/gcs.js';
 import { deleteCapturedRealityEngineJob } from './capturedRealityDerivativeRevocation.js';
+import { assertPrivateDataRightsExportDestination, deleteOwnedPrivateLifeModel, exportOwnedPrivateLifeModel } from './privateLifeModelDataRights.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
 const MAX_OWNED_JOBS = 2_000;
@@ -84,9 +85,11 @@ function canonicalDigest(value: unknown) {
 }
 
 async function buildExport(db: Firestore, requestId: string, ownerUid: string) {
-  const [userSnap, jobs] = await Promise.all([
+  await assertPrivateDataRightsExportDestination();
+  const [userSnap, jobs, privateLifeModel] = await Promise.all([
     db.collection('users').doc(ownerUid).get(),
     ownedJobs(db, ownerUid),
+    exportOwnedPrivateLifeModel(db, ownerUid),
   ]);
   const exportedJobs = jobs.map((document) => {
     const source = redact(document.data()) as Record<string, unknown>;
@@ -114,23 +117,26 @@ async function buildExport(db: Firestore, requestId: string, ownerUid: string) {
     requestId,
     user: userSnap.exists ? redact(userSnap.data()) : null,
     jobs: exportedJobs,
+    privateLifeModel: redact(privateLifeModel),
     unresolvedDomains: [
       'firebase-auth-account',
       'provider-side-derivatives',
       'external-artifacts-not-bound-to-jobs-storage',
       'cross-system-data-owned-by-other-urai-services',
+      ...privateLifeModel.unresolvedDomains,
     ],
   };
   const bytes = Buffer.from(JSON.stringify(payload), 'utf8');
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   const destination = `privacy/data-rights/${createHash('sha256').update(ownerUid).digest('hex')}/${requestId}/export.json`;
   const gcsRef = await uploadToGcs(bytes, destination, 'application/json');
-  return { payload, recordCount: exportedJobs.length + (userSnap.exists ? 1 : 0), sha256, gcsRef };
+  return { payload, recordCount: exportedJobs.length + privateLifeModel.records.length + (userSnap.exists ? 1 : 0), sha256, gcsRef };
 }
 
 async function executeDelete(db: Firestore, requestId: string, ownerUid: string) {
   const jobs = await ownedJobs(db, ownerUid);
   const ownerHash = createHash('sha256').update(ownerUid).digest('hex');
+  const privateLifeModel = await deleteOwnedPrivateLifeModel(db, ownerUid, requestId);
   let queueDeletes = 0;
   let logDeletes = 0;
   let jobsAnonymized = 0;
@@ -192,6 +198,7 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
 
   return {
     jobsAnonymized,
+    privateLifeModel,
     queueDeletes,
     logDeletes,
     unresolvedDomains: [
@@ -199,6 +206,7 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
       'provider-side-derivatives',
       'external-artifacts-not-bound-to-jobs-storage',
       'cross-system-data-owned-by-other-urai-services',
+      ...privateLifeModel.unresolvedDomains,
     ],
   };
 }
