@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
 
 type RecordValue = Record<string, unknown>;
-type Session = { job: RecordValue; inputDigest: string; submitted: boolean; controller: AbortController; deadline?: number; fields?: RecordValue; token?: string; attemptId?: string; requestId?: string };
+type Session = { job: RecordValue; inputDigest: string; submitted: boolean; controller: AbortController; deadline?: number; fields?: RecordValue; token?: string; gatewayUrl?: string; verifyCurrent?: () => Promise<void>; attemptId?: string; requestId?: string };
 const sessions = new AsyncLocalStorage<Session>();
 const SOURCE_PATHS = ['workers/narrator-worker/src/protected-spend.ts', 'workers/narrator-worker/src/protected-spend.js', 'workers/narrator-worker/src/handlers/narrator-tts.ts', 'workers/narrator-worker/src/handlers/narrator-tts.js'];
 const REPOSITORY = 'LifeLoggerAI/urai-jobs';
@@ -44,7 +44,9 @@ function canonical(value: unknown): string {
 }
 export function narratorRequestDigest(endpoint: string, body: string): string { return narratorDigest(Buffer.concat([Buffer.from(`POST\n${endpoint}\n`), Buffer.from(body, 'utf8')])); }
 export function narratorHeaderBindings(headers: HeadersInit) {
-  const entries = [...new Headers(headers).entries()].sort(([a], [b]) => a.localeCompare(b));
+  const entries: [string, string][] = [];
+  new Headers(headers).forEach((value, key) => entries.push([key, value]));
+  entries.sort(([a], [b]) => a.localeCompare(b));
   const credentialNames = new Set(['authorization', 'xi-api-key', 'x-api-key']);
   const credentials = Object.fromEntries(entries.filter(([key]) => credentialNames.has(key)));
   need(Object.keys(credentials).length > 0, 'provider credential unavailable');
@@ -82,8 +84,9 @@ async function boundedJson(response: Response) {
   try { const value = record(JSON.parse(Buffer.concat(chunks, count).toString('utf8'))); need(value.ok === true, 'gateway did not admit request'); return value; }
   catch (error) { if (error instanceof NarratorSpendRejected) throw error; throw new NarratorSpendRejected('invalid gateway response'); }
 }
-async function gateway(action: string, fields: RecordValue, token: string) {
-  const endpoint = httpsEndpoint(process.env.ASSET_FORGE_SPEND_GATEWAY_URL, true);
+async function gateway(action: string, fields: RecordValue, token: string, pinnedUrl: string) {
+  const endpoint = httpsEndpoint(pinnedUrl, true);
+  need(httpsEndpoint(process.env.ASSET_FORGE_SPEND_GATEWAY_URL, true) === endpoint, 'issuer-pinned gateway URL changed');
   need(token.length >= 32, 'protected worker credential unavailable');
   try { return await boundedJson(await fetch(endpoint, { method: 'POST', redirect: 'error', cache: 'no-store', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ action, ...fields }), signal: AbortSignal.timeout(15_000) })); }
   catch (error) { if (error instanceof NarratorSpendRejected) throw error; throw new NarratorSpendRejected('gateway outcome unavailable; reconcile before retry'); }
@@ -91,7 +94,7 @@ async function gateway(action: string, fields: RecordValue, token: string) {
 function protectedBinding(requestDigest: string) {
   let mapping: RecordValue; try { mapping = record(JSON.parse(process.env.URAI_NARRATOR_SPEND_BINDINGS_JSON || '{}')); } catch { throw new NarratorSpendRejected('invalid protected narrator mapping'); }
   const entry = record(mapping[requestDigest]);
-  return { jobId: nonempty(entry.job_id), workerId: nonempty(entry.worker_id), accountId: nonempty(entry.account_id), token: nonempty(entry.token) };
+  return { jobId: nonempty(entry.job_id), workerId: nonempty(entry.worker_id), accountId: nonempty(entry.account_id), token: nonempty(entry.token), gatewayUrl: httpsEndpoint(entry.gateway_url, true) };
 }
 type ExactRequest = { endpoint: string; headers: HeadersInit; body: string; credentialExpiresAt?: number; actualAccountId?: string; assertCurrent(): Promise<void> | void };
 
@@ -105,12 +108,17 @@ export async function paidNarratorFetch(provider: 'google' | 'elevenlabs', model
   const body = request.body, headers = new Headers(request.headers), sourceSha = narratorExecutorSourceSha();
   const requestDigest = narratorRequestDigest(endpoint, body), config = protectedBinding(requestDigest), accountHeaders = narratorHeaderBindings(headers);
   if (provider === 'google') need(request.actualAccountId === config.accountId, 'protected Google account differs from actual ADC principal and quota project');
-  const gatewaySource = sha(process.env.ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA, 40);
+  const gatewaySource = sha(process.env.ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA, 40), gatewayUrl = config.gatewayUrl;
   const fields = { job_id: config.jobId, worker_id: config.workerId, executor_repository: REPOSITORY, executor_source_sha: sourceSha, gateway_repository: GATEWAY_REPOSITORY, gateway_source_sha: gatewaySource, consumer: 'jobs-narrator', tenant_sha256: narratorDigest(nonempty(session.job.tenantId)), provider, account_id: config.accountId, ...accountHeaders, source_input_sha256: session.inputDigest, content_type: nonempty(headers.get('content-type')), request_sha256: requestDigest, endpoint, model: nonempty(model), asset: `${nonempty(session.job.tenantId)}/${nonempty(session.job.jobId)}/narrator.tts`, request_size: String(Buffer.byteLength(body)) };
-  const verifyCurrent = async () => { current(session); need(narratorExecutorSourceSha() === sourceSha && process.env.ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA === gatewaySource, 'narrator execution source changed'); need(narratorSourceJson(protectedBinding(requestDigest)) === narratorSourceJson(config), 'protected narrator mapping changed'); await request.assertCurrent(); current(session); };
+  const verifyCurrent = async () => { current(session); need(narratorExecutorSourceSha() === sourceSha && process.env.ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA === gatewaySource && process.env.ASSET_FORGE_SPEND_GATEWAY_URL === gatewayUrl, 'narrator execution source changed'); need(narratorSourceJson(protectedBinding(requestDigest)) === narratorSourceJson(config), 'protected narrator mapping changed'); await request.assertCurrent(); current(session); };
+  session.verifyCurrent = verifyCurrent;
+  need(httpsEndpoint(process.env.ASSET_FORGE_SPEND_GATEWAY_URL, true) === gatewayUrl, 'issuer-pinned gateway URL mismatch');
   session.submitted = true;
   await verifyCurrent();
-  const prepared = await gateway('preflight', fields, config.token);
+  const prepared = await gateway('preflight', fields, config.token, gatewayUrl);
+  const preflightExpiry = timestamp(prepared.admission_expires_at);
+  need(Date.now() < preflightExpiry, 'protected preflight admission expired');
+  session.deadline = preflightExpiry;
   need(prepared.provider_call_authorized === false && prepared.execution_performed === false, 'preflight cannot authorize a provider call');
   const envelope = record(prepared.envelope), job = record(envelope.job), executor = record(job.executor), authority = record(job.authority), budget = record(job.budget);
   need(job.job_id === config.jobId && job.provider === provider && job.account_id === config.accountId && job.model_version === model && job.consumer === fields.consumer && job.rights_reviewed === true, 'protected narrator job changed');
@@ -129,14 +137,20 @@ export async function paidNarratorFetch(provider: 'google' | 'elevenlabs', model
   if (request.credentialExpiresAt !== undefined) need(Number.isFinite(request.credentialExpiresAt) && request.credentialExpiresAt > Date.now() + runtime * 1000, 'provider credential expires inside approved lifetime');
   const jobDigest = narratorDigest(canonical(Object.fromEntries(Object.entries(job).filter(([key]) => key !== 'approval' && key !== 'attempts'))));
   await verifyCurrent();
-  const admitted = await gateway('reserve', { ...fields, job_digest: jobDigest }, config.token);
+  const reservationStartedAt = Date.now(), localDeadline = Math.min(preflightExpiry, reservationStartedAt + runtime * 1000);
+  session.deadline = localDeadline;
+  const admitted = await gateway('reserve', { ...fields, job_digest: jobDigest }, config.token, gatewayUrl);
   need(admitted.provider_call_authorized === true && admitted.execution_performed === false && admitted.executor_source_sha === sourceSha && admitted.gateway_source_sha === gatewaySource && admitted.worker_id === config.workerId && admitted.job_digest === jobDigest && admitted.max_runtime_seconds === runtime, 'invalid authenticated narrator reservation');
-  session.fields = fields; session.token = config.token; session.attemptId = nonempty(admitted.attempt_id); session.deadline = Date.now() + runtime * 1000;
+  session.fields = fields; session.token = config.token; session.gatewayUrl = gatewayUrl; session.attemptId = nonempty(admitted.attempt_id);
+  const reservedAt = timestamp(admitted.reserved_at), admittedExpiry = timestamp(admitted.admission_expires_at);
+  need(reservedAt <= Date.now() && admittedExpiry <= preflightExpiry && admittedExpiry <= reservedAt + runtime * 1000, 'protected reservation extends verified lifetime');
+  session.deadline = Math.min(localDeadline, admittedExpiry);
+  current(session);
   await verifyCurrent();
   if (request.credentialExpiresAt !== undefined) need(request.credentialExpiresAt > session.deadline, 'provider credential expired after reservation');
   // Freeze exact bytes/headers. Redirects and transport errors cannot trigger a second POST.
   const response = await fetch(endpoint, { method: 'POST', headers, body, redirect: 'error', cache: 'no-store', signal: session.controller.signal });
-  current(session); const requestId = response.headers.get('request-id') || response.headers.get('x-request-id');
+  await verifyCurrent(); current(session); const requestId = response.headers.get('request-id') || response.headers.get('x-request-id');
   if (requestId) session.requestId = requestId.slice(0, 256);
   return response;
 }
@@ -153,14 +167,15 @@ export async function withProtectedNarratorSession<T>(jobValue: unknown, run: ()
     const timer = setInterval(() => { if (session.deadline && Date.now() >= session.deadline) session.controller.abort(); }, 25);
     const wait = (work: Promise<T>) => new Promise<T>((resolve, reject) => {
       const abort = () => reject(new NarratorSpendRejected('narrator execution timed out; charge reconciliation required'));
+      if (session.controller.signal.aborted) { abort(); return; }
       session.controller.signal.addEventListener('abort', abort, { once: true });
       work.then(resolve, reject).finally(() => session.controller.signal.removeEventListener('abort', abort));
     });
-    try { const result = await wait(run()); current(session); outcome = 'succeeded'; return result; }
+    try { const result = await wait(run()); current(session); await session.verifyCurrent?.(); current(session); outcome = 'succeeded'; return result; }
     finally {
       clearInterval(timer);
       if (session.fields && session.attemptId) {
-        try { const observed = await gateway('record', { ...session.fields, attempt_id: session.attemptId, status: outcome, ...(session.requestId ? { request_id: session.requestId } : {}) }, session.token as string); need(observed.provider_call_authorized === false && observed.execution_performed === false && observed.reconciliation_required === true, 'invalid narrator observation'); }
+        try { const observed = await gateway('record', { ...session.fields, attempt_id: session.attemptId, status: outcome, ...(session.requestId ? { request_id: session.requestId } : {}) }, session.token as string, session.gatewayUrl as string); if (outcome === 'succeeded') { await session.verifyCurrent?.(); current(session); } need(observed.provider_call_authorized === false && observed.execution_performed === false && observed.reconciliation_required === true, 'invalid narrator observation'); }
         catch { if (outcome === 'succeeded') throw new NarratorSpendRejected('narrator output requires durable observation and charge reconciliation'); }
       }
     }
