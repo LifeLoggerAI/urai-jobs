@@ -1,19 +1,24 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { FieldPath, FieldValue, getFirestore, type Firestore, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import type { CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
 import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { uploadToGcs } from '../core/gcs.js';
+import { deleteCapturedRealityEngineJob, deleteCapturedRealityPublishedRuntimeForOwner } from './capturedRealityDerivativeRevocation.js';
+import { assertPrivateDataRightsExportDestination, assertPrivateLifeModelOwnerEpoch, deleteOwnedPrivateLifeModel, exportOwnedPrivateLifeModel, removePrivateDataRightsExportAttempt } from './privateLifeModelDataRights.js';
+import { continuationReason, recordFailure, retryCounters } from './dataRightsContinuationPolicy.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
 const MAX_OWNED_JOBS = 2_000;
 const EXECUTION_MODE = 'protected-staging';
 const EXECUTION_SCHEMA = 'urai-jobs-data-rights-execution-v1';
+const EXECUTION_LEASE_MS = 180000;
+const MAX_LOG_DELETE_PAGES = 20;
 
 const ExecuteSchema = z.object({
-  requestId: z.string().trim().min(8).max(200),
-  retentionDecisionReceiptId: z.string().trim().min(8).max(200),
+  requestId: z.string().trim().min(8).max(200).regex(/^[A-Za-z0-9._:-]+$/),
+  retentionDecisionReceiptId: z.string().trim().min(8).max(200).regex(/^[A-Za-z0-9._:-]+$/),
   idempotencyKey: z.string().trim().min(8).max(160).regex(/^[A-Za-z0-9._:-]+$/),
 }).strict();
 
@@ -79,13 +84,19 @@ async function ownedJobs(db: Firestore, ownerUid: string): Promise<QueryDocument
 }
 
 function canonicalDigest(value: unknown) {
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  const canonical = (item: any): string => Array.isArray(item) ? '[' + item.map(canonical).join(',') + ']'
+    : item && typeof item === 'object' ? '{' + Object.entries(item).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+      .map(([key, entry]) => JSON.stringify(key) + ':' + canonical(entry)).join(',') + '}' : JSON.stringify(item);
+  return createHash('sha256').update(canonical(value)).digest('hex');
 }
 
-async function buildExport(db: Firestore, requestId: string, ownerUid: string) {
-  const [userSnap, jobs] = await Promise.all([
+async function buildExport(db: Firestore, requestId: string, ownerUid: string, checkpoint: () => Promise<void>, attemptKey: string) {
+  await checkpoint();
+  await assertPrivateDataRightsExportDestination();
+  const [userSnap, jobs, privateLifeModel] = await Promise.all([
     db.collection('users').doc(ownerUid).get(),
     ownedJobs(db, ownerUid),
+    exportOwnedPrivateLifeModel(db, ownerUid),
   ]);
   const exportedJobs = jobs.map((document) => {
     const source = redact(document.data()) as Record<string, unknown>;
@@ -113,64 +124,105 @@ async function buildExport(db: Firestore, requestId: string, ownerUid: string) {
     requestId,
     user: userSnap.exists ? redact(userSnap.data()) : null,
     jobs: exportedJobs,
+    privateLifeModel: redact(privateLifeModel),
     unresolvedDomains: [
       'firebase-auth-account',
       'provider-side-derivatives',
       'external-artifacts-not-bound-to-jobs-storage',
       'cross-system-data-owned-by-other-urai-services',
+      ...privateLifeModel.unresolvedDomains,
     ],
   };
   const bytes = Buffer.from(JSON.stringify(payload), 'utf8');
   const sha256 = createHash('sha256').update(bytes).digest('hex');
-  const destination = `privacy/data-rights/${createHash('sha256').update(ownerUid).digest('hex')}/${requestId}/export.json`;
+  // Distinct attempt paths prevent a delayed upload from replacing a successor.
+  const destination = `privacy/data-rights/${createHash('sha256').update(ownerUid).digest('hex')}/${requestId}/${attemptKey}/export.json`;
+  await checkpoint();
+  await assertPrivateLifeModelOwnerEpoch(db, ownerUid, privateLifeModel.ownerDeletionEpoch);
   const gcsRef = await uploadToGcs(bytes, destination, 'application/json');
-  return { payload, recordCount: exportedJobs.length + (userSnap.exists ? 1 : 0), sha256, gcsRef };
+  await checkpoint();
+  await assertPrivateLifeModelOwnerEpoch(db, ownerUid, privateLifeModel.ownerDeletionEpoch);
+  return { recordCount: exportedJobs.length + privateLifeModel.records.length + (userSnap.exists ? 1 : 0), sha256, gcsRef,
+    completeEcosystemExport: false, unresolvedDomains: payload.unresolvedDomains };
 }
 
-async function executeDelete(db: Firestore, requestId: string, ownerUid: string) {
-  const jobs = await ownedJobs(db, ownerUid);
+async function executeDelete(db: Firestore, requestId: string, ownerUid: string, checkpoint: () => Promise<void>) {
+  await checkpoint();
   const ownerHash = createHash('sha256').update(ownerUid).digest('hex');
+  const privateLifeModel = await deleteOwnedPrivateLifeModel(db, ownerUid, requestId, checkpoint);
   let queueDeletes = 0;
   let logDeletes = 0;
   let jobsAnonymized = 0;
+  const capturedRealityRuntime = await deleteCapturedRealityPublishedRuntimeForOwner(ownerUid);
 
-  for (const document of jobs) {
-    const logs = await document.ref.collection('logs').limit(500).get();
-    if (logs.size >= 500) {
-      throw httpsError('resource-exhausted', `Job ${document.id} has too many logs for bounded deletion; reconcile before retry.`);
+  // Committed anonymization removes ownerUid from this query, so a retry can
+  // continue beyond the execution budget without retaining a mutable cursor.
+  for (let jobPage = 0; jobPage < 20; jobPage++) {
+    await checkpoint();
+    const jobs = await db.collection('jobs').where('ownerUid', '==', ownerUid).limit(100).get();
+    if (!jobs.size) break;
+    for (const document of jobs.docs) {
+      await checkpoint();
+      // Fence in-flight worker/callback attempts before mutating owned records.
+      const currentJob = await db.runTransaction(async transaction => {
+        const current = (await transaction.get(document.ref)).data();
+        if (!current || current.ownerUid !== ownerUid) throw httpsError('permission-denied', 'Owned job authority changed during deletion.');
+        transaction.update(document.ref, { status: 'CANCELLED', lease: FieldValue.delete(), 'execution.asyncCallbackPending': false,
+          'execution.leaseToken': FieldValue.delete(), 'execution.callbackLeaseToken': FieldValue.delete(),
+          'execution.callbackTokenHash': FieldValue.delete(), 'execution.callbackDeadlineAt': FieldValue.delete(),
+          'execution.capturedRealityAcceptedCallbackHash': FieldValue.delete() });
+        return current;
+      });
+      if ((currentJob.jobType || currentJob.type) === 'memory.private-source.reconstruct-place') {
+        // Preserve owner identity until the engine proves cleanup, so retries can
+        // still locate a partially deleted reconstruction job.
+        await deleteCapturedRealityEngineJob(document.id);
+      }
+      const logsRef = document.ref.collection('logs');
+      for (let page = 0; page < MAX_LOG_DELETE_PAGES; page++) {
+        await checkpoint();
+        const logs = await logsRef.limit(400).get();
+        if (!logs.size) break;
+        const logBatch = db.batch();
+        for (const log of logs.docs) logBatch.delete(log.ref);
+        await logBatch.commit(); logDeletes += logs.size;
+      }
+      if ((await logsRef.limit(1).get()).size) throw httpsError('resource-exhausted', 'Bounded job log deletion requires continuation.');
+      await checkpoint();
+      const currentOwner = (await document.ref.get()).data()?.ownerUid;
+      if (currentOwner !== ownerUid) throw httpsError('permission-denied', 'Owned job authority changed during deletion.');
+      const batch = db.batch();
+      const queueRef = db.collection('jobQueue').doc(document.id);
+      const queueSnap = await queueRef.get();
+      if (queueSnap.exists) {
+        batch.delete(queueRef);
+        queueDeletes += 1;
+      }
+      batch.set(document.ref, {
+        ownerUid: `deleted:${ownerHash}`,
+        payload: FieldValue.delete(),
+        output: FieldValue.delete(),
+        result: FieldValue.delete(),
+        consent: FieldValue.delete(),
+        consents: FieldValue.delete(),
+        error: FieldValue.delete(),
+        deletionReceipt: {
+          schemaVersion: EXECUTION_SCHEMA,
+          requestId,
+          ownerHash,
+          deletedAt: FieldValue.serverTimestamp(),
+        },
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      await batch.commit();
+      jobsAnonymized += 1;
     }
-    const batch = db.batch();
-    for (const log of logs.docs) {
-      batch.delete(log.ref);
-      logDeletes += 1;
-    }
-    const queueRef = db.collection('jobQueue').doc(document.id);
-    const queueSnap = await queueRef.get();
-    if (queueSnap.exists) {
-      batch.delete(queueRef);
-      queueDeletes += 1;
-    }
-    batch.set(document.ref, {
-      ownerUid: `deleted:${ownerHash}`,
-      payload: FieldValue.delete(),
-      output: FieldValue.delete(),
-      consent: FieldValue.delete(),
-      consents: FieldValue.delete(),
-      error: FieldValue.delete(),
-      deletionReceipt: {
-        schemaVersion: EXECUTION_SCHEMA,
-        requestId,
-        ownerHash,
-        deletedAt: FieldValue.serverTimestamp(),
-      },
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    await batch.commit();
-    jobsAnonymized += 1;
   }
+  if ((await db.collection('jobs').where('ownerUid', '==', ownerUid).limit(1).get()).size) throw httpsError('resource-exhausted', 'Bounded owner job deletion requires continuation.');
 
   // Jobs does not own Firebase Auth deletion, external provider derivatives, or
   // every cross-system artifact. Never mark the user's request globally complete.
+  await checkpoint();
   await db.collection('users').doc(ownerUid).set({
     dataRightsDeletionPendingCentralPrivacy: true,
     dataRightsDeletionRequestId: requestId,
@@ -179,6 +231,8 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
 
   return {
     jobsAnonymized,
+    privateLifeModel,
+    capturedRealityRuntime,
     queueDeletes,
     logDeletes,
     unresolvedDomains: [
@@ -186,6 +240,7 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
       'provider-side-derivatives',
       'external-artifacts-not-bound-to-jobs-storage',
       'cross-system-data-owned-by-other-urai-services',
+      ...privateLifeModel.unresolvedDomains,
     ],
   };
 }
@@ -199,6 +254,7 @@ const handler = async (data: unknown, _context: CallableContext) => {
   const db = getFirestore();
   const requestRef = db.collection(DATA_RIGHTS_COLLECTION).doc(parsed.data.requestId);
   const executionRef = requestRef.collection('audit').doc(`execution-${canonicalDigest(parsed.data.idempotencyKey).slice(0, 24)}`);
+  const leaseToken = randomUUID();
 
   const request = await db.runTransaction(async (transaction) => {
     const [requestSnap, priorExecution] = await Promise.all([
@@ -206,39 +262,90 @@ const handler = async (data: unknown, _context: CallableContext) => {
       transaction.get(executionRef),
     ]);
     if (!requestSnap.exists) throw httpsError('not-found', 'Data-rights request was not found.');
-    if (priorExecution.exists) return { replay: priorExecution.data(), record: requestSnap.data() as RequestRecord };
-
     const record = requestSnap.data() as RequestRecord;
-    if (!record.ownerUid || !['EXPORT', 'DELETE'].includes(String(record.requestType))) {
+    const prior = priorExecution.exists ? priorExecution.data() : null;
+    if (typeof record.ownerUid !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(record.ownerUid) || !['EXPORT', 'DELETE'].includes(String(record.requestType))) {
       throw httpsError('failed-precondition', 'Data-rights request schema requires reconciliation.');
     }
-    if (record.status !== 'APPROVED') {
+    const requestHash = canonicalDigest({ schemaVersion: EXECUTION_SCHEMA, requestId: parsed.data.requestId,
+      idempotencyKeyHash: canonicalDigest(parsed.data.idempotencyKey),
+      ownerHash: createHash('sha256').update(record.ownerUid).digest('hex'), requestType: record.requestType,
+      retentionDecisionReceiptId: parsed.data.retentionDecisionReceiptId, admission });
+    if (prior && prior.requestHash !== requestHash) throw httpsError('already-exists', 'Data-rights idempotency authority differs or an unbound legacy attempt requires reconciliation.');
+    if (!['APPROVED', 'IN_REVIEW'].includes(String(record.status))) throw httpsError('failed-precondition', 'Stored data-rights approval is no longer current.');
+    if (prior?.event === 'DATA_RIGHTS_EXECUTION_FINISHED') {
+      if (prior.schemaVersion !== EXECUTION_SCHEMA || !prior.result || typeof prior.result !== 'object'
+        || prior.resultDigest !== canonicalDigest(prior.result)) throw httpsError('failed-precondition', 'Retained data-rights receipt requires reconciliation.');
+      return { replay: prior, record, requestHash, attemptNumber: prior.attemptNumber };
+    }
+    const failedRetry = prior?.event === 'DATA_RIGHTS_EXECUTION_FAILED'
+      && record.status === 'IN_REVIEW' && record.executionState === 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE';
+    const continuationRetry = prior?.event === 'DATA_RIGHTS_EXECUTION_CONTINUATION_REQUIRED'
+      && record.status === 'IN_REVIEW' && record.executionState === 'PROTECTED_STAGING_EXECUTION_CONTINUATION_REQUIRED';
+    const interrupted = prior?.event === 'DATA_RIGHTS_EXECUTION_STARTED'
+      && record.status === 'IN_REVIEW' && record.executionState === 'PROTECTED_STAGING_EXECUTION_IN_PROGRESS';
+    if (interrupted && (!Number.isSafeInteger(prior.leaseExpiresAtMs) || prior.leaseExpiresAtMs > Date.now())) {
+      throw httpsError('unavailable', 'The exact data-rights execution is still in progress.');
+    }
+    const retry = failedRetry || continuationRetry || interrupted;
+    if (prior && !retry) throw httpsError('failed-precondition', 'The exact data-rights execution attempt requires reconciliation.');
+    if (record.status !== 'APPROVED' && !retry) {
       throw httpsError('failed-precondition', 'Only an explicitly APPROVED request can enter protected staging execution.');
     }
-    transaction.create(executionRef, {
+    let budget;
+    try {
+      budget = retryCounters(prior, continuationRetry ? 'continuation' : failedRetry ? 'failure' : interrupted ? 'interrupted' : 'initial');
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'data_rights_retry_budget_invalid';
+      throw httpsError('resource-exhausted', reason);
+    }
+    const { attemptNumber, failureAttempts, continuationDeliveries } = budget;
+    const execution = {
       event: 'DATA_RIGHTS_EXECUTION_STARTED',
+      attemptNumber, failureAttempts, continuationDeliveries,
+      requestHash, leaseToken, leaseExpiresAtMs: Date.now() + EXECUTION_LEASE_MS,
+      exportAttemptObjectKey: canonicalDigest(leaseToken).slice(0, 32),
       schemaVersion: EXECUTION_SCHEMA,
       requestType: record.requestType,
       ownerHash: createHash('sha256').update(record.ownerUid).digest('hex'),
       retentionDecisionReceiptId: parsed.data.retentionDecisionReceiptId,
       admission,
       createdAt: FieldValue.serverTimestamp(),
+    };
+    if (retry) transaction.set(executionRef, { ...execution, failureCode: FieldValue.delete(), failedAt: FieldValue.delete() }, { merge: true });
+    else transaction.create(executionRef, execution);
+    transaction.create(executionRef.collection('attempts').doc(String(attemptNumber).padStart(2, '0')), {
+      event: 'DATA_RIGHTS_ATTEMPT_STARTED', schemaVersion: EXECUTION_SCHEMA, requestHash, attemptNumber,
+      failureAttempts, continuationDeliveries,
+      ownerHash: execution.ownerHash, requestType: record.requestType,
+      exportAttemptObjectKey: execution.exportAttemptObjectKey, createdAt: FieldValue.serverTimestamp(),
     });
     transaction.set(requestRef, {
       status: 'IN_REVIEW',
       executionState: 'PROTECTED_STAGING_EXECUTION_IN_PROGRESS',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    return { replay: null, record };
+    return { replay: null, record, requestHash, attemptNumber, failureAttempts, continuationDeliveries };
   });
 
   if (request.replay) return { replay: true, receipt: request.replay };
   const record = request.record;
   const ownerUid = String(record.ownerUid);
+  const attemptRef = executionRef.collection('attempts').doc(String(request.attemptNumber).padStart(2, '0'));
+  const currentExecution = async (transaction: any) => {
+    const [execution, currentRequest] = await Promise.all([transaction.get(executionRef), transaction.get(requestRef)]);
+    const active = execution.data(), current = currentRequest.data();
+    if (active?.event !== 'DATA_RIGHTS_EXECUTION_STARTED' || active.requestHash !== request.requestHash
+      || active.leaseToken !== leaseToken || !Number.isSafeInteger(active.leaseExpiresAtMs) || active.leaseExpiresAtMs <= Date.now()
+      || current?.ownerUid !== ownerUid || current.requestType !== record.requestType || current.status !== 'IN_REVIEW'
+      || current.executionState !== 'PROTECTED_STAGING_EXECUTION_IN_PROGRESS') throw httpsError('unavailable', 'Data-rights execution authority changed or its lease expired.');
+    return active;
+  };
+  const checkpoint = async () => { await db.runTransaction(currentExecution); };
   try {
     const result = record.requestType === 'EXPORT'
-      ? await buildExport(db, parsed.data.requestId, ownerUid)
-      : await executeDelete(db, parsed.data.requestId, ownerUid);
+      ? await buildExport(db, parsed.data.requestId, ownerUid, checkpoint, canonicalDigest(leaseToken).slice(0, 32))
+      : await executeDelete(db, parsed.data.requestId, ownerUid, checkpoint);
     const resultDigest = canonicalDigest(result);
     const terminalState = record.requestType === 'EXPORT'
       ? 'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'
@@ -246,33 +353,74 @@ const handler = async (data: unknown, _context: CallableContext) => {
     const receipt = {
       event: 'DATA_RIGHTS_EXECUTION_FINISHED',
       schemaVersion: EXECUTION_SCHEMA,
+      requestHash: request.requestHash, attemptNumber: request.attemptNumber,
       requestType: record.requestType,
       resultDigest,
       terminalState,
       result,
       completedAt: FieldValue.serverTimestamp(),
     };
-    await executionRef.set(receipt, { merge: true });
-    await requestRef.set({
-      status: 'IN_REVIEW',
-      executionState: terminalState,
-      executionReceiptPath: executionRef.path,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    await db.runTransaction(async transaction => {
+      await currentExecution(transaction);
+      transaction.set(executionRef, { ...receipt, leaseToken: FieldValue.delete(), leaseExpiresAtMs: 0,
+        failureCode: FieldValue.delete(), failedAt: FieldValue.delete() }, { merge: true });
+      transaction.set(attemptRef, { event: 'DATA_RIGHTS_ATTEMPT_FINISHED', resultDigest,
+        completedAt: FieldValue.serverTimestamp() }, { merge: true });
+      transaction.set(requestRef, { status: 'IN_REVIEW', executionState: terminalState,
+        executionReceiptPath: executionRef.path, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    });
     return { replay: false, receipt };
   } catch (error) {
-    await executionRef.set({
-      event: 'DATA_RIGHTS_EXECUTION_FAILED',
-      failure: error instanceof Error ? error.message : 'unknown-error',
-      failedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    await requestRef.set({
-      status: 'IN_REVIEW',
-      executionState: 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE',
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    throw error;
+    let cleanupPending = false;
+    if (record.requestType === 'EXPORT') {
+      // An ambiguous/stale upload can only be removed from its own attempt path.
+      try { await removePrivateDataRightsExportAttempt(ownerUid, parsed.data.requestId, canonicalDigest(leaseToken).slice(0, 32)); }
+      catch { cleanupPending = true; }
+    }
+    const continuation = !cleanupPending && record.requestType === 'DELETE' ? continuationReason(error) : null;
+    const counters = recordFailure({
+      failureAttempts: request.failureAttempts,
+      continuationDeliveries: request.continuationDeliveries,
+    }, Boolean(continuation));
+    await db.runTransaction(async transaction => {
+      const [execution, currentRequest, ownAttempt] = await Promise.all([transaction.get(executionRef), transaction.get(requestRef), transaction.get(attemptRef)]);
+      const active = execution.data(), current = currentRequest.data();
+      if (ownAttempt.data()?.requestHash === request.requestHash && ownAttempt.data()?.event === 'DATA_RIGHTS_ATTEMPT_STARTED') {
+        transaction.set(attemptRef, {
+          event: continuation ? 'DATA_RIGHTS_ATTEMPT_CONTINUATION_REQUIRED' : 'DATA_RIGHTS_ATTEMPT_FAILED',
+          privateExportCleanupPending: cleanupPending,
+          failureCode: cleanupPending ? 'PRIVATE_EXPORT_CLEANUP_RECONCILIATION_REQUIRED'
+            : continuation ? 'DATA_RIGHTS_EXECUTION_CONTINUATION_REQUIRED' : 'DATA_RIGHTS_EXECUTION_FAILED',
+          ...counters,
+          failedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+      // An expired predecessor cannot mark its successor failed or revive approval.
+      if (active?.event !== 'DATA_RIGHTS_EXECUTION_STARTED' || active.leaseToken !== leaseToken
+        || active.requestHash !== request.requestHash || current?.ownerUid !== ownerUid
+        || current.requestType !== record.requestType || current.status !== 'IN_REVIEW') return;
+      transaction.set(executionRef, {
+        event: continuation ? 'DATA_RIGHTS_EXECUTION_CONTINUATION_REQUIRED' : 'DATA_RIGHTS_EXECUTION_FAILED',
+        failureCode: cleanupPending ? 'PRIVATE_EXPORT_CLEANUP_RECONCILIATION_REQUIRED'
+          : continuation ? 'DATA_RIGHTS_EXECUTION_CONTINUATION_REQUIRED' : 'DATA_RIGHTS_EXECUTION_FAILED',
+        ...counters,
+        leaseToken: FieldValue.delete(), leaseExpiresAtMs: 0, failedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      transaction.set(requestRef, {
+        status: 'IN_REVIEW',
+        executionState: cleanupPending ? 'PROTECTED_STAGING_EXECUTION_FAILED_RECONCILIATION_REQUIRED'
+          : continuation ? 'PROTECTED_STAGING_EXECUTION_CONTINUATION_REQUIRED' : 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE',
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    });
+    if (cleanupPending) throw httpsError('internal', 'Private export cleanup requires reconciliation.');
+    if (continuation) throw httpsError('resource-exhausted', 'Bounded data-rights deletion continuation required.');
+    const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+    if (['unavailable', 'resource-exhausted', 'permission-denied', 'failed-precondition'].includes(code)) throw error;
+    // Storage/database errors can include owner IDs, private paths and payloads.
+    throw httpsError('internal', 'Protected data-rights execution failed.');
   }
 };
 
 export const processDataRightsRequest = withAuthenticatedRole(['admin', 'operator'], handler);
+
