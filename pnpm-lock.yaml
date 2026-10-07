@@ -168,6 +168,8 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  workers/generic-world-factory: {}
+
   workers/private-life-model-index-provider:
     dependencies:
       express:
