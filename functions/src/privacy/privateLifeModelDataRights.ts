@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 
 const SOURCE_EVIDENCE_CLASSES = new Set(['SOURCE_CAPTURED', 'SOURCE_DERIVED', 'DIRECT_SUBJECT_TESTIMONY', 'ATTRIBUTED_TESTIMONY', 'CORROBORATED_INFERENCE', 'CONTEXTUAL_RESEARCH']);
@@ -189,31 +189,129 @@ export async function deleteOwnedPrivateLifeModel(db: Firestore, ownerUid: strin
 }
 
 export async function invalidatePrivateLifeModelForConsent(event: { ownerUid: string; purpose: string; eventId: string }) {
-  const summary = { jobsInvalidated: 0, localRootDeletionsAcknowledged: 0, completePrivateSourceRevocation: false };
-  if (event.purpose !== 'memory.storage') return summary;
+  const empty = { jobsInvalidated: 0, localRootDeletionsAcknowledged: 0, completePrivateSourceRevocation: false };
+  if (event.purpose !== 'memory.storage') return empty;
+  assertOwner(event.ownerUid);
   const db = getFirestore();
-  const jobs = await db.collection('jobs').where('ownerUid', '==', event.ownerUid).limit(2001).get();
-  if (jobs.size > 2000) throw new Error('private_life_model_revocation_job_limit');
-  for (const document of jobs.docs) {
-    const job = document.data();
-    if (job.ownerUid !== event.ownerUid) throw new Error('private_life_model_revocation_owner_mismatch');
-    if (!['memory.private-source.index','memory.private-source.transcribe'].includes(job.type || job.jobType)) continue;
-    const batch = db.batch();
-    batch.update(document.ref, { status: 'CANCELLED', output: FieldValue.delete(), result: FieldValue.delete(), lease: FieldValue.delete(),
-      'execution.leaseToken': FieldValue.delete(), 'execution.asyncCallbackPending': false,
-      consentRevocationEventId: event.eventId, derivativeAccessState: 'REVOKED', updatedAt: FieldValue.serverTimestamp() });
-    batch.set(db.collection('jobQueue').doc(document.id), { status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-    await batch.commit(); summary.jobsInvalidated++;
+  const receiptRef = db.collection('jobConsentEventReceipts').doc(ownerHash(event.eventId));
+  const blockRef = db.collection('jobConsentBlocks').doc(ownerHash(event.ownerUid + '\n' + event.purpose));
+  const schemaVersion = 'urai-private-life-model-consent-cleanup-v1';
+  type Progress = { schemaVersion: string; phase: 'jobs' | 'sources' | 'models' | 'DONE'; cursor: string;
+    jobsInvalidated: number; localRootDeletionsAcknowledged: number };
+  const validate = (receipt: any, block: any) => {
+    if (receipt?.consumerId !== 'urai-jobs' || receipt.eventId !== event.eventId || receipt.ownerUid !== event.ownerUid
+      || receipt.purpose !== event.purpose || receipt.status !== 'blocked'
+      || receipt.eventBindingVersion !== 'urai-jobs-consent-event-binding-v1' || !/^[a-f0-9]{64}$/.test(receipt.eventBindingHash || '')
+      || block?.active !== true || block.ownerUid !== event.ownerUid || block.purpose !== event.purpose) {
+      throw new Error('private_life_model_revocation_authority_changed');
+    }
+  };
+  const initial = await db.runTransaction(async transaction => {
+    const [receipt, block] = await Promise.all([transaction.get(receiptRef), transaction.get(blockRef)]);
+    validate(receipt.data(), block.data());
+    const prior = receipt.data()?.privateLifeModelInvalidationProgress as Progress | undefined;
+    if (prior && (prior.schemaVersion !== schemaVersion || !['jobs','sources','models','DONE'].includes(prior.phase)
+      || typeof prior.cursor !== 'string' || !Number.isSafeInteger(prior.jobsInvalidated) || prior.jobsInvalidated < 0
+      || !Number.isSafeInteger(prior.localRootDeletionsAcknowledged) || prior.localRootDeletionsAcknowledged < 0)) {
+      throw new Error('private_life_model_revocation_progress_invalid');
+    }
+    const progress = prior || { schemaVersion, phase: 'jobs' as const, cursor: '', jobsInvalidated: 0, localRootDeletionsAcknowledged: 0 };
+    if (!prior) transaction.set(receiptRef, { privateLifeModelInvalidationProgress: progress }, { merge: true });
+    return progress;
+  });
+  let progress = initial;
+  const current = async (transaction: any) => {
+    const [receipt, block] = await Promise.all([transaction.get(receiptRef), transaction.get(blockRef)]);
+    validate(receipt.data(), block.data());
+    const stored = receipt.data()?.privateLifeModelInvalidationProgress;
+    if (stored?.schemaVersion !== schemaVersion || stored.phase !== progress.phase || stored.cursor !== progress.cursor
+      || stored.jobsInvalidated !== progress.jobsInvalidated
+      || stored.localRootDeletionsAcknowledged !== progress.localRootDeletionsAcknowledged) {
+      throw new Error('private_life_model_revocation_concurrent_continuation');
+    }
+  };
+  const checkpoint = async () => { await db.runTransaction(current); };
+  const advance = async (next: Progress) => {
+    await db.runTransaction(async transaction => {
+      await current(transaction);
+      transaction.set(receiptRef, { privateLifeModelInvalidationProgress: next }, { merge: true });
+    });
+    progress = next;
+  };
+  const pageQuery = (collection: string, cursor: string, limit: number) => {
+    let query = db.collection(collection).where('ownerUid', '==', event.ownerUid).orderBy(FieldPath.documentId()).limit(limit);
+    if (cursor) query = query.startAfter(cursor);
+    return query;
+  };
+  const purgeChildren = async (root: any, children: string[]) => {
+    for (const child of children) {
+      const ref = root.ref.collection(child);
+      for (let page = 0; page < MAX_DELETE_PAGES; page++) {
+        await checkpoint();
+        const documents = await ref.limit(DELETE_PAGE_SIZE).get();
+        if (!documents.size) break;
+        const batch = db.batch();
+        for (const document of documents.docs) {
+          if (document.data().ownerUid !== event.ownerUid) throw new Error('private_life_model_revocation_child_owner_mismatch');
+          batch.delete(document.ref);
+        }
+        await batch.commit();
+      }
+      if ((await ref.limit(1).get()).size) throw new Error('private_life_model_revocation_child_continuation');
+    }
+  };
+  while (progress.phase !== 'DONE') {
+    const phase = progress.phase;
+    const collection = phase === 'jobs' ? 'jobs' : phase === 'sources' ? 'uraiPrivateSourceReceipts' : 'uraiPrivateLifeModel';
+    let complete = false;
+    for (let page = 0; page < MAX_DELETE_PAGES; page++) {
+      await checkpoint();
+      const roots = await pageQuery(collection, progress.cursor, phase === 'jobs' ? 200 : 100).get();
+      if (!roots.size) { complete = true; break; }
+      if (phase === 'jobs') {
+        const increment = await db.runTransaction(async transaction => {
+          await current(transaction);
+          const snapshots = await Promise.all(roots.docs.map(document => transaction.get(document.ref)));
+          let count = 0;
+          for (const snapshot of snapshots) {
+            const job = snapshot.data();
+            if (!job || job.ownerUid !== event.ownerUid) throw new Error('private_life_model_revocation_owner_mismatch');
+            if (!['memory.private-source.index','memory.private-source.transcribe'].includes(job.type || job.jobType)) continue;
+            transaction.update(snapshot.ref, { status: 'CANCELLED', output: FieldValue.delete(), result: FieldValue.delete(), lease: FieldValue.delete(),
+              'execution.leaseToken': FieldValue.delete(), 'execution.asyncCallbackPending': false,
+              consentRevocationEventId: event.eventId, derivativeAccessState: 'REVOKED', updatedAt: FieldValue.serverTimestamp() });
+            transaction.set(db.collection('jobQueue').doc(snapshot.id), { status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+            count++;
+          }
+          transaction.set(receiptRef, { privateLifeModelInvalidationProgress: { ...progress,
+            cursor: roots.docs.at(-1)!.id, jobsInvalidated: progress.jobsInvalidated + count } }, { merge: true });
+          return count;
+        });
+        progress = { ...progress, cursor: roots.docs.at(-1)!.id, jobsInvalidated: progress.jobsInvalidated + increment };
+      } else {
+        for (const root of roots.docs) {
+          if (root.data().ownerUid !== event.ownerUid) throw new Error('private_life_model_revocation_owner_mismatch');
+          await checkpoint();
+          if (phase === 'sources') {
+            await root.ref.update({ status: 'REVOKED', revokedByEventId: event.eventId, updatedAt: FieldValue.serverTimestamp() });
+            await purgeChildren(root, ['transcripts','transcriptionAttempts']);
+          } else {
+            await purgeChildren(root, ['state','revisions','idempotency']);
+            await checkpoint();
+            await db.recursiveDelete(root.ref);
+          }
+          await advance({ ...progress, cursor: root.id,
+            localRootDeletionsAcknowledged: progress.localRootDeletionsAcknowledged + (phase === 'models' ? 1 : 0) });
+        }
+      }
+    }
+    if (!complete && (await pageQuery(collection, progress.cursor, 1).get()).size) {
+      // Cursor and counters are durable. The same bound event resumes here;
+      // exhaustion never creates a successful privacy propagation receipt.
+      throw new Error('private_life_model_revocation_scope_continuation');
+    }
+    await advance({ ...progress, phase: phase === 'jobs' ? 'sources' : phase === 'sources' ? 'models' : 'DONE', cursor: '' });
   }
-  // Canonical consent block is already active before this helper runs. Index
-  // transactions cannot commit across that block, including while cleanup awaits.
-  for (const receipt of await ownedRoots(db, 'uraiPrivateSourceReceipts', event.ownerUid)) {
-    await receipt.ref.update({ status: 'REVOKED', revokedByEventId: event.eventId, updatedAt: FieldValue.serverTimestamp() });
-    await db.recursiveDelete(receipt.ref.collection('transcripts'));
-    await db.recursiveDelete(receipt.ref.collection('transcriptionAttempts'));
-  }
-  for (const root of await ownedRoots(db, 'uraiPrivateLifeModel', event.ownerUid)) {
-    await db.recursiveDelete(root.ref); summary.localRootDeletionsAcknowledged++;
-  }
-  return summary;
+  return { jobsInvalidated: progress.jobsInvalidated, localRootDeletionsAcknowledged: progress.localRootDeletionsAcknowledged,
+    completePrivateSourceRevocation: false };
 }

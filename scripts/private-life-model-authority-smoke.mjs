@@ -42,9 +42,14 @@ function database() {
   let tail = Promise.resolve(), beforeCommit;
   const set = (path, data) => { records.set(path, clone(data)); versions.set(path,(versions.get(path)||0)+1); };
   const snapshot = path => ({ id: path.split('/').at(-1), ref: ref(path), exists: records.has(path), data: () => clone(records.get(path)) });
-  const query = (path, filter, bound = Infinity) => ({ path, where: (key,op,value) => { assert.equal(op,'=='); return query(path,[key,value],bound); },
-    limit: limit => query(path,filter,limit), get: async () => { const docs = [...records.keys()].filter(p=>p.startsWith(path+'/') && !p.slice(path.length+1).includes('/')
-      && (!filter || records.get(p)?.[filter[0]]===filter[1])).slice(0,bound).map(snapshot); return { size: docs.length, docs }; }, doc: id => ref(path+'/'+id) });
+  const query = (path, filter, bound = Infinity, after = '') => ({ path,
+    where: (key,op,value) => { assert.equal(op,'=='); return query(path,[key,value],bound,after); },
+    orderBy: () => query(path,filter,bound,after), startAfter: value => query(path,filter,bound,typeof value==='string'?value:value.id),
+    limit: limit => query(path,filter,limit,after), get: async () => {
+      const docs = [...records.keys()].filter(p=>p.startsWith(path+'/') && !p.slice(path.length+1).includes('/')
+        && p.slice(path.length+1)>after && (!filter || records.get(p)?.[filter[0]]===filter[1])).sort().slice(0,bound).map(snapshot);
+      return { size: docs.length, docs };
+    }, doc: id => ref(path+'/'+id) });
   const ref = path => ({ path, id: path.split('/').at(-1), collection: name => query(path+'/'+name), get: async () => snapshot(path),
     set: async (data, options) => set(path,options?.merge ? { ...records.get(path), ...data } : data), update: async data => set(path,{ ...records.get(path), ...data }) });
   const db = { collection: name => query(name), doc: ref, recursiveDelete: async target => { for (const path of [...records.keys()]) if(path===target.path||path.startsWith(target.path+'/')) {
@@ -57,7 +62,7 @@ function database() {
       try { for(let attempt=0;attempt<3;attempt++) {
         const reads=new Map(),writes=[];let wrote=false;
         const result=await fn({ get: async target => { assert.equal(wrote,false,'Firestore requires all reads before writes');reads.set(target.path,versions.get(target.path)||0);return snapshot(target.path); },
-          create: (target,data)=>{wrote=true;writes.push([target,data,'create']);},set:(target,data,options)=>{wrote=true;writes.push([target,data,options?.merge?'merge':'set']);} });
+          update: (target,data)=>{wrote=true;writes.push([target,data,'merge']);},create: (target,data)=>{wrote=true;writes.push([target,data,'create']);},set:(target,data,options)=>{wrote=true;writes.push([target,data,options?.merge?'merge':'set']);} });
         if(beforeCommit){const hook=beforeCommit;beforeCommit=undefined;await hook();}
         if([...reads].some(([path,version])=>(versions.get(path)||0)!==version))continue;
         for(const [target,data,mode]of writes){if(mode==='create')assert.equal(records.has(target.path),false,'create must be unique');set(target.path,mode==='merge'?{...records.get(target.path),...data}:data);}
@@ -179,7 +184,7 @@ await check('provider errors never print private transcript, provider text or ar
 
 function loadPrivacy(f, { bucketPrivate=true, env={} }={}) {
   const exports={};vm.runInNewContext(compile(privacySource),{exports,Buffer,process:{env:{GCS_BUCKET_NAME:'synthetic-export-bucket',URAI_JOBS_DATA_RIGHTS_ALLOWED_EXPORT_BUCKET:'synthetic-export-bucket',...env}},require:name=>name==='firebase-admin/storage'?{getStorage:()=>({bucket:()=>({getMetadata:async()=>[{iamConfiguration:{uniformBucketLevelAccess:{enabled:true},publicAccessPrevention:bucketPrivate?'enforced':'inherited'}}]})})}:name==='firebase-admin/firestore'?{
-    getFirestore:()=>f.db,FieldValue:{serverTimestamp:()=> 'synthetic-time',delete:()=> 'deleted'}}:require(name)});return exports;
+    getFirestore:()=>f.db,FieldPath:{documentId:()=> '__name__'},FieldValue:{serverTimestamp:()=> 'synthetic-time',delete:()=> 'deleted'}}:require(name)});return exports;
 }
 await check('data-rights export denies an unadmitted or public storage destination',async()=>{
   const f=fixture();await loadPrivacy(f).assertPrivateDataRightsExportDestination();
@@ -203,7 +208,7 @@ await check('delete racing extraction leaves no resurrection or failed-attempt r
   assert.equal((await f.execute()).status,502);assert.equal([...f.records.keys()].some(p=>p.startsWith(rootPath)),false);
 });
 await check('consent revocation scrubs job output and purges private revisions with explicit external boundary',async()=>{
-  const f=fixture();await f.execute();f.set(blockPath,{active:true});const result=await loadPrivacy(f).invalidatePrivateLifeModelForConsent({ownerUid:request.ownerUid,purpose:'memory.storage',eventId:'synthetic_event_01'});
+  const f=fixture();await f.execute();f.set(blockPath,{active:true,ownerUid:request.ownerUid,purpose:'memory.storage'});f.set('jobConsentEventReceipts/'+hash('synthetic_event_01'),{consumerId:'urai-jobs',eventId:'synthetic_event_01',ownerUid:request.ownerUid,purpose:'memory.storage',status:'blocked',eventBindingVersion:'urai-jobs-consent-event-binding-v1',eventBindingHash:'d'.repeat(64)});const result=await loadPrivacy(f).invalidatePrivateLifeModelForConsent({ownerUid:request.ownerUid,purpose:'memory.storage',eventId:'synthetic_event_01'});
   assert.equal(result.jobsInvalidated,1);assert.equal(result.completePrivateSourceRevocation,false);assert.equal(f.records.get('jobs/'+request.jobId).status,'CANCELLED');
   assert.equal(f.records.get(receiptPath).status,'REVOKED');assert.equal([...f.records.keys()].some(p=>p.startsWith(rootPath)),false);assert.equal((await f.execute()).status,502);
 });

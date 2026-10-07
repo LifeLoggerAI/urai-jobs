@@ -31,11 +31,12 @@ function fixture(options = {}) {
   function document(path) { return { path, id: path.split('/').at(-1), collection: name => query(`${path}/${name}`),
     get: async () => snapshot(path), set: async (value, settings) => write(path, value, settings?.merge),
     update: async value => { assert.ok(records.has(path)); write(path, value, true, true); }, delete: async () => records.delete(path) }; }
-  function query(path, filters = [], maximum = Infinity) { return { path, doc: id => document(`${path}/${id}`),
-    where: (key, operator, value) => { assert.equal(operator, '=='); return query(path, [...filters, [key, value]], maximum); },
-    orderBy: key => { assert.equal(key, '__name__'); return query(path, filters, maximum); }, limit: value => query(path, filters, value),
+  function query(path, filters = [], maximum = Infinity, after = '') { return { path, doc: id => document(`${path}/${id}`),
+    where: (key, operator, value) => { assert.equal(operator, '=='); return query(path, [...filters, [key, value]], maximum, after); },
+    orderBy: key => { assert.equal(key, '__name__'); return query(path, filters, maximum, after); }, limit: value => query(path, filters, value, after),
+    startAfter: value => query(path, filters, maximum, typeof value === 'string' ? value : value.id),
     get: async () => { const docs = [...records.keys()].filter(key => key.startsWith(path + '/') && !key.slice(path.length + 1).includes('/'))
-      .filter(key => filters.every(([field, value]) => records.get(key)?.[field] === value)).sort().slice(0, maximum).map(snapshot);
+      .filter(key => key.slice(path.length + 1) > after && filters.every(([field, value]) => records.get(key)?.[field] === value)).sort().slice(0, maximum).map(snapshot);
       await options.afterQuery?.(path, records); return { docs, size: docs.length }; } }; }
   const db = { collection: name => query(name), doc: document,
     runTransaction: async callback => { const operation = serial.then(async () => { const writes = [];
@@ -196,3 +197,67 @@ test('bounded owner job deletion resumes a scope larger than one execution', asy
   await assert.rejects(f.execute(), error => error.code === 'resource-exhausted');
   assert.equal((await f.db.collection('jobs').where('ownerUid', '==', uid).get()).size, 2);
   await f.execute(); assert.equal((await f.db.collection('jobs').where('ownerUid', '==', uid).get()).size, 0); assert.equal(f.records.get(fencePath).deletionEpoch, 1); });
+
+function consentFixture(options = {}) {
+  const f = fixture(options), event = { ownerUid: uid, purpose: 'memory.storage', eventId: 'fictional_consent_cleanup' };
+  const receipt = 'jobConsentEventReceipts/' + hash(event.eventId), block = 'jobConsentBlocks/' + hash(uid + String.fromCharCode(10) + event.purpose);
+  f.records.set(receipt, { consumerId: 'urai-jobs', eventId: event.eventId, ownerUid: uid, purpose: event.purpose,
+    status: 'blocked', eventBindingVersion: 'urai-jobs-consent-event-binding-v1', eventBindingHash: hash('fictional canonical event only') });
+  f.records.set(block, { ownerUid: uid, purpose: event.purpose, active: true });
+  return { ...f, event, receipt, block, revoke: () => f.helper.invalidatePrivateLifeModelForConsent(event) };
+}
+test('private consent cleanup resumes more than 4000 owner jobs from an atomic durable cursor', async () => {
+  const f = consentFixture();
+  for (let i = 0; i < 4002; i++) {
+    const id = 'bulk_' + String(i).padStart(5, '0');
+    f.records.set('jobs/' + id, { ownerUid: uid, type: 'memory.private-source.index', status: 'RUNNING', output: { private: true }, execution: { leaseToken: 'fictional' } });
+  }
+  await assert.rejects(f.revoke(), /scope_continuation/);
+  const progress = f.records.get(f.receipt).privateLifeModelInvalidationProgress;
+  assert.equal(progress.phase, 'jobs'); assert.equal(progress.jobsInvalidated, 4000); assert.ok(progress.cursor);
+  const out = await f.revoke();
+  assert.equal(out.jobsInvalidated, 4003); assert.equal(out.completePrivateSourceRevocation, false);
+  assert.equal(f.records.get(f.receipt).privateLifeModelInvalidationProgress.phase, 'DONE');
+  assert.equal(f.records.has(fencePath), false); assert.equal(f.records.has(modelPath), false);
+  const replay = await f.revoke(); assert.equal(replay.jobsInvalidated, out.jobsInvalidated);
+  assert.ok([...f.records].filter(([p]) => p.startsWith('jobs/')).every(([,d]) => d.status === 'CANCELLED' && d.output === undefined));
+});
+test('private consent cleanup pages retained source grants and erased model roots beyond 2000', async () => {
+  const f = consentFixture();
+  for (let i = 0; i < 2001; i++) {
+    f.records.set('uraiPrivateSourceReceipts/' + hash('bulk source ' + i), { ownerUid: uid, status: 'ACTIVE' });
+    f.records.set('uraiPrivateLifeModel/' + hash('bulk model ' + i).slice(0,40), { ownerUid: uid });
+  }
+  await assert.rejects(f.revoke(), /scope_continuation/);
+  assert.equal(f.records.get(f.receipt).privateLifeModelInvalidationProgress.phase, 'sources');
+  await assert.rejects(f.revoke(), /scope_continuation/);
+  assert.equal(f.records.get(f.receipt).privateLifeModelInvalidationProgress.phase, 'models');
+  const out = await f.revoke();
+  assert.equal(out.localRootDeletionsAcknowledged, 2002); assert.equal((await f.db.collection('uraiPrivateLifeModel').get()).size, 0);
+  assert.ok([...f.records].filter(([p]) => p.startsWith('uraiPrivateSourceReceipts/') && p.split('/').length === 2).every(([,d]) => d.status === 'REVOKED'));
+});
+test('private consent cleanup resumes interrupted child erasure without dropping its parent cursor', async () => {
+  const f = consentFixture();
+  for (let i = 0; i < 10001; i++) f.records.set(sourcePath + '/transcripts/bulk_' + String(i).padStart(5, '0'), { ownerUid: uid });
+  await assert.rejects(f.revoke(), /child_continuation/);
+  assert.equal(f.records.get(f.receipt).privateLifeModelInvalidationProgress.phase, 'sources');
+  assert.equal(f.records.get(f.receipt).privateLifeModelInvalidationProgress.cursor, '');
+  assert.equal((await f.db.collection(sourcePath + '/transcripts').get()).size, 2);
+  await f.revoke(); assert.equal((await f.db.collection(sourcePath + '/transcripts').get()).size, 0);
+});
+test('private consent cleanup preserves a foreign-owner child and refuses a success continuation', async () => {
+  const f = consentFixture(), foreign = sourcePath + '/transcripts/foreign';
+  f.records.set(foreign, { ownerUid: 'different_owner', private: true });
+  await assert.rejects(f.revoke(), /child_owner_mismatch/);
+  assert.equal(f.records.get(foreign).ownerUid, 'different_owner');
+  assert.notEqual(f.records.get(f.receipt).privateLifeModelInvalidationProgress.phase, 'DONE');
+});
+test('private consent cleanup revalidates canonical block changes during enumeration', async () => {
+  let changed = false;
+  const f = consentFixture({ afterQuery: (path, records) => {
+    if (path === 'jobs' && !changed) { changed = true; records.get('jobConsentBlocks/' + hash(uid + String.fromCharCode(10) + 'memory.storage')).active = false; }
+  } });
+  await assert.rejects(f.revoke(), /authority_changed/);
+  assert.equal(f.records.get('jobs/fictional_job').status, 'SUCCESS');
+  assert.equal(f.records.get(sourcePath).status, 'ACTIVE');
+});
