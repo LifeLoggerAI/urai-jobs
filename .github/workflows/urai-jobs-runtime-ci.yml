@@ -84,6 +84,7 @@ jobs:
             sudo apt-get install -y ffmpeg
           fi
           node scripts/life-movies-media-timing-smoke.mjs
+          node scripts/life-movies-delayed-audio-smoke.mjs
           node scripts/life-movies-cancellation-smoke.mjs
           node scripts/life-movies-render-budget-smoke.mjs
           URAI_SOURCE_SHA="$TARGET_SHA" node scripts/life-movies-assembly-media-smoke.mjs --evidence-dir "$RUNNER_TEMP/life-movies-assembly-proof"

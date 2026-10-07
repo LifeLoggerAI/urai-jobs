@@ -48,6 +48,26 @@ export const LifeMovieAudioCueSchema = z.object({
   message: 'Audio cue must have positive output duration.',
 });
 
+function assertOrdinarySubtitleTimeline(value: string, durationMs: number) {
+  const normalized = value.replace(/\r\n?/g, '\n').trim();
+  if (!normalized) return;
+  const parseTime = (input: string) => {
+    const match = /^(\d{2}):(\d{2}):(\d{2}),(\d{3})$/.exec(input);
+    if (!match || Number(match[2]) > 59 || Number(match[3]) > 59) throw new Error('life_movie_subtitle_invalid');
+    return (((Number(match[1]) * 60 + Number(match[2])) * 60 + Number(match[3])) * 1000) + Number(match[4]);
+  };
+  for (const block of normalized.split(/\n{2,}/)) {
+    const lines = block.split('\n');
+    const timingIndex = lines[0]?.includes('-->') ? 0 : 1;
+    const match = /^(\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2},\d{3})(?:\s+.*)?$/.exec(String(lines[timingIndex] || '').trim());
+    if (!match || !lines.slice(timingIndex + 1).join('\n').trim()) throw new Error('life_movie_subtitle_invalid');
+    const startMs = parseTime(match[1]);
+    const endMs = parseTime(match[2]);
+    if (endMs <= startMs) throw new Error('life_movie_subtitle_invalid');
+    if (endMs > durationMs) throw new Error('life_movie_subtitle_outside_timeline');
+  }
+}
+
 export const StudioLifeMovieRenderPayloadSchema = z.object({
   schemaVersion: z.literal('urai-life-movie-render-v1'),
   projectId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
@@ -89,6 +109,11 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
     }
   }
   const totalTimelineMs = ordered.reduce((max, item) => Math.max(max, item.endMs), 0);
+  try { assertOrdinarySubtitleTimeline(value.subtitleText, totalTimelineMs); }
+  catch (error) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['subtitleText'],
+      message: error instanceof Error ? error.message : 'life_movie_subtitle_invalid' });
+  }
   for (const [index, cue] of value.audioCues.entries()) {
     if (cue.endMs > totalTimelineMs) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['audioCues', index, 'endMs'], message: 'Audio cue must fit inside the rendered timeline.' });

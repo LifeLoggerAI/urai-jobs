@@ -359,6 +359,14 @@ function parsePayload(job) {
 
   const subtitleText = typeof payload.subtitleText === 'string' ? payload.subtitleText : '';
   if (Buffer.byteLength(subtitleText, 'utf8') > 2 * 1024 * 1024) throw new Error('subtitles_too_large');
+  // Ordinary renders must enforce the same caption timing boundary as final
+  // assembly before accessing a private source or starting FFmpeg. Validation
+  // does not rewrite the original admitted UTF-8 caption payload.
+  try { shiftSrt(subtitleText, 0, 1, totalTimelineMs); }
+  catch (error) {
+    throw new Error(error?.message === 'assembly_subtitle_outside_segment'
+      ? 'life_movie_subtitle_outside_timeline' : 'life_movie_subtitle_invalid');
+  }
 
   return {
     tenantId,
@@ -657,7 +665,10 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
     if (!streams.audio) {
       args.push('-f', 'lavfi', '-t', String(durationSeconds), '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
     }
-    args.push('-t', String(durationSeconds), '-vf', `${visualFilter},tpad=stop_mode=clone:stop_duration=${durationSeconds}`, '-af', 'apad', '-map', '0:v:0');
+    // Camera media can start AAC after its first video frame. Normalize audio
+    // to output time zero with leading silence, preserving sync instead of
+    // advancing speech; then pad through the declared clip duration.
+    args.push('-t', String(durationSeconds), '-vf', `${visualFilter},tpad=stop_mode=clone:stop_duration=${durationSeconds}`, '-af', 'aresample=48000:first_pts=0,apad', '-map', '0:v:0');
     args.push(...(streams.audio ? ['-map', '0:a:0'] : ['-map', '1:a:0']));
     args.push(
       '-c:v', 'libx264', '-threads', '1', '-preset', 'medium', '-crf', '20',
@@ -681,7 +692,7 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
   throw new Error('source_has_no_supported_media_stream');
 }
 
-async function mixAudioCues(baseMoviePath, outputPath, audioCues, localBySource, sourceById, signal) {
+async function mixAudioCues(baseMoviePath, outputPath, audioCues, localBySource, sourceById, timelineDurationMs, signal) {
   if (!audioCues.length) {
     fs.renameSync(baseMoviePath, outputPath);
     return;
@@ -708,11 +719,16 @@ async function mixAudioCues(baseMoviePath, outputPath, audioCues, localBySource,
     );
     mixInputs.push(`[${label}]`);
   }
-  filters.push(`${mixInputs.join('')}amix=inputs=${mixInputs.length}:duration=first:dropout_transition=0:normalize=0[mixedaudio]`);
+  // AAC/MP3 decode in different packet sizes. Ending at the first decoded
+  // stream can truncate the last dialogue packet. Flush all bounded cues,
+  // then pad/trim to the explicit movie timeline without advancing dialogue.
+  const timelineDurationSeconds = timelineDurationMs / 1000;
+  filters.push(`${mixInputs.join('')}amix=inputs=${mixInputs.length}:duration=longest:dropout_transition=0:normalize=0,apad,atrim=duration=${timelineDurationSeconds},asetpts=PTS-STARTPTS[mixedaudio]`);
 
   args.push(
     '-filter_complex', filters.join(';'),
     '-map', '0:v:0', '-map', '[mixedaudio]',
+    '-t', String(timelineDurationSeconds),
     '-c:v', 'copy',
     '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
     '-movflags', '+faststart',
@@ -994,7 +1010,7 @@ async function renderLifeMovie(job) {
     ], { signal: control.signal });
 
     const moviePath = path.join(workDir, 'life-movie.mp4');
-    await mixAudioCues(baseMoviePath, moviePath, input.audioCues, localBySource, input.sourceById, control.signal);
+    await mixAudioCues(baseMoviePath, moviePath, input.audioCues, localBySource, input.sourceById, timelineDurationMs, control.signal);
     await control.check();
     const media = probeNormalizedMovie(moviePath, input, timelineDurationMs);
 
