@@ -532,6 +532,8 @@ export const executeJob = onMessagePublished({
         ...(providerAuthorization ? { providerAuthorization } : {}),
       }, {
         headers: getWorkerAuthHeaders(),
+        // A redirect must never redispatch private job bytes or worker authority.
+        maxRedirects: 0,
         timeout: jobType === 'studio.render.video'
           ? 120000
           : jobType === 'studio.assemble.video'
