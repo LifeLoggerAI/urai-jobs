@@ -7,13 +7,13 @@ import { httpsError } from '../core/errors.js';
 import { uploadToGcs } from '../core/gcs.js';
 import { deleteCapturedRealityEngineJob } from './capturedRealityDerivativeRevocation.js';
 import { assertPrivateDataRightsExportDestination, assertPrivateLifeModelOwnerEpoch, deleteOwnedPrivateLifeModel, exportOwnedPrivateLifeModel, removePrivateDataRightsExportAttempt } from './privateLifeModelDataRights.js';
+import { continuationReason, recordFailure, retryCounters } from './dataRightsContinuationPolicy.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
 const MAX_OWNED_JOBS = 2_000;
 const EXECUTION_MODE = 'protected-staging';
 const EXECUTION_SCHEMA = 'urai-jobs-data-rights-execution-v1';
 const EXECUTION_LEASE_MS = 180000;
-const MAX_EXECUTION_ATTEMPTS = 3;
 const MAX_LOG_DELETE_PAGES = 20;
 
 const ExecuteSchema = z.object({
@@ -278,22 +278,29 @@ const handler = async (data: unknown, _context: CallableContext) => {
     }
     const failedRetry = prior?.event === 'DATA_RIGHTS_EXECUTION_FAILED'
       && record.status === 'IN_REVIEW' && record.executionState === 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE';
+    const continuationRetry = prior?.event === 'DATA_RIGHTS_EXECUTION_CONTINUATION_REQUIRED'
+      && record.status === 'IN_REVIEW' && record.executionState === 'PROTECTED_STAGING_EXECUTION_CONTINUATION_REQUIRED';
     const interrupted = prior?.event === 'DATA_RIGHTS_EXECUTION_STARTED'
       && record.status === 'IN_REVIEW' && record.executionState === 'PROTECTED_STAGING_EXECUTION_IN_PROGRESS';
     if (interrupted && (!Number.isSafeInteger(prior.leaseExpiresAtMs) || prior.leaseExpiresAtMs > Date.now())) {
       throw httpsError('unavailable', 'The exact data-rights execution is still in progress.');
     }
-    const retry = failedRetry || interrupted;
+    const retry = failedRetry || continuationRetry || interrupted;
     if (prior && !retry) throw httpsError('failed-precondition', 'The exact data-rights execution attempt requires reconciliation.');
     if (record.status !== 'APPROVED' && !retry) {
       throw httpsError('failed-precondition', 'Only an explicitly APPROVED request can enter protected staging execution.');
     }
-    const previousAttempt = prior?.attemptNumber ?? 0;
-    if (!Number.isSafeInteger(previousAttempt) || previousAttempt < 0 || previousAttempt >= MAX_EXECUTION_ATTEMPTS) throw httpsError('resource-exhausted', 'The bounded data-rights retry budget is exhausted.');
-    const attemptNumber = previousAttempt + 1;
+    let budget;
+    try {
+      budget = retryCounters(prior, continuationRetry ? 'continuation' : failedRetry ? 'failure' : interrupted ? 'interrupted' : 'initial');
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'data_rights_retry_budget_invalid';
+      throw httpsError('resource-exhausted', reason);
+    }
+    const { attemptNumber, failureAttempts, continuationDeliveries } = budget;
     const execution = {
       event: 'DATA_RIGHTS_EXECUTION_STARTED',
-      attemptNumber,
+      attemptNumber, failureAttempts, continuationDeliveries,
       requestHash, leaseToken, leaseExpiresAtMs: Date.now() + EXECUTION_LEASE_MS,
       exportAttemptObjectKey: canonicalDigest(leaseToken).slice(0, 32),
       schemaVersion: EXECUTION_SCHEMA,
@@ -307,6 +314,7 @@ const handler = async (data: unknown, _context: CallableContext) => {
     else transaction.create(executionRef, execution);
     transaction.create(executionRef.collection('attempts').doc(String(attemptNumber).padStart(2, '0')), {
       event: 'DATA_RIGHTS_ATTEMPT_STARTED', schemaVersion: EXECUTION_SCHEMA, requestHash, attemptNumber,
+      failureAttempts, continuationDeliveries,
       ownerHash: execution.ownerHash, requestType: record.requestType,
       exportAttemptObjectKey: execution.exportAttemptObjectKey, createdAt: FieldValue.serverTimestamp(),
     });
@@ -315,7 +323,7 @@ const handler = async (data: unknown, _context: CallableContext) => {
       executionState: 'PROTECTED_STAGING_EXECUTION_IN_PROGRESS',
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    return { replay: null, record, requestHash, attemptNumber };
+    return { replay: null, record, requestHash, attemptNumber, failureAttempts, continuationDeliveries };
   });
 
   if (request.replay) return { replay: true, receipt: request.replay };
@@ -367,24 +375,44 @@ const handler = async (data: unknown, _context: CallableContext) => {
       try { await removePrivateDataRightsExportAttempt(ownerUid, parsed.data.requestId, canonicalDigest(leaseToken).slice(0, 32)); }
       catch { cleanupPending = true; }
     }
+    const continuation = !cleanupPending && record.requestType === 'DELETE' ? continuationReason(error) : null;
+    const counters = recordFailure({
+      failureAttempts: request.failureAttempts,
+      continuationDeliveries: request.continuationDeliveries,
+    }, Boolean(continuation));
     await db.runTransaction(async transaction => {
       const [execution, currentRequest, ownAttempt] = await Promise.all([transaction.get(executionRef), transaction.get(requestRef), transaction.get(attemptRef)]);
       const active = execution.data(), current = currentRequest.data();
       if (ownAttempt.data()?.requestHash === request.requestHash && ownAttempt.data()?.event === 'DATA_RIGHTS_ATTEMPT_STARTED') {
-        transaction.set(attemptRef, { event: 'DATA_RIGHTS_ATTEMPT_FAILED', privateExportCleanupPending: cleanupPending,
-          failureCode: cleanupPending ? 'PRIVATE_EXPORT_CLEANUP_RECONCILIATION_REQUIRED' : 'DATA_RIGHTS_EXECUTION_FAILED',
-          failedAt: FieldValue.serverTimestamp() }, { merge: true });
+        transaction.set(attemptRef, {
+          event: continuation ? 'DATA_RIGHTS_ATTEMPT_CONTINUATION_REQUIRED' : 'DATA_RIGHTS_ATTEMPT_FAILED',
+          privateExportCleanupPending: cleanupPending,
+          failureCode: cleanupPending ? 'PRIVATE_EXPORT_CLEANUP_RECONCILIATION_REQUIRED'
+            : continuation ? 'DATA_RIGHTS_EXECUTION_CONTINUATION_REQUIRED' : 'DATA_RIGHTS_EXECUTION_FAILED',
+          ...counters,
+          failedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
       }
       // An expired predecessor cannot mark its successor failed or revive approval.
       if (active?.event !== 'DATA_RIGHTS_EXECUTION_STARTED' || active.leaseToken !== leaseToken
         || active.requestHash !== request.requestHash || current?.ownerUid !== ownerUid
         || current.requestType !== record.requestType || current.status !== 'IN_REVIEW') return;
-      transaction.set(executionRef, { event: 'DATA_RIGHTS_EXECUTION_FAILED', failureCode: cleanupPending ? 'PRIVATE_EXPORT_CLEANUP_RECONCILIATION_REQUIRED' : 'DATA_RIGHTS_EXECUTION_FAILED',
-        leaseToken: FieldValue.delete(), leaseExpiresAtMs: 0, failedAt: FieldValue.serverTimestamp() }, { merge: true });
-      transaction.set(requestRef, { status: 'IN_REVIEW', executionState: cleanupPending ? 'PROTECTED_STAGING_EXECUTION_FAILED_RECONCILIATION_REQUIRED' : 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE',
-        updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      transaction.set(executionRef, {
+        event: continuation ? 'DATA_RIGHTS_EXECUTION_CONTINUATION_REQUIRED' : 'DATA_RIGHTS_EXECUTION_FAILED',
+        failureCode: cleanupPending ? 'PRIVATE_EXPORT_CLEANUP_RECONCILIATION_REQUIRED'
+          : continuation ? 'DATA_RIGHTS_EXECUTION_CONTINUATION_REQUIRED' : 'DATA_RIGHTS_EXECUTION_FAILED',
+        ...counters,
+        leaseToken: FieldValue.delete(), leaseExpiresAtMs: 0, failedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      transaction.set(requestRef, {
+        status: 'IN_REVIEW',
+        executionState: cleanupPending ? 'PROTECTED_STAGING_EXECUTION_FAILED_RECONCILIATION_REQUIRED'
+          : continuation ? 'PROTECTED_STAGING_EXECUTION_CONTINUATION_REQUIRED' : 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE',
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
     });
     if (cleanupPending) throw httpsError('internal', 'Private export cleanup requires reconciliation.');
+    if (continuation) throw httpsError('resource-exhausted', 'Bounded data-rights deletion continuation required.');
     const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
     if (['unavailable', 'resource-exhausted', 'permission-denied', 'failed-precondition'].includes(code)) throw error;
     // Storage/database errors can include owner IDs, private paths and payloads.
