@@ -22,7 +22,7 @@ const COMMUNICATIONS_TENANT_ID_PATTERN = /^tenant_[a-zA-Z0-9_-]{6,64}$/;
 
 const PrivateSourcePayloadSchema = z.object({
   sourceReceiptRef: z.string().trim().regex(/^psr_[A-Za-z0-9_-]{16,128}$/),
-  requestedPurpose: z.enum(['transcribe', 'memory-index']),
+  requestedPurpose: z.literal('transcribe'),
   locale: z.string().trim().min(2).max(35).regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/).optional(),
   requestReceipt: z.string().trim().regex(/^req_[A-Za-z0-9_-]{12,128}$/).optional(),
 }).strict();
@@ -179,6 +179,8 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
         'Private-source processing requires canonical consent context: purpose, policy version, and decision receipt.'
       );
     }
+
+    if (consent.purpose !== 'memory.storage') throw httpsError('failed-precondition', 'Private-source processing requires the memory.storage consent purpose.');
 
     if (jobType === 'memory.private-source.transcribe') {
       const privateSource = PrivateSourcePayloadSchema.safeParse(payload);

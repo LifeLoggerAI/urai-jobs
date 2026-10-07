@@ -9,6 +9,7 @@ import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJobTypes.js';
 import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
 import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
+import { canFinalizePrivateSource } from '../privacy/privateLifeModelDataRights.js';
 
 // URAI Jobs worker routing audit markers.
 // asset/spatial/studio subsystem workers route: '/'
@@ -578,6 +579,9 @@ export const executeJob = onMessagePublished({
       if (!canFinalizeExecution(current, leaseToken)) {
         return false;
       }
+
+      if (['memory.private-source.transcribe','memory.private-source.index'].includes(jobType)
+        && !await canFinalizePrivateSource(db, transaction, current, result)) return false;
 
       const now = FieldValue.serverTimestamp();
       transaction.update(jobRef, {
