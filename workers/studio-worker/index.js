@@ -82,23 +82,49 @@ function createRenderControl(job) {
     if (controller.signal.aborted) throw controller.signal.reason;
     if (!checking) {
       checking = (async () => {
-        const snapshot = await wait(admin.firestore().collection('jobs').doc(jobId).get());
-        const current = snapshot.exists ? snapshot.data() : null;
-        if (!current || current.status !== 'RUNNING' || current.execution?.leaseToken !== job.leaseToken) {
-          throw new Error('render_lease_revoked');
-        }
-        if (current.tenantId !== job.tenantId || current.ownerUid !== job.ownerUid
-          || (current.jobType || current.type) !== jobType
-          || canonicalJson(current.payload) !== canonicalJson(job.payload)) {
-          throw new Error('render_job_binding_mismatch');
-        }
-        if (current.ownerUid && current.consent?.purpose) {
-          const id = crypto.createHash('sha256').update(`${current.ownerUid}\n${current.consent.purpose}`).digest('hex');
-          const block = await wait(admin.firestore().collection('jobConsentBlocks').doc(id).get());
-          if (block.exists && block.data()?.active === true) throw new Error('render_consent_revoked');
-        }
+        const db = admin.firestore();
+        await wait(db.runTransaction(async (transaction) => {
+          const snapshot = await transaction.get(db.collection('jobs').doc(jobId));
+          const current = snapshot.exists ? snapshot.data() : null;
+          if (!current || current.status !== 'RUNNING' || current.execution?.leaseToken !== job.leaseToken) {
+            throw new Error('render_lease_revoked');
+          }
+          if (current.jobId !== jobId || current.tenantId !== job.tenantId || current.ownerUid !== job.ownerUid
+            || (current.jobType || current.type) !== jobType
+            || canonicalJson(current.payload) !== canonicalJson(job.payload)
+            || canonicalJson(current.consent) !== canonicalJson(job.consent)
+            || canonicalJson(current.consents) !== canonicalJson(job.consents)) {
+            throw new Error('render_job_binding_mismatch');
+          }
+          const validConsent = value => value && typeof value === 'object'
+            && ['purpose', 'policyVersion', 'decisionReceiptId'].every(key => typeof value[key] === 'string' && value[key].length > 0);
+          if (typeof current.ownerUid !== 'string' || !current.ownerUid
+            || !validConsent(current.consent) || current.consent.purpose !== 'life-movie.render'
+            || (current.consents !== undefined && (!Array.isArray(current.consents)
+              || current.consents.length > 8 || current.consents.some(value => !validConsent(value))))) {
+            throw new Error('render_consent_missing');
+          }
+          const ownerHash = crypto.createHash('sha256').update(current.ownerUid).digest('hex');
+          const [localFence, centralFence, ...blocks] = await Promise.all([
+            transaction.get(db.collection('uraiPrivateLifeModelOwnerFences').doc(ownerHash)),
+            transaction.get(db.collection('privacyDeletionTombstones').doc(current.ownerUid)),
+            ...[current.consent, ...(current.consents || [])].map(context => {
+              const id = crypto.createHash('sha256').update(`${current.ownerUid}\n${context.purpose}`).digest('hex');
+              return transaction.get(db.collection('jobConsentBlocks').doc(id));
+            }),
+          ]);
+          const own = localFence.exists ? localFence.data() : null;
+          const central = centralFence.exists ? centralFence.data() : null;
+          if ((localFence.exists && (own?.ownerHash !== ownerHash || own?.deleted === true))
+            || (centralFence.exists && (central?.uid !== current.ownerUid || central?.active === true))) {
+            throw new Error('render_owner_deleted');
+          }
+          for (const block of blocks) {
+            if (block.exists && block.data()?.active === true) throw new Error('render_consent_revoked');
+          }
+        }));
       })().catch((error) => {
-        const allowed = ['render_lease_revoked', 'render_job_binding_mismatch', 'render_consent_revoked', 'render_deadline_exceeded'];
+        const allowed = ['render_lease_revoked', 'render_job_binding_mismatch', 'render_consent_revoked', 'render_consent_missing', 'render_owner_deleted', 'render_deadline_exceeded'];
         abort(allowed.includes(error?.message) ? error.message : 'render_authority_unavailable');
         throw controller.signal.reason;
       }).finally(() => { checking = undefined; });
@@ -114,6 +140,71 @@ function createRenderControl(job) {
     signal: controller.signal, wait, check,
     async start() { await check(); pollTimer = setTimeout(poll, pollMs); },
     stop() { stopped = true; clearTimeout(pollTimer); clearTimeout(deadlineTimer); },
+  };
+}
+
+// Every new artifact has create-only Storage authority and an attempt marker.
+// Cleanup may erase only its immutable generation, never a replacement object.
+function createPrivateOutputControl(bucket, job, attemptPrefix, control) {
+  const written = [];
+  const marker = {
+    uraiLifeMovieJobId: job.jobId,
+    uraiLifeMovieOwnerSha256: crypto.createHash('sha256').update(job.ownerUid).digest('hex'),
+    uraiLifeMovieLeaseSha256: crypto.createHash('sha256').update(job.leaseToken).digest('hex'),
+    uraiLifeMovieAttemptSha256: crypto.createHash('sha256').update(attemptPrefix).digest('hex'),
+  };
+  const bounded = async promise => {
+    let timer;
+    try {
+      return await Promise.race([promise, new Promise((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('render_output_cleanup_timeout')), 5000);
+      })]);
+    } finally { clearTimeout(timer); }
+  };
+  const inspect = async record => {
+    const [metadata] = await record.file.getMetadata();
+    const generation = String(metadata.generation || '');
+    if (!/^[1-9][0-9]*$/.test(generation)
+      || !Object.entries(marker).every(([key, value]) => metadata.metadata?.[key] === value)) {
+      throw new Error('render_output_cleanup_authority_mismatch');
+    }
+    if (record.generation && record.generation !== generation) throw new Error('render_output_generation_changed');
+    record.generation = generation;
+    return generation;
+  };
+  return {
+    async upload(localPath, destination, contentType) {
+      await control.check();
+      const record = { file: bucket.file(destination) };
+      written.push(record);
+      const output = record.file.createWriteStream({
+        resumable: false, preconditionOpts: { ifGenerationMatch: 0 },
+        metadata: { contentType, cacheControl: 'private, no-store', metadata: marker },
+      });
+      // The supported Storage SDK installs the exact upload response metadata
+      // on this File before emitting response. Pin it before any later lookup.
+      output.once('response', () => {
+        const metadata = record.file.metadata;
+        const generation = String(metadata?.generation || '');
+        if (/^[1-9][0-9]*$/.test(generation)
+          && Object.entries(marker).every(([key, value]) => metadata.metadata?.[key] === value)) {
+          record.generation = generation;
+        } else record.invalidReceipt = true;
+      });
+      await pipeline(fs.createReadStream(localPath), output, { signal: control.signal });
+      if (!record.generation || record.invalidReceipt) throw new Error('render_output_receipt_invalid');
+      await control.wait(inspect(record));
+      await control.check();
+    },
+    async cleanup() {
+      const results = await Promise.allSettled(written.map(record => bounded((async () => {
+        let generation;
+        try { generation = await inspect(record); }
+        catch (error) { if (error?.code === 404) return; throw error; }
+        await record.file.delete({ ignoreNotFound: true, ifGenerationMatch: generation });
+      })())));
+      if (results.some(result => result.status === 'rejected')) throw new Error('render_output_cleanup_incomplete');
+    },
   };
 }
 
@@ -646,7 +737,7 @@ async function assembleLifeMovie(job) {
   const control = createRenderControl(job);
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'urai-life-movie-assembly-'));
   const attemptPrefix = `${input.outputPrefix.replace(/\/+$/, '')}/attempt-${crypto.randomUUID()}`;
-  const writtenObjects = [];
+  const privateOutputs = createPrivateOutputControl(bucket, job, attemptPrefix, control);
   let completed = false;
 
   async function downloadVerified(location, expectedChecksum, localPath, budget) {
@@ -673,11 +764,7 @@ async function assembleLifeMovie(job) {
   }
 
   async function uploadPrivateFile(localPath, destination, contentType) {
-    await control.check();
-    writtenObjects.push(destination);
-    await pipeline(fs.createReadStream(localPath), bucket.file(destination).createWriteStream({
-      resumable: false, metadata: { contentType, cacheControl: 'private, no-store' },
-    }), { signal: control.signal });
+    await privateOutputs.upload(localPath, destination, contentType);
   }
 
   try {
@@ -819,11 +906,7 @@ async function assembleLifeMovie(job) {
     control.stop();
     fs.rmSync(workDir, { recursive: true, force: true });
     if (!completed) {
-      const cleanup = await Promise.allSettled(writtenObjects.map((destination) =>
-        bucket.file(destination).delete({ ignoreNotFound: true })));
-      if (cleanup.some((result) => result.status === 'rejected')) {
-        throw new Error('assembly_cleanup_incomplete');
-      }
+      try { await privateOutputs.cleanup(); } catch { throw new Error('assembly_cleanup_incomplete'); }
     }
   }
 }
@@ -838,7 +921,7 @@ async function renderLifeMovie(job) {
   // Isolate every execution attempt so cancelled/stale work cannot overwrite or
   // delete a newer attempt's objects, even when the requested prefix is reused.
   const attemptPrefix = `${input.outputPrefix}/attempt-${crypto.randomUUID()}`;
-  const writtenObjects = [];
+  const privateOutputs = createPrivateOutputControl(bucket, job, attemptPrefix, control);
   let completed = false;
   try {
     await control.start();
@@ -971,11 +1054,7 @@ async function renderLifeMovie(job) {
       manifest: `${attemptPrefix}/life-movie.render-manifest.json`,
     };
     async function uploadPrivateFile(localPath, destination, contentType) {
-      await control.check();
-      writtenObjects.push(destination);
-      await pipeline(fs.createReadStream(localPath), bucket.file(destination).createWriteStream({
-        resumable: false, metadata: { contentType, cacheControl: 'private, no-store' },
-      }), { signal: control.signal });
+      await privateOutputs.upload(localPath, destination, contentType);
     }
     await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4');
     await uploadPrivateFile(subtitlePath, outputPaths.srt, 'application/x-subrip');
@@ -1007,11 +1086,7 @@ async function renderLifeMovie(job) {
     control.stop();
     fs.rmSync(workDir, { recursive: true, force: true });
     if (!completed) {
-      const cleanup = await Promise.allSettled(writtenObjects.map((destination) =>
-        bucket.file(destination).delete({ ignoreNotFound: true })));
-      if (cleanup.some((result) => result.status === 'rejected')) {
-        throw new Error('render_cleanup_incomplete');
-      }
+      try { await privateOutputs.cleanup(); } catch { throw new Error('render_cleanup_incomplete'); }
     }
   }
 }

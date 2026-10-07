@@ -44,15 +44,17 @@ function makeMovie(name, { width = 320, height = 320, fps = 30, duration = 15, a
 }
 
 function harness(job, options = {}) {
+  job.consent = { purpose: 'life-movie.render', policyVersion: 'fixture-v1', decisionReceiptId: 'fixture-receipt' };
   const current = { ...structuredClone(job), status: 'RUNNING', execution: { leaseToken: job.leaseToken } };
-  const state = { current, downloads: 0, uploads: [], deleted: [], children: new Set(), consentRevoked: false };
+  const state = { current, downloads: 0, uploads: [], deleted: [], metadata: new Map(), children: new Set(), consentRevoked: false };
   const app = { use() {}, get() {}, post() {}, listen() {} };
   const express = Object.assign(() => app, { json: () => () => {} });
   const admin = {
     initializeApp() {},
-    firestore: () => ({ collection: (collection) => ({ doc: () => ({ get: async () =>
+    firestore: () => ({ runTransaction: callback => callback({ get: ref => ref.get() }),
+      collection: (collection) => ({ doc: () => ({ get: async () =>
       collection === 'jobs' ? { exists: true, data: () => state.current }
-        : { exists: state.consentRevoked, data: () => ({ active: state.consentRevoked }) },
+        : { exists: collection === 'jobConsentBlocks' && state.consentRevoked, data: () => ({ active: state.consentRevoked }) },
     }) }) }),
     storage: () => ({ bucket: (bucket) => ({ file: (name) => ({
       createReadStream() {
@@ -62,8 +64,10 @@ function harness(job, options = {}) {
         return Readable.from([objects.get(name)]);
       },
       createWriteStream(metadata) {
+        const uploadFile = this;
         assert.equal(bucket, bucketName);
         assert.equal(metadata.metadata.cacheControl, 'private, no-store');
+        assert.equal(metadata.preconditionOpts.ifGenerationMatch, 0);
         state.uploads.push(name);
         const chunks = [];
         return new Writable({ write(chunk, _encoding, callback) {
@@ -71,11 +75,21 @@ function harness(job, options = {}) {
           chunks.push(Buffer.from(chunk)); callback();
         }, final(callback) {
           objects.set(name, Buffer.concat(chunks));
+          state.metadata.set(name, { generation: String(state.uploads.length + 100), ...metadata.metadata });
+          uploadFile.metadata = state.metadata.get(name);
+          this.emit('response', { statusCode: 200 });
           if (options.cancelUpload) state.current.status = 'CANCELLED';
           callback();
         } });
       },
-      async delete() { state.deleted.push(name); objects.delete(name); },
+      async getMetadata() {
+        if (!state.metadata.has(name)) throw Object.assign(new Error('fixture_missing_object'), { code: 404 });
+        return [state.metadata.get(name)];
+      },
+      async delete(options) {
+        assert.equal(options.ifGenerationMatch, state.metadata.get(name).generation);
+        state.deleted.push(name); objects.delete(name);
+      },
     }) }) }),
   };
   const worker = {};
@@ -225,7 +239,7 @@ try {
   const cancelled = await rejectAssembly(job, /render_lease_revoked/, { cancelUpload: true });
   assert.equal(cancelled.state.deleted.length, 1);
   const failed = await rejectAssembly(job, /fixture_upload_failed/, { failUpload: true });
-  assert.equal(failed.state.deleted.length, 2);
+  assert.equal(failed.state.deleted.length, 1, 'cleanup removes only the successfully created first generation');
   const revoked = harness(job); revoked.state.consentRevoked = true;
   await assert.rejects(revoked.worker.assembleLifeMovie(job), /render_consent_revoked/);
   assert.equal(revoked.state.downloads, 0);
