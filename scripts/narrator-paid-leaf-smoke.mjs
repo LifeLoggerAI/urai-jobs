@@ -16,11 +16,11 @@ const ts = require('typescript');
 const sourcePaths = ['workers/narrator-worker/src/protected-spend.ts', 'workers/narrator-worker/src/protected-spend.js', 'workers/narrator-worker/src/handlers/narrator-tts.ts', 'workers/narrator-worker/src/handlers/narrator-tts.js'];
 const hash = value => createHash('sha256').update(value).digest('hex');
 const stable = value => value === null || typeof value !== 'object' ? JSON.stringify(value) : Array.isArray(value) ? `[${value.map(stable).join(',')}]` : `{${Object.keys(value).filter(k => value[k] !== undefined).sort().map(k => `${JSON.stringify(k)}:${stable(value[k])}`).join(',')}}`;
-const canonical = value => {
+const protectedCanonical = value => {
   if (value === null || typeof value === 'boolean' || typeof value === 'number') return String(value);
   if (typeof value === 'string') return JSON.stringify(value).replace(/[\u007f-\uffff]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  return `{${Object.keys(value).sort().map(k => `${canonical(k)}:${canonical(value[k])}`).join(',')}}`;
+  if (Array.isArray(value)) return `[${value.map(protectedCanonical).join(',')}]`;
+  return `{${Object.keys(value).sort().map(k => `${protectedCanonical(k)}:${protectedCanonical(value[k])}`).join(',')}}`;
 };
 const requestDigest = (endpoint, body) => hash(Buffer.concat([Buffer.from(`POST\n${endpoint}\n`), Buffer.from(body)]));
 const gatewayUrl = 'https://synthetic-gateway.example/api/worker/production-spend';
@@ -32,17 +32,25 @@ git('init', '--quiet'); git('add', '.'); git('-c', 'user.name=UrAi Synthetic Tes
 const sourceSha = git('rev-parse', 'HEAD');
 
 function fixture(provider, options = {}, extension = 'ts') {
-  const clock = { now: Date.now(), monotonic: 0 }, events = [], submitted = [], stored = [];
+  const clock = { now: Date.now(), monotonic: 0 }, events = [], submitted = [], stored = [], deleted = [];
   const adc = { token: 'synthetic-oauth-token', principal: 'synthetic@synthetic-project.iam.gserviceaccount.com', quota: 'synthetic-billing-project', expiresAt: clock.now + 3_600_000 };
   Object.assign(adc, options.adc);
   const job = { jobId: 'synthetic-narrator-job', jobType: 'narrator.tts', type: 'narrator.tts', ownerUid: 'synthetic-owner', tenantId: 'synthetic-tenant', leaseToken: 'synthetic-lease', consent: { purpose: 'synthetic.voice', policyVersion: 'synthetic-policy', decisionReceiptId: 'synthetic-consent' }, payload: { provider, text: 'Synthetic é voice', locale: 'en-GB', voice: 'en-GB-Standard-A', voiceId: 'synthetic-voice', format: 'OGG_OPUS' } };
   if (provider === 'elevenlabs') job.providerAuthorization = { provider, ownerUid: job.ownerUid, consentReceiptId: 'synthetic-consent', rightsReceiptId: 'synthetic-rights', provenanceRef: 'synthetic-provenance', voiceId: job.payload.voiceId };
   Object.assign(job, options.job);
+  const canonical = { ...structuredClone(job), status: 'RUNNING', execution: { leaseToken: job.leaseToken } };
+  delete canonical.providerAuthorization;
+  const authorization = { enabled: true, provider: 'elevenlabs', ownerUid: job.ownerUid,
+    consentPurpose: job.consent?.purpose || 'synthetic.voice', policyVersion: job.consent?.policyVersion || 'synthetic-policy',
+    decisionReceiptId: job.consent?.decisionReceiptId || 'synthetic-consent', voiceIds: [job.payload.voiceId],
+    rightsReceiptId: 'synthetic-rights', provenanceRef: 'synthetic-provenance' };
+  const blocks = new Map(), dbState = { available: true }, firestoreReads = [];
+  options.initialCanonical?.({ canonical, authorization, blocks, dbState });
   const endpoint = provider === 'google' ? 'https://texttospeech.googleapis.com/v1/text:synthesize' : 'https://api.elevenlabs.io/v1/text-to-speech/synthetic-voice?output_format=mp3_44100_128';
   const body = provider === 'google' ? JSON.stringify({ input: { text: job.payload.text }, voice: { languageCode: job.payload.locale || 'en-US', name: job.payload.voice || job.payload.voiceId }, audioConfig: { audioEncoding: 'OGG_OPUS' } }) : JSON.stringify({ text: job.payload.text, model_id: 'eleven_multilingual_v2' });
   const accountId = provider === 'google' ? `google:${adc.quota}:${adc.principal}` : 'synthetic-elevenlabs-account';
   const mapping = { [requestDigest(endpoint, body)]: { job_id: 'synthetic-protected-job', worker_id: `synthetic-${provider}-worker`, account_id: accountId, token: 'synthetic-distinct-worker-token-1234567890', gateway_url: gatewayUrl } };
-  const env = { GCS_BUCKET_NAME: 'synthetic-bucket', URAI_SOURCE_SHA: sourceSha, ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA: gatewaySha, ASSET_FORGE_SPEND_GATEWAY_URL: gatewayUrl, ASSET_FORGE_SPEND_GATEWAY_ORIGIN: 'https://synthetic-gateway.example', URAI_NARRATOR_SPEND_BINDINGS_JSON: JSON.stringify(mapping), URAI_NARRATOR_ELEVENLABS_ENABLED: 'true', ELEVENLABS_API_KEY: 'synthetic-elevenlabs-key', ELEVENLABS_ALLOWED_VOICE_IDS: 'synthetic-voice' };
+  const env = { FIREBASE_PROJECT_ID: 'synthetic-jobs-project', GCS_BUCKET_NAME: 'synthetic-bucket', URAI_SOURCE_SHA: sourceSha, ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA: gatewaySha, ASSET_FORGE_SPEND_GATEWAY_URL: gatewayUrl, ASSET_FORGE_SPEND_GATEWAY_ORIGIN: 'https://synthetic-gateway.example', URAI_NARRATOR_SPEND_BINDINGS_JSON: JSON.stringify(mapping), URAI_NARRATOR_ELEVENLABS_ENABLED: 'true', ELEVENLABS_API_KEY: 'synthetic-elevenlabs-key', ELEVENLABS_ALLOWED_VOICE_IDS: 'synthetic-voice' };
   Object.assign(env, options.env);
   let protectedJob, held = false, recorded = false, verifiedPreflightExpiry;
   const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
@@ -66,19 +74,19 @@ function fixture(provider, options = {}, extension = 'ts') {
       if (fields.action === 'preflight') {
         if (options.gatewayUnavailable) throw new Error('synthetic gateway unavailable');
         if (options.preflightDenied) return json({ ok: false }, 409);
-        const result = protectedEnvelope(fields); options.afterPreflight?.({ env, job, adc, clock });
+        const result = protectedEnvelope(fields); options.afterPreflight?.({ env, job, adc, clock, canonical, authorization, blocks, dbState, stored, deleted });
         return json(options.authorizingPreflight ? { ...result, provider_call_authorized: true } : result);
       }
       if (fields.action === 'reserve') {
         if (held || options.reserveDenied) return json({ ok: false }, 409);
         held = true;
         if (options.reserveLost) throw new Error('synthetic reserve response lost after hold');
-        const digest = hash(canonical(Object.fromEntries(Object.entries(protectedJob).filter(([key]) => key !== 'approval' && key !== 'attempts'))));
+        const digest = hash(protectedCanonical(Object.fromEntries(Object.entries(protectedJob).filter(([key]) => key !== 'approval' && key !== 'attempts'))));
         assert.equal(fields.job_digest, digest);
         const reservedAt = clock.now, admittedExpiry = Math.min(verifiedPreflightExpiry, reservedAt + (options.runtime || 45) * 1000);
         const result = { ok: true, ...(options.missingReserveTimes ? {} : { reserved_at: new Date(options.reservedAt === undefined ? reservedAt : options.reservedAt).toISOString(), admission_expires_at: new Date(options.reserveExpiry === undefined ? admittedExpiry : options.reserveExpiry).toISOString() }), attempt_id: 'synthetic-attempt', provider_call_authorized: true, execution_performed: false, job_digest: digest, executor_source_sha: sourceSha, gateway_source_sha: gatewaySha, worker_id: fields.worker_id, account_id: fields.account_id, credential_sha256: fields.credential_sha256, semantic_headers_sha256: fields.semantic_headers_sha256, source_input_sha256: fields.source_input_sha256, semantic_input_sha256: fields.semantic_input_sha256, content_type: fields.content_type, max_runtime_seconds: options.runtime || 45 };
         options.mutateReserve?.(result);
-        options.afterReserve?.({ env, job, adc, clock });
+        options.afterReserve?.({ env, job, adc, clock, canonical, authorization, blocks, dbState, stored, deleted });
         return json(options.badReserve ? { ...result, worker_id: 'foreign-worker' } : result);
       }
       if (fields.action === 'record') {
@@ -86,7 +94,7 @@ function fixture(provider, options = {}, extension = 'ts') {
         assert.ok(['succeeded', 'failed'].includes(fields.status));
         assert.equal(fields.credential_sha256, events[0].fields.credential_sha256);
         recorded = true;
-        options.afterRecord?.({ env, job, adc, clock });
+        options.afterRecord?.({ env, job, adc, clock, canonical, authorization, blocks, dbState, stored, deleted });
         if (options.recordUnavailable) throw new Error('synthetic observation unavailable');
         return json({ ok: true, provider_call_authorized: false, execution_performed: false, reconciliation_required: true });
       }
@@ -97,7 +105,7 @@ function fixture(provider, options = {}, extension = 'ts') {
     if (options.providerLost) throw new Error('synthetic provider response lost');
     if (options.providerTimeout) { clock.now += 2000; return new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('synthetic provider timeout')), { once: true })); }
     if (options.providerDenied) return json({ error: 'synthetic failure' }, 500);
-    options.afterProvider?.({ env, job, adc, clock });
+    options.afterProvider?.({ env, job, adc, clock, canonical, authorization, blocks, dbState, stored, deleted });
     if (provider === 'google') return json({ audioContent: options.invalidAudio ? 'invalid!' : Buffer.from('synthetic-audio').toString('base64') });
     return new Response(options.invalidAudio ? Buffer.alloc(0) : Buffer.from('synthetic-audio'), { headers: { 'request-id': 'synthetic-provider-request' } });
   };
@@ -106,7 +114,35 @@ function fixture(provider, options = {}, extension = 'ts') {
     auth = { getClient: async () => ({ getAccessToken: async () => ({ token: adc.token }), get quotaProjectId() { return adc.quota; }, get credentials() { return { expiry_date: adc.expiresAt }; } }), getCredentials: async () => ({ client_email: adc.principal }), getProjectId: async () => adc.quota };
     async synthesizeSpeech(request) { submitted.push({ sdk: true, request }); return [{ audioContent: Buffer.from('synthetic-audio') }]; }
   }
-  class Storage { bucket(bucket) { return { file: filename => ({ async save(bytes, metadata) { stored.push({ bucket, filename, bytes, metadata }); options.afterStorage?.({ env, job, adc, clock }); if (options.storageFails) throw new Error('synthetic Storage failure'); } }) }; } }
+  class Storage { bucket(bucket) { return { file: filename => ({
+    async save(bytes, metadata) { assert.equal(metadata.preconditionOpts?.ifGenerationMatch, args.includes('--lifecycle-baseline') ? undefined : 0);
+      if (options.storagePending) await new Promise(resolve => { dbState.finishStorage = resolve; });
+      stored.push({ bucket, filename, bytes, metadata, generation: '1', live: true });
+      options.afterStorage?.({ env, job, adc, clock, canonical, authorization, blocks, dbState, stored, deleted });
+      if (options.storageFails) throw new Error('synthetic Storage failure'); },
+    async getMetadata() { const output = stored.find(o => o.filename === filename && o.live);
+      if (!output) throw Object.assign(new Error('synthetic absent output'), { code: 404 });
+      if (options.metadataFails) throw new Error('synthetic metadata unavailable');
+      return [{ generation: output.generation, metadata: output.metadata.metadata.metadata }]; },
+    async delete(optionsValue) { const output = stored.find(o => o.filename === filename && o.live); if (!output) return;
+      options.beforeDelete?.({ output });
+      if (optionsValue.ifGenerationMatch !== output.generation) throw Object.assign(new Error('synthetic generation changed'), { code: 412 });
+      output.live = false; deleted.push({ filename, generation: optionsValue.ifGenerationMatch }); },
+  }) }; } }
+  const apps = [];
+  const ref = key => ({ key });
+  const db = { collection: name => ({ doc: id => ref(name + '/' + id) }), doc: ref,
+    runTransaction: async fn => { if (dbState.pending) return new Promise(() => {}); if (!dbState.available) throw new Error('synthetic Firestore unavailable');
+      return fn({ get: async document => { firestoreReads.push(document.key);
+        if (document.key === 'jobs/' + job.jobId) return { exists: !options.jobMissing, data: () => structuredClone(canonical) };
+        if (document.key === 'users/' + job.ownerUid + '/providerAuthorizations/elevenlabs') return { exists: !options.authorizationMissing, data: () => structuredClone(authorization) };
+        if (document.key.startsWith('jobConsentBlocks/')) { const active = blocks.get(document.key.split('/')[1]); return { exists: active !== undefined, data: () => ({ active }) }; }
+        throw new Error('unexpected canonical read');
+      } });
+    } };
+  const admin = { apps, initializeApp(optionsValue, name) { const app = { name, options: optionsValue }; apps.push(app); return app; },
+    firestore(app) { assert.equal(app.options.projectId, env.FIREBASE_PROJECT_ID); return db; } };
+
   const context = vm.createContext({ Buffer, Headers, Response, URL, AbortController, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval, Date: FakeDate, fetch, process: { env, cwd: () => root }, console: { log() {} } });
   const modules = new Map();
   function load(rel) {
@@ -117,6 +153,8 @@ function fixture(provider, options = {}, extension = 'ts') {
     const localRequire = spec => {
       if (spec === '@google-cloud/text-to-speech') return { TextToSpeechClient };
       if (spec === '@google-cloud/storage') return { Storage };
+      if (spec === 'firebase-admin') return admin;
+      if (spec === './narrator-tts.js') return load(`workers/narrator-worker/src/handlers/narrator-tts.${extension}`);
       if (spec === '../protected-spend.js') return load(`workers/narrator-worker/src/protected-spend.${extension}`);
       if (spec === 'node:perf_hooks') return { performance: { now: () => clock.monotonic } };
       if (spec === '../runtime-source-proof.cjs') return require(path.join(sourceRoot, 'workers/narrator-worker/runtime-source-proof.cjs'));
@@ -128,14 +166,97 @@ function fixture(provider, options = {}, extension = 'ts') {
     return module.exports;
   }
   const handler = load(`workers/narrator-worker/src/handlers/narrator-tts.${extension}`);
-  return { job, env, adc, events, submitted, stored, endpoint, body, clock, helper: load(`workers/narrator-worker/src/protected-spend.${extension}`), execute: () => handler.handleNarratorTts(job), get held() { return held; }, get recorded() { return recorded; } };
+  const registry = load(`workers/narrator-worker/src/handlers/index.${extension}`);
+  return { job, env, adc, events, submitted, stored, deleted, canonical, authorization, blocks, dbState, firestoreReads, endpoint, body, clock, helper: load('workers/narrator-worker/src/protected-spend.' + extension), execute: () => registry.handleJob(job), get held() { return held; }, get recorded() { return recorded; } };
 }
 
 let count = 0;
 async function test(label, run) { await run(); count++; console.log(`[PASS] ${label}`); }
 async function denied(provider, options, extra, extension = 'ts') { const f = fixture(provider, options, extension); await assert.rejects(f.execute()); assert.equal(f.submitted.length, 0); assert.equal(f.stored.length, 0); extra?.(f); }
+async function lifecycleProof(reproduce = false) {
+  for (const extension of ['ts', 'js']) for (const provider of ['google', 'elevenlabs']) {
+    await test(extension + ' ' + provider + ' late Storage completion after session timeout is cleaned by its continuation', async () => {
+      const f = fixture(provider, { runtime: 1, storagePending: true }, extension);
+      const execution = f.execute(), rejected = assert.rejects(execution);
+      for (let attempt = 0; !f.dbState?.finishStorage && attempt < 100; attempt++) await new Promise(resolve => setTimeout(resolve, 5));
+      assert.equal(typeof f.dbState?.finishStorage, 'function', 'actual handler reached pending Storage await');
+      f.clock.now += 2000; await rejected; assert.equal(f.held, true); assert.equal(f.stored.length, 0);
+      f.dbState.finishStorage();
+      for (let attempt = 0; (!f.stored.length || (!reproduce && f.stored[0].live)) && attempt < 100; attempt++) await new Promise(resolve => setTimeout(resolve, 5));
+      assert.equal(f.stored.length, 1); assert.equal(f.stored[0].live, reproduce); assert.equal(f.deleted.length, reproduce ? 0 : 1);
+    });
+  }
+  const revoke = ({ canonical, blocks }) => blocks.set(hash(canonical.ownerUid + '\n' + canonical.consent.purpose), true);
+  const correct = ({ canonical }) => { canonical.payload.text = 'Corrected canonical source'; };
+  for (const extension of ['ts', 'js']) for (const provider of ['google', 'elevenlabs']) {
+    const label = extension + ' ' + provider + ' canonical ';
+    const races = [
+      ['initial revocation', { initialCanonical: revoke }, 0, 0, false],
+      ['revocation during preflight', { afterPreflight: revoke }, 0, 0, false],
+      ['revocation during reserve', { afterReserve: revoke }, 0, 0, true],
+      ['revocation after provider response', { afterProvider: revoke }, 1, 0, true],
+      ['revocation during storage', { afterStorage: revoke }, 1, 1, true],
+      ['revocation during outcome observation', { afterRecord: revoke }, 1, 1, true],
+      ['source correction during reserve', { afterReserve: correct }, 0, 0, true],
+      ['source correction during storage', { afterStorage: correct }, 1, 1, true],
+    ];
+    if (provider === 'elevenlabs') races.push(
+      ['voice authorization revoked during reserve', { afterReserve: ({ authorization }) => { authorization.enabled = false; } }, 0, 0, true],
+      ['voice rights corrected during storage', { afterStorage: ({ authorization }) => { authorization.rightsReceiptId = 'corrected-rights'; } }, 1, 1, true]);
+    for (const [name, options, posts, writes, held] of races) await test(label + name, async () => {
+      const f = fixture(provider, options, extension);
+      if (reproduce) { await f.execute(); assert.equal(f.submitted.length, 1); assert.equal(f.stored.length, 1); assert.equal(f.deleted.length, 0); }
+      else { await assert.rejects(f.execute()); assert.equal(f.submitted.length, posts); assert.equal(f.stored.length, writes);
+        assert.equal(f.held, held); assert.equal(f.deleted.length, writes);
+        if (held) assert.equal(f.recorded, true);
+        if (posts === 0) assert.equal(f.stored.length, 0);
+        if (writes) { assert.equal(f.stored[0].live, false); assert.equal(f.deleted[0].generation, '1'); } }
+    });
+    if (reproduce) continue;
+    for (const field of ['ownerUid', 'tenantId', 'status', 'type', 'payload', 'execution']) await test(label + 'stored ' + field + ' mismatch denies provider', async () => {
+      const f = fixture(provider, { initialCanonical: ({ canonical }) => { canonical[field] = field === 'payload' ? { text: 'foreign' } : field === 'execution' ? { leaseToken: 'foreign-lease' } : 'foreign'; } }, extension);
+      await assert.rejects(f.execute()); assert.equal(f.submitted.length, 0); assert.equal(f.events.length, 0);
+    });
+    await test(label + 'missing authoritative job denies provider', () => denied(provider, { jobMissing: true }, f => assert.equal(f.events.length, 0), extension));
+    await test(label + 'missing deployed canonical project denies provider', () => denied(provider, { env: { FIREBASE_PROJECT_ID: '' } }, f => assert.equal(f.events.length, 0), extension));
+    await test(label + 'project drift during reserve retains hold without dispatch', () => denied(provider, { afterReserve: ({ env }) => { env.FIREBASE_PROJECT_ID = 'foreign-jobs-project'; } }, f => assert.equal(f.held, true), extension));
+    await test(label + 'additional purpose revocation denies provider', async () => {
+      const additional = { purpose: 'synthetic.private-memory', policyVersion: 'p', decisionReceiptId: 'd' };
+      const f = fixture(provider, { job: { consents: [additional] }, initialCanonical: ({ canonical, blocks }) => { blocks.set(hash(canonical.ownerUid + '\n' + additional.purpose), true); } }, extension);
+      await assert.rejects(f.execute()); assert.equal(f.submitted.length, 0);
+    });
+    for (const unrelated of ['owner', 'purpose', 'inactive']) await test(label + 'unrelated/inactive block ' + unrelated + ' preserves valid run', async () => {
+      const f = fixture(provider, { initialCanonical: ({ canonical, blocks }) => { blocks.set(hash((unrelated === 'owner' ? 'foreign-owner' : canonical.ownerUid) + '\n' + (unrelated === 'purpose' ? 'foreign-purpose' : canonical.consent.purpose)), unrelated !== 'inactive'); } }, extension);
+      await f.execute(); assert.equal(f.submitted.length, 1); assert.equal(f.stored.length, 1); assert.equal(f.deleted.length, 0); assert.ok(f.firestoreReads.includes('jobs/' + f.job.jobId));
+    });
+    await test(label + 'Firestore outage after reserve retains hold without dispatch', () => denied(provider, { afterReserve: ({ dbState }) => { dbState.available = false; } }, f => assert.equal(f.held, true), extension));
+    await test(label + 'foreign output marker refuses destructive cleanup', async () => {
+      const f = fixture(provider, { afterStorage: state => { revoke(state); state.stored[0].metadata.metadata.metadata.uraiNarratorOutputNonce = 'foreign-original'; } }, extension);
+      await assert.rejects(f.execute(), /cleanup_incomplete/); assert.equal(f.deleted.length, 0); assert.equal(f.stored[0].live, true); assert.equal(f.held, true);
+    });
+    await test(label + 'concurrent object generation replacement survives cleanup', async () => {
+      const f = fixture(provider, { afterStorage: revoke, beforeDelete: ({ output }) => { output.generation = '2'; } }, extension);
+      await assert.rejects(f.execute(), /cleanup_incomplete/); assert.equal(f.deleted.length, 0); assert.equal(f.stored[0].live, true); assert.equal(f.held, true);
+    });
+    await test(label + 'cleanup metadata outage remains exact retry blocker', async () => {
+      const f = fixture(provider, { afterStorage: revoke, metadataFails: true }, extension);
+      await assert.rejects(f.execute(), /cleanup_incomplete/); assert.equal(f.deleted.length, 0); assert.equal(f.stored[0].live, true); assert.equal(f.held, true);
+    });
+    if (provider === 'elevenlabs') for (const field of ['enabled', 'provider', 'ownerUid', 'consentPurpose', 'policyVersion', 'decisionReceiptId', 'voiceIds', 'rightsReceiptId', 'provenanceRef']) await test(label + 'server voice grant ' + field + ' mismatch denies provider', async () => {
+      const f = fixture(provider, { initialCanonical: ({ authorization }) => { authorization[field] = field === 'enabled' ? false : field === 'voiceIds' ? [] : 'foreign'; } }, extension);
+      await assert.rejects(f.execute()); assert.equal(f.submitted.length, 0); assert.equal(f.events.length, 0);
+    });
+  }
+  if (!reproduce) await test('canonical Firestore read timeout blocks all paid operations', async () => {
+    const f = fixture('google', { initialCanonical: ({ dbState }) => { dbState.pending = true; } });
+    await assert.rejects(f.execute(), /canonical_read_timeout/);
+    assert.equal(f.events.length, 0); assert.equal(f.submitted.length, 0); assert.equal(f.held, false);
+  });
+}
+
 try {
-  if (args.includes('--reproduce')) {
+  if (args.includes('--lifecycle-baseline') || args.includes('--lifecycle-only')) { await lifecycleProof(args.includes('--lifecycle-baseline')); }
+  else if (args.includes('--reproduce')) {
     for (const provider of ['google', 'elevenlabs']) await test(`predecessor ${provider} invokes actual paid leaf without canonical approval`, async () => { const f = fixture(provider, { env: { URAI_NARRATOR_SPEND_BINDINGS_JSON: '{}' } }); await f.execute(); assert.equal(f.events.length, 0); assert.equal(f.submitted.length, 1); });
   } else {
     for (const extension of ['ts', 'js']) for (const provider of ['google', 'elevenlabs']) {
@@ -264,5 +385,6 @@ try {
     await test('declared SHA cannot substitute for actual clean source', () => denied('google', { env: { URAI_SOURCE_SHA: 'a'.repeat(40) } }));
     for (const rel of ['workers/narrator-worker/src/protected-spend', 'workers/narrator-worker/src/handlers/narrator-tts']) await test(`${rel} tracked JS AST matches actual TS compilation`, async () => { const compiled = ts.transpileModule(fs.readFileSync(path.join(sourceRoot, `${rel}.ts`), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText; const tree = code => { const file = ts.createSourceFile('actual.js', code, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS); assert.equal(file.parseDiagnostics.length, 0); const shape = node => { const children = []; ts.forEachChild(node, child => { children.push(shape(child)); }); return [node.kind, typeof node.text === 'string' ? node.text : null, children]; }; return shape(file); }; assert.deepEqual(tree(fs.readFileSync(path.join(sourceRoot, `${rel}.js`), 'utf8')), tree(compiled)); assert.equal(fs.readFileSync(path.join(sourceRoot, `${rel}.js`), 'utf8'), compiled, 'tracked JS must match compiler bytes'); });
   }
+  if (!args.includes('--lifecycle-baseline') && !args.includes('--lifecycle-only') && !args.includes('--reproduce')) await lifecycleProof();
   console.log(`Actual narrator paid-leaf synthetic regressions: ${count} passed; provider network calls: 0; spending: 0.`);
 } finally { fs.rmSync(root, { recursive: true, force: true }); }

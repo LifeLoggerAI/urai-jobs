@@ -336,6 +336,7 @@ if (String(labels['urai-environment'] || '') !== process.env.EXPECTED_ENVIRONMEN
 if (String(revision?.spec?.serviceAccountName || '') !== process.env.EXPECTED_SERVICE_ACCOUNT) failures.push('revision service account mismatch');
 if (observedValues.URAI_ENV !== process.env.EXPECTED_ENVIRONMENT) failures.push('revision URAI_ENV mismatch');
 if (observedValues.GCS_BUCKET_NAME !== process.env.EXPECTED_BUCKET) failures.push('revision GCS_BUCKET_NAME mismatch');
+if (process.env.EXPECTED_CANONICAL_JOBS_PROJECT && observedValues.FIREBASE_PROJECT_ID !== process.env.EXPECTED_CANONICAL_JOBS_PROJECT) failures.push('revision canonical Jobs project mismatch');
 if (process.env.EXPECTED_STUDIO_SOURCE_BUCKETS && observedValues.URAI_STUDIO_SOURCE_BUCKETS !== process.env.EXPECTED_STUDIO_SOURCE_BUCKETS) failures.push('revision URAI_STUDIO_SOURCE_BUCKETS mismatch');
 if (normalizeDigest(revision?.status?.imageDigest) !== normalizeDigest(process.env.EXPECTED_IMAGE_DIGEST)) failures.push('revision image digest mismatch');
 if (failures.length) {
@@ -512,7 +513,7 @@ deploy_worker() {
     env_vars="$env_vars,URAI_STUDIO_SOURCE_BUCKETS=$URAI_STUDIO_SOURCE_BUCKETS"
   fi
   if [ "$worker" = "narrator-worker" ]; then
-    env_vars="$env_vars,URAI_NARRATOR_ELEVENLABS_ENABLED=$URAI_NARRATOR_ELEVENLABS_ENABLED"
+    env_vars="$env_vars,FIREBASE_PROJECT_ID=$GCLOUD_PROJECT,URAI_NARRATOR_ELEVENLABS_ENABLED=$URAI_NARRATOR_ELEVENLABS_ENABLED"
     if [ "$URAI_NARRATOR_ELEVENLABS_ENABLED" = "true" ]; then
       env_vars="$env_vars,ELEVENLABS_ALLOWED_VOICE_IDS=$ELEVENLABS_ALLOWED_VOICE_IDS,ELEVENLABS_MODEL_ID=$ELEVENLABS_MODEL_ID,ELEVENLABS_OUTPUT_FORMAT=$ELEVENLABS_OUTPUT_FORMAT,ELEVENLABS_MAX_CHARACTERS_PER_REQUEST=$ELEVENLABS_MAX_CHARACTERS_PER_REQUEST"
       secret_vars="$secret_vars,ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY_SECRET}:${SECRET_VERSION_IDS[$ELEVENLABS_API_KEY_SECRET]}"
@@ -587,6 +588,7 @@ deploy_worker() {
 
   secret_versions_json="$(build_secret_versions_json "$worker")"
   revision_json="$(gcloud run revisions describe "$revision" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format=json)"
+  EXPECTED_CANONICAL_JOBS_PROJECT="$([ "$worker" = "narrator-worker" ] && printf '%s' "$GCLOUD_PROJECT" || true)" \
   EXPECTED_STUDIO_SOURCE_BUCKETS="$([ "$worker" = "studio-worker" ] && printf '%s' "$URAI_STUDIO_SOURCE_BUCKETS" || true)" \
   verify_revision_configuration "$revision_json" "$secret_versions_json" "$build_image_digest"
   labels_json="$(revision_labels_json "$revision_json")"

@@ -205,6 +205,11 @@ export async function paidNarratorFetch(provider: 'google' | 'elevenlabs', model
   return response;
 }
 
+/** Stop continuations whose uncancellable await finished after the session deadline. */
+export function assertProtectedNarratorCurrent(): void {
+  const session = sessions.getStore(); need(session, 'narrator execution lacks source session'); current(session);
+}
+
 /** One deadline spans provider response decoding and output persistence; outcomes never settle funds. */
 export async function withProtectedNarratorSession<T>(jobValue: unknown, run: () => Promise<T>): Promise<T> {
   const job = record(jobValue);

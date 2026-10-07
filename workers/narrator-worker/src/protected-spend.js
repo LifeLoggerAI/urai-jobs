@@ -8,6 +8,7 @@ exports.narratorSemanticInputDigest = narratorSemanticInputDigest;
 exports.narratorHeaderBindings = narratorHeaderBindings;
 exports.narratorExecutorSourceSha = narratorExecutorSourceSha;
 exports.paidNarratorFetch = paidNarratorFetch;
+exports.assertProtectedNarratorCurrent = assertProtectedNarratorCurrent;
 exports.withProtectedNarratorSession = withProtectedNarratorSession;
 /** Narrator paid leaves use the canonical Factory gateway; configuration is never approval. */
 const node_async_hooks_1 = require("node:async_hooks");
@@ -294,6 +295,12 @@ async function paidNarratorFetch(provider, model, request) {
     if (requestId)
         session.requestId = requestId.slice(0, 256);
     return response;
+}
+/** Stop continuations whose uncancellable await finished after the session deadline. */
+function assertProtectedNarratorCurrent() {
+    const session = sessions.getStore();
+    need(session, 'narrator execution lacks source session');
+    current(session);
 }
 /** One deadline spans provider response decoding and output persistence; outcomes never settle funds. */
 async function withProtectedNarratorSession(jobValue, run) {
