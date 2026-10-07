@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const handler = fs.readFileSync(new URL('../workers/narrator-worker/src/handlers/narrator-tts.ts', import.meta.url), 'utf8');
 const runtime = fs.readFileSync(new URL('../workers/narrator-worker/src/index.ts', import.meta.url), 'utf8');
@@ -44,8 +46,10 @@ assert.ok(
 );
 const synthesisStart = handler.indexOf('async function synthesizeElevenLabs');
 const synthesisBody = handler.slice(synthesisStart, handleStart);
-assert.ok(synthesisStart >= 0 && synthesisBody.indexOf('allowedElevenLabsVoiceIds') < synthesisBody.indexOf('fetch('),
+assert.ok(synthesisStart >= 0 && synthesisBody.indexOf('allowedElevenLabsVoiceIds') < synthesisBody.indexOf('paidNarratorFetch("elevenlabs"'),
   'voice allowlist must be evaluated before provider execution');
+assert.ok(!synthesisBody.includes('await fetch(') && !handler.includes('ttsClient.synthesizeSpeech('),
+  'every narrator paid provider leaf must use protected exact REST dispatch');
 assert.ok(handler.includes('outputFormat !== "mp3_44100_128"'),
   'worker must fail closed until additional ElevenLabs output formats have verified MIME/extension handling');
 
@@ -94,3 +98,4 @@ assert.ok(deploy.includes('if [ "$worker" = "narrator-worker" ] && [ "$URAI_NARR
 assert.ok(deploy.includes('if [ "$worker" = "narrator-worker" ]; then'));
 
 console.log('Governed ElevenLabs narrator provider contract passed');
+execFileSync(process.execPath, [fileURLToPath(new URL('./narrator-paid-leaf-smoke.mjs', import.meta.url))], { stdio: 'inherit' });

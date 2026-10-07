@@ -39,3 +39,6 @@ deployment, independent review, Golden Master or production parity. Previously
 issued signed credentials may remain usable until expiration unless the actual
 storage layer proves revocation; response fencing does not claim instant
 invalidation of already-issued credentials.
+# 2026-10-07 combined narrator and canon continuation
+
+The current convergence child deliberately retains #176 private-source/media/runtime-rights/offline-world history, adds #178 narrator protected gateway mapping and absolute admission expiry, retains the stronger #177 issuer-origin and pricing lifetime checks, and preserves #174's exact canon provenance document. Local synthetic paid-leaf verification passed 208 TS/JS behavior and compiler-parity groups with zero network provider requests; complete-workspace typecheck passed against the frozen pnpm 8.15.9 dependency graph. These observations do not certify native CI, deployed source, authentic bounded spend approval, account/pricing/control records, source-provider readback, private-family output, independent review or launch acceptance. Current native checks must validate this combined immutable tree; the predecessor observations below are historical.
