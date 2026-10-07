@@ -12,11 +12,12 @@ function fixture({ responseOk = true, missingConfig = false, foreignOwner = fals
   const job = { ownerUid: foreignOwner ? 'other_owner' : 'synthetic_owner', type: 'memory.private-source.reconstruct-place', status: 'SUCCESS',
     result: { runtime: { ref: 'cr-artifact:opaque-runtime' } }, output: { runtime: { ref: 'cr-artifact:opaque-runtime' } },
     derivativeAccessState: alreadyComplete ? 'REVOKED_ENGINE_CLEANUP_COMPLETE' : undefined };
-  const snapshot = { id: 'synthetic_job_01', data: () => job, ref: { update: async (patch) => { writes.push(patch); Object.assign(job, patch); } } };
-  const db = { collection: (name) => ({ where: () => ({ orderBy() { return this; }, limit: () => ({ get: async () => ['capturedRealityRuntimeAdmissions', 'capturedRealityRuntimeCleanup'].includes(name) ? ({ size: 0, docs: [] }) : ({ size: 1, docs: [snapshot] }) }) }), doc: (id) => ({ name, id }) }),
+  const snapshot = { id: 'synthetic_job_01', exists: true, get: key => job[key], data: () => job, ref: { update: async (patch) => { writes.push(patch); Object.assign(job, patch); } } };
+  const db = { collection: (name) => ({ where: () => ({ orderBy() { return this; }, limit: () => ({ get: async () => ['capturedRealityRuntimeAdmissions', 'capturedRealityRuntimeCleanup'].includes(name) ? ({ size: 0, docs: [] }) : ({ size: 1, docs: [snapshot] }) }) }), doc: (id) => ({ name, id, get: async () => ({ exists: true, data: () => ({ eventId: 'synthetic_event_01', ownerUid: 'synthetic_owner', purpose: 'memory.storage', status: 'blocked' }) }), set: async () => {} }) }),
+    runTransaction: async fn => { const pending = []; const result = await fn({ get: async () => snapshot, update: (_ref, patch) => pending.push(patch), set: () => {} }); pending.forEach(patch => { writes.push(patch); Object.assign(job, patch); }); return result; },
     batch: () => { const pending = []; return { update: (_ref, patch) => pending.push(patch), set: (_ref, patch) => pending.push(patch), commit: async () => { pending.forEach((patch) => { writes.push(patch); Object.assign(job, patch); }); } }; } };
   vm.runInNewContext(compiled, { exports, process: { env: missingConfig ? {} : { CAPTURED_REALITY_ENGINE_URL: 'https://engine.invalid', CAPTURED_REALITY_ENGINE_TOKEN: 'synthetic-token' } }, URL, AbortSignal, setTimeout,
-    require: (name) => name === 'firebase-admin/firestore' ? { getFirestore: () => db, FieldPath: { documentId: () => '__name__' }, FieldValue: { delete: () => 'deleted', serverTimestamp: () => 'server-time' } } : name === 'firebase-admin/storage' ? { getStorage: () => ({ bucket: () => ({ file: () => ({ delete: async () => {} }) }) }) } : require(name),
+    require: (name) => name === 'firebase-admin/firestore' ? { getFirestore: () => db, FieldPath: { documentId: () => '__name__' }, FieldValue: { delete: () => undefined, serverTimestamp: () => 'server-time' } } : name === 'firebase-admin/storage' ? { getStorage: () => ({ bucket: () => ({ file: () => ({ delete: async () => {} }) }) }) } : require(name),
     fetch: async (url, options) => { calls.push({ url, body: options.body }); return { ok: responseOk, status: responseOk ? 200 : 503, json: async () => ({ ok: responseOk, artifactsDeleted: responseOk }) }; },
   });
   return { exports, writes, calls, job };
@@ -24,10 +25,10 @@ function fixture({ responseOk = true, missingConfig = false, foreignOwner = fals
 const event = { eventId: 'synthetic_event_01', ownerUid: 'synthetic_owner', purpose: 'memory.storage', revokedAt: new Date().toISOString() };
 const valid = fixture(); const summary = await valid.exports.invalidateCapturedRealityDerivativesForConsent(event);
 assert.equal(summary.engineDeletionsAcknowledged, 1); assert.equal(valid.job.derivativeAccessState, 'REVOKED_ENGINE_CLEANUP_COMPLETE');
-assert.equal(valid.job.output, 'deleted'); assert.equal(valid.job.result, 'deleted'); assert.equal(valid.job.status, 'CANCELLED');
+assert.equal(valid.job.output, undefined); assert.equal(valid.job.result, undefined); assert.equal(valid.job.status, 'CANCELLED');
 assert.equal(valid.calls.length, 1); assert.equal(JSON.parse(valid.calls[0].body).jobId, 'synthetic_job_01');
 assert.equal(valid.writes[0]['execution.asyncCallbackPending'], false);
-assert.equal(valid.writes[0]['execution.callbackLeaseToken'], 'deleted');
+assert.equal(valid.writes[0]['execution.callbackLeaseToken'], undefined);
 const denied = fixture({ responseOk: false }); await assert.rejects(denied.exports.invalidateCapturedRealityDerivativesForConsent(event), /not_acknowledged/);
 assert.equal(denied.job.derivativeAccessState, 'REVOKED_ENGINE_CLEANUP_PENDING', 'an engine failure cannot produce a complete deletion ack');
 const missing = fixture({ missingConfig: true }); await assert.rejects(missing.exports.invalidateCapturedRealityDerivativesForConsent(event), /unconfigured/);
@@ -89,3 +90,4 @@ await assert.rejects(rightsExports.processDataRightsRequest(request, {}), (error
 requestRecords.set(executionPath, { event: 'DATA_RIGHTS_EXECUTION_STARTED', attemptNumber: 1 });
 await assert.rejects(rightsExports.processDataRightsRequest(request, {}), /already active/);
 console.log('[PASS] captured reality data rights: cancel/scrub/delete acknowledgement, failed cleanup pending, owner isolation and replay; protected runtime not certified');
+
