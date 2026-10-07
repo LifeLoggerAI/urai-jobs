@@ -314,24 +314,51 @@ function parseGcsRef(ref: unknown) {
   return { bucket, objectPath };
 }
 
+async function loadMoviePlaybackAuthority(tenantId: string, userId: string, jobId: string, expectedFingerprint?: string) {
+  return getFirestore().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(jobDoc(jobId));
+    if (!snapshot.exists) throw new Error('job_not_found');
+    const job = snapshot.data() as Job & { derivativeAccessState?: string; outputDeletionState?: string };
+    if (job.sourceSystem !== 'urai-studio' || job.tenantId !== tenantId || job.ownerUid !== userId
+      || job.jobId !== jobId || (job.jobType || job.type) !== 'studio.render.video') throw new Error('job_boundary_mismatch');
+    if (!isConsentContext(job.consent) || job.consent.purpose !== 'life-movie.render') {
+      throw new Error('life_movie_consent_missing');
+    }
+    if (job.status !== 'SUCCESS' || ['REVOKED', 'DELETED'].includes(String(job.derivativeAccessState))
+      || ['PENDING', 'COMPLETE'].includes(String(job.outputDeletionState))) throw new Error('job_not_ready_for_playback');
+    const consentSnapshot = await transaction.get(consentBlockRef(userId, job.consent.purpose));
+    if (consentSnapshot.exists && consentSnapshot.data()?.active === true) throw new Error('life_movie_consent_revoked');
+    const projectId = (job.payload as { projectId?: unknown } | undefined)?.projectId;
+    if (typeof projectId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(projectId)) {
+      throw new Error('job_boundary_mismatch');
+    }
+    const fingerprint = buildRequestFingerprint('studio.render.video', {
+      jobId, tenantId, ownerUid: userId, consent: job.consent, payload: job.payload, output: job.output,
+    });
+    if (expectedFingerprint && expectedFingerprint !== fingerprint) throw new Error('life_movie_delivery_changed');
+    return { job, projectId, fingerprint };
+  });
+}
+
 async function signedMovieAccess(tenantId: string, userId: string, jobId: string, disposition: 'inline' | 'attachment') {
-  const job = await loadBoundJob(tenantId, userId, jobId);
-  if (!isConsentContext(job.consent) || job.consent.purpose !== 'life-movie.render') {
-    throw new Error('life_movie_consent_missing');
-  }
-  const consentSnapshot = await consentBlockRef(userId, job.consent.purpose).get();
-  if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
-    throw new Error('life_movie_consent_revoked');
-  }
-  if (String(job.status) !== 'SUCCESS') throw new Error('job_not_ready_for_playback');
+  const authority = await loadMoviePlaybackAuthority(tenantId, userId, jobId);
+  const { job } = authority;
   const output = job.output as WorkerOutput | undefined;
+  if (output?.publicReleaseAuthorized === true) throw new Error('life_movie_output_boundary_mismatch');
   const artifacts = Array.isArray(output?.outputs) ? output!.outputs! : [];
   const video = artifacts.find((artifact) => artifact?.kind === 'mp4');
   if (!video?.ref) throw new Error('life_movie_video_output_missing');
   const videoLocation = parseGcsRef(video.ref);
-  const expectedPrefix = `tenants/${tenantId}/life-movies/`;
+  const expectedPrefix = `tenants/${tenantId}/life-movies/${authority.projectId}/`;
   const allowedBuckets = allowedLifeMovieOutputBuckets();
-  if (!allowedBuckets.has(videoLocation.bucket) || !videoLocation.objectPath.startsWith(expectedPrefix)) {
+  if (!allowedBuckets.has(videoLocation.bucket) || !videoLocation.objectPath.startsWith(expectedPrefix)
+    || videoLocation.objectPath.includes('\\')) {
+    throw new Error('life_movie_output_boundary_mismatch');
+  }
+  const subtitle = artifacts.find((artifact) => artifact?.kind === 'srt');
+  const subtitleLocation = subtitle?.ref ? parseGcsRef(subtitle.ref) : null;
+  if (subtitleLocation && (!allowedBuckets.has(subtitleLocation.bucket)
+    || !subtitleLocation.objectPath.startsWith(expectedPrefix) || subtitleLocation.objectPath.includes('\\'))) {
     throw new Error('life_movie_output_boundary_mismatch');
   }
 
@@ -343,17 +370,18 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
     responseType: typeof video.mimeType === 'string' ? video.mimeType : 'video/mp4',
   });
 
-  const subtitle = artifacts.find((artifact) => artifact?.kind === 'srt');
   let subtitleText = '';
-  if (subtitle?.ref) {
-    const subtitleLocation = parseGcsRef(subtitle.ref);
-    if (!allowedBuckets.has(subtitleLocation.bucket) || !subtitleLocation.objectPath.startsWith(expectedPrefix)) {
-      throw new Error('life_movie_output_boundary_mismatch');
-    }
+  if (subtitleLocation) {
     const [bytes] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).download();
     if (bytes.length > 2 * 1024 * 1024) throw new Error('life_movie_subtitles_too_large');
     subtitleText = bytes.toString('utf8');
   }
+
+  // Signing and subtitle downloads await external services. Re-read the same
+  // owner/source/output and canonical consent atomically after every such await
+  // has finished, before releasing any signed URL or private caption text.
+  await loadMoviePlaybackAuthority(tenantId, userId, jobId, authority.fingerprint);
+  if (Date.now() >= expiresAtMs) throw new Error('life_movie_delivery_expired');
 
   return {
     expiresAt: new Date(expiresAtMs).toISOString(),
@@ -547,6 +575,8 @@ export const studioLifeMovieBridge = onRequest({
       : code === 'job_not_ready_for_playback' ? 409
       : code === 'life_movie_consent_missing' ? 409
       : code === 'life_movie_consent_revoked' ? 409
+      : code === 'life_movie_delivery_changed' ? 409
+      : code === 'life_movie_delivery_expired' ? 409
       : code === 'output_delete_boundary_mismatch' ? 403
       : code === 'life_movie_output_boundary_mismatch' ? 403
       : code === 'life_movie_output_bucket_authority_unavailable' ? 503
