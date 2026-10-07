@@ -76,6 +76,57 @@ async function runtimeConsentCurrent(ownerUid:string){
   return memory.data()?.active!==true&&location.data()?.active!==true;
 }
 
+type RuntimeBinding = {
+  ownerUid: string; runtimeSha: string; byteSize: number; artifactRef: string;
+  spatialAuthorityHead: string; acceptedCallbackHash: string; reconstructionMethod: string;
+};
+const authorityHash=(binding:RuntimeBinding)=>createHash('sha256').update(JSON.stringify(binding)).digest('hex');
+function runtimeBinding(data: Record<string,any>, expectedSha: string): RuntimeBinding {
+  if((data.jobType||data.type)!=='memory.private-source.reconstruct-place'||data.status!=='SUCCESS'
+    ||String(data.derivativeAccessState||'').startsWith('REVOKED')) throw new Error('captured_reality_job_not_successful');
+  const ownerUid=String(data.ownerUid||'');
+  if(!/^[A-Za-z0-9_-]{1,160}$/.test(ownerUid)) throw new Error('captured_reality_owner_invalid');
+  const runtime=data.output?.runtime||data.result?.runtime;
+  const runtimeSha=String(runtime?.sha256||'').toLowerCase();
+  const byteSize=Number(runtime?.byteSize);
+  const artifactRef=String(runtime?.ref||'');
+  const spatialAuthorityHead=String(data.payload?.spatialAuthorityHead||'');
+  const acceptedCallbackHash=String(data.execution?.capturedRealityAcceptedCallbackHash||'');
+  if(runtimeSha!==expectedSha||!SHA256.test(runtimeSha)||!Number.isSafeInteger(byteSize)||byteSize<1
+    ||byteSize>MAX_RUNTIME_BYTES||!ARTIFACT.test(artifactRef)||!SHA40.test(spatialAuthorityHead)) throw new Error('captured_reality_runtime_binding_invalid');
+  if(!SHA256.test(acceptedCallbackHash)) throw new Error('captured_reality_callback_authority_missing');
+  return {ownerUid,runtimeSha,byteSize,artifactRef,spatialAuthorityHead,acceptedCallbackHash,
+    reconstructionMethod:String(data.payload?.reconstructionMethod||'3dgs')};
+}
+async function currentAuthority(transaction:any,db:ReturnType<typeof getFirestore>,jobRef:any,
+  expectedSha:string,expected?:RuntimeBinding):Promise<RuntimeBinding>{
+  const job=await transaction.get(jobRef);
+  if(!job.exists) throw new Error('captured_reality_job_missing');
+  const binding=runtimeBinding(job.data(),expectedSha);
+  if(expected&&JSON.stringify(binding)!==JSON.stringify(expected)) throw new Error('captured_reality_job_changed_before_receipt');
+  // These reads are part of the transaction that admits or replays the receipt.
+  // Firestore must retry if revocation/deletion changes authority before commit.
+  const ownerFence=db.collection('uraiPrivateLifeModelOwnerFences').doc(createHash('sha256').update(binding.ownerUid).digest('hex'));
+  const [memory,location,fence]=await Promise.all([
+    transaction.get(consentBlockRef(binding.ownerUid,'memory.storage')),
+    transaction.get(consentBlockRef(binding.ownerUid,'location.context')),
+    transaction.get(ownerFence),
+  ]);
+  if(memory.data()?.active===true||location.data()?.active===true) throw new Error('captured_reality_consent_blocked');
+  if(fence.data()?.deleted===true) throw new Error('captured_reality_owner_deleted');
+  return binding;
+}
+function replayGeneration(receipt:any,binding:RuntimeBinding,jobId:string,assetId:string,bucketName:string,objectPath:string){
+  if(receipt.get('schemaVersion')!=='urai-captured-reality-runtime-admission-v1'||receipt.get('ownerUid')!==binding.ownerUid
+    ||receipt.get('jobId')!==jobId||receipt.get('assetId')!==assetId||receipt.get('runtimeSha256')!==binding.runtimeSha
+    ||receipt.get('runtimeByteSize')!==binding.byteSize||receipt.get('storageBucket')!==bucketName
+    ||receipt.get('runtimeObject')!==objectPath||receipt.get('spatialAuthorityHead')!==binding.spatialAuthorityHead
+    ||receipt.get('runtimeAuthorityHash')!==authorityHash(binding)
+    ||receipt.get('revokedAt')||receipt.get('releaseState')==='revoked'
+    ||!/^\d+$/.test(String(receipt.get('storageGeneration')||''))) throw new Error('captured_reality_runtime_admission_conflict');
+  return String(receipt.get('storageGeneration'));
+}
+
 export const publishCapturedRealityRuntime=onRequest({
   secrets:[publisherToken,engineToken],cors:false,timeoutSeconds:120,memory:'1GiB',
 },async(request,response)=>{
@@ -84,31 +135,24 @@ export const publishCapturedRealityRuntime=onRequest({
   const parsed=PublishSchema.safeParse(request.body);
   if(!parsed.success){response.status(400).json({ok:false,error:'invalid-request'});return;}
   const {jobId,assetId,expectedRuntimeSha256}=parsed.data;
+  let publishedObject:{bucketName:string;objectPath:string;generation:string;binding:RuntimeBinding}|undefined;
   try{
     const db=getFirestore();
     const jobRef=db.collection('jobs').doc(jobId);
     const receiptId=createHash('sha256').update(jobId+'\n'+assetId).digest('hex');
     const receiptRef=db.collection('capturedRealityRuntimeAdmissions').doc(receiptId);
-    const [job,existing]=await Promise.all([jobRef.get(),receiptRef.get()]);
-    if(!job.exists) throw new Error('captured_reality_job_missing');
-    const data=job.data() as Record<string,any>;
-    if((data.jobType||data.type)!=='memory.private-source.reconstruct-place'||data.status!=='SUCCESS') throw new Error('captured_reality_job_not_successful');
-    const ownerUid=String(data.ownerUid||'');
-    if(!/^[A-Za-z0-9_-]{1,160}$/.test(ownerUid)) throw new Error('captured_reality_owner_invalid');
-    if(!(await runtimeConsentCurrent(ownerUid))) throw new Error('captured_reality_consent_blocked');
-    const runtime=data.output?.runtime||data.result?.runtime;
-    const runtimeSha=String(runtime?.sha256||'').toLowerCase();
-    const byteSize=Number(runtime?.byteSize);
-    const artifactRef=String(runtime?.ref||'');
-    const spatialAuthorityHead=String(data.payload?.spatialAuthorityHead||'');
-    if(runtimeSha!==expectedRuntimeSha256||!SHA256.test(runtimeSha)||!Number.isSafeInteger(byteSize)||byteSize<1||byteSize>MAX_RUNTIME_BYTES||!ARTIFACT.test(artifactRef)||!SHA40.test(spatialAuthorityHead)) throw new Error('captured_reality_runtime_binding_invalid');
-    if(!SHA256.test(String(data.execution?.capturedRealityAcceptedCallbackHash||''))) throw new Error('captured_reality_callback_authority_missing');
-
     const bucketName=configuredBucket();
+    const admission=await db.runTransaction(async tx=>{
+      const binding=await currentAuthority(tx,db,jobRef,expectedRuntimeSha256);
+      const existing=await tx.get(receiptRef);
+      const path=`private-captured-reality/${binding.ownerUid}/${assetId}/runtime/${binding.runtimeSha}.splat`;
+      return {binding,generation:existing.exists?replayGeneration(existing,binding,jobId,assetId,bucketName,path):undefined};
+    });
+    const binding=admission.binding;
+    const {ownerUid,runtimeSha,byteSize,artifactRef,spatialAuthorityHead}=binding;
     const objectPath=`private-captured-reality/${ownerUid}/${assetId}/runtime/${runtimeSha}.splat`;
-    if(existing.exists){
-      if(existing.get('ownerUid')!==ownerUid||existing.get('jobId')!==jobId||existing.get('assetId')!==assetId||existing.get('runtimeSha256')!==runtimeSha||existing.get('storageBucket')!==bucketName||existing.get('runtimeObject')!==objectPath||existing.get('revokedAt')) throw new Error('captured_reality_runtime_admission_conflict');
-      response.status(200).json({ok:true,replayed:true,admissionId:receiptId,assetId,runtimeSha256:runtimeSha,storageGeneration:String(existing.get('storageGeneration')||'')});
+    if(admission.generation){
+      response.status(200).json({ok:true,replayed:true,admissionId:receiptId,assetId,runtimeSha256:runtimeSha,storageGeneration:admission.generation});
       return;
     }
 
@@ -119,35 +163,68 @@ export const publishCapturedRealityRuntime=onRequest({
     try{
       await file.save(bytes,{resumable:false,validation:'crc32c',preconditionOpts:{ifGenerationMatch:0},metadata:{
         contentType:'application/octet-stream',cacheControl:'private, no-store',
-        metadata:{uraiRuntimeSha256:runtimeSha,uraiCapturedRealityJobId:jobId,uraiSpatialAuthorityHead:spatialAuthorityHead},
+        metadata:{uraiRuntimeSha256:runtimeSha,uraiCapturedRealityJobId:jobId,uraiSpatialAuthorityHead:spatialAuthorityHead,
+          uraiRuntimeAuthorityHash:authorityHash(binding)},
       }});
       const [meta]=await file.getMetadata(); generation=String(meta.generation||'');
     }catch(error:any){
       if(error?.code!==412) throw error;
       const [meta]=await file.getMetadata();
-      if(String(meta.metadata?.uraiRuntimeSha256||'')!==runtimeSha||String(meta.metadata?.uraiCapturedRealityJobId||'')!==jobId) throw new Error('captured_reality_runtime_object_conflict');
+      if(String(meta.metadata?.uraiRuntimeSha256||'')!==runtimeSha||String(meta.metadata?.uraiCapturedRealityJobId||'')!==jobId
+        ||String(meta.metadata?.uraiSpatialAuthorityHead||'')!==spatialAuthorityHead
+        ||String(meta.metadata?.uraiRuntimeAuthorityHash||'')!==authorityHash(binding)
+        ||Number(meta.size)!==byteSize) throw new Error('captured_reality_runtime_object_conflict');
       generation=String(meta.generation||'');
     }
     if(!/^\d+$/.test(generation)) throw new Error('captured_reality_storage_generation_missing');
-    if(!(await runtimeConsentCurrent(ownerUid))){await file.delete({ignoreNotFound:true});throw new Error('captured_reality_consent_changed_after_publish');}
+    publishedObject={bucketName,objectPath,generation,binding};
+    if(!(await runtimeConsentCurrent(ownerUid))) throw new Error('captured_reality_consent_changed_after_publish');
 
-    await db.runTransaction(async tx=>{
-      const [freshJob,freshReceipt]=await Promise.all([tx.get(jobRef),tx.get(receiptRef)]);
-      if(freshReceipt.exists) throw new Error('captured_reality_runtime_admission_race');
-      const current=freshJob.data() as Record<string,any>;
-      if(!freshJob.exists||current.ownerUid!==ownerUid||current.status!=='SUCCESS'||String((current.output?.runtime||current.result?.runtime)?.sha256||'')!==runtimeSha) throw new Error('captured_reality_job_changed_before_receipt');
+    const result=await db.runTransaction(async tx=>{
+      await currentAuthority(tx,db,jobRef,expectedRuntimeSha256,binding);
+      const freshReceipt=await tx.get(receiptRef);
+      if(freshReceipt.exists){
+        return {replayed:true,generation:replayGeneration(freshReceipt,binding,jobId,assetId,bucketName,objectPath)};
+      }
       tx.create(receiptRef,{
         schemaVersion:'urai-captured-reality-runtime-admission-v1',ownerUid,jobId,assetId,
         runtimeSha256:runtimeSha,runtimeByteSize:byteSize,storageBucket:bucketName,runtimeObject:objectPath,storageGeneration:generation,
-        spatialAuthorityHead,reconstructionMethod:String(current.payload?.reconstructionMethod||'3dgs'),
+        spatialAuthorityHead,reconstructionMethod:binding.reconstructionMethod,runtimeAuthorityHash:authorityHash(binding),
         truthClass:'SPATIALLY_RECONSTRUCTABLE',reviewState:'technical-unreviewed',releaseState:'hard-off',
         candidateAcceptance:false,publicReleaseAuthorized:false,metricScaleVerified:false,navigationAccepted:false,
         browserCertified:false,mobileCertified:false,xrCertified:false,createdAt:FieldValue.serverTimestamp(),
       });
+      return {replayed:false,generation};
     });
-    response.status(200).json({ok:true,replayed:false,admissionId:receiptId,assetId,runtimeSha256:runtimeSha,storageGeneration:generation});
+    publishedObject=undefined;
+    response.status(200).json({ok:true,replayed:result.replayed,admissionId:receiptId,assetId,runtimeSha256:runtimeSha,storageGeneration:result.generation});
   }catch(error){
-    console.error('Captured Reality runtime publication failed',{jobId,assetId,error});
+    if(publishedObject){
+      try{
+        // Do not delete a newer replacement generation while compensating for a
+        // rejected admission. A simultaneous identical winner is replayed above.
+        await getStorage().bucket(publishedObject.bucketName).file(publishedObject.objectPath)
+          .delete({ignoreNotFound:true,ifGenerationMatch:publishedObject.generation});
+      }catch{
+        // Persist exact cleanup identity separately from admissions. A rejected
+        // publication must never be represented as a usable runtime receipt,
+        // and a Storage outage must leave a durable owner-scoped retry target.
+        const cleanupId=createHash('sha256').update(jobId+'\n'+assetId+'\n'+publishedObject.generation).digest('hex');
+        try{
+          await getFirestore().collection('capturedRealityRuntimeCleanup').doc(cleanupId).set({
+            schemaVersion:'urai-captured-reality-runtime-cleanup-v1',ownerUid:publishedObject.binding.ownerUid,
+            jobId,assetId,runtimeSha256:publishedObject.binding.runtimeSha,
+            storageBucket:publishedObject.bucketName,runtimeObject:publishedObject.objectPath,
+            storageGeneration:publishedObject.generation,cleanupPending:true,
+            candidateAcceptance:false,publicReleaseAuthorized:false,createdAt:FieldValue.serverTimestamp(),
+          },{merge:true});
+        }catch{
+          console.error('Captured Reality rejected-runtime cleanup persistence failed',{jobId,assetId,code:'CR_RUNTIME_CLEANUP_PERSISTENCE_FAILED'});
+        }
+        console.error('Captured Reality rejected-runtime cleanup pending',{jobId,assetId,code:'CR_RUNTIME_CLEANUP_PENDING'});
+      }
+    }
+    console.error('Captured Reality runtime publication failed',{jobId,assetId,code:'CR_RUNTIME_PUBLICATION_REJECTED'});
     response.status(409).json({ok:false,error:'captured-reality-runtime-publication-rejected'});
   }
 });

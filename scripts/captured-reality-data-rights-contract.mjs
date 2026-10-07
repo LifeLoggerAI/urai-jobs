@@ -13,10 +13,10 @@ function fixture({ responseOk = true, missingConfig = false, foreignOwner = fals
     result: { runtime: { ref: 'cr-artifact:opaque-runtime' } }, output: { runtime: { ref: 'cr-artifact:opaque-runtime' } },
     derivativeAccessState: alreadyComplete ? 'REVOKED_ENGINE_CLEANUP_COMPLETE' : undefined };
   const snapshot = { id: 'synthetic_job_01', data: () => job, ref: { update: async (patch) => { writes.push(patch); Object.assign(job, patch); } } };
-  const db = { collection: (name) => ({ where: () => ({ limit: () => ({ get: async () => name === 'capturedRealityRuntimeAdmissions' ? ({ size: 0, docs: [] }) : ({ size: 1, docs: [snapshot] }) }) }), doc: (id) => ({ name, id }) }),
+  const db = { collection: (name) => ({ where: () => ({ orderBy() { return this; }, limit: () => ({ get: async () => ['capturedRealityRuntimeAdmissions', 'capturedRealityRuntimeCleanup'].includes(name) ? ({ size: 0, docs: [] }) : ({ size: 1, docs: [snapshot] }) }) }), doc: (id) => ({ name, id }) }),
     batch: () => { const pending = []; return { update: (_ref, patch) => pending.push(patch), set: (_ref, patch) => pending.push(patch), commit: async () => { pending.forEach((patch) => { writes.push(patch); Object.assign(job, patch); }); } }; } };
   vm.runInNewContext(compiled, { exports, process: { env: missingConfig ? {} : { CAPTURED_REALITY_ENGINE_URL: 'https://engine.invalid', CAPTURED_REALITY_ENGINE_TOKEN: 'synthetic-token' } }, URL, AbortSignal, setTimeout,
-    require: (name) => name === 'firebase-admin/firestore' ? { getFirestore: () => db, FieldValue: { delete: () => 'deleted', serverTimestamp: () => 'server-time' } } : name === 'firebase-admin/storage' ? { getStorage: () => ({ bucket: () => ({ file: () => ({ delete: async () => {} }) }) }) } : require(name),
+    require: (name) => name === 'firebase-admin/firestore' ? { getFirestore: () => db, FieldPath: { documentId: () => '__name__' }, FieldValue: { delete: () => 'deleted', serverTimestamp: () => 'server-time' } } : name === 'firebase-admin/storage' ? { getStorage: () => ({ bucket: () => ({ file: () => ({ delete: async () => {} }) }) }) } : require(name),
     fetch: async (url, options) => { calls.push({ url, body: options.body }); return { ok: responseOk, status: responseOk ? 200 : 503, json: async () => ({ ok: responseOk, artifactsDeleted: responseOk }) }; },
   });
   return { exports, writes, calls, job };

@@ -1,4 +1,4 @@
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 
 type Event = { eventId: string; ownerUid: string; purpose: string; revokedAt: string };
@@ -27,29 +27,47 @@ export async function deleteCapturedRealityEngineJob(jobId: string): Promise<voi
 
 export async function deleteCapturedRealityPublishedRuntimeForOwner(ownerUid: string) {
   const db = getFirestore();
-  const snapshots = await db.collection('capturedRealityRuntimeAdmissions').where('ownerUid', '==', ownerUid).limit(501).get();
-  if (snapshots.size > 500) throw new Error('captured_reality_runtime_admission_limit');
   let publishedRuntimeDeletionsAcknowledged = 0;
-  for (const snapshot of snapshots.docs) {
-    const data = snapshot.data() as Record<string, unknown>;
-    if (data.ownerUid !== ownerUid) throw new Error('captured_reality_runtime_admission_owner_mismatch');
-    if (data.revokedAt) continue;
-    const bucket = String(data.storageBucket || '');
-    const objectPath = String(data.runtimeObject || '');
-    const expectedPrefix = `private-captured-reality/${ownerUid}/${String(data.assetId || '')}/runtime/`;
-    if (!bucket || bucket.includes('/') || bucket.includes('..') || !objectPath.startsWith(expectedPrefix) || objectPath.includes('..')) {
-      throw new Error('captured_reality_runtime_admission_storage_boundary_invalid');
+  // Failed publisher compensation retains exact owner/object/generation retry
+  // targets here without granting runtime admission. Both collections are
+  // private server-owned records and are covered by the same privacy lifecycle.
+  for (const collection of ['capturedRealityRuntimeAdmissions', 'capturedRealityRuntimeCleanup']) {
+    let after: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+    for (;;) {
+      let query = db.collection(collection).where('ownerUid', '==', ownerUid).orderBy(FieldPath.documentId()).limit(100);
+      if (after) query = query.startAfter(after);
+      const snapshots = await query.get();
+      for (const snapshot of snapshots.docs) {
+        const data = snapshot.data() as Record<string, unknown>;
+        if (data.ownerUid !== ownerUid) throw new Error('captured_reality_runtime_admission_owner_mismatch');
+        if ((data.revokedAt || data.cleanupAcknowledgedAt) && data.cleanupPending !== true) continue;
+        const bucket = String(data.storageBucket || '');
+        const objectPath = String(data.runtimeObject || '');
+        const expectedPrefix = `private-captured-reality/${ownerUid}/${String(data.assetId || '')}/runtime/`;
+        if (!bucket || bucket.includes('/') || bucket.includes('..') || !objectPath.startsWith(expectedPrefix) || objectPath.includes('..')) {
+          throw new Error('captured_reality_runtime_admission_storage_boundary_invalid');
+        }
+        const generation = String(data.storageGeneration || '');
+        if (!/^\d+$/.test(generation)) throw new Error('captured_reality_runtime_admission_generation_invalid');
+        // Fence access before any Storage await. If deletion fails, the next
+        // canonical revocation/delete delivery retries this retained generation.
+        await snapshot.ref.set({
+          releaseState: 'revoked',
+          reviewState: 'revoked',
+          candidateAcceptance: false,
+          publicReleaseAuthorized: false,
+          revokedAt: FieldValue.serverTimestamp(),
+          cleanupPending: true,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+        await getStorage().bucket(bucket).file(objectPath, { generation }).delete({ ignoreNotFound: true });
+        await snapshot.ref.set({ cleanupPending: false, cleanupAcknowledgedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        publishedRuntimeDeletionsAcknowledged += 1;
+      }
+      if (snapshots.size < 100) break;
+      after = snapshots.docs[snapshots.docs.length - 1];
     }
-    await getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true });
-    await snapshot.ref.set({
-      releaseState: 'revoked',
-      reviewState: 'revoked',
-      candidateAcceptance: false,
-      publicReleaseAuthorized: false,
-      revokedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    publishedRuntimeDeletionsAcknowledged += 1;
   }
   return { publishedRuntimeDeletionsAcknowledged };
 }
