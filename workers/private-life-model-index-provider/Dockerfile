@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package.json tsconfig.json ./
 RUN npm install --ignore-scripts --no-audit --no-fund
 COPY src ./src
+COPY tests ./tests
 RUN npm run build
 
 FROM node:22-alpine

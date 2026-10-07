@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { registerProtectedSourceRoutes } from './protected-source-provider';
+import { validateExtraction as validateExtractionGraph } from './contracts.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
@@ -25,6 +26,8 @@ const MAX_EXTRACTION_BYTES = 512 * 1024;
 const SOURCE_CONTRACT = 'urai-private-source-receipt-v2';
 const TRANSCRIPT_CONTRACT = 'urai-private-source-transcript-v2';
 
+// Opaque private refs and authority responses must not be retained by caches.
+app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 app.use(express.json({ limit: '96kb' }));
 
 function runtimeEnv(): string {
@@ -297,7 +300,7 @@ function validateExtraction(value: any, sourceEvidenceClass: string, transcriptL
   for (const state of extraction.temporalStates) if (!entities.has(state.entityId)) throw new Error('invalid temporal entity');
   for (const conflict of extraction.conflicts) if (!Array.isArray(conflict.claimIds) || conflict.claimIds.length > 256 || conflict.claimIds.some(id => !claims.has(id))) throw new Error('invalid conflict lineage');
   for (const constraint of extraction.negativeConstraints) if (!Array.isArray(constraint.sourceClaimIds) || constraint.sourceClaimIds.length > 256 || constraint.sourceClaimIds.some(id => !claims.has(id))) throw new Error('invalid negative constraint lineage');
-  return extraction;
+  return validateExtractionGraph(extraction, sourceEvidenceClass, transcriptLength) as Extraction;
 }
 
 async function extractLifeModel(transcriptText: string, request: IndexRequest): Promise<Extraction> {
