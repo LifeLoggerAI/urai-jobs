@@ -50,14 +50,18 @@ const requestRecords = new Map(), requestId = 'synthetic_rights_01', ownerUid = 
 requestRecords.set(`dataRightsRequests/${requestId}`, { ownerUid, requestType: 'DELETE', status: 'APPROVED' });
 let engineCalls = 0, failEngineOnce = true;
 const jobRecord = { ownerUid, status: 'RUNNING', type: 'memory.private-source.reconstruct-place', result: { runtime: 'opaque' }, output: { runtime: 'opaque' } };
-const jobRef = { id: 'synthetic_job_01', path: 'jobs/synthetic_job_01', update: async (patch) => Object.assign(jobRecord, patch), collection: () => ({ limit: () => ({ get: async () => ({ size: 0, docs: [] }) }) }) };
+const jobRef = { id: 'synthetic_job_01', path: 'jobs/synthetic_job_01', get: async () => ({ exists: true, data: () => jobRecord }),
+  set: async patch => Object.assign(jobRecord, patch), update: async (patch) => Object.assign(jobRecord, patch),
+  collection: () => ({ limit: () => ({ get: async () => ({ size: 0, docs: [] }) }) }) };
 function ref(path) { return { path, get: async () => ({ exists: requestRecords.has(path), data: () => requestRecords.get(path) }),
   set: async (record) => requestRecords.set(path, { ...requestRecords.get(path), ...record }), collection: (name) => ({ doc: (id) => ref(`${path}/${name}/${id}`) }) }; }
+const ownedJobQuery = { orderBy: () => ownedJobQuery, limit: () => ownedJobQuery, get: async () => ({ size: jobRecord.ownerUid === ownerUid ? 1 : 0,
+  docs: jobRecord.ownerUid === ownerUid ? [{ id: jobRef.id, ref: jobRef, data: () => jobRecord }] : [] }) };
 const db = {
-  collection: (name) => ({ doc: (id) => ref(`${name}/${id}`), where: () => ({ orderBy: () => ({ limit: () => ({ get: async () => ({ size: jobRecord.ownerUid === ownerUid ? 1 : 0,
-    docs: jobRecord.ownerUid === ownerUid ? [{ id: jobRef.id, ref: jobRef, data: () => jobRecord }] : [] }) }) }) }) }),
+  collection: (name) => ({ doc: (id) => ref(`${name}/${id}`), where: () => ownedJobQuery }),
   runTransaction: async (fn) => {
-    const writes = [], result = await fn({ get: (target) => target.get(), create: (target, record) => writes.push([target, record]), set: (target, record) => writes.push([target, record]) });
+    const writes = [], result = await fn({ get: (target) => target.get(), create: (target, record) => writes.push([target, record]),
+      update: (target, record) => writes.push([target, record]), set: (target, record) => writes.push([target, record]) });
     for (const [target, record] of writes) await target.set(record); return result;
   },
   batch: () => ({ delete() {}, set(target, patch) { if (target === jobRef) Object.assign(jobRecord, patch); }, commit: async () => {} }),
@@ -74,7 +78,8 @@ vm.runInNewContext(ts.transpileModule(rights, { compilerOptions: { module: ts.Mo
     : require(name),
 });
 const request = { requestId, retentionDecisionReceiptId: 'synthetic_retention_01', idempotencyKey: 'synthetic_idempotency_01' };
-await assert.rejects(rightsExports.processDataRightsRequest(request, {}), /synthetic-engine-unavailable/);
+await assert.rejects(rightsExports.processDataRightsRequest(request, {}), error => error.code === 'internal');
+assert.equal(engineCalls, 1, 'the actual engine cleanup failed before safe error redaction');
 assert.equal(jobRecord.ownerUid, ownerUid, 'failed engine deletion must retain discoverable owner scope');
 assert.equal(jobRecord.status, 'CANCELLED');
 assert.equal(requestRecords.get(`dataRightsRequests/${requestId}`).executionState, 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE');
@@ -82,9 +87,11 @@ const retried = await rightsExports.processDataRightsRequest(request, {});
 assert.equal(retried.replay, false); assert.equal(engineCalls, 2); assert.equal(jobRecord.result, 'deleted');
 assert.ok(jobRecord.ownerUid.startsWith('deleted:')); assert.equal((await rightsExports.processDataRightsRequest(request, {})).replay, true); assert.equal(engineCalls, 2);
 const executionPath = [...requestRecords.keys()].find((key) => key.includes('/audit/execution-'));
-requestRecords.set(executionPath, { event: 'DATA_RIGHTS_EXECUTION_FAILED', attemptNumber: 3 });
+const boundExecution = { ...requestRecords.get(executionPath) };
+requestRecords.set(executionPath, { ...boundExecution, event: 'DATA_RIGHTS_EXECUTION_FAILED', attemptNumber: 3 });
 requestRecords.set(`dataRightsRequests/${requestId}`, { ownerUid, requestType: 'DELETE', status: 'IN_REVIEW', executionState: 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE' });
 await assert.rejects(rightsExports.processDataRightsRequest(request, {}), (error) => error.code === 'resource-exhausted');
-requestRecords.set(executionPath, { event: 'DATA_RIGHTS_EXECUTION_STARTED', attemptNumber: 1 });
-await assert.rejects(rightsExports.processDataRightsRequest(request, {}), /already active/);
+requestRecords.set(executionPath, { ...boundExecution, event: 'DATA_RIGHTS_EXECUTION_STARTED', attemptNumber: 1, leaseExpiresAtMs: Date.now() + 180000 });
+requestRecords.set(`dataRightsRequests/${requestId}`, { ownerUid, requestType: 'DELETE', status: 'IN_REVIEW', executionState: 'PROTECTED_STAGING_EXECUTION_IN_PROGRESS' });
+await assert.rejects(rightsExports.processDataRightsRequest(request, {}), error => error.code === 'unavailable');
 console.log('[PASS] captured reality data rights: cancel/scrub/delete acknowledgement, failed cleanup pending, owner isolation and replay; protected runtime not certified');

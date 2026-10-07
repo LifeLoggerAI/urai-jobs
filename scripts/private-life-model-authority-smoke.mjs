@@ -50,7 +50,8 @@ function database() {
   const db = { collection: name => query(name), doc: ref, recursiveDelete: async target => { for (const path of [...records.keys()]) if(path===target.path||path.startsWith(target.path+'/')) {
       records.delete(path); versions.set(path,(versions.get(path)||0)+1); } },
     batch: () => { const writes=[];return { update: (target,data)=>writes.push([target,data]),set:(target,data)=>writes.push([target,data]),
-      commit: async()=>{for(const [target,data]of writes)await target.update(data);} }; },
+      delete: target=>writes.push([target,undefined]),
+      commit: async()=>{assert.ok(writes.length<=500);for(const [target,data]of writes){if(data===undefined){records.delete(target.path);versions.set(target.path,(versions.get(target.path)||0)+1);}else await target.update(data);}} }; },
     runTransaction: async fn => {
       let unlock; const next = new Promise(resolve=>unlock=resolve); const prior=tail;tail=next;await prior;
       try { for(let attempt=0;attempt<3;attempt++) {
@@ -64,7 +65,7 @@ function database() {
       }throw new Error('transaction conflict exhausted');}finally{unlock();}
     }
   };
-  set('jobs/'+request.jobId,{ ownerUid: request.ownerUid, type: 'memory.private-source.index', status: 'RUNNING', execution: { leaseToken: request.leaseToken }, consent,
+  set('jobs/'+request.jobId,{ jobId: request.jobId, ownerUid: request.ownerUid, type: 'memory.private-source.index', status: 'RUNNING', execution: { leaseToken: request.leaseToken }, consent,
     payload: { sourceReceiptRef: request.sourceReceiptRef, transcriptRef: request.transcriptRef, provenanceRef: request.provenanceRef, requestedPurpose: request.requestedPurpose, correlationTrigger: request.correlationTrigger } });
   set(receiptPath,{schemaVersion:'urai-private-source-receipt-v2',ownerUid:request.ownerUid,sourceReceiptRef:request.sourceReceiptRef,sourceHandle:request.sourceHandle,
     status:'ACTIVE',synthetic:false,sourceEvidenceClass:request.sourceEvidenceClass,purposes:['memory-index'],consent,
