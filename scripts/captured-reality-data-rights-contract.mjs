@@ -13,10 +13,10 @@ function fixture({ responseOk = true, missingConfig = false, foreignOwner = fals
     result: { runtime: { ref: 'cr-artifact:opaque-runtime' } }, output: { runtime: { ref: 'cr-artifact:opaque-runtime' } },
     derivativeAccessState: alreadyComplete ? 'REVOKED_ENGINE_CLEANUP_COMPLETE' : undefined };
   const snapshot = { id: 'synthetic_job_01', data: () => job, ref: { update: async (patch) => { writes.push(patch); Object.assign(job, patch); } } };
-  const db = { collection: (name) => ({ where: () => ({ limit: () => ({ get: async () => ({ size: 1, docs: [snapshot] }) }) }), doc: (id) => ({ name, id }) }),
+  const db = { collection: (name) => ({ where: () => ({ limit: () => ({ get: async () => name === 'capturedRealityRuntimeAdmissions' ? ({ size: 0, docs: [] }) : ({ size: 1, docs: [snapshot] }) }) }), doc: (id) => ({ name, id }) }),
     batch: () => { const pending = []; return { update: (_ref, patch) => pending.push(patch), set: (_ref, patch) => pending.push(patch), commit: async () => { pending.forEach((patch) => { writes.push(patch); Object.assign(job, patch); }); } }; } };
   vm.runInNewContext(compiled, { exports, process: { env: missingConfig ? {} : { CAPTURED_REALITY_ENGINE_URL: 'https://engine.invalid', CAPTURED_REALITY_ENGINE_TOKEN: 'synthetic-token' } }, URL, AbortSignal, setTimeout,
-    require: (name) => name === 'firebase-admin/firestore' ? { getFirestore: () => db, FieldValue: { delete: () => 'deleted', serverTimestamp: () => 'server-time' } } : require(name),
+    require: (name) => name === 'firebase-admin/firestore' ? { getFirestore: () => db, FieldValue: { delete: () => 'deleted', serverTimestamp: () => 'server-time' } } : name === 'firebase-admin/storage' ? { getStorage: () => ({ bucket: () => ({ file: () => ({ delete: async () => {} }) }) }) } : require(name),
     fetch: async (url, options) => { calls.push({ url, body: options.body }); return { ok: responseOk, status: responseOk ? 200 : 503, json: async () => ({ ok: responseOk, artifactsDeleted: responseOk }) }; },
   });
   return { exports, writes, calls, job };
@@ -39,6 +39,7 @@ const consent = fs.readFileSync('functions/src/privacy/consentRevocation.ts', 'u
 assert.ok(consent.includes('await invalidateCapturedRealityDerivativesForConsent(lifeMovieRevocationEvent)'));
 assert.ok(consent.includes('capturedRealityInvalidation,'));
 const rights = fs.readFileSync('functions/src/privacy/dataRightsExecution.ts', 'utf8');
+assert.ok(rights.includes('await deleteCapturedRealityPublishedRuntimeForOwner(ownerUid)'));
 assert.ok(rights.includes('await deleteCapturedRealityEngineJob(document.id)'));
 assert.ok(rights.includes('result: FieldValue.delete()'));
 assert.ok(rights.indexOf('await deleteCapturedRealityEngineJob(document.id)') < rights.indexOf('ownerUid: `deleted:${ownerHash}`'));
@@ -70,7 +71,7 @@ vm.runInNewContext(ts.transpileModule(rights, { compilerOptions: { module: ts.Mo
     : name === '../core/errors.js' ? { httpsError: (code, message) => Object.assign(new Error(message), { code }) }
     : name === '../core/gcs.js' ? { uploadToGcs: async () => 'opaque-private-export' }
     : name === './privateLifeModelDataRights.js' ? { assertPrivateDataRightsExportDestination: async () => {}, deleteOwnedPrivateLifeModel: async () => ({ unresolvedDomains: [] }), exportOwnedPrivateLifeModel: async () => ({ records: [], unresolvedDomains: [] }) }
-    : name === './capturedRealityDerivativeRevocation.js' ? { deleteCapturedRealityEngineJob: async () => { engineCalls++; if (failEngineOnce) { failEngineOnce = false; throw new Error('synthetic-engine-unavailable'); } } }
+    : name === './capturedRealityDerivativeRevocation.js' ? { deleteCapturedRealityEngineJob: async () => { engineCalls++; if (failEngineOnce) { failEngineOnce = false; throw new Error('synthetic-engine-unavailable'); } }, deleteCapturedRealityPublishedRuntimeForOwner: async () => ({ publishedRuntimeDeletionsAcknowledged: 0 }) }
     : require(name),
 });
 const request = { requestId, retentionDecisionReceiptId: 'synthetic_retention_01', idempotencyKey: 'synthetic_idempotency_01' };
