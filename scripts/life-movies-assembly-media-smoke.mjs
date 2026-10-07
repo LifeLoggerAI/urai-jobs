@@ -46,16 +46,23 @@ function makeMovie(name, { width = 320, height = 320, fps = 30, duration = 15, a
 function harness(job, options = {}) {
   job.consent = { purpose: 'life-movie.render', policyVersion: 'fixture-v1', decisionReceiptId: 'fixture-receipt' };
   const current = { ...structuredClone(job), status: 'RUNNING', execution: { leaseToken: job.leaseToken } };
-  const state = { current, downloads: 0, uploads: [], deleted: [], metadata: new Map(), children: new Set(), consentRevoked: false };
+  const state = { current, downloads: 0, uploads: [], deleted: [], metadata: new Map(), children: new Set(), consentRevoked: false,
+    fences: new Map(options.fences || []), reads: [] };
   const app = { use() {}, get() {}, post() {}, listen() {} };
   const express = Object.assign(() => app, { json: () => () => {} });
   const admin = {
     initializeApp() {},
     firestore: () => ({ runTransaction: callback => callback({ get: ref => ref.get() }),
-      collection: (collection) => ({ doc: () => ({ get: async () =>
-      collection === 'jobs' ? { exists: true, data: () => state.current }
-        : { exists: collection === 'jobConsentBlocks' && state.consentRevoked, data: () => ({ active: state.consentRevoked }) },
-    }) }) }),
+      collection: (collection) => ({ doc: (id) => ({ get: async () => {
+        state.reads.push(collection + '/' + id);
+        if (collection === 'jobs') return { exists: true, data: () => structuredClone(state.current) };
+        if (collection === 'jobConsentBlocks') return { exists: state.consentRevoked, data: () => ({ active: state.consentRevoked }) };
+        if (['uraiPrivateLifeModelOwnerFences', 'privacyDeletionTombstones'].includes(collection)) {
+          const data = state.fences.get(collection + '/' + id);
+          return { exists: data !== undefined, data: () => data === undefined ? undefined : structuredClone(data) };
+        }
+        throw new Error('unexpected fixture authority read');
+      } }) }) }),
     storage: () => ({ bucket: (bucket) => ({ file: (name) => ({
       createReadStream() {
         assert.equal(bucket, bucketName);
@@ -79,6 +86,11 @@ function harness(job, options = {}) {
           uploadFile.metadata = state.metadata.get(name);
           this.emit('response', { statusCode: 200 });
           if (options.cancelUpload) state.current.status = 'CANCELLED';
+          if (options.deleteOwnerDuringUpload && state.uploads.length === 1) {
+            const uid = state.current.ownerUid, kind = options.deleteOwnerDuringUpload;
+            state.fences.set(kind === 'local' ? 'uraiPrivateLifeModelOwnerFences/' + sha256(uid) : 'privacyDeletionTombstones/' + uid,
+              kind === 'local' ? { ownerHash: sha256(uid), deleted: true } : { uid, active: true });
+          }
           callback();
         } });
       },
@@ -93,7 +105,7 @@ function harness(job, options = {}) {
     }) }) }),
   };
   const worker = {};
-  vm.runInNewContext(code + '\nmodule.exports = { renderLifeMovie, assembleLifeMovie, parseAssemblyPayload, shiftSrt, probeNormalizedMovie };', {
+  vm.runInNewContext(code + '\nmodule.exports = { renderLifeMovie, assembleLifeMovie, parseAssemblyPayload, shiftSrt, probeNormalizedMovie, createRenderControl };', {
     module: worker, Buffer, AbortController, console: { log() {}, error() {} },
     process: { env: { GCS_BUCKET_NAME: bucketName, URAI_ENV: 'test', URAI_STUDIO_LEASE_POLL_MS: '25' } },
     require(name) {
@@ -110,6 +122,39 @@ function harness(job, options = {}) {
   return { worker: worker.exports, state };
 }
 function test(name) { evidence.tests.push(name); console.log(`[PASS] ${name}`); }
+async function ownerControlProof(reproduce = false) {
+  for (const type of ['studio.render.video', 'studio.assemble.video']) {
+    const job = { jobId: 'owned-synthetic-control', type, ownerUid: 'owner-fixture-1', tenantId,
+      leaseToken: 'owned-synthetic-lease', consent: { purpose: 'life-movie.render' }, payload: { source: 'synthetic' } };
+    for (const kind of ['local', 'central']) {
+      const pathFor = uid => kind === 'local' ? 'uraiPrivateLifeModelOwnerFences/' + sha256(uid) : 'privacyDeletionTombstones/' + uid;
+      const dead = uid => kind === 'local' ? { ownerHash: sha256(uid), deleted: true } : { uid, active: true };
+      for (const when of ['before admission', 'identity mismatch', 'after admission']) {
+        const data = when === 'identity mismatch'
+          ? (kind === 'local' ? { ownerHash: sha256('foreign-owner'), deleted: false } : { uid: 'foreign-owner', active: false }) : dead(job.ownerUid);
+        const h = harness(job, { fences: when === 'after admission' ? [] : [[pathFor(job.ownerUid), data]] });
+        const control = h.worker.createRenderControl(job);
+        try {
+          if (when === 'after admission') { await control.start(); h.state.fences.set(pathFor(job.ownerUid), data); }
+          const run = () => when === 'after admission' ? control.check() : control.start();
+          if (reproduce) await run(); else await assert.rejects(run(), /render_owner_deleted/);
+          assert.equal(h.state.downloads, 0); assert.equal(h.state.uploads.length, 0);
+          test(type + ' ' + kind + ' owner fence ' + when);
+        } finally { control.stop(); }
+      }
+    }
+    for (const own of [true, false]) {
+      const uid = own ? job.ownerUid : 'unrelated-owner';
+      const h = harness(job, { fences: [
+        ['uraiPrivateLifeModelOwnerFences/' + sha256(uid), { ownerHash: sha256(uid), deleted: !own }],
+        ['privacyDeletionTombstones/' + uid, { uid, active: !own }],
+      ] });
+      const control = h.worker.createRenderControl(job);
+      try { await control.start(); await control.check(); test(type + (own ? ' inactive identity-bound fences remain admissible' : ' unrelated owner deletion does not widen scope')); }
+      finally { control.stop(); }
+    }
+  }
+}
 function location(ref) {
   assert.ok(ref.startsWith(`gs://${bucketName}/`));
   return ref.slice(`gs://${bucketName}/`.length);
@@ -121,15 +166,20 @@ function assertOutputs(result) {
 }
 async function rejectAssembly(job, pattern, options = {}) {
   const h = harness(job, options);
-  await assert.rejects(h.worker.assembleLifeMovie(job), pattern);
+  await assert.rejects((job.jobType || job.type) === 'studio.render.video'
+    ? h.worker.renderLifeMovie(job) : h.worker.assembleLifeMovie(job), pattern);
   assert.equal(h.state.children.size, 0, 'FFmpeg must be reaped before cleanup');
   for (const object of h.state.uploads) assert.equal(objects.has(object), false, 'failed uploads must be removed');
   return h;
 }
 
 try {
+  if (process.argv.includes('--owner-control-only') || process.argv.includes('--owner-control-baseline')) {
+    await ownerControlProof(process.argv.includes('--owner-control-baseline'));
+  } else {
   objects.set(sourceObject, makeMovie('motion-source.mp4'));
   const segments = [];
+  let renderAuthorityJob;
   const ranges = [[400, 15400], [16000, 31000], [31000, 46000], [46000, 61000]];
   for (const [index, [startMs, endMs]] of ranges.entries()) {
     const job = { jobId: `render-fixture-${index}`, tenantId, ownerUid: 'owner-fixture-1',
@@ -143,6 +193,7 @@ try {
         audioCues: [], subtitleText: `1\n00:00:00,000 --> 00:00:15,000\nSynthetic motion segment ${index}\n`,
         outputPrefix: `${prefix}/segments/${String(index).padStart(4, '0')}`,
         spatialRequired: false, publicReleaseAuthorized: false, providerGenerationAuthorized: false } };
+    renderAuthorityJob ||= structuredClone(job);
     const h = harness(job);
     const result = await h.worker.renderLifeMovie(job);
     assert.equal(result.ok, true); assertOutputs(result);
@@ -244,6 +295,15 @@ try {
   await assert.rejects(revoked.worker.assembleLifeMovie(job), /render_consent_revoked/);
   assert.equal(revoked.state.downloads, 0);
   test('assembly cancellation, consent revocation and upload failure remove partial output');
+  for (const kind of ['local', 'central']) {
+    const removed = await rejectAssembly(job, /render_owner_deleted/, { deleteOwnerDuringUpload: kind });
+    assert.equal(removed.state.deleted.length, 1);
+    test('assembly ' + kind + ' owner deletion during first upload denies remaining output and removes attempt bytes');
+    const rendered = await rejectAssembly(renderAuthorityJob, /render_owner_deleted/, { deleteOwnerDuringUpload: kind });
+    assert.equal(rendered.state.deleted.length, 1);
+    test('render ' + kind + ' owner deletion during first upload denies remaining output and removes attempt bytes');
+  }
+  await ownerControlProof();
 
   const outputArg = process.argv.indexOf('--evidence-dir');
   if (outputArg >= 0) {
@@ -251,5 +311,6 @@ try {
     const out = path.resolve(process.argv[outputArg + 1]); fs.mkdirSync(out, { recursive: true });
     fs.copyFileSync(finalPath, path.join(out, 'synthetic-61-second-diagnostic.mp4'));
     fs.writeFileSync(path.join(out, 'assembly-source-test-receipt.json'), JSON.stringify(evidence, null, 2) + '\n');
+  }
   }
 } finally { fs.rmSync(root, { recursive: true, force: true }); }
