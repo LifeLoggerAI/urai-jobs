@@ -42,7 +42,7 @@ function fixture(provider, options = {}, extension = 'ts') {
   const body = provider === 'google' ? JSON.stringify({ input: { text: job.payload.text }, voice: { languageCode: job.payload.locale || 'en-US', name: job.payload.voice || job.payload.voiceId }, audioConfig: { audioEncoding: 'OGG_OPUS' } }) : JSON.stringify({ text: job.payload.text, model_id: 'eleven_multilingual_v2' });
   const accountId = provider === 'google' ? `google:${adc.quota}:${adc.principal}` : 'synthetic-elevenlabs-account';
   const mapping = { [requestDigest(endpoint, body)]: { job_id: 'synthetic-protected-job', worker_id: `synthetic-${provider}-worker`, account_id: accountId, token: 'synthetic-distinct-worker-token-1234567890' } };
-  const env = { GCS_BUCKET_NAME: 'synthetic-bucket', URAI_SOURCE_SHA: sourceSha, ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA: gatewaySha, ASSET_FORGE_SPEND_GATEWAY_URL: gatewayUrl, URAI_NARRATOR_SPEND_BINDINGS_JSON: JSON.stringify(mapping), URAI_NARRATOR_ELEVENLABS_ENABLED: 'true', ELEVENLABS_API_KEY: 'synthetic-elevenlabs-key', ELEVENLABS_ALLOWED_VOICE_IDS: 'synthetic-voice' };
+  const env = { GCS_BUCKET_NAME: 'synthetic-bucket', URAI_SOURCE_SHA: sourceSha, ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA: gatewaySha, ASSET_FORGE_SPEND_GATEWAY_URL: gatewayUrl, ASSET_FORGE_SPEND_GATEWAY_ORIGIN: 'https://synthetic-gateway.example', URAI_NARRATOR_SPEND_BINDINGS_JSON: JSON.stringify(mapping), URAI_NARRATOR_ELEVENLABS_ENABLED: 'true', ELEVENLABS_API_KEY: 'synthetic-elevenlabs-key', ELEVENLABS_ALLOWED_VOICE_IDS: 'synthetic-voice' };
   Object.assign(env, options.env);
   let protectedJob, held = false, recorded = false;
   const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
@@ -53,7 +53,7 @@ function fixture(provider, options = {}, extension = 'ts') {
     options.mutateEnvelope?.(protectedJob, fields);
     const price = { provider: fields.provider, account_id: fields.account_id, model_version: fields.model, request_sha256: fields.request_sha256, credential_sha256: fields.credential_sha256, semantic_headers_sha256: fields.semantic_headers_sha256, source_input_sha256: fields.source_input_sha256, content_type: fields.content_type, trusted_readback: true, receipt: 'synthetic-protected-price', observed_at: new Date(clock.now - 1000).toISOString(), expires_at: new Date(clock.now + 3_600_000).toISOString(), rates: structuredClone(rates) };
     options.mutatePricing?.(price, clock);
-    return { ok: true, envelope: { job: protectedJob, ...(options.missingPricing ? {} : { protected_pricing: price }) }, provider_call_authorized: false, execution_performed: false };
+    return { ok: true, admission_expires_at: new Date(clock.now + 3_600_000).toISOString(), envelope: { job: protectedJob, ...(options.missingPricing ? {} : { protected_pricing: price }) }, provider_call_authorized: false, execution_performed: false };
   }
   const fetch = async (url, init) => {
     if (String(url).startsWith('https://synthetic-gateway.example')) {
@@ -63,7 +63,7 @@ function fixture(provider, options = {}, extension = 'ts') {
       if (fields.action === 'preflight') {
         if (options.gatewayUnavailable) throw new Error('synthetic gateway unavailable');
         if (options.preflightDenied) return json({ ok: false }, 409);
-        const result = protectedEnvelope(fields); options.afterPreflight?.({ env, job, adc, clock });
+        const result = protectedEnvelope(fields); options.mutatePreflight?.(result, clock); options.afterPreflight?.({ env, job, adc, clock });
         return json(options.authorizingPreflight ? { ...result, provider_call_authorized: true } : result);
       }
       if (fields.action === 'reserve') {
@@ -72,7 +72,8 @@ function fixture(provider, options = {}, extension = 'ts') {
         if (options.reserveLost) throw new Error('synthetic reserve response lost after hold');
         const digest = hash(canonical(Object.fromEntries(Object.entries(protectedJob).filter(([key]) => key !== 'approval' && key !== 'attempts'))));
         assert.equal(fields.job_digest, digest);
-        const result = { ok: true, attempt_id: 'synthetic-attempt', provider_call_authorized: true, execution_performed: false, job_digest: digest, executor_source_sha: sourceSha, gateway_source_sha: gatewaySha, worker_id: fields.worker_id, max_runtime_seconds: options.runtime || 45 };
+        const result = { ok: true, attempt_id: 'synthetic-attempt', provider_call_authorized: true, execution_performed: false, job_digest: digest, executor_source_sha: sourceSha, gateway_source_sha: gatewaySha, worker_id: fields.worker_id, max_runtime_seconds: options.runtime || 45, reserved_at: new Date(clock.now).toISOString(), admission_expires_at: new Date(clock.now + (options.runtime || 45) * 1000).toISOString() };
+        options.mutateReserve?.(result, clock);
         options.afterReserve?.({ env, job, adc, clock });
         return json(options.badReserve ? { ...result, worker_id: 'foreign-worker' } : result);
       }
@@ -100,7 +101,7 @@ function fixture(provider, options = {}, extension = 'ts') {
     auth = { getClient: async () => ({ getAccessToken: async () => ({ token: adc.token }), get quotaProjectId() { return adc.quota; }, get credentials() { return { expiry_date: adc.expiresAt }; } }), getCredentials: async () => ({ client_email: adc.principal }), getProjectId: async () => adc.quota };
     async synthesizeSpeech(request) { submitted.push({ sdk: true, request }); return [{ audioContent: Buffer.from('synthetic-audio') }]; }
   }
-  class Storage { bucket(bucket) { return { file: filename => ({ async save(bytes, metadata) { stored.push({ bucket, filename, bytes, metadata }); if (options.storageFails) throw new Error('synthetic Storage failure'); } }) }; } }
+  class Storage { bucket(bucket) { return { file: filename => ({ async save(bytes, metadata) { stored.push({ bucket, filename, bytes, metadata }); options.afterStorage?.({ env, job, adc, clock }); if (options.storageFails) throw new Error('synthetic Storage failure'); } }) }; } }
   const context = vm.createContext({ Buffer, Headers, Response, URL, AbortController, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval, Date: FakeDate, fetch, process: { env, cwd: () => root }, console: { log() {} } });
   const modules = new Map();
   function load(rel) {
@@ -135,6 +136,18 @@ try {
       await test(`${prefix} configured credentials and forged caller approval grant no spend`, () => denied(provider, { env: { URAI_NARRATOR_SPEND_BINDINGS_JSON: '{}' }, job: { approval: { status: 'APPROVED' }, providerCallAuthorized: true } }, undefined, extension));
       await test(`${prefix} gateway denial blocks actual provider`, () => denied(provider, { preflightDenied: true }, undefined, extension));
       await test(`${prefix} uncertain reservation never dispatches or releases hold`, () => denied(provider, { reserveLost: true }, f => { assert.equal(f.held, true); assert.equal(f.recorded, false); }, extension));
+      await test(`${prefix} missing protected gateway origin never sends worker token`, () => denied(provider, { env: { ASSET_FORGE_SPEND_GATEWAY_ORIGIN: '' } }, f => assert.equal(f.events.length, 0), extension));
+      await test(`${prefix} foreign public gateway never receives worker token`, () => denied(provider, { env: { ASSET_FORGE_SPEND_GATEWAY_URL: 'https://foreign.example/api/worker/production-spend' } }, f => assert.equal(f.events.length, 0), extension));
+      await test(`${prefix} missing preflight window blocks reservation`, () => denied(provider, { mutatePreflight: result => delete result.admission_expires_at }, f => assert.equal(f.held, false), extension));
+      await test(`${prefix} expired preflight window blocks reservation`, () => denied(provider, { mutatePreflight: (result, clock) => { result.admission_expires_at = new Date(clock.now).toISOString(); } }, f => assert.equal(f.held, false), extension));
+      for (const field of ['reserved_at', 'admission_expires_at']) await test(`${prefix} missing reservation ${field} keeps unresolved hold`, () => denied(provider, { mutateReserve: result => delete result[field] }, f => assert.equal(f.held, true), extension));
+      await test(`${prefix} future server reservation refuses paid POST`, () => denied(provider, { mutateReserve: (result, clock) => { result.reserved_at = new Date(clock.now + 1000).toISOString(); } }, f => assert.equal(f.held, true), extension));
+      await test(`${prefix} reservation cannot exceed signed preflight window`, () => denied(provider, { mutatePreflight: (result, clock) => { result.admission_expires_at = new Date(clock.now + 500).toISOString(); } }, f => assert.equal(f.held, true), extension));
+      await test(`${prefix} delayed reservation never restarts runtime`, () => denied(provider, { runtime: 1, afterReserve: ({ clock }) => { clock.now += 1500; } }, f => assert.equal(f.held, true), extension));
+      await test(`${prefix} price expiry during reservation blocks paid POST`, () => denied(provider, { mutatePricing: (price, clock) => { price.expires_at = new Date(clock.now + 500).toISOString(); }, afterReserve: ({ clock }) => { clock.now += 600; } }, f => assert.equal(f.held, true), extension));
+      await test(`${prefix} gateway mutation during reservation keeps hold without token replay`, () => denied(provider, { afterReserve: ({ env }) => { env.ASSET_FORGE_SPEND_GATEWAY_URL = 'https://foreign.example/api/worker/production-spend'; } }, f => { assert.equal(f.held, true); assert.equal(f.events.length, 2); }, extension));
+      await test(`${prefix} expired output persistence cannot return success`, async () => { const f = fixture(provider, { runtime: 1, afterStorage: ({ clock }) => { clock.now += 1500; } }, extension); await assert.rejects(f.execute()); assert.equal(f.submitted.length, 1); assert.equal(f.held, true); assert.equal(f.events.at(-1).fields.status, 'failed'); });
+      await test(`${prefix} output input correction cannot return stale success`, async () => { const f = fixture(provider, { afterStorage: ({ job }) => { job.payload.text = 'corrected synthetic input'; } }, extension); await assert.rejects(f.execute()); assert.equal(f.submitted.length, 1); assert.equal(f.events.at(-1).fields.status, 'failed'); });
       await test(`${prefix} exact synthetic reservation precedes one frozen POST`, async () => { const f = fixture(provider, {}, extension); const result = await f.execute(); assert.equal(f.submitted.length, 1); assert.equal(f.submitted[0].sdk, undefined); assert.equal(f.submitted[0].init.body, f.body); assert.equal(f.submitted[0].init.redirect, 'error'); assert.deepEqual(f.events.map(e => e.action), ['preflight', 'reserve', 'record']); assert.equal(f.events[2].fields.status, 'succeeded'); assert.equal(f.held, true); assert.equal(f.stored.length, 1); assert.equal(result.provider, provider); assert.equal(result.consentRef, provider === 'elevenlabs' ? 'synthetic-consent' : null); assert.equal(result.rightsRef, provider === 'elevenlabs' ? 'synthetic-rights' : null); const field = f.events[0].fields; assert.equal(field.request_size, String(Buffer.byteLength(f.body))); assert.equal(field.request_sha256, requestDigest(f.endpoint, f.body)); assert.equal(field.source_input_sha256, hash(stable(f.job))); if (provider === 'google') { const h = new Headers(f.submitted[0].init.headers); assert.equal(h.get('x-goog-user-project'), f.adc.quota); assert.equal(h.get('authorization'), `Bearer ${f.adc.token}`); assert.deepEqual(JSON.parse(f.body), { input: { text: f.job.payload.text }, voice: { languageCode: 'en-GB', name: 'en-GB-Standard-A' }, audioConfig: { audioEncoding: 'OGG_OPUS' } }); } });
     }
     for (const provider of ['google', 'elevenlabs']) {

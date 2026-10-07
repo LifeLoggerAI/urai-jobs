@@ -147,6 +147,8 @@ async function boundedJson(response) {
 }
 async function gateway(action, fields, token) {
     const endpoint = httpsEndpoint(process.env.ASSET_FORGE_SPEND_GATEWAY_URL, true);
+    const origin = nonempty(process.env.ASSET_FORGE_SPEND_GATEWAY_ORIGIN);
+    need(new URL(endpoint).origin === origin && new URL(origin).origin === origin, 'gateway differs from protected issuer origin');
     need(token.length >= 32, 'protected worker credential unavailable');
     try {
         return await boundedJson(await fetch(endpoint, { method: 'POST', redirect: 'error', cache: 'no-store', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ action, ...fields }), signal: AbortSignal.timeout(15_000) }));
@@ -178,16 +180,28 @@ async function paidNarratorFetch(provider, model, request) {
     need(provider === 'google' ? endpoint === 'https://texttospeech.googleapis.com/v1/text:synthesize' : parsed.origin === 'https://api.elevenlabs.io' && /^\/v1\/text-to-speech\/[^/]+$/.test(parsed.pathname), 'provider endpoint changed');
     need(typeof request.body === 'string' && Buffer.byteLength(request.body) > 0 && Buffer.byteLength(request.body) <= 1_048_576, 'exact bounded narrator bytes required');
     const body = request.body, headers = new Headers(request.headers), sourceSha = narratorExecutorSourceSha();
-    const requestDigest = narratorRequestDigest(endpoint, body), config = protectedBinding(requestDigest), accountHeaders = narratorHeaderBindings(headers);
+    const requestDigest = narratorRequestDigest(endpoint, body), accountHeaders = narratorHeaderBindings(headers);
+    const gatewaySource = sha(process.env.ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA, 40);
+    const gatewayEndpoint = httpsEndpoint(process.env.ASSET_FORGE_SPEND_GATEWAY_URL, true), gatewayOrigin = nonempty(process.env.ASSET_FORGE_SPEND_GATEWAY_ORIGIN);
+    need(new URL(gatewayEndpoint).origin === gatewayOrigin && new URL(gatewayOrigin).origin === gatewayOrigin, 'gateway differs from protected issuer origin');
+    const config = protectedBinding(requestDigest);
     if (provider === 'google')
         need(request.actualAccountId === config.accountId, 'protected Google account differs from actual ADC principal and quota project');
-    const gatewaySource = sha(process.env.ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA, 40);
     const fields = { job_id: config.jobId, worker_id: config.workerId, executor_repository: REPOSITORY, executor_source_sha: sourceSha, gateway_repository: GATEWAY_REPOSITORY, gateway_source_sha: gatewaySource, consumer: 'jobs-narrator', tenant_sha256: narratorDigest(nonempty(session.job.tenantId)), provider, account_id: config.accountId, ...accountHeaders, source_input_sha256: session.inputDigest, content_type: nonempty(headers.get('content-type')), request_sha256: requestDigest, endpoint, model: nonempty(model), asset: `${nonempty(session.job.tenantId)}/${nonempty(session.job.jobId)}/narrator.tts`, request_size: String(Buffer.byteLength(body)) };
-    const verifyCurrent = async () => { current(session); need(narratorExecutorSourceSha() === sourceSha && process.env.ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA === gatewaySource, 'narrator execution source changed'); need(narratorSourceJson(protectedBinding(requestDigest)) === narratorSourceJson(config), 'protected narrator mapping changed'); await request.assertCurrent(); current(session); };
+    const verifyBinding = () => {
+        current(session);
+        need(narratorExecutorSourceSha() === sourceSha && process.env.ASSET_FORGE_SPEND_GATEWAY_SOURCE_SHA === gatewaySource, 'narrator execution source changed');
+        need(process.env.ASSET_FORGE_SPEND_GATEWAY_URL === gatewayEndpoint && process.env.ASSET_FORGE_SPEND_GATEWAY_ORIGIN === gatewayOrigin, 'protected gateway locator changed');
+        need(narratorSourceJson(protectedBinding(requestDigest)) === narratorSourceJson(config), 'protected narrator mapping changed');
+    };
+    const verifyCurrent = async () => { verifyBinding(); await request.assertCurrent(); verifyBinding(); };
     session.submitted = true;
     await verifyCurrent();
     const prepared = await gateway('preflight', fields, config.token);
     need(prepared.provider_call_authorized === false && prepared.execution_performed === false, 'preflight cannot authorize a provider call');
+    const authorizationDeadline = timestamp(prepared.admission_expires_at);
+    need(Date.now() < authorizationDeadline, 'protected preflight authorization expired');
+    session.deadline = authorizationDeadline;
     const envelope = record(prepared.envelope), job = record(envelope.job), executor = record(job.executor), authority = record(job.authority), budget = record(job.budget);
     need(job.job_id === config.jobId && job.provider === provider && job.account_id === config.accountId && job.model_version === model && job.consumer === fields.consumer && job.rights_reviewed === true, 'protected narrator job changed');
     need(executor.binding_version === 2 && authority.repository === REPOSITORY && authority.sha === sourceSha, 'protected narrator source authority changed');
@@ -209,14 +223,20 @@ async function paidNarratorFetch(provider, model, request) {
     if (request.credentialExpiresAt !== undefined)
         need(Number.isFinite(request.credentialExpiresAt) && request.credentialExpiresAt > Date.now() + runtime * 1000, 'provider credential expires inside approved lifetime');
     const jobDigest = narratorDigest(canonical(Object.fromEntries(Object.entries(job).filter(([key]) => key !== 'approval' && key !== 'attempts'))));
-    await verifyCurrent();
+    // Anchor runtime before the awaited reservation; late delivery never restarts it.
+    const reservationStartedAt = Date.now();
+    session.deadline = Math.min(authorizationDeadline, timestamp(price.expires_at), timestamp(rates.expires_at), reservationStartedAt + runtime * 1000);
+    session.verifyCurrent = async () => { await verifyCurrent(); fresh(price, 'observed_at'); fresh(rates, 'verified_at'); };
+    await session.verifyCurrent();
     const admitted = await gateway('reserve', { ...fields, job_digest: jobDigest }, config.token);
     need(admitted.provider_call_authorized === true && admitted.execution_performed === false && admitted.executor_source_sha === sourceSha && admitted.gateway_source_sha === gatewaySource && admitted.worker_id === config.workerId && admitted.job_digest === jobDigest && admitted.max_runtime_seconds === runtime, 'invalid authenticated narrator reservation');
     session.fields = fields;
     session.token = config.token;
     session.attemptId = nonempty(admitted.attempt_id);
-    session.deadline = Date.now() + runtime * 1000;
-    await verifyCurrent();
+    const reservedAt = timestamp(admitted.reserved_at), admissionDeadline = timestamp(admitted.admission_expires_at);
+    need(reservedAt >= reservationStartedAt && reservedAt <= Date.now() && admissionDeadline > reservedAt && admissionDeadline <= authorizationDeadline && admissionDeadline <= reservedAt + runtime * 1000, 'invalid protected reservation window');
+    session.deadline = Math.min(session.deadline, admissionDeadline);
+    await session.verifyCurrent();
     if (request.credentialExpiresAt !== undefined)
         need(request.credentialExpiresAt > session.deadline, 'provider credential expired after reservation');
     // Freeze exact bytes/headers. Redirects and transport errors cannot trigger a second POST.
@@ -246,6 +266,8 @@ async function withProtectedNarratorSession(jobValue, run) {
         });
         try {
             const result = await wait(run());
+            if (session.verifyCurrent)
+                await session.verifyCurrent();
             current(session);
             outcome = 'succeeded';
             return result;
