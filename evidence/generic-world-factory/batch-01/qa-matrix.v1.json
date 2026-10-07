@@ -1,0 +1,192 @@
+{
+  "schemaVersion": "urai-generic-world-batch1-qa-matrix-v1",
+  "batch": "01",
+  "worldIds": [
+    {
+      "id": "gw-etx-living-room-1960s-1970s-v1",
+      "state": "PROVIDER_READY",
+      "providerJobs": {
+        "meshy": null,
+        "tripo": null
+      },
+      "selectedChallenger": null,
+      "sha256": [],
+      "technicalValidation": "NOT_STARTED",
+      "visualReview": "NOT_STARTED",
+      "humanAcceptance": "NOT_STARTED",
+      "runtimeBinding": "NOT_STARTED",
+      "liveReadback": "NOT_STARTED"
+    },
+    {
+      "id": "gw-etx-kitchen-dining-1970s-1980s-v1",
+      "state": "PROVIDER_READY",
+      "providerJobs": {
+        "meshy": null,
+        "tripo": null
+      },
+      "selectedChallenger": null,
+      "sha256": [],
+      "technicalValidation": "NOT_STARTED",
+      "visualReview": "NOT_STARTED",
+      "humanAcceptance": "NOT_STARTED",
+      "runtimeBinding": "NOT_STARTED",
+      "liveReadback": "NOT_STARTED"
+    },
+    {
+      "id": "gw-etx-small-town-street-v1",
+      "state": "PROVIDER_READY",
+      "providerJobs": {
+        "meshy": null,
+        "tripo": null
+      },
+      "selectedChallenger": null,
+      "sha256": [],
+      "technicalValidation": "NOT_STARTED",
+      "visualReview": "NOT_STARTED",
+      "humanAcceptance": "NOT_STARTED",
+      "runtimeBinding": "NOT_STARTED",
+      "liveReadback": "NOT_STARTED"
+    },
+    {
+      "id": "gw-school-classroom-hall-v1",
+      "state": "PROVIDER_READY",
+      "providerJobs": {
+        "meshy": null,
+        "tripo": null
+      },
+      "selectedChallenger": null,
+      "sha256": [],
+      "technicalValidation": "NOT_STARTED",
+      "visualReview": "NOT_STARTED",
+      "humanAcceptance": "NOT_STARTED",
+      "runtimeBinding": "NOT_STARTED",
+      "liveReadback": "NOT_STARTED"
+    },
+    {
+      "id": "gw-church-sanctuary-fellowship-v1",
+      "state": "PROVIDER_READY",
+      "providerJobs": {
+        "meshy": null,
+        "tripo": null
+      },
+      "selectedChallenger": null,
+      "sha256": [],
+      "technicalValidation": "NOT_STARTED",
+      "visualReview": "NOT_STARTED",
+      "humanAcceptance": "NOT_STARTED",
+      "runtimeBinding": "NOT_STARTED",
+      "liveReadback": "NOT_STARTED"
+    },
+    {
+      "id": "gw-hospital-room-corridor-v1",
+      "state": "PROVIDER_READY",
+      "providerJobs": {
+        "meshy": null,
+        "tripo": null
+      },
+      "selectedChallenger": null,
+      "sha256": [],
+      "technicalValidation": "NOT_STARTED",
+      "visualReview": "NOT_STARTED",
+      "humanAcceptance": "NOT_STARTED",
+      "runtimeBinding": "NOT_STARTED",
+      "liveReadback": "NOT_STARTED"
+    },
+    {
+      "id": "gw-college-dorm-campus-v1",
+      "state": "PROVIDER_READY",
+      "providerJobs": {
+        "meshy": null,
+        "tripo": null
+      },
+      "selectedChallenger": null,
+      "sha256": [],
+      "technicalValidation": "NOT_STARTED",
+      "visualReview": "NOT_STARTED",
+      "humanAcceptance": "NOT_STARTED",
+      "runtimeBinding": "NOT_STARTED",
+      "liveReadback": "NOT_STARTED"
+    },
+    {
+      "id": "gw-military-admin-ops-v1",
+      "state": "PROVIDER_READY",
+      "providerJobs": {
+        "meshy": null,
+        "tripo": null
+      },
+      "selectedChallenger": null,
+      "sha256": [],
+      "technicalValidation": "NOT_STARTED",
+      "visualReview": "NOT_STARTED",
+      "humanAcceptance": "NOT_STARTED",
+      "runtimeBinding": "NOT_STARTED",
+      "liveReadback": "NOT_STARTED"
+    },
+    {
+      "id": "gw-lake-dock-shoreline-v1",
+      "state": "PROVIDER_READY",
+      "providerJobs": {
+        "meshy": null,
+        "tripo": null
+      },
+      "selectedChallenger": null,
+      "sha256": [],
+      "technicalValidation": "NOT_STARTED",
+      "visualReview": "NOT_STARTED",
+      "humanAcceptance": "NOT_STARTED",
+      "runtimeBinding": "NOT_STARTED",
+      "liveReadback": "NOT_STARTED"
+    },
+    {
+      "id": "gw-backyard-workshop-v1",
+      "state": "PROVIDER_READY",
+      "providerJobs": {
+        "meshy": null,
+        "tripo": null
+      },
+      "selectedChallenger": null,
+      "sha256": [],
+      "technicalValidation": "NOT_STARTED",
+      "visualReview": "NOT_STARTED",
+      "humanAcceptance": "NOT_STARTED",
+      "runtimeBinding": "NOT_STARTED",
+      "liveReadback": "NOT_STARTED"
+    },
+    {
+      "id": "gw-diner-cafe-v1",
+      "state": "PROVIDER_READY",
+      "providerJobs": {
+        "meshy": null,
+        "tripo": null
+      },
+      "selectedChallenger": null,
+      "sha256": [],
+      "technicalValidation": "NOT_STARTED",
+      "visualReview": "NOT_STARTED",
+      "humanAcceptance": "NOT_STARTED",
+      "runtimeBinding": "NOT_STARTED",
+      "liveReadback": "NOT_STARTED"
+    },
+    {
+      "id": "gw-motel-walkway-v1",
+      "state": "PROVIDER_READY",
+      "providerJobs": {
+        "meshy": null,
+        "tripo": null
+      },
+      "selectedChallenger": null,
+      "sha256": [],
+      "technicalValidation": "NOT_STARTED",
+      "visualReview": "NOT_STARTED",
+      "humanAcceptance": "NOT_STARTED",
+      "runtimeBinding": "NOT_STARTED",
+      "liveReadback": "NOT_STARTED"
+    }
+  ],
+  "invariants": {
+    "acceptedCount": 0,
+    "runtimeBoundCount": 0,
+    "liveVerifiedCount": 0,
+    "truthClass": "GENERIC"
+  }
+}
