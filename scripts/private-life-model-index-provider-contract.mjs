@@ -17,7 +17,7 @@ check('resolver output is rebound to requested opaque refs', source.includes("re
 check('resolver output cannot switch source handles', source.includes("String(payload.sourceHandle) !== request.sourceHandle"));
 check('raw transcript has a hard bound', source.includes('MAX_TRANSCRIPT_CHARS'));
 check('raw transcript is not included in failure logs', !source.includes('transcriptText,\n      error'));
-check('extractor uses deterministic JSON response mode', source.includes("response_format: { type: 'json_object' }") && source.includes('temperature: 0'));
+check('extractor uses bounded JSON output without unsupported sampling overrides', source.includes("response_format: { type: 'json_object' }") && source.includes('max_completion_tokens: 8192') && !source.includes('temperature:'));
 check('synthetic-memory firewall is explicit', source.includes('syntheticOutputMayBecomeHistoricalSource: false'));
 check('unknown evidence cannot enter historical source classes', source.includes('ALLOWED_EVIDENCE') && !source.includes("'UNKNOWN',"));
 check('correction triggers are bounded', source.includes('initial-source') && source.includes('stronger-source'));

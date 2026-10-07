@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { validateExtraction } from './contracts.js';
 
 const app = express();
 const port = Number(process.env.PORT || 8080);
@@ -20,6 +21,12 @@ const ALLOWED_EVIDENCE = new Set([
   'CONTEXTUAL_RESEARCH',
 ]);
 const MAX_TRANSCRIPT_CHARS = Number(process.env.URAI_LIFE_MODEL_MAX_TRANSCRIPT_CHARS || 240000);
+const INDEX_LEASE_MS = 180000;
+const MAX_INDEX_ATTEMPTS = 3;
+
+class AdmissionError extends Error {
+  constructor(readonly code: string, readonly status: number) { super(code); }
+}
 
 app.use(express.json({ limit: '96kb' }));
 
@@ -98,6 +105,7 @@ type Extraction = {
 };
 
 function assertRequest(body: any): IndexRequest {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new AdmissionError('LIFE_MODEL_INVALID_REQUEST', 400);
   const allowed = new Set([
     'sourceHandle',
     'sourceEvidenceClass',
@@ -110,7 +118,7 @@ function assertRequest(body: any): IndexRequest {
     'idempotencyKey',
   ]);
   for (const key of Object.keys(body || {})) {
-    if (!allowed.has(key)) throw new Error(`forbidden field: ${key}`);
+    if (!allowed.has(key) || typeof body[key] !== 'string') throw new AdmissionError('LIFE_MODEL_INVALID_REQUEST', 400);
   }
   const request: IndexRequest = {
     sourceHandle: String(body?.sourceHandle || ''),
@@ -131,6 +139,7 @@ function assertRequest(body: any): IndexRequest {
   if (request.requestedPurpose !== 'memory-index') throw new Error('requestedPurpose must be memory-index');
   if (!ALLOWED_TRIGGERS.has(String(request.correlationTrigger))) throw new Error('invalid correlationTrigger');
   if (!/^[A-Za-z0-9._:-]{8,256}$/.test(request.idempotencyKey)) throw new Error('invalid idempotencyKey');
+  if (request.locale && !/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/.test(request.locale)) throw new Error('invalid locale');
   return request;
 }
 
@@ -142,7 +151,7 @@ function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
   if (value && typeof value === 'object') {
     const entries = Object.entries(value as Record<string, unknown>)
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
       .map(([key, val]) => JSON.stringify(key) + ':' + canonicalJson(val));
     return '{' + entries.join(',') + '}';
   }
@@ -202,30 +211,12 @@ async function resolvePrivateInputs(request: IndexRequest) {
   return { transcriptText, sourceFixityRef, sourceSha256 };
 }
 
-function validateExtraction(value: any, sourceEvidenceClass: string): Extraction {
-  const extraction = value as Extraction;
-  if (!extraction || typeof extraction !== 'object') throw new Error('extractor returned invalid object');
-  for (const key of ['entities', 'claims', 'relationships', 'temporalStates', 'places', 'conflicts', 'negativeConstraints']) {
-    if (!Array.isArray((extraction as any)[key])) throw new Error(`extractor missing ${key}`);
-  }
-  if (!extraction.sceneTruth || !['READY', 'READY_WITH_OCCLUSION', 'READY_INTERPRETIVE', 'BLOCKED'].includes(extraction.sceneTruth.decision)) {
-    throw new Error('extractor returned invalid sceneTruth decision');
-  }
-  for (const claim of extraction.claims) {
-    if (!claim.claimId || !claim.subject || !claim.predicate || typeof claim.object !== 'string') throw new Error('invalid extracted claim');
-    if (!ALLOWED_EVIDENCE.has(claim.evidenceClass)) throw new Error('claim uses unsupported evidence class');
-    if (claim.evidenceClass !== sourceEvidenceClass && claim.evidenceClass !== 'CORROBORATED_INFERENCE') {
-      throw new Error('claim attempts unsupported evidence promotion');
-    }
-    if (!Number.isFinite(claim.confidence) || claim.confidence < 0 || claim.confidence > 1) throw new Error('invalid claim confidence');
-  }
-  return extraction;
-}
+type ExtractionResult = { extraction: Extraction; provider: { name: 'openai'; requestedModel: string; responseModel: string | null; responseId: string | null; sourceSha: string | null; usage: { promptTokens: number | null; completionTokens: number | null } } };
 
-async function extractLifeModel(transcriptText: string, request: IndexRequest): Promise<Extraction> {
-  const apiKey = String(process.env.OPENAI_API_KEY || '');
-  const model = String(process.env.URAI_LIFE_MODEL_EXTRACTOR_MODEL || 'gpt-5-mini');
-  if (!apiKey) throw new Error('life model extractor is not configured');
+async function extractLifeModel(transcriptText: string, request: IndexRequest): Promise<ExtractionResult> {
+  const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
+  const model = String(process.env.URAI_LIFE_MODEL_EXTRACTOR_MODEL || '').trim();
+  if (!apiKey || !model) throw new Error('life model extractor is not configured');
 
   const schemaInstruction = {
     entities: [{ entityId: 'entity_1', type: 'person|place|object|event|organization|animal|other', label: 'string', aliases: ['string'] }],
@@ -238,7 +229,7 @@ async function extractLifeModel(transcriptText: string, request: IndexRequest): 
       confidence: 0.0,
       time: { start: 'ISO-8601-or-empty', end: 'ISO-8601-or-empty', uncertainty: 'string' },
       place: { label: 'string', precision: 'country|region|city|place|room|unknown' },
-      sourceSpan: { startChar: 0, endChar: 0 },
+      sourceSpan: { startChar: 0, endChar: 1 },
       contradictedBy: ['claim_id'],
     }],
     relationships: [{ from: 'entity_id', to: 'entity_id', type: 'string', confidence: 0.0 }],
@@ -258,7 +249,7 @@ async function extractLifeModel(transcriptText: string, request: IndexRequest): 
     body: JSON.stringify({
       model,
       response_format: { type: 'json_object' },
-      temperature: 0,
+      max_completion_tokens: 8192,
       messages: [
         {
           role: 'system',
@@ -267,6 +258,7 @@ async function extractLifeModel(transcriptText: string, request: IndexRequest): 
             'Extract only evidence-constrained claims from the provided transcript.',
             'Never invent missing facts. Preserve uncertainty and contradictions.',
             'Synthetic or simulated content can never become historical evidence.',
+            'Every claim must have a nonempty sourceSpan with exact startChar/endChar offsets in the supplied transcript. Relationships, temporal states, constraints and conflicts must reference declared entities/claims.',
             'Do not infer biometric identity. Do not upgrade evidence beyond the supplied evidence class except CORROBORATED_INFERENCE when the transcript itself supports a bounded inference.',
             'If identity/time/place contradictions block a faithful hero scene, set sceneTruth.decision to BLOCKED.',
             'Return JSON only matching this shape:',
@@ -291,7 +283,19 @@ async function extractLifeModel(transcriptText: string, request: IndexRequest): 
   const json = await response.json() as any;
   const content = String(json?.choices?.[0]?.message?.content || '');
   if (!content) throw new Error('life model extractor returned empty content');
-  return validateExtraction(JSON.parse(content), request.sourceEvidenceClass);
+  const metadata = (value: unknown): string | null => typeof value === 'string' && /^[A-Za-z0-9._:-]{1,160}$/.test(value) ? value : null;
+  const usage = (value: unknown): number | null => Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
+  const completionTokens = usage(json?.usage?.completion_tokens);
+  if (completionTokens !== null && completionTokens > 8192) throw new Error('extractor exceeded output budget');
+  return {
+    extraction: validateExtraction(JSON.parse(content), request.sourceEvidenceClass, transcriptText.length) as Extraction,
+    provider: {
+      name: 'openai', requestedModel: model,
+      responseModel: metadata(json?.model), responseId: metadata(json?.id),
+      sourceSha: /^[a-f0-9]{40}$/.test(String(process.env.URAI_SOURCE_SHA || '')) ? String(process.env.URAI_SOURCE_SHA) : null,
+      usage: { promptTokens: usage(json?.usage?.prompt_tokens), completionTokens },
+    },
+  };
 }
 
 function firestore() {
@@ -304,45 +308,130 @@ function firestore() {
   return getFirestore();
 }
 
-async function persistRevision(request: IndexRequest, extraction: Extraction, sourceFixityRef: string, sourceSha256: string) {
-  const db = firestore();
+type ResolvedInputs = Awaited<ReturnType<typeof resolvePrivateInputs>>;
+type StoredIndex = { handleHash: string; revision: number; checksum: string; backlogState: string; replayed: boolean };
+type IndexAdmission = { handleHash: string; requestHash: string; leaseToken: string; replay?: StoredIndex };
+
+function requestHash(request: IndexRequest, resolved: ResolvedInputs): string {
+  return stableHash(canonicalJson({
+    schemaVersion: 'urai-life-model-index-admission-v2',
+    sourceHandleHash: stableHash(request.sourceHandle),
+    sourceEvidenceClass: request.sourceEvidenceClass,
+    transcriptRef: request.transcriptRef, provenanceRef: request.provenanceRef,
+    requestedPurpose: request.requestedPurpose, locale: request.locale || null,
+    priorMemoryIndexRef: request.priorMemoryIndexRef || null,
+    correlationTrigger: request.correlationTrigger || 'initial-source',
+    sourceFixityRef: resolved.sourceFixityRef, sourceSha256: resolved.sourceSha256,
+    transcriptSha256: stableHash(resolved.transcriptText),
+  }));
+}
+
+function indexRefs(request: IndexRequest) {
   const handleHash = stableHash(request.sourceHandle).slice(0, 40);
-  const root = db.collection('uraiPrivateLifeModel').doc(handleHash);
-  const idempotencyRef = root.collection('idempotency').doc(stableHash(request.idempotencyKey));
+  const root = firestore().collection('uraiPrivateLifeModel').doc(handleHash);
+  return { handleHash, root, idempotencyRef: root.collection('idempotency').doc(stableHash(request.idempotencyKey)) };
+}
+
+async function reserveIndex(request: IndexRequest, resolved: ResolvedInputs): Promise<IndexAdmission> {
+  const db = firestore();
+  const { handleHash, root, idempotencyRef } = indexRefs(request);
+  const binding = requestHash(request, resolved);
+  const leaseToken = crypto.randomUUID();
+  return db.runTransaction(async (tx) => {
+    const existing = await tx.get(idempotencyRef);
+    const data = existing.data() || {};
+    if (existing.exists && data.requestHash !== binding) {
+      // Legacy unbound receipts cannot prove that the same key meant this input.
+      throw new AdmissionError('LIFE_MODEL_IDEMPOTENCY_CONFLICT', 409);
+    }
+    if (data.state === 'SUCCESS') {
+      if (!Number.isSafeInteger(data.revision) || data.revision < 1 || !SHA256.test(data.checksum) || !['INDEXED', 'CONFLICTED'].includes(data.backlogState)) {
+        throw new AdmissionError('LIFE_MODEL_STORED_RECEIPT_INVALID', 409);
+      }
+      const retained = await tx.get(root.collection('revisions').doc(String(data.revision).padStart(8, '0')));
+      const { checksum, backlogState, createdAt: _createdAt, ...record } = retained.data() || {};
+      if (!retained.exists || checksum !== data.checksum || backlogState !== data.backlogState
+        || record.admissionRequestHash !== binding || record.sourceHandleHash !== handleHash
+        || stableHash(canonicalJson(record)) !== data.checksum) {
+        throw new AdmissionError('LIFE_MODEL_STORED_RECEIPT_INVALID', 409);
+      }
+      return { handleHash, requestHash: binding, leaseToken: '', replay: {
+        handleHash, revision: data.revision, checksum: data.checksum, backlogState: data.backlogState, replayed: true,
+      } };
+    }
+    if (existing.exists && !['RUNNING', 'FAILED'].includes(data.state)) {
+      throw new AdmissionError('LIFE_MODEL_INDEX_STATE_INVALID', 409);
+    }
+    if (data.state === 'RUNNING' && (!Number.isSafeInteger(data.leaseExpiresAtMs) || data.leaseExpiresAtMs > Date.now())) {
+      throw new AdmissionError('LIFE_MODEL_INDEX_IN_PROGRESS', 503);
+    }
+    const previousAttempts = existing.exists ? data.attempts : 0;
+    if (!Number.isSafeInteger(previousAttempts) || previousAttempts < 0 || previousAttempts >= MAX_INDEX_ATTEMPTS) {
+      throw new AdmissionError('LIFE_MODEL_RETRY_LIMIT', 409);
+    }
+    tx.set(idempotencyRef, {
+      admissionSchemaVersion: 2, requestHash: binding, state: 'RUNNING',
+      attempts: previousAttempts + 1, leaseToken, leaseExpiresAtMs: Date.now() + INDEX_LEASE_MS,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(existing.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge: true });
+    return { handleHash, requestHash: binding, leaseToken };
+  });
+}
+
+async function releaseFailedIndex(request: IndexRequest, admission: IndexAdmission) {
+  if (!admission.leaseToken) return;
+  const { idempotencyRef } = indexRefs(request);
+  await firestore().runTransaction(async (tx) => {
+    const existing = await tx.get(idempotencyRef);
+    const data = existing.data() || {};
+    if (data.state !== 'RUNNING' || data.leaseToken !== admission.leaseToken || data.requestHash !== admission.requestHash) return;
+    tx.update(idempotencyRef, { state: 'FAILED', leaseToken: null, leaseExpiresAtMs: 0, updatedAt: FieldValue.serverTimestamp() });
+  });
+}
+
+async function assertCurrentInputs(request: IndexRequest, admission: IndexAdmission) {
+  const current = await resolvePrivateInputs(request);
+  if (requestHash(request, current) !== admission.requestHash) throw new AdmissionError('LIFE_MODEL_SOURCE_AUTHORITY_CHANGED', 409);
+}
+
+async function persistRevision(request: IndexRequest, output: ExtractionResult, resolved: ResolvedInputs, admission: IndexAdmission): Promise<StoredIndex> {
+  const db = firestore();
+  const extraction = output.extraction;
+  const { handleHash, root, idempotencyRef } = indexRefs(request);
 
   const result = await db.runTransaction(async (tx) => {
     const existing = await tx.get(idempotencyRef);
-    if (existing.exists) {
-      const data = existing.data() || {};
-      return {
-        handleHash,
-        revision: Number(data.revision),
-        checksum: String(data.checksum),
-        backlogState: String(data.backlogState),
-        replayed: true,
-      };
+    const data = existing.data() || {};
+    if (!existing.exists || data.state !== 'RUNNING' || data.requestHash !== admission.requestHash || data.leaseToken !== admission.leaseToken || !Number.isSafeInteger(data.leaseExpiresAtMs) || data.leaseExpiresAtMs <= Date.now()) {
+      throw new AdmissionError('LIFE_MODEL_STALE_LEASE', 409);
     }
 
     const currentRef = root.collection('state').doc('current');
     const currentSnap = await tx.get(currentRef);
     const currentRevision = Number(currentSnap.data()?.revision || 0);
+    if (!Number.isSafeInteger(currentRevision) || currentRevision < 0 || currentRevision >= Number.MAX_SAFE_INTEGER) throw new Error('invalid stored revision');
     const revision = currentRevision + 1;
     const record = {
       schemaVersion: 'urai-life-model-v1',
+      hashAlgorithm: 'sha256-canonical-json-lexical-v2',
       revision,
       correlationTrigger: request.correlationTrigger || 'initial-source',
       sourceHandleHash: handleHash,
       sourceEvidenceClass: request.sourceEvidenceClass,
-      sourceFixityRef,
-      sourceSha256,
+      sourceFixityRef: resolved.sourceFixityRef,
+      sourceSha256: resolved.sourceSha256,
+      transcriptSha256: stableHash(resolved.transcriptText),
+      admissionRequestHash: admission.requestHash,
       transcriptRef: request.transcriptRef,
       provenanceRef: request.provenanceRef,
       priorMemoryIndexRef: request.priorMemoryIndexRef || null,
       syntheticOutputMayBecomeHistoricalSource: false,
       extraction,
+      extractionProvider: output.provider,
     };
     const checksum = stableHash(canonicalJson(record));
-    const backlogState = extraction.conflicts.length ? 'CONFLICTED' : 'INDEXED';
+    const backlogState = extraction.sceneTruth.decision === 'BLOCKED' ? 'CONFLICTED' : 'INDEXED';
     const revisionRef = root.collection('revisions').doc(String(revision).padStart(8, '0'));
 
     tx.create(revisionRef, {
@@ -359,11 +448,12 @@ async function persistRevision(request: IndexRequest, extraction: Extraction, so
       syntheticOutputMayBecomeHistoricalSource: false,
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    tx.create(idempotencyRef, {
+    tx.update(idempotencyRef, {
+      state: 'SUCCESS', leaseToken: null, leaseExpiresAtMs: 0,
       revision,
       checksum,
       backlogState,
-      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     return { handleHash, revision, checksum, backlogState, replayed: false };
@@ -377,7 +467,9 @@ function readiness() {
     auth: Boolean(process.env.PRIVATE_SOURCE_INDEX_TOKEN) || !productionRuntime(),
     resolverUrl: Boolean(process.env.PRIVATE_SOURCE_REF_RESOLVER_URL),
     resolverToken: Boolean(process.env.PRIVATE_SOURCE_REF_RESOLVER_TOKEN),
-    extractorKey: Boolean(process.env.OPENAI_API_KEY),
+    extractorKey: Boolean(String(process.env.OPENAI_API_KEY || '').trim()),
+    extractorModel: /^[A-Za-z0-9._:-]{1,160}$/.test(String(process.env.URAI_LIFE_MODEL_EXTRACTOR_MODEL || '').trim()),
+    transcriptBound: Number.isSafeInteger(MAX_TRANSCRIPT_CHARS) && MAX_TRANSCRIPT_CHARS > 0 && MAX_TRANSCRIPT_CHARS <= 240000,
     firebaseProject: Boolean(process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT),
     sourceSha: /^[0-9a-f]{40}$/.test(String(process.env.URAI_SOURCE_SHA || '')) || !productionRuntime(),
   };
@@ -401,14 +493,23 @@ app.get('/readyz', (_req, res) => {
 });
 
 app.post('/', requireAuth, async (req, res) => {
+  let request: IndexRequest | undefined;
+  let admission: IndexAdmission | undefined;
   try {
-    const request = assertRequest(req.body);
+    try { request = assertRequest(req.body); } catch { throw new AdmissionError('LIFE_MODEL_INVALID_REQUEST', 400); }
     const state = readiness();
     if (!state.ok) return res.status(503).send({ ok: false, code: 'LIFE_MODEL_PROVIDER_NOT_READY', checks: state.checks });
 
     const resolved = await resolvePrivateInputs(request);
-    const extraction = await extractLifeModel(resolved.transcriptText, request);
-    const stored = await persistRevision(request, extraction, resolved.sourceFixityRef, resolved.sourceSha256);
+    admission = await reserveIndex(request, resolved);
+    let stored = admission.replay;
+    if (!stored) {
+      const extraction = await extractLifeModel(resolved.transcriptText, request);
+      await assertCurrentInputs(request, admission);
+      stored = await persistRevision(request, extraction, resolved, admission);
+    }
+    // Authorize both new output and replay immediately before returning private refs.
+    await assertCurrentInputs(request, admission);
 
     const base = (leaf: string) => privateRef(stored.handleHash, stored.revision, leaf);
     return res.status(200).send({
@@ -432,12 +533,17 @@ app.post('/', requireAuth, async (req, res) => {
       replayed: stored.replayed,
     });
   } catch (error) {
+    if (request && admission) {
+      try { await releaseFailedIndex(request, admission); } catch { /* Lease expiry permits a bounded recovery when Firestore is unavailable. */ }
+    }
+    const code = error instanceof AdmissionError ? error.code : 'LIFE_MODEL_INDEX_FAILED';
     console.error(JSON.stringify({
       event: 'private-life-model.index.failed',
       service: 'private-life-model-index-provider',
-      error: error instanceof Error ? error.message : 'unknown_error',
+      code,
     }));
-    return res.status(502).send({ ok: false, error: 'Private Life Model indexing failed.' });
+    if (code === 'LIFE_MODEL_INDEX_IN_PROGRESS') res.set('Retry-After', '5');
+    return res.status(error instanceof AdmissionError ? error.status : 502).send({ ok: false, code, error: 'Private Life Model indexing failed.' });
   }
 });
 
