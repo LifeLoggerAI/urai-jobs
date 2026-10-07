@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { uploadToGcs } from '../core/gcs.js';
+import { deleteCapturedRealityEngineJob } from './capturedRealityDerivativeRevocation.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
 const MAX_OWNED_JOBS = 2_000;
@@ -135,6 +136,17 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
   let jobsAnonymized = 0;
 
   for (const document of jobs) {
+    const currentJob = document.data();
+    // Fence in-flight worker/callback attempts before mutating owned records.
+    await document.ref.update({ status: 'CANCELLED', lease: FieldValue.delete(), 'execution.asyncCallbackPending': false,
+      'execution.leaseToken': FieldValue.delete(), 'execution.callbackLeaseToken': FieldValue.delete(),
+      'execution.callbackTokenHash': FieldValue.delete(), 'execution.callbackDeadlineAt': FieldValue.delete(),
+      'execution.capturedRealityAcceptedCallbackHash': FieldValue.delete() });
+    if ((currentJob.jobType || currentJob.type) === 'memory.private-source.reconstruct-place') {
+      // Preserve owner identity until the engine proves cleanup, so retries can
+      // still locate a partially deleted reconstruction job.
+      await deleteCapturedRealityEngineJob(document.id);
+    }
     const logs = await document.ref.collection('logs').limit(500).get();
     if (logs.size >= 500) {
       throw httpsError('resource-exhausted', `Job ${document.id} has too many logs for bounded deletion; reconcile before retry.`);
@@ -154,6 +166,7 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
       ownerUid: `deleted:${ownerHash}`,
       payload: FieldValue.delete(),
       output: FieldValue.delete(),
+      result: FieldValue.delete(),
       consent: FieldValue.delete(),
       consents: FieldValue.delete(),
       error: FieldValue.delete(),
@@ -206,24 +219,32 @@ const handler = async (data: unknown, _context: CallableContext) => {
       transaction.get(executionRef),
     ]);
     if (!requestSnap.exists) throw httpsError('not-found', 'Data-rights request was not found.');
-    if (priorExecution.exists) return { replay: priorExecution.data(), record: requestSnap.data() as RequestRecord };
-
     const record = requestSnap.data() as RequestRecord;
+    const prior = priorExecution.exists ? priorExecution.data() : null;
+    if (prior?.event === 'DATA_RIGHTS_EXECUTION_FINISHED') return { replay: prior, record };
+    const retry = prior?.event === 'DATA_RIGHTS_EXECUTION_FAILED'
+      && record.status === 'IN_REVIEW' && record.executionState === 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE';
+    if (prior && !retry) throw httpsError('failed-precondition', 'The exact data-rights execution attempt is already active or requires reconciliation.');
     if (!record.ownerUid || !['EXPORT', 'DELETE'].includes(String(record.requestType))) {
       throw httpsError('failed-precondition', 'Data-rights request schema requires reconciliation.');
     }
-    if (record.status !== 'APPROVED') {
+    if (record.status !== 'APPROVED' && !retry) {
       throw httpsError('failed-precondition', 'Only an explicitly APPROVED request can enter protected staging execution.');
     }
-    transaction.create(executionRef, {
+    const attemptNumber = Number(prior?.attemptNumber || 0) + 1;
+    if (!Number.isSafeInteger(attemptNumber) || attemptNumber > 3) throw httpsError('resource-exhausted', 'The bounded data-rights retry budget is exhausted.');
+    const execution = {
       event: 'DATA_RIGHTS_EXECUTION_STARTED',
+      attemptNumber,
       schemaVersion: EXECUTION_SCHEMA,
       requestType: record.requestType,
       ownerHash: createHash('sha256').update(record.ownerUid).digest('hex'),
       retentionDecisionReceiptId: parsed.data.retentionDecisionReceiptId,
       admission,
       createdAt: FieldValue.serverTimestamp(),
-    });
+    };
+    if (retry) transaction.set(executionRef, execution, { merge: true });
+    else transaction.create(executionRef, execution);
     transaction.set(requestRef, {
       status: 'IN_REVIEW',
       executionState: 'PROTECTED_STAGING_EXECUTION_IN_PROGRESS',
