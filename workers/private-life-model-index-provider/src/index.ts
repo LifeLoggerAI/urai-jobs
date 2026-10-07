@@ -304,7 +304,89 @@ function firestore() {
   return getFirestore();
 }
 
-async function persistRevision(request: IndexRequest, extraction: Extraction, sourceFixityRef: string, sourceSha256: string) {
+type IndexBinding = { requestDigest: string; sourceDigest: string };
+type IndexReceipt = { handleHash: string; revision: number; checksum: string; backlogState: string; replayed: boolean };
+type IndexClaim = IndexBinding & { handleHash: string; claimToken: string; receipt: IndexReceipt | null };
+const INDEX_LEASE_MS = 150000;
+
+class IndexConflict extends Error {
+  constructor(readonly code: string) { super(code); }
+}
+
+function indexBinding(request: IndexRequest, resolved: Awaited<ReturnType<typeof resolvePrivateInputs>>): IndexBinding {
+  return {
+    requestDigest: stableHash(canonicalJson({
+      sourceHandleHash: stableHash(request.sourceHandle),
+      sourceEvidenceClass: request.sourceEvidenceClass,
+      transcriptRef: request.transcriptRef,
+      provenanceRef: request.provenanceRef,
+      requestedPurpose: request.requestedPurpose,
+      locale: request.locale || null,
+      priorMemoryIndexRef: request.priorMemoryIndexRef || null,
+      correlationTrigger: request.correlationTrigger || 'initial-source',
+    })),
+    sourceDigest: stableHash(canonicalJson({
+      sourceFixityRef: resolved.sourceFixityRef,
+      sourceSha256: resolved.sourceSha256,
+      transcriptSha256: stableHash(resolved.transcriptText),
+    })),
+  };
+}
+
+function assertIndexBinding(data: Record<string, any>, binding: IndexBinding) {
+  // Legacy unbound receipts cannot authorize replay for a current request.
+  if (data.requestDigest !== binding.requestDigest || data.sourceDigest !== binding.sourceDigest) {
+    throw new IndexConflict('LIFE_MODEL_IDEMPOTENCY_CONFLICT');
+  }
+}
+
+function indexReceipt(data: Record<string, any>, handleHash: string): IndexReceipt {
+  if (!Number.isSafeInteger(data.revision) || data.revision < 1
+      || !SHA256.test(String(data.checksum)) || !['INDEXED', 'CONFLICTED'].includes(data.backlogState)) {
+    throw new IndexConflict('LIFE_MODEL_IDEMPOTENCY_RECEIPT_INVALID');
+  }
+  return { handleHash, revision: data.revision, checksum: data.checksum, backlogState: data.backlogState, replayed: true };
+}
+
+async function claimIndexRequest(request: IndexRequest, binding: IndexBinding): Promise<IndexClaim> {
+  const db = firestore();
+  const handleHash = stableHash(request.sourceHandle).slice(0, 40);
+  const idempotencyRef = db.collection('uraiPrivateLifeModel').doc(handleHash)
+    .collection('idempotency').doc(stableHash(request.idempotencyKey));
+  return db.runTransaction(async (tx) => {
+    const existing = await tx.get(idempotencyRef);
+    if (existing.exists) {
+      const data = existing.data() || {};
+      assertIndexBinding(data, binding);
+      if (data.state === 'SUCCESS') return { ...binding, handleHash, claimToken: '', receipt: indexReceipt(data, handleHash) };
+      if (data.state !== 'RUNNING') throw new IndexConflict('LIFE_MODEL_IDEMPOTENCY_RECEIPT_INVALID');
+      if (Number(data.leaseUntilMs) > Date.now()) throw new IndexConflict('LIFE_MODEL_INDEX_IN_PROGRESS');
+    }
+    const claimToken = crypto.randomUUID();
+    tx.set(idempotencyRef, {
+      ...binding,
+      state: 'RUNNING',
+      claimToken,
+      leaseUntilMs: Date.now() + INDEX_LEASE_MS,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return { ...binding, handleHash, claimToken, receipt: null };
+  });
+}
+
+async function releaseIndexClaim(request: IndexRequest, claim: IndexClaim) {
+  if (!claim.claimToken) return;
+  const db = firestore();
+  const idempotencyRef = db.collection('uraiPrivateLifeModel').doc(claim.handleHash)
+    .collection('idempotency').doc(stableHash(request.idempotencyKey));
+  await db.runTransaction(async (tx) => {
+    const existing = await tx.get(idempotencyRef);
+    const data = existing.data() || {};
+    if (data.state === 'RUNNING' && data.claimToken === claim.claimToken) tx.delete(idempotencyRef);
+  });
+}
+
+async function persistRevision(request: IndexRequest, extraction: Extraction, sourceFixityRef: string, sourceSha256: string, claim: IndexClaim) {
   const db = firestore();
   const handleHash = stableHash(request.sourceHandle).slice(0, 40);
   const root = db.collection('uraiPrivateLifeModel').doc(handleHash);
@@ -312,15 +394,11 @@ async function persistRevision(request: IndexRequest, extraction: Extraction, so
 
   const result = await db.runTransaction(async (tx) => {
     const existing = await tx.get(idempotencyRef);
-    if (existing.exists) {
-      const data = existing.data() || {};
-      return {
-        handleHash,
-        revision: Number(data.revision),
-        checksum: String(data.checksum),
-        backlogState: String(data.backlogState),
-        replayed: true,
-      };
+    const data = existing.data() || {};
+    assertIndexBinding(data, claim);
+    if (data.state === 'SUCCESS') return indexReceipt(data, handleHash);
+    if (data.state !== 'RUNNING' || data.claimToken !== claim.claimToken || Number(data.leaseUntilMs) <= Date.now()) {
+      throw new IndexConflict('LIFE_MODEL_INDEX_LEASE_LOST');
     }
 
     const currentRef = root.collection('state').doc('current');
@@ -359,7 +437,10 @@ async function persistRevision(request: IndexRequest, extraction: Extraction, so
       syntheticOutputMayBecomeHistoricalSource: false,
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    tx.create(idempotencyRef, {
+    tx.set(idempotencyRef, {
+      requestDigest: claim.requestDigest,
+      sourceDigest: claim.sourceDigest,
+      state: 'SUCCESS',
       revision,
       checksum,
       backlogState,
@@ -401,14 +482,26 @@ app.get('/readyz', (_req, res) => {
 });
 
 app.post('/', requireAuth, async (req, res) => {
+  let request: IndexRequest | undefined;
+  let claim: IndexClaim | undefined;
+  res.set('Cache-Control', 'no-store');
   try {
-    const request = assertRequest(req.body);
+    request = assertRequest(req.body);
     const state = readiness();
     if (!state.ok) return res.status(503).send({ ok: false, code: 'LIFE_MODEL_PROVIDER_NOT_READY', checks: state.checks });
 
     const resolved = await resolvePrivateInputs(request);
-    const extraction = await extractLifeModel(resolved.transcriptText, request);
-    const stored = await persistRevision(request, extraction, resolved.sourceFixityRef, resolved.sourceSha256);
+    claim = await claimIndexRequest(request, indexBinding(request, resolved));
+    let stored = claim.receipt;
+    if (!stored) {
+      const extraction = await extractLifeModel(resolved.transcriptText, request);
+      // Corrections and revocation must be rechecked after extraction, before persistence or delivery.
+      const currentSource = await resolvePrivateInputs(request);
+      if (indexBinding(request, currentSource).sourceDigest !== claim.sourceDigest) {
+        throw new IndexConflict('LIFE_MODEL_SOURCE_CHANGED');
+      }
+      stored = await persistRevision(request, extraction, resolved.sourceFixityRef, resolved.sourceSha256, claim);
+    }
 
     const base = (leaf: string) => privateRef(stored.handleHash, stored.revision, leaf);
     return res.status(200).send({
@@ -432,6 +525,13 @@ app.post('/', requireAuth, async (req, res) => {
       replayed: stored.replayed,
     });
   } catch (error) {
+    if (request && claim) {
+      try { await releaseIndexClaim(request, claim); }
+      catch { console.error(JSON.stringify({ event: 'private-life-model.index.lease-release-failed', service: 'private-life-model-index-provider' })); }
+    }
+    if (error instanceof IndexConflict) {
+      return res.status(409).send({ ok: false, code: error.code });
+    }
     console.error(JSON.stringify({
       event: 'private-life-model.index.failed',
       service: 'private-life-model-index-provider',
