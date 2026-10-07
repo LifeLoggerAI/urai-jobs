@@ -39,7 +39,7 @@ assert.equal(unavailable.ok, false); assert.equal(unavailable.checks.cuda, false
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'urai-engine-contract-'));
 const servers = [];
 async function listen(server) { server.listen(0, '127.0.0.1'); await once(server, 'listening'); servers.push(server); return `http://127.0.0.1:${server.address().port}`; }
-let revoked = false, runnerFails = false, runnerWaits = false, callbackDrops = false, callbacks = [], commands = [];
+let revoked = false, runnerFails = false, runnerWaits = false, callbackDrops = false, callbacks = [], commands = [], authorityBarrier, runnerEntered;
 const callbackTokenHash = sha(Buffer.from('b'.repeat(64)));
 const jobId = 'synthetic_job_01', sourceHandle = 'synthetic_handle_01', sourceRoot = path.join(temp, 'sources');
 await fs.mkdir(sourceRoot, { mode: 0o700 });
@@ -52,7 +52,8 @@ const manifestPath = path.join(temp, 'private-manifest.json');
 const manifest = { entries: [{ jobId, sourceHandle, ownerUid: 'synthetic_owner_01', sourceReceiptRef: 'synthetic_receipt_01', expiresAt: new Date(Date.now() + 600000).toISOString(), acceptedInputs: inputs }] };
 await fs.writeFile(manifestPath, JSON.stringify(manifest), { mode: 0o600 });
 const resolver = createResolver({ manifestPath, sourceRoot, token: 'synthetic-resolver-token', local: true,
-  validateAuthority: async (body) => ({ authorized: !revoked, ownerBound: true, jobId: body.jobId, sourceHandles: body.sourceHandles, callbackTokenHash: body.callbackTokenHash, purposes: ['memory.storage', 'location.context'] }) });
+  validateAuthority: async (body) => { if (authorityBarrier) { authorityBarrier.entered(); await authorityBarrier.wait; }
+    return { authorized: !revoked, ownerBound: true, jobId: body.jobId, sourceHandles: body.sourceHandles, callbackTokenHash: body.callbackTokenHash, purposes: ['memory.storage', 'location.context'] }; } });
 const resolverUrl = await listen(resolver.server);
 const worker = http.createServer(async (req, res) => {
   let text = ''; for await (const part of req) text += part;
@@ -89,7 +90,7 @@ revoked = true; await assert.rejects(policy({ jobId, sourceHandles: [sourceHandl
 
 const run = async (binary, args, { cwd, signal }) => {
   commands.push(binary); if (runnerFails) throw new Error('synthetic runner failure'); if (signal.aborted) throw new Error('cancelled');
-  if (runnerWaits) await new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }));
+  if (runnerWaits) { runnerEntered?.resolve(); await new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true })); }
   if (binary === 'ns-process-data') {
     await fs.mkdir(path.join(cwd, '05_colmap_processed'), { recursive: true });
     await fs.writeFile(path.join(cwd, '05_colmap_processed', 'transforms.json'), JSON.stringify({ frames: [{}, {}, {}] }));
@@ -138,5 +139,81 @@ try {
   assert.equal(commands.length, commandCount, 'restart recovery must not silently retrain');
   assert.equal((await fs.readdir(path.join(config.storageRoot, 'work'))).length, 0);
   assert.equal(JSON.parse(await fs.readFile(path.join(config.storageRoot, 'state', `${interruptedKey}.json`), 'utf8')).status, 'FAILED');
+
+  // Admission authority deliberately waits while the same job is submitted
+  // again. Both callers must share the original reservation, not race training
+  // or return a transient global-busy response for the identical attempt.
+  function deferred() { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; }
+  function observed(promise) { promise.catch(() => {}); return promise; }
+  const sixthId = 'synthetic_job_06'; manifest.entries[0].jobId = sixthId; await fs.writeFile(manifestPath, JSON.stringify(manifest));
+  const authorityEntered = deferred(), releaseAuthority = deferred();
+  authorityBarrier = { entered: authorityEntered.resolve, wait: releaseAuthority.promise };
+  let readinessCalls = 0;
+  const concurrentConfig = { ...config, storageRoot: path.join(temp, 'concurrent-engine') };
+  const concurrent = createEngine(concurrentConfig, { run, checkRuntime: async () => { readinessCalls++; return { ok: true, checks: { syntheticBoundaryOnly: true } }; } });
+  await concurrent.initialize(); const concurrentUrl = await listen(concurrent.server);
+  const beforeConcurrent = commands.length, sixthRequest = { ...request, jobId: sixthId };
+  const sixthFirst = observed(concurrent.submit(sixthRequest)); await authorityEntered.promise;
+  const sixthSecond = observed(concurrent.submit(sixthRequest)); await new Promise(setImmediate);
+  assert.equal(readinessCalls, 1, 'simultaneous identical admission must share readiness and authorization');
+  releaseAuthority.resolve(); authorityBarrier = undefined;
+  const [sixthA, sixthB] = await Promise.all([sixthFirst, sixthSecond]);
+  assert.equal(sixthA.status, 202); assert.equal(sixthB.status, 202); assert.equal(sixthB.body.idempotent, true);
+  assert.equal((await sixthA.completion).success, true); assert.equal(commands.length - beforeConcurrent, 3, 'only one pipeline may run');
+
+  // Deletion of an unknown attempt is permanent, including across process
+  // restart, rather than an acknowledgement that leaves it trainable later.
+  const seventhId = 'synthetic_job_07';
+  const seventhDelete = await fetch(`${concurrentUrl}/delete`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId: seventhId }) });
+  assert.equal(seventhDelete.status, 200); assert.equal((await seventhDelete.json()).artifactsDeleted, true);
+  const seventhPath = path.join(concurrentConfig.storageRoot, 'state', `${sha(Buffer.from(seventhId))}.json`);
+  assert.deepEqual(JSON.parse(await fs.readFile(seventhPath, 'utf8')), { status: 'DELETED' });
+  const restarted = createEngine(concurrentConfig, { run, checkRuntime: async () => ({ ok: true }) }); await restarted.initialize();
+  assert.equal((await restarted.submit({ ...request, jobId: seventhId })).body.status, 'DELETED');
+
+  // A pending readiness probe cannot resurrect a job deleted before admission.
+  const eighthId = 'synthetic_job_08'; manifest.entries[0].jobId = eighthId; await fs.writeFile(manifestPath, JSON.stringify(manifest));
+  const readinessEntered = deferred(), releaseReadiness = deferred();
+  const preadmissionConfig = { ...config, storageRoot: path.join(temp, 'preadmission-engine') };
+  const preadmission = createEngine(preadmissionConfig, { run, checkRuntime: async () => { readinessEntered.resolve(); await releaseReadiness.promise; return { ok: true }; } });
+  await preadmission.initialize(); const preadmissionUrl = await listen(preadmission.server);
+  const beforeDeleteCommands = commands.length, beforeDeleteCallbacks = callbacks.length;
+  const eighthSubmit = observed(preadmission.submit({ ...request, jobId: eighthId })); await readinessEntered.promise;
+  const eighthDelete = await fetch(`${preadmissionUrl}/delete`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId: eighthId }) });
+  assert.ok([200, 409].includes(eighthDelete.status));
+  assert.equal(JSON.parse(await fs.readFile(path.join(preadmissionConfig.storageRoot, 'state', `${sha(Buffer.from(eighthId))}.json`), 'utf8')).status, 'DELETED');
+  releaseReadiness.resolve(); const eighthAdmission = await eighthSubmit;
+  assert.equal(eighthAdmission.status, 409); assert.equal(eighthAdmission.body.status, 'DELETED');
+  const eighthAck = await fetch(`${preadmissionUrl}/delete`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId: eighthId }) });
+  assert.equal(eighthAck.status, 200);
+  assert.equal(commands.length, beforeDeleteCommands); assert.equal(callbacks.length, beforeDeleteCallbacks, 'deleted preadmission jobs cannot emit callbacks');
+
+  // The same fence must hold with source authority blocked after readiness.
+  const ninthId = 'synthetic_job_09'; manifest.entries[0].jobId = ninthId; await fs.writeFile(manifestPath, JSON.stringify(manifest));
+  const ninthEntered = deferred(), ninthRelease = deferred(); authorityBarrier = { entered: ninthEntered.resolve, wait: ninthRelease.promise };
+  const ninthSubmit = observed(concurrent.submit({ ...request, jobId: ninthId })); await ninthEntered.promise;
+  const ninthDelete = await fetch(`${concurrentUrl}/delete`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId: ninthId }) });
+  assert.ok([200, 409].includes(ninthDelete.status)); ninthRelease.resolve(); authorityBarrier = undefined;
+  assert.equal((await ninthSubmit).body.status, 'DELETED');
+  const ninthAck = await fetch(`${concurrentUrl}/delete`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId: ninthId }) });
+  assert.equal(ninthAck.status, 200); assert.equal(commands.length, beforeDeleteCommands); assert.equal(callbacks.length, beforeDeleteCallbacks);
+
+  // An already running command is aborted before cleanup acknowledgement,
+  // and its failure/callback/finalization paths must preserve the tombstone.
+  const tenthId = 'synthetic_job_10'; manifest.entries[0].jobId = tenthId; await fs.writeFile(manifestPath, JSON.stringify(manifest));
+  runnerEntered = deferred(); runnerWaits = true;
+  const tenth = await concurrent.submit({ ...request, jobId: tenthId }); await runnerEntered.promise;
+  const tenthDelete = await fetch(`${concurrentUrl}/delete`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId: tenthId }) });
+  assert.equal(tenthDelete.status, 409, 'cleanup cannot be acknowledged with an active subprocess');
+  assert.equal((await tenth.completion).success, false); runnerWaits = false; runnerEntered = undefined;
+  const tenthAck = await fetch(`${concurrentUrl}/delete`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId: tenthId }) });
+  assert.equal(tenthAck.status, 200); assert.equal(callbacks.length, beforeDeleteCallbacks, 'deleted computations cannot emit a late failure/success callback');
+  const tenthState = JSON.parse(await fs.readFile(path.join(concurrentConfig.storageRoot, 'state', `${sha(Buffer.from(tenthId))}.json`), 'utf8'));
+  assert.equal(tenthState.status, 'DELETED'); assert.deepEqual(Object.keys(tenthState).sort(), ['digest', 'status']);
+  assert.equal((await concurrent.submit({ ...request, jobId: tenthId })).body.status, 'DELETED');
+  for (const [route, extra] of [['/retry-callback', {}], ['/artifact', { ref: result.output.runtime.ref }]]) {
+    const denied = await fetch(`${concurrentUrl}${route}`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId: tenthId, ...extra }) });
+    assert.equal(denied.status, 403, 'deleted state cannot be delivered or resurrected');
+  }
 } finally { for (const server of servers) server.closeAllConnections(); await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve)))); await fs.rm(temp, { recursive: true, force: true }); }
 console.log('[PASS] captured reality engine/resolver contracts: synthetic transport/command doubles only; no CUDA, training, private-source or runtime acceptance');

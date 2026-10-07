@@ -63,24 +63,45 @@ async function filesNamed(root, name) {
   return results;
 }
 function createEngine(config, { run = command, checkRuntime = runtimeReadiness } = {}) {
-  const active = new Map(); let ready;
+  const active = new Map(), admissions = new Map(), lifecycle = new Map(); let ready;
   const root = config.storageRoot || path.join(process.cwd(), '.private-captured-reality');
   const key = (jobId) => sha(Buffer.from(jobId));
   const statePath = (jobId) => path.join(root, 'state', `${key(jobId)}.json`);
-  async function persist(jobId, state) {
+  function exclusive(jobId, operation) {
+    const previous = lifecycle.get(jobId) || Promise.resolve();
+    const result = previous.then(operation), tail = result.then(() => {}, () => {});
+    lifecycle.set(jobId, tail);
+    return result.finally(() => { if (lifecycle.get(jobId) === tail) lifecycle.delete(jobId); });
+  }
+  async function readState(jobId) {
+    return fs.readFile(statePath(jobId), 'utf8').then(JSON.parse).catch((error) => { if (error.code !== 'ENOENT') throw error; return null; });
+  }
+  async function writeState(jobId, state) {
     await fs.mkdir(path.join(root, 'state'), { recursive: true, mode: 0o700 });
     const target = statePath(jobId), temp = `${target}.tmp`;
     await fs.writeFile(temp, JSON.stringify(state), { mode: 0o600 }); await fs.rename(temp, target);
+  }
+  async function persist(jobId, state) {
+    return exclusive(jobId, async () => {
+      if ((await readState(jobId))?.status === 'DELETED' && state.status !== 'DELETED') throw new Error('RECONSTRUCTION_DELETED');
+      await writeState(jobId, state);
+    });
   }
   async function sourceCheck(request, signal) {
     const callbackTokenHash = sha(Buffer.from(new URL(request.callbackUrl).searchParams.get('callbackToken')));
     const result = await jsonRequest(`${config.resolverUrl}/check`, config.resolverToken, { jobId: request.jobId, sourceHandles: request.sourceHandles, callbackTokenHash }, config.local, signal);
     if (result.authorized !== true || result.jobId !== request.jobId || result.callbackTokenHash !== callbackTokenHash || JSON.stringify([...result.sourceHandles].sort()) !== JSON.stringify([...request.sourceHandles].sort())) throw new Error('SOURCE_AUTHORIZATION_DENIED');
   }
-  async function callback(request, body) {
+  async function deliverCallback(request, body) {
     // Callback authority is already the worker's one-use token; never log URLs.
     const result = await fetch(privateUrl(request.callbackUrl, config.local), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(15000) });
     if (!result.ok) throw new Error('CALLBACK_REJECTED');
+  }
+  async function callback(request, body) {
+    return exclusive(request.jobId, async () => {
+      if ((await readState(request.jobId))?.status === 'DELETED') throw new Error('RECONSTRUCTION_DELETED');
+      await deliverCallback(request, body);
+    });
   }
   async function perform(request, digest, controller) {
     const jobKey = key(request.jobId), workspace = path.join(root, 'work', jobKey), artifactRoot = path.join(root, 'artifacts', jobKey);
@@ -161,37 +182,89 @@ function createEngine(config, { run = command, checkRuntime = runtimeReadiness }
       failure = true;
       // Once success callback transport begins, delivery may be ambiguous. Keep
       // private output for idempotent callback recovery; never retrain the job.
-      if (!callbackPrepared) {
+      const deleted = (await readState(request.jobId))?.status === 'DELETED';
+      if (!callbackPrepared || deleted) {
         await fs.rm(artifactRoot, { recursive: true, force: true });
-        await callback(request, { jobId: request.jobId, status: 'failed' }).catch(() => {});
-        await persist(request.jobId, { digest, status: 'FAILED', request, failureCode: signal.aborted ? 'CANCELLED_OR_REVOKED' : 'RECONSTRUCTION_FAILED' });
+        if (!deleted) {
+          await callback(request, { jobId: request.jobId, status: 'failed' }).catch(() => {});
+          await persist(request.jobId, { digest, status: 'FAILED', request, failureCode: signal.aborted ? 'CANCELLED_OR_REVOKED' : 'RECONSTRUCTION_FAILED' });
+        }
       }
     } finally {
-      clearInterval(monitor); clearTimeout(watchdog); await fs.rm(workspace, { recursive: true, force: true }); active.delete(request.jobId);
+      clearInterval(monitor); clearTimeout(watchdog);
+      await exclusive(request.jobId, async () => {
+        if ((await readState(request.jobId))?.status === 'DELETED') await fs.rm(artifactRoot, { recursive: true, force: true });
+        await fs.rm(workspace, { recursive: true, force: true }); active.delete(request.jobId);
+      });
     }
     return { success: !failure, output };
   }
   async function submit(body) {
     const request = validateRequest(body, config.callbackOrigin, config.local);
     if (request.spatialAuthorityHead !== config.spatialAuthorityHead) throw new Error('SPATIAL_AUTHORITY_MISMATCH');
-    ready = await checkRuntime(config);
-    if (!ready.ok) return { status: 503, body: { accepted: false, code: 'ENGINE_NOT_READY', checks: ready.checks } };
     const digest = sha(Buffer.from(JSON.stringify(request)));
-    const existing = await fs.readFile(statePath(request.jobId), 'utf8').then(JSON.parse).catch((error) => { if (error.code !== 'ENOENT') throw error; return null; });
-    if (existing) {
-      const replayable = existing.digest === digest && ['RUNNING', 'CALLBACK_PENDING', 'SUCCESS'].includes(existing.status);
-      return { status: replayable ? 202 : 409, body: { accepted: replayable, idempotent: true, status: existing.status } };
+    const pending = admissions.get(request.jobId);
+    if (pending) {
+      if (pending.digest !== digest) return { status: 409, body: { accepted: false, idempotent: true, status: 'ADMISSION_PENDING' } };
+      const result = await pending.promise;
+      return { ...result, body: { ...result.body, idempotent: true } };
     }
-    if (active.size) return { status: 429, body: { accepted: false, code: 'BOUNDED_COMPUTE_BUSY' } };
-    const controller = new AbortController(); active.set(request.jobId, controller);
-    try { await sourceCheck(request); await persist(request.jobId, { digest, status: 'RUNNING', request }); }
-    catch (error) { active.delete(request.jobId); throw error; }
-    const completion = perform(request, digest, controller);
-    // A rejected infrastructure promise must not leak callback/source details.
-    completion.catch(() => { controller.abort(); active.delete(request.jobId); });
-    return { status: 202, body: { accepted: true, jobId: request.jobId }, completion };
+    const admission = { digest };
+    admission.promise = admit(request, digest).finally(() => { if (admissions.get(request.jobId) === admission) admissions.delete(request.jobId); });
+    admissions.set(request.jobId, admission);
+    return admission.promise;
+  }
+  async function admit(request, digest) {
+    const controller = new AbortController(); let launched = false;
+    const deletedResult = () => ({ status: 409, body: { accepted: false, idempotent: true, status: 'DELETED' } });
+    const existingResult = await exclusive(request.jobId, async () => {
+      const existing = await readState(request.jobId);
+      if (existing) {
+        const replayable = existing.digest === digest && ['RUNNING', 'CALLBACK_PENDING', 'SUCCESS'].includes(existing.status);
+        return { status: replayable ? 202 : 409, body: { accepted: replayable, idempotent: true, status: existing.status } };
+      }
+      // Reservation is synchronous after the state read. Other jobs cannot
+      // pass the compute ceiling while readiness/source authority is pending.
+      if (active.size) return { status: 429, body: { accepted: false, code: 'BOUNDED_COMPUTE_BUSY' } };
+      active.set(request.jobId, controller); return null;
+    });
+    if (existingResult) return existingResult;
+    try {
+      ready = await checkRuntime(config);
+      if ((await readState(request.jobId))?.status === 'DELETED') return deletedResult();
+      if (controller.signal.aborted) return { status: 409, body: { accepted: false, code: 'ADMISSION_CANCELLED' } };
+      if (!ready.ok) return { status: 503, body: { accepted: false, code: 'ENGINE_NOT_READY', checks: ready.checks } };
+      await sourceCheck(request, controller.signal);
+      return await exclusive(request.jobId, async () => {
+        if ((await readState(request.jobId))?.status === 'DELETED') return deletedResult();
+        if (controller.signal.aborted) return { status: 409, body: { accepted: false, code: 'ADMISSION_CANCELLED' } };
+        await writeState(request.jobId, { digest, status: 'RUNNING', request });
+        launched = true; const completion = perform(request, digest, controller);
+        // Infrastructure failures retain no callback/source details publicly.
+        completion.catch(() => { controller.abort(); active.delete(request.jobId); });
+        return { status: 202, body: { accepted: true, jobId: request.jobId }, completion };
+      });
+    } catch (error) {
+      if ((await readState(request.jobId))?.status === 'DELETED') return deletedResult();
+      throw error;
+    } finally { if (!launched && active.get(request.jobId) === controller) active.delete(request.jobId); }
   }
   async function cancel(jobId) { if (!HANDLE.test(String(jobId))) throw new Error('JOB_ID_INVALID'); active.get(jobId)?.abort(); }
+  async function deleteJob(jobId) {
+    if (!HANDLE.test(String(jobId))) throw new Error('JOB_ID_INVALID');
+    return exclusive(jobId, async () => {
+      const state = await readState(jobId);
+      // Tombstone even an unknown/preadmission identity before acknowledging or
+      // aborting. All admission, state, callback and delivery paths share this
+      // fence, so a delayed authority check cannot resurrect deleted output.
+      await writeState(jobId, { ...(state?.digest ? { digest: state.digest } : {}), status: 'DELETED' });
+      active.get(jobId)?.abort();
+      if (active.has(jobId)) return { status: 409, body: { ok: false, code: 'CANCEL_PENDING' } };
+      await fs.rm(path.join(root, 'artifacts', key(jobId)), { recursive: true, force: true });
+      await fs.rm(path.join(root, 'work', key(jobId)), { recursive: true, force: true });
+      return { status: 200, body: { ok: true, artifactsDeleted: true } };
+    });
+  }
   async function initialize() {
     await fs.mkdir(root, { recursive: true, mode: 0o700 });
     await fs.mkdir(path.join(root, 'state'), { recursive: true, mode: 0o700 });
@@ -215,25 +288,26 @@ function createEngine(config, { run = command, checkRuntime = runtimeReadiness }
       if (req.url === '/cancel') { await cancel(body.jobId); return send(res, 202, { accepted: true }); }
       if (req.url === '/retry-callback') {
         if (!HANDLE.test(String(body.jobId || ''))) throw new Error('JOB_ID_INVALID');
-        const state = JSON.parse(await fs.readFile(statePath(body.jobId), 'utf8'));
-        if (state.status !== 'CALLBACK_PENDING') throw new Error('CALLBACK_NOT_PENDING');
-        await sourceCheck(state.request);
-        await callback(state.request, { jobId: body.jobId, status: 'success', result: state.output });
-        state.status = 'SUCCESS'; await persist(body.jobId, state); return send(res, 200, { ok: true });
+        return await exclusive(body.jobId, async () => {
+          const state = await readState(body.jobId);
+          if (state?.status !== 'CALLBACK_PENDING') throw new Error('CALLBACK_NOT_PENDING');
+          await sourceCheck(state.request);
+          await deliverCallback(state.request, { jobId: body.jobId, status: 'success', result: state.output });
+          state.status = 'SUCCESS'; await writeState(body.jobId, state); return send(res, 200, { ok: true });
+        });
       }
       if (req.url === '/delete') {
-        await cancel(body.jobId); if (active.has(body.jobId)) return send(res, 409, { ok: false, code: 'CANCEL_PENDING' });
-        await fs.rm(path.join(root, 'artifacts', key(body.jobId)), { recursive: true, force: true });
-        const state = await fs.readFile(statePath(body.jobId), 'utf8').then(JSON.parse).catch(() => null);
-        if (state) await persist(body.jobId, { digest: state.digest, status: 'DELETED' });
-        return send(res, 200, { ok: true, artifactsDeleted: true });
+        const result = await deleteJob(body.jobId); return send(res, result.status, result.body);
       }
       if (req.url === '/artifact') {
-        const state = JSON.parse(await fs.readFile(statePath(body.jobId), 'utf8')); await sourceCheck(state.request);
-        const match = /^cr-artifact:([a-f0-9]{64}):([a-f0-9]{64})$/.exec(String(body.ref));
-        if (state.status !== 'SUCCESS' || !match || match[1] !== key(body.jobId)) throw new Error('ARTIFACT_DENIED');
-        const bytes = await fs.readFile(path.join(root, 'artifacts', match[1], match[2])); if (sha(bytes) !== match[2]) throw new Error('ARTIFACT_FIXITY_MISMATCH');
-        res.writeHead(200, { 'content-type': 'application/octet-stream', 'cache-control': 'no-store', 'content-length': bytes.length }); return res.end(bytes);
+        if (!HANDLE.test(String(body.jobId || ''))) throw new Error('JOB_ID_INVALID');
+        return await exclusive(body.jobId, async () => {
+          const state = await readState(body.jobId), match = /^cr-artifact:([a-f0-9]{64}):([a-f0-9]{64})$/.exec(String(body.ref));
+          if (state?.status !== 'SUCCESS' || !match || match[1] !== key(body.jobId)) throw new Error('ARTIFACT_DENIED');
+          await sourceCheck(state.request);
+          const bytes = await fs.readFile(path.join(root, 'artifacts', match[1], match[2])); if (sha(bytes) !== match[2]) throw new Error('ARTIFACT_FIXITY_MISMATCH');
+          res.writeHead(200, { 'content-type': 'application/octet-stream', 'cache-control': 'no-store', 'content-length': bytes.length }); return res.end(bytes);
+        });
       }
       send(res, 404, { ok: false, code: 'NOT_FOUND' });
     } catch { send(res, 403, { ok: false, code: 'PRIVATE_RECONSTRUCTION_REJECTED' }); }
