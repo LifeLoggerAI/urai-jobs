@@ -131,10 +131,14 @@ export async function invalidateLifeMovieDerivativesForConsent(
           'execution.callbackLeaseToken': FieldValue.delete(), 'execution.callbackDeadlineAt': FieldValue.delete(),
           updatedAt: now,
         };
-        if (!TERMINAL.has(status)) {
-          patch.status = 'CANCELLED';
-          patch.completedAt = now;
-        }
+        // A legacy FAILED job has no canonical consent for the queue/worker to
+        // recheck. Permanent cancellation also closes status-only admin retries.
+        // Preserve generation history without copying arbitrary persisted values
+        // into the bounded patch or overwriting history on event replay.
+        patch.status = 'CANCELLED';
+        if (!job.completedAt) patch.completedAt = now;
+        if (!job.outputDeletionPreviousStatus) patch.outputDeletionPreviousStatus =
+          TERMINAL.has(status) || ['PENDING', 'LEASED', 'RUNNING'].includes(status) ? status : 'UNKNOWN';
         transaction.set(jobQueueEntryDoc(snapshot.id), {
           jobId: snapshot.id, status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: now,
         }, { merge: true });
