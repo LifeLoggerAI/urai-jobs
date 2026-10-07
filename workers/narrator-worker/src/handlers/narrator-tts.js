@@ -119,6 +119,20 @@ async function assertNarratorLifecycle(job) {
                     || current.tenantId !== job.tenantId || current.execution?.leaseToken !== job.leaseToken
                     || narratorCanonicalInput(current) !== narratorCanonicalInput(job))
                     throw new Error("narrator_canonical_job_changed");
+                // The governed DELETE executor installs this permanent owner fence
+                // before enumerating data. A RUNNING job or delayed consent callback
+                // cannot authorize another paid call or retain a new output after it.
+                const ownerHash = (0, protected_spend_js_1.narratorDigest)(current.ownerUid);
+                const [localFence, centralFence] = await Promise.all([
+                    transaction.get(db.collection("uraiPrivateLifeModelOwnerFences").doc(ownerHash)),
+                    transaction.get(db.collection("privacyDeletionTombstones").doc(current.ownerUid)),
+                ]);
+                const own = localFence.exists ? localFence.data() : null;
+                const central = centralFence.exists ? centralFence.data() : null;
+                if ((localFence.exists && (own?.ownerHash !== ownerHash || own?.deleted === true))
+                    || (centralFence.exists && (central?.uid !== current.ownerUid || central?.active === true))) {
+                    throw new Error("narrator_canonical_owner_deleted");
+                }
                 const valid = (value) => value && typeof value === "object"
                     && ["purpose", "policyVersion", "decisionReceiptId"].every(key => typeof value[key] === "string" && value[key].length > 0);
                 const contexts = [current.consent, ...(Array.isArray(current.consents) ? current.consents : [])].filter(valid);

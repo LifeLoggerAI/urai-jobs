@@ -44,8 +44,8 @@ function fixture(provider, options = {}, extension = 'ts') {
     consentPurpose: job.consent?.purpose || 'synthetic.voice', policyVersion: job.consent?.policyVersion || 'synthetic-policy',
     decisionReceiptId: job.consent?.decisionReceiptId || 'synthetic-consent', voiceIds: [job.payload.voiceId],
     rightsReceiptId: 'synthetic-rights', provenanceRef: 'synthetic-provenance' };
-  const blocks = new Map(), dbState = { available: true }, firestoreReads = [];
-  options.initialCanonical?.({ canonical, authorization, blocks, dbState });
+  const blocks = new Map(), fences = new Map(), dbState = { available: true }, firestoreReads = [];
+  options.initialCanonical?.({ canonical, authorization, blocks, fences, dbState });
   const endpoint = provider === 'google' ? 'https://texttospeech.googleapis.com/v1/text:synthesize' : 'https://api.elevenlabs.io/v1/text-to-speech/synthetic-voice?output_format=mp3_44100_128';
   const body = provider === 'google' ? JSON.stringify({ input: { text: job.payload.text }, voice: { languageCode: job.payload.locale || 'en-US', name: job.payload.voice || job.payload.voiceId }, audioConfig: { audioEncoding: 'OGG_OPUS' } }) : JSON.stringify({ text: job.payload.text, model_id: 'eleven_multilingual_v2' });
   const accountId = provider === 'google' ? `google:${adc.quota}:${adc.principal}` : 'synthetic-elevenlabs-account';
@@ -74,7 +74,7 @@ function fixture(provider, options = {}, extension = 'ts') {
       if (fields.action === 'preflight') {
         if (options.gatewayUnavailable) throw new Error('synthetic gateway unavailable');
         if (options.preflightDenied) return json({ ok: false }, 409);
-        const result = protectedEnvelope(fields); options.afterPreflight?.({ env, job, adc, clock, canonical, authorization, blocks, dbState, stored, deleted });
+        const result = protectedEnvelope(fields); options.afterPreflight?.({ env, job, adc, clock, canonical, authorization, blocks, fences, dbState, stored, deleted });
         return json(options.authorizingPreflight ? { ...result, provider_call_authorized: true } : result);
       }
       if (fields.action === 'reserve') {
@@ -86,7 +86,7 @@ function fixture(provider, options = {}, extension = 'ts') {
         const reservedAt = clock.now, admittedExpiry = Math.min(verifiedPreflightExpiry, reservedAt + (options.runtime || 45) * 1000);
         const result = { ok: true, ...(options.missingReserveTimes ? {} : { reserved_at: new Date(options.reservedAt === undefined ? reservedAt : options.reservedAt).toISOString(), admission_expires_at: new Date(options.reserveExpiry === undefined ? admittedExpiry : options.reserveExpiry).toISOString() }), attempt_id: 'synthetic-attempt', provider_call_authorized: true, execution_performed: false, job_digest: digest, executor_source_sha: sourceSha, gateway_source_sha: gatewaySha, worker_id: fields.worker_id, account_id: fields.account_id, credential_sha256: fields.credential_sha256, semantic_headers_sha256: fields.semantic_headers_sha256, source_input_sha256: fields.source_input_sha256, semantic_input_sha256: fields.semantic_input_sha256, content_type: fields.content_type, max_runtime_seconds: options.runtime || 45 };
         options.mutateReserve?.(result);
-        options.afterReserve?.({ env, job, adc, clock, canonical, authorization, blocks, dbState, stored, deleted });
+        options.afterReserve?.({ env, job, adc, clock, canonical, authorization, blocks, fences, dbState, stored, deleted });
         return json(options.badReserve ? { ...result, worker_id: 'foreign-worker' } : result);
       }
       if (fields.action === 'record') {
@@ -94,7 +94,7 @@ function fixture(provider, options = {}, extension = 'ts') {
         assert.ok(['succeeded', 'failed'].includes(fields.status));
         assert.equal(fields.credential_sha256, events[0].fields.credential_sha256);
         recorded = true;
-        options.afterRecord?.({ env, job, adc, clock, canonical, authorization, blocks, dbState, stored, deleted });
+        options.afterRecord?.({ env, job, adc, clock, canonical, authorization, blocks, fences, dbState, stored, deleted });
         if (options.recordUnavailable) throw new Error('synthetic observation unavailable');
         return json({ ok: true, provider_call_authorized: false, execution_performed: false, reconciliation_required: true });
       }
@@ -105,7 +105,7 @@ function fixture(provider, options = {}, extension = 'ts') {
     if (options.providerLost) throw new Error('synthetic provider response lost');
     if (options.providerTimeout) { clock.now += 2000; return new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('synthetic provider timeout')), { once: true })); }
     if (options.providerDenied) return json({ error: 'synthetic failure' }, 500);
-    options.afterProvider?.({ env, job, adc, clock, canonical, authorization, blocks, dbState, stored, deleted });
+    options.afterProvider?.({ env, job, adc, clock, canonical, authorization, blocks, fences, dbState, stored, deleted });
     if (provider === 'google') return json({ audioContent: options.invalidAudio ? 'invalid!' : Buffer.from('synthetic-audio').toString('base64') });
     return new Response(options.invalidAudio ? Buffer.alloc(0) : Buffer.from('synthetic-audio'), { headers: { 'request-id': 'synthetic-provider-request' } });
   };
@@ -118,7 +118,7 @@ function fixture(provider, options = {}, extension = 'ts') {
     async save(bytes, metadata) { assert.equal(metadata.preconditionOpts?.ifGenerationMatch, args.includes('--lifecycle-baseline') ? undefined : 0);
       if (options.storagePending) await new Promise(resolve => { dbState.finishStorage = resolve; });
       stored.push({ bucket, filename, bytes, metadata, generation: '1', live: true });
-      options.afterStorage?.({ env, job, adc, clock, canonical, authorization, blocks, dbState, stored, deleted });
+      options.afterStorage?.({ env, job, adc, clock, canonical, authorization, blocks, fences, dbState, stored, deleted });
       if (options.storageFails) throw new Error('synthetic Storage failure'); },
     async getMetadata() { const output = stored.find(o => o.filename === filename && o.live);
       if (!output) throw Object.assign(new Error('synthetic absent output'), { code: 404 });
@@ -137,6 +137,9 @@ function fixture(provider, options = {}, extension = 'ts') {
         if (document.key === 'jobs/' + job.jobId) return { exists: !options.jobMissing, data: () => structuredClone(canonical) };
         if (document.key === 'users/' + job.ownerUid + '/providerAuthorizations/elevenlabs') return { exists: !options.authorizationMissing, data: () => structuredClone(authorization) };
         if (document.key.startsWith('jobConsentBlocks/')) { const active = blocks.get(document.key.split('/')[1]); return { exists: active !== undefined, data: () => ({ active }) }; }
+        if (document.key.startsWith('uraiPrivateLifeModelOwnerFences/') || document.key.startsWith('privacyDeletionTombstones/')) {
+          const data = fences.get(document.key); return { exists: data !== undefined, data: () => data === undefined ? undefined : structuredClone(data) };
+        }
         throw new Error('unexpected canonical read');
       } });
     } };
@@ -167,12 +170,57 @@ function fixture(provider, options = {}, extension = 'ts') {
   }
   const handler = load(`workers/narrator-worker/src/handlers/narrator-tts.${extension}`);
   const registry = load(`workers/narrator-worker/src/handlers/index.${extension}`);
-  return { job, env, adc, events, submitted, stored, deleted, canonical, authorization, blocks, dbState, firestoreReads, endpoint, body, clock, helper: load('workers/narrator-worker/src/protected-spend.' + extension), execute: () => registry.handleJob(job), get held() { return held; }, get recorded() { return recorded; } };
+  return { job, env, adc, events, submitted, stored, deleted, canonical, authorization, blocks, fences, dbState, firestoreReads, endpoint, body, clock, helper: load('workers/narrator-worker/src/protected-spend.' + extension), execute: () => registry.handleJob(job), get held() { return held; }, get recorded() { return recorded; } };
 }
 
 let count = 0;
 async function test(label, run) { await run(); count++; console.log(`[PASS] ${label}`); }
 async function denied(provider, options, extra, extension = 'ts') { const f = fixture(provider, options, extension); await assert.rejects(f.execute()); assert.equal(f.submitted.length, 0); assert.equal(f.stored.length, 0); extra?.(f); }
+async function ownerFenceProof(reproduce = false) {
+  const pathFor = (kind, uid) => kind === 'local' ? 'uraiPrivateLifeModelOwnerFences/' + hash(uid) : 'privacyDeletionTombstones/' + uid;
+  const deletedFence = (kind, uid) => kind === 'local' ? { ownerHash: hash(uid), deleted: true } : { uid, active: true };
+  for (const extension of ['ts', 'js']) for (const provider of ['google', 'elevenlabs']) {
+    for (const kind of ['local', 'central']) {
+      const removeOwner = ({ canonical, fences }) => fences.set(pathFor(kind, canonical.ownerUid), deletedFence(kind, canonical.ownerUid));
+      for (const [name, hook, posts, writes, held] of [
+        ['before admission', 'initialCanonical', 0, 0, false],
+        ['during preflight', 'afterPreflight', 0, 0, false],
+        ['during reserve', 'afterReserve', 0, 0, true],
+        ['after provider response', 'afterProvider', 1, 0, true],
+        ['during Storage write', 'afterStorage', 1, 1, true],
+        ['during outcome observation', 'afterRecord', 1, 1, true],
+      ]) await test(extension + ' ' + provider + ' ' + kind + ' owner deletion ' + name, async () => {
+        const f = fixture(provider, { [hook]: removeOwner }, extension);
+        if (reproduce) { await f.execute(); assert.equal(f.submitted.length, 1); assert.equal(f.stored.length, 1); assert.equal(f.deleted.length, 0); }
+        else { await assert.rejects(f.execute(), hook === 'afterRecord'
+          ? /narrator output requires durable observation and charge reconciliation/
+          : /narrator_canonical_owner_deleted/);
+          assert.equal(f.submitted.length, posts); assert.equal(f.stored.length, writes); assert.equal(f.held, held);
+          assert.equal(f.deleted.length, writes); if (writes) { assert.equal(f.stored[0].live, false); assert.equal(f.deleted[0].generation, '1'); }
+          if (held) assert.equal(f.recorded, true);
+        }
+      });
+      await test(extension + ' ' + provider + ' ' + kind + ' owner fence identity mismatch denies admission', async () => {
+        const f = fixture(provider, { initialCanonical: ({ canonical, fences }) => fences.set(pathFor(kind, canonical.ownerUid),
+          kind === 'local' ? { ownerHash: hash('foreign-owner'), deleted: false } : { uid: 'foreign-owner', active: false }) }, extension);
+        if (reproduce) { await f.execute(); assert.equal(f.submitted.length, 1); }
+        else { await assert.rejects(f.execute(), /narrator_canonical_owner_deleted/); assert.equal(f.submitted.length, 0); assert.equal(f.events.length, 0); }
+      });
+    }
+    await test(extension + ' ' + provider + ' current inactive identity-bound owner fences preserve valid admission', async () => {
+      const f = fixture(provider, { initialCanonical: ({ canonical, fences }) => {
+        fences.set(pathFor('local', canonical.ownerUid), { ownerHash: hash(canonical.ownerUid), deleted: false });
+        fences.set(pathFor('central', canonical.ownerUid), { uid: canonical.ownerUid, active: false });
+      } }, extension);
+      await f.execute(); assert.equal(f.submitted.length, 1); assert.equal(f.stored.length, 1); assert.equal(f.deleted.length, 0);
+      if (!reproduce) for (const kind of ['local', 'central']) assert.ok(f.firestoreReads.includes(pathFor(kind, f.job.ownerUid)));
+    });
+    await test(extension + ' ' + provider + ' another owner deletion does not widen deletion scope', async () => {
+      const f = fixture(provider, { initialCanonical: ({ fences }) => { for (const kind of ['local', 'central']) fences.set(pathFor(kind, 'unrelated-owner'), deletedFence(kind, 'unrelated-owner')); } }, extension);
+      await f.execute(); assert.equal(f.submitted.length, 1); assert.equal(f.stored.length, 1); assert.equal(f.deleted.length, 0);
+    });
+  }
+}
 async function lifecycleProof(reproduce = false) {
   for (const extension of ['ts', 'js']) for (const provider of ['google', 'elevenlabs']) {
     await test(extension + ' ' + provider + ' late Storage completion after session timeout is cleaned by its continuation', async () => {
@@ -255,7 +303,8 @@ async function lifecycleProof(reproduce = false) {
 }
 
 try {
-  if (args.includes('--lifecycle-baseline') || args.includes('--lifecycle-only')) { await lifecycleProof(args.includes('--lifecycle-baseline')); }
+  if (args.includes('--owner-fence-baseline') || args.includes('--owner-fence-only')) { await ownerFenceProof(args.includes('--owner-fence-baseline')); }
+  else if (args.includes('--lifecycle-baseline') || args.includes('--lifecycle-only')) { await lifecycleProof(args.includes('--lifecycle-baseline')); }
   else if (args.includes('--reproduce')) {
     for (const provider of ['google', 'elevenlabs']) await test(`predecessor ${provider} invokes actual paid leaf without canonical approval`, async () => { const f = fixture(provider, { env: { URAI_NARRATOR_SPEND_BINDINGS_JSON: '{}' } }); await f.execute(); assert.equal(f.events.length, 0); assert.equal(f.submitted.length, 1); });
   } else {
@@ -385,6 +434,6 @@ try {
     await test('declared SHA cannot substitute for actual clean source', () => denied('google', { env: { URAI_SOURCE_SHA: 'a'.repeat(40) } }));
     for (const rel of ['workers/narrator-worker/src/protected-spend', 'workers/narrator-worker/src/handlers/narrator-tts']) await test(`${rel} tracked JS AST matches actual TS compilation`, async () => { const compiled = ts.transpileModule(fs.readFileSync(path.join(sourceRoot, `${rel}.ts`), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText; const tree = code => { const file = ts.createSourceFile('actual.js', code, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS); assert.equal(file.parseDiagnostics.length, 0); const shape = node => { const children = []; ts.forEachChild(node, child => { children.push(shape(child)); }); return [node.kind, typeof node.text === 'string' ? node.text : null, children]; }; return shape(file); }; assert.deepEqual(tree(fs.readFileSync(path.join(sourceRoot, `${rel}.js`), 'utf8')), tree(compiled)); assert.equal(fs.readFileSync(path.join(sourceRoot, `${rel}.js`), 'utf8'), compiled, 'tracked JS must match compiler bytes'); });
   }
-  if (!args.includes('--lifecycle-baseline') && !args.includes('--lifecycle-only') && !args.includes('--reproduce')) await lifecycleProof();
+  if (!args.includes('--lifecycle-baseline') && !args.includes('--lifecycle-only') && !args.includes('--reproduce') && !args.includes('--owner-fence-baseline') && !args.includes('--owner-fence-only')) { await lifecycleProof(); await ownerFenceProof(); }
   console.log(`Actual narrator paid-leaf synthetic regressions: ${count} passed; provider network calls: 0; spending: 0.`);
 } finally { fs.rmSync(root, { recursive: true, force: true }); }
