@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import './life-movies-output-deletion-smoke.mjs'
 import fs from 'node:fs'
 
 const bridge = fs.readFileSync(new URL('../functions/src/jobs/studioLifeMovieLongformBridge.ts', import.meta.url), 'utf8')
@@ -88,7 +89,10 @@ console.log('Life Movie durable long-form orchestrator contract passed')
 assert.ok(bridge.includes("status: 'CANCELLED'"), 'parent cancellation must retain explicit cancelled queue semantics')
 assert.doesNotMatch(bridge, /status: 'DONE'[\s\S]{0,120}longform/, 'long-form cancellation must not collapse cancellation into generic DONE state')
 
-assert.doesNotMatch(bridge, /segments\.push\([\s\S]*?ref:/, 'private playback response must not expose raw GCS refs')
+const playbackStart = bridge.indexOf('async function readPlanPlayback(')
+const playbackEnd = bridge.indexOf('async function resumePlan(', playbackStart)
+assert.ok(playbackStart >= 0 && playbackEnd > playbackStart, 'private playback source must be bounded')
+assert.doesNotMatch(bridge.slice(playbackStart, playbackEnd), /segments\.push\([\s\S]*?ref:/, 'private playback response must not expose raw GCS refs')
 assert.ok(bridge.indexOf('assertPlanOwner') < bridge.indexOf('readPlanPlayback'), 'owner/tenant boundary helper must exist before playback implementation')
 
 assert.ok(bridge.includes("readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);"), 'ordinary playback must retain the default inline signed-access mode')

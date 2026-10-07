@@ -329,8 +329,8 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
   const video = artifacts.find((artifact) => artifact?.kind === 'mp4');
   if (!video?.ref) throw new Error('life_movie_video_output_missing');
   const videoLocation = parseGcsRef(video.ref);
-  const allowedBuckets = allowedLifeMovieOutputBuckets();
   const expectedPrefix = `tenants/${tenantId}/life-movies/`;
+  const allowedBuckets = allowedLifeMovieOutputBuckets();
   if (!allowedBuckets.has(videoLocation.bucket) || !videoLocation.objectPath.startsWith(expectedPrefix)) {
     throw new Error('life_movie_output_boundary_mismatch');
   }
@@ -370,26 +370,51 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
 }
 
 async function deleteBoundMovieOutput(tenantId: string, userId: string, jobId: string) {
-  const job = await loadBoundJob(tenantId, userId, jobId);
-  const output = job.output as WorkerOutput | undefined;
-  const artifacts = Array.isArray(output?.outputs) ? output!.outputs! : [];
-  const locations = artifacts
-    .map((artifact) => artifact?.ref)
-    .filter((ref): ref is string => typeof ref === 'string' && ref.startsWith('gs://'))
-    .map(parseGcsRef);
-
-  const expectedPrefix = `tenants/${tenantId}/life-movies/`;
+  const db = getFirestore();
   const allowedBuckets = allowedLifeMovieOutputBuckets();
-  for (const location of locations) {
-    if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(expectedPrefix)) {
-      throw new Error('output_delete_boundary_mismatch');
+  const locations = await db.runTransaction(async (transaction) => {
+    const ref = jobDoc(jobId);
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new Error('job_not_found');
+    const job = snapshot.data() as Job & { result?: unknown; outputDeletionPreviousStatus?: Job['status'] };
+    if (job.sourceSystem !== 'urai-studio' || job.tenantId !== tenantId || job.ownerUid !== userId
+      || (job.jobType || job.type) !== 'studio.render.video') throw new Error('job_boundary_mismatch');
+    const projectId = (job.payload as { projectId?: unknown } | undefined)?.projectId;
+    if (typeof projectId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(projectId)) {
+      throw new Error('job_boundary_mismatch');
     }
-  }
+    const expectedPrefix = `tenants/${tenantId}/life-movies/${projectId}/`;
+    const locations = new Map<string, { bucket: string; objectPath: string }>();
+    for (const value of [job.output, job.result]) {
+      const output = value as WorkerOutput | undefined;
+      for (const artifact of Array.isArray(output?.outputs) ? output!.outputs! : []) {
+        if (typeof artifact?.ref !== 'string' || !artifact.ref.startsWith('gs://')) continue;
+        const location = parseGcsRef(artifact.ref);
+        if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(expectedPrefix)
+          || location.objectPath.includes('..') || location.objectPath.includes('\\')) {
+          throw new Error('output_delete_boundary_mismatch');
+        }
+        locations.set(`${location.bucket}/${location.objectPath}`, location);
+      }
+    }
+    const now = FieldValue.serverTimestamp();
+    transaction.update(ref, {
+      status: 'CANCELLED', derivativeAccessState: 'DELETED', outputDeletionState: 'PENDING',
+      outputDeletionRequestedAt: now, outputDeletedBy: userId, updatedAt: now, completedAt: job.completedAt || now,
+      outputDeletionPreviousStatus: job.outputDeletionPreviousStatus || job.status,
+      lease: FieldValue.delete(), 'execution.leaseToken': FieldValue.delete(),
+      'execution.asyncCallbackPending': false, 'execution.callbackTokenHash': FieldValue.delete(),
+      'execution.callbackLeaseToken': FieldValue.delete(), 'execution.callbackDeadlineAt': FieldValue.delete(),
+    });
+    transaction.set(jobQueueEntryDoc(jobId), {
+      jobId, jobType: 'studio.render.video', status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: now,
+    }, { merge: true });
+    return [...locations.values()];
+  });
 
   await Promise.all(locations.map(({ bucket, objectPath }) =>
     getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true })));
 
-  const db = getFirestore();
   const now = FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
     const ref = jobDoc(jobId);
@@ -402,6 +427,7 @@ async function deleteBoundMovieOutput(tenantId: string, userId: string, jobId: s
     transaction.update(ref, {
       output: FieldValue.delete(),
       result: FieldValue.delete(),
+      outputDeletionState: 'COMPLETE',
       outputDeletedAt: now,
       outputDeletedBy: userId,
       updatedAt: now,
