@@ -81,7 +81,7 @@ function fixture({onExtract, resolver, env = {}, indexSource=source}={}) {
     URAI_PRIVATE_SOURCE_CONTRACT:'urai-private-source-receipt-v2',URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED:'true',URAI_PRIVATE_LIFE_MODEL_EXECUTION_AUTHORITY_REF:'private:synthetic/execution',...env}};
   vm.runInNewContext(compile(indexSource)+'\nObject.assign(exports,{assertRequest,resolvePrivateInputs,validateExtraction,readiness,...(typeof reserveExtraction === "function" ? {reserveExtraction,persistRevision,requireCurrentAuthority,quarantinedImport} : {})});',{
     exports,process,Buffer,URL,AbortSignal,Response,setTimeout,clearTimeout,console:{log:v=>logs.push(v),error:v=>logs.push(v)},
-    require:name=>name==='express'?express:name==='./protected-source-provider'?{registerProtectedSourceRoutes(){}}:name==='firebase-admin/app'?{getApps:()=>[1],initializeApp(){},applicationDefault(){}}:
+    require:name=>name==='express-rate-limit'?{rateLimit:()=>()=>{}}:name==='express'?express:name==='./protected-source-provider'?{registerProtectedSourceRoutes(){}}:name==='firebase-admin/app'?{getApps:()=>[1],initializeApp(){},applicationDefault(){}}:
       name==='firebase-admin/firestore'?{getFirestore:()=>data.db,FieldValue:{serverTimestamp:()=> 'synthetic-time'}}:require(name),
     fetch:async(url,options)=>{fetches.push({url,body:JSON.parse(options.body)});if(url.includes('resolve-life-model-inputs'))return new Response(JSON.stringify(resolver?await resolver(data):resolverProof),{status:200});
       await onExtract?.(data);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(extraction)}}]}),{status:200});}
@@ -223,7 +223,7 @@ function workerFixture({proofPatch={},providerPatch={},revokeAfterProvider=false
     PRIVATE_SOURCE_AUTHORITY_TOKEN:'synthetic-token',PRIVATE_SOURCE_TRANSCRIBE_URL:'https://transcribe.invalid',PRIVATE_SOURCE_TRANSCRIBE_TOKEN:'synthetic-token',
     PRIVATE_SOURCE_INDEX_URL:'https://index.invalid',PRIVATE_SOURCE_INDEX_TOKEN:'synthetic-token',URAI_PRIVATE_SOURCE_CONTRACT:'urai-private-source-receipt-v2',
     URAI_PRIVATE_SOURCE_EXECUTION_ENABLED:'true',URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF:'private:synthetic/execution'}},URL,console:{log:v=>logs.push(v),error:v=>logs.push(v)},
-    require:name=>name==='express'?express:name==='axios'?{post:async(url,body)=>{calls.push({url,body});if(url.includes('/authorize'))return{status:200,data:revokeAfterProvider&&providerRan?{...proof,currentConsent:false}:proof};providerRan=true;return{status:200,data:provider};}}:require(name)});
+    require:name=>name==='express-rate-limit'?{rateLimit:()=>()=>{}}:name==='express'?express:name==='axios'?{post:async(url,body)=>{calls.push({url,body});if(url.includes('/authorize'))return{status:200,data:revokeAfterProvider&&providerRan?{...proof,currentConsent:false}:proof};providerRan=true;return{status:200,data:provider};}}:require(name)});
   return {calls,logs,execute:async()=>{const out={status:0,body:null};const res={status:n=>{out.status=n;return res;},send:body=>{out.body=body;return res;}};await routes.get('/execute-job')({body:job},res);return out;}};
 }
 await check('dispatcher final transaction rejects consent/correction/deletion after worker validation',async()=>{
