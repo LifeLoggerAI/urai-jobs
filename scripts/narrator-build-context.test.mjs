@@ -20,7 +20,8 @@ function fixture() {
   const files = ['workers/narrator-worker/src/protected-spend.ts', 'workers/narrator-worker/src/protected-spend.js',
     'workers/narrator-worker/src/handlers/narrator-tts.ts', 'workers/narrator-worker/src/handlers/narrator-tts.js',
     'workers/narrator-worker/Dockerfile', 'workers/narrator-worker/package.json', 'packages/shared-types/package.json',
-    'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'];
+    'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml',
+    'workers/narrator-worker/runtime-source-proof.cjs', 'workers/narrator-worker/tsconfig.json'];
   for (const file of files) { const target = path.join(root, file); fs.mkdirSync(path.dirname(target), { recursive: true }); fs.copyFileSync(path.join(sourceRoot, file), target); }
   fs.writeFileSync(path.join(root, '.gitignore'), '**/node_modules/\n**/dist/\n');
   git(root, 'init', '--quiet'); git(root, 'add', '.');

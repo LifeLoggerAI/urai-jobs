@@ -3,6 +3,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { createNarratorSourceAttestation } from './narrator-runtime-source-attestation.mjs';
 
 const protectedPaths = [
   'workers/narrator-worker/src/protected-spend.ts',
@@ -12,7 +13,8 @@ const protectedPaths = [
 ];
 const requiredPaths = [...protectedPaths, 'workers/narrator-worker/Dockerfile',
   'workers/narrator-worker/package.json', 'packages/shared-types/package.json',
-  'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'];
+  'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml',
+  'workers/narrator-worker/runtime-source-proof.cjs', 'workers/narrator-worker/tsconfig.json'];
 function git(root, ...args) {
   return execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-C', root, ...args],
     { encoding: 'utf8', timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -66,9 +68,10 @@ export function prepareNarratorBuildContext({ repositoryRoot, sourceSha, outputD
       if (!bytes.equals(fs.readFileSync(path.join(root, file)))) throw new Error('narrator_build_source_bytes_changed');
       return { path: file, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
     });
+    const attestation = createNarratorSourceAttestation({ root: runtimeRoot, sourceSha });
     const receipt = { schemaVersion: 'urai-narrator-exact-git-build-context-v1',
       repository: 'LifeLoggerAI/urai-jobs', sourceSha, sourceTreeSha: git(root, 'rev-parse', 'HEAD^{tree}'),
-      files, gitIndexReconstructionRequired: true, sourceOnly: true,
+      files, ...attestation, gitIndexReconstructionRequired: true, sourceOnly: true,
       spendAuthorized: false, deploymentAuthorized: false, runtimeAccepted: false };
     // Index stat timestamps vary between exports. Reconstruct from the exact Git
     // tree inside Docker; the archived object database/source bytes stay stable.
