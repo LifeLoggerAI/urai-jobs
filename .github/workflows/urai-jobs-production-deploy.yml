@@ -39,6 +39,16 @@ on:
         required: true
         default: false
         type: boolean
+      enable_private_source_execution:
+        description: Explicitly enable private-source job execution after provider/runtime authority is ready
+        required: true
+        default: false
+        type: boolean
+      private_source_execution_authority_ref:
+        description: Opaque private authority ref required only when private-source execution is enabled
+        required: false
+        default: ''
+        type: string
       studio_bridge_secret_version:
         description: Exact numeric Secret Manager version for URAI_STUDIO_JOBS_BRIDGE_TOKEN
         required: true
@@ -76,6 +86,8 @@ jobs:
       INPUT_TARGET_SECRET_VERSIONS: ${{ inputs.target_secret_versions_json }}
       INPUT_INCLUDE_STUDIO_WORKER: ${{ inputs.include_studio_worker }}
       INPUT_INCLUDE_PRIVATE_SOURCE_WORKER: ${{ inputs.include_private_source_worker }}
+      INPUT_ENABLE_PRIVATE_SOURCE_EXECUTION: ${{ inputs.enable_private_source_execution }}
+      INPUT_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF: ${{ inputs.private_source_execution_authority_ref }}
       INPUT_STUDIO_BRIDGE_SECRET_VERSION: ${{ inputs.studio_bridge_secret_version }}
     steps:
       - name: Checkout exact candidate with rollback history
@@ -99,6 +111,14 @@ jobs:
             *) echo 'Unsupported deployment target' >&2; exit 64 ;;
           esac
           test "$INPUT_CONFIRMATION" = "$EXPECTED_CONFIRMATION"
+          case "$INPUT_ENABLE_PRIVATE_SOURCE_EXECUTION" in true|false) ;; *) echo 'enable_private_source_execution must be boolean' >&2; exit 1 ;; esac
+          if [ "$INPUT_ENABLE_PRIVATE_SOURCE_EXECUTION" = 'true' ]; then
+            test "$INPUT_INCLUDE_PRIVATE_SOURCE_WORKER" = 'true'
+            [[ "$INPUT_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF" =~ ^private:[A-Za-z0-9_./:-]{8,512}$ ]] || { echo 'enabled private-source execution requires an opaque private authority ref' >&2; exit 1; }
+          elif [ -n "$INPUT_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF" ]; then
+            echo 'private_source_execution_authority_ref must be empty while execution is disabled' >&2
+            exit 1
+          fi
           test "$(git rev-parse HEAD)" = "$INPUT_EXPECTED_SHA"
           test -z "$(git status --porcelain --untracked-files=all)"
           test "$INPUT_EXPECTED_SHA" != "$INPUT_ROLLBACK_SHA"
@@ -377,6 +397,13 @@ jobs:
           gcloud secrets describe "$URAI_WHEEL_GITHUB_TOKEN_SECRET" --project "$DEPLOY_PROJECT_ID" >/dev/null
           gcloud secrets describe "$URAI_JOBS_CALLBACK_SECRET_NAME" --project "$DEPLOY_PROJECT_ID" >/dev/null
           if [ "$INCLUDE_PRIVATE_SOURCE_WORKER" = "true" ]; then
+            case "$ENABLE_PRIVATE_SOURCE_EXECUTION" in true|false) ;; *) echo "ENABLE_PRIVATE_SOURCE_EXECUTION must be true or false" >&2; exit 1 ;; esac
+            if [ "$ENABLE_PRIVATE_SOURCE_EXECUTION" = "true" ]; then
+              [[ "$PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF" =~ ^private:[A-Za-z0-9_./:-]{8,512}$ ]] || { echo "enabled private-source execution requires an opaque private authority ref" >&2; exit 1; }
+            else
+              test -z "$PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF"
+            fi
+            test "$URAI_PRIVATE_SOURCE_CONTRACT" = "urai-private-source-receipt-v2"
             gcloud secrets describe "$PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET" --project "$DEPLOY_PROJECT_ID" >/dev/null
             gcloud secrets describe "$PRIVATE_SOURCE_TRANSCRIBE_TOKEN_SECRET" --project "$DEPLOY_PROJECT_ID" >/dev/null
             gcloud secrets describe "$PRIVATE_SOURCE_INDEX_TOKEN_SECRET" --project "$DEPLOY_PROJECT_ID" >/dev/null
@@ -477,6 +504,9 @@ jobs:
           DEPLOY_RECEIPT_PATH: docs/release-evidence/worker-deploy-receipt.json
           GITHUB_SHA: ${{ env.TARGET_SHA }}
           URAI_JOBS_DEPLOY_WORKERS: ${{ inputs.include_studio_worker && inputs.include_private_source_worker && 'narrator-worker,asset-worker,studio-worker,private-source-worker' || inputs.include_studio_worker && 'narrator-worker,asset-worker,studio-worker' || inputs.include_private_source_worker && 'narrator-worker,asset-worker,private-source-worker' || 'narrator-worker,asset-worker' }}
+          URAI_PRIVATE_SOURCE_CONTRACT: ${{ env.URAI_PRIVATE_SOURCE_CONTRACT }}
+          URAI_PRIVATE_SOURCE_EXECUTION_ENABLED: ${{ env.ENABLE_PRIVATE_SOURCE_EXECUTION }}
+          URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF: ${{ env.PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF }}
         run: |
           node scripts/verify-rollback-revision.mjs
           bash scripts/deploy-workers-approved.sh
@@ -591,6 +621,7 @@ jobs:
       REQUIRE_CUSTOM_DOMAINS: ${{ inputs.require_custom_domains }}
       REQUIRE_STUDIO_WORKER: ${{ inputs.include_studio_worker }}
       REQUIRE_PRIVATE_SOURCE_WORKER: ${{ inputs.include_private_source_worker }}
+      REQUIRE_PRIVATE_SOURCE_EXECUTION_ENABLED: ${{ inputs.enable_private_source_execution }}
     steps:
       - name: Checkout exact verified source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -663,6 +694,10 @@ jobs:
           if (!String(firebase.communicationsWorkerUrl || '').startsWith('https://')) failures.push('Firebase Communications worker URL binding');
           if (!String(firebase.privateSourceWorkerUrl || '').startsWith('https://')) failures.push('Firebase private-source worker URL binding');
           if (process.env.REQUIRE_PRIVATE_SOURCE_WORKER === 'true' && firebase.privateSourceWorkerUrl !== privateSource?.serviceUrl) failures.push('Firebase private-source deployed worker URL binding');
+          if (process.env.REQUIRE_PRIVATE_SOURCE_WORKER === 'true') {
+            if (privateSource?.configuration?.privateSourceContract !== 'urai-private-source-receipt-v2') failures.push('private-source contract binding');
+            if (privateSource?.configuration?.privateSourceExecutionEnabled !== (process.env.REQUIRE_PRIVATE_SOURCE_EXECUTION_ENABLED === 'true')) failures.push('private-source execution state binding');
+          }
           if (process.env.REQUIRE_STUDIO_WORKER === 'true' && firebase.studioWorkerUrl !== studio?.serviceUrl) failures.push('Firebase Studio worker URL binding');
           if (!input.hostingSite || firebase.hostingSite !== input.hostingSite) failures.push('hosting site');
           if (failures.length) throw new Error(`Mutation evidence mismatch: ${failures.join(', ')}`);
