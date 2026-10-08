@@ -284,6 +284,12 @@ jobs:
             activationVerified:verified,
             serviceUrl:verified?process.env.VERIFIED_URL:null,
             revision:verified?process.env.VERIFIED_REVISION:null,
+            workerBindings:verified?{
+              authorityUrl:process.env.VERIFIED_URL,
+              resolverUrl:process.env.VERIFIED_URL,
+              transcribeUrl:process.env.VERIFIED_URL+'/transcribe',
+              indexUrl:process.env.VERIFIED_URL
+            }:null,
             privateSourceTranscriptionEnabled:verified&&process.env.ENABLE_TRANSCRIPTION==='true',
             privateLifeModelExecutionEnabled:verified&&process.env.ENABLE_LIFE_MODEL==='true',
             spendingAuthorityBound:verified&&(process.env.ENABLE_TRANSCRIPTION==='true'||process.env.ENABLE_LIFE_MODEL==='true'),
