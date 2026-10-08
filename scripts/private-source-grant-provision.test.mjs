@@ -34,3 +34,6 @@ test('actual CLI configured apply refuses synthetic input before SDK or ADC',()=
   assert.notEqual(r.status,0);assert.match(r.stderr,/synthetic fixture is dry-run-only/);assert.doesNotMatch(r.stderr,/Cannot find module|credential|network/i);
 });
 console.log(JSON.stringify({kind:'actual-private-source-grant-validator-and-CLI',passed,providerCalls:0,cloudWrites:0,syntheticApplyAuthorized:false}));
+
+// Exercise the actual CLI retained-write path, including transactional withdrawal.
+await import('./private-source-grant-admission-races.test.mjs');

@@ -94,6 +94,48 @@ function args(argv){
   if(!out.input) fail('--input is required');
   return out;
 }
+// Provisioning is a retained-data write, so the current server-owned deletion
+// and purpose authorities must be in the same transaction as grant creation.
+async function admitGrantTransaction(db, grant, project) {
+  if (db.projectId !== project) fail('configured Firestore project does not match provisioning authority');
+  const ownerHash = hash(grant.ownerUid);
+  const purposes = new Set(['memory.storage']);
+  if (grant.purposes.includes('reconstruct-place')) purposes.add('location.context');
+  const ref = db.collection('uraiPrivateSourceReceipts').doc(documentId(grant.sourceReceiptRef));
+  await db.runTransaction(async tx => {
+    const ownerFence = await tx.get(db.collection('uraiPrivateLifeModelOwnerFences').doc(ownerHash));
+    const canonicalDeletion = await tx.get(db.collection('privacyDeletionTombstones').doc(grant.ownerUid));
+    const blocks = await Promise.all([...purposes].map(purpose =>
+      tx.get(db.collection('jobConsentBlocks').doc(hash(grant.ownerUid+'\n'+purpose)))
+        .then(snapshot => ({ purpose, snapshot }))));
+    const current = await tx.get(ref);
+    if (ownerFence.exists) {
+      const marker = ownerFence.data();
+      if (marker?.ownerHash !== ownerHash || marker.deleted !== false
+        || !Number.isSafeInteger(marker.deletionEpoch) || marker.deletionEpoch !== 0) {
+        fail('private source owner deletion authority forbids provisioning');
+      }
+    }
+    if (canonicalDeletion.exists) {
+      const marker = canonicalDeletion.data();
+      if (marker?.uid !== grant.ownerUid || marker.active !== false) {
+        fail('canonical privacy deletion authority forbids provisioning');
+      }
+    }
+    for (const { purpose, snapshot } of blocks) if (snapshot.exists) {
+      const marker = snapshot.data();
+      if (marker?.ownerUid !== grant.ownerUid || marker.purpose !== purpose || marker.active !== false) {
+        fail('current purpose consent authority forbids provisioning');
+      }
+    }
+    if (current.exists) {
+      if (canonical(current.data()) !== canonical(grant)) fail('existing receipt differs; corrections require explicit governed revision flow');
+      return;
+    }
+    tx.create(ref, grant);
+  });
+}
+
 async function main(){
   const cli=args(process.argv);
   const grant=validateGrant(JSON.parse(fs.readFileSync(cli.input,'utf8')));
@@ -106,16 +148,7 @@ async function main(){
   const { applicationDefault, getApps, initializeApp } = require('firebase-admin/app');
   if(!getApps().length) initializeApp({credential:applicationDefault(),projectId:project});
   const db=getFirestore();
-  const ref=db.collection('uraiPrivateSourceReceipts').doc(id);
-  await db.runTransaction(async tx=>{
-    const snap=await tx.get(ref);
-    if(snap.exists){
-      const existing=snap.data();
-      if(canonical(existing)!==canonical(grant)) fail('existing receipt differs; corrections require explicit governed revision flow');
-      return;
-    }
-    tx.create(ref,grant);
-  });
+  await admitGrantTransaction(db,grant,project);
   process.stdout.write(JSON.stringify({...result,project,createdOrAlreadyExact:true})+'\n');
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
