@@ -254,6 +254,9 @@ jobs:
       URAI_JOBS_TERMINAL_EVENT_TOPIC: job-terminal-events
       INCLUDE_STUDIO_WORKER: ${{ inputs.include_studio_worker }}
       INCLUDE_PRIVATE_SOURCE_WORKER: ${{ inputs.include_private_source_worker }}
+      ENABLE_PRIVATE_SOURCE_EXECUTION: ${{ inputs.enable_private_source_execution }}
+      PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF: ${{ inputs.private_source_execution_authority_ref }}
+      URAI_PRIVATE_SOURCE_CONTRACT: urai-private-source-receipt-v2
       PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET: urai-private-source-authority-token
       PRIVATE_SOURCE_TRANSCRIBE_TOKEN_SECRET: urai-private-source-transcribe-token
       PRIVATE_SOURCE_INDEX_TOKEN_SECRET: urai-private-source-index-token
