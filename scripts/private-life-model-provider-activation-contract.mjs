@@ -38,6 +38,16 @@ assert.ok(source.includes("EXPECT_PRIVATE=\"$([ \"$ENABLE_TRANSCRIPTION\" = true
 assert.ok(source.includes("EXPECT_LIFE=\"$([ \"$ENABLE_LIFE_MODEL\" = true ] && printf 200 || printf 503)\""));
 assert.ok(!source.includes('providerCallExecuted:true'));
 assert.ok(!source.includes('paidProviderCallExecuted:true'));
+
+assert.ok(source.includes("if(env.URAI_SOURCE_SHA!==process.env.TARGET_SHA) fail.push('source SHA')"));
+assert.ok(source.includes("if((env.PRIVATE_SOURCE_ALLOWED_BUCKET||'')!==process.env.PRIVATE_SOURCE_ALLOWED_BUCKET) fail.push('private bucket')"));
+assert.ok(source.includes("if((env.URAI_LIFE_MODEL_EXTRACTOR_MODEL||'')!==process.env.LIFE_MODEL_EXTRACTOR_MODEL) fail.push('extractor model')"));
+assert.ok(source.includes("if(env.URAI_PRIVATE_SOURCE_DIARIZATION_MODEL!==process.env.DIARIZATION_MODEL) fail.push('diarization model')"));
+assert.ok(source.includes("if(labels['urai-paid-execution']!==expectedPaid) fail.push('paid execution label')"));
+assert.ok(source.includes("fail.push('transcribe secret not removed')"));
+assert.ok(source.includes("fail.push('index secret not removed')"));
+assert.ok(source.includes("fail.push('OpenAI secret not removed')"));
+assert.ok(source.includes('--update-labels "urai-paid-execution=$PAID_LABEL"'));
 assert.ok(index.includes("spendingAuthority: PRIVATE_REF.test(String(process.env.URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF || ''))"));
 assert.ok(protectedSource.includes("spendingAuthority: PRIVATE_REF.test(String(process.env.URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF || ''))"));
 assert.ok(index.includes('spendingAuthorityRef: process.env.URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF'));
