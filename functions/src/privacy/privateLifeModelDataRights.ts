@@ -153,8 +153,14 @@ function stableSourceRevocationDigest(value: Record<string, unknown>) {
   return ownerHash(canonical(source));
 }
 
-export async function exportOwnedPrivateLifeModel(db: Firestore, ownerUid: string, checkpoint: RightsCheckpoint = async () => {}) {
+export async function exportOwnedPrivateLifeModel(db: Firestore, ownerUid: string, checkpoint: RightsCheckpoint = async () => {},
+  captureAuthority?: (authority: RightsCheckpoint) => void) {
   await checkpoint();
+  const blockRef = db.collection('jobConsentBlocks').doc(ownerHash(ownerUid + '\n' + 'memory.storage'));
+  await db.runTransaction(async transaction => {
+    if ((await transaction.get(blockRef)).data()?.active === true) throw new Error('private_life_model_export_consent_revoked');
+    await checkpoint(transaction);
+  });
   const before = await ownerEpoch(db, ownerUid);
   if (before.deleted) throw new Error('private_life_model_owner_deleted');
   const records: Array<{ path: string; data: Record<string, unknown> }> = [];
@@ -198,23 +204,37 @@ export async function exportOwnedPrivateLifeModel(db: Firestore, ownerUid: strin
     }
   }
   if (Buffer.byteLength(JSON.stringify(records), 'utf8') > 16 * 1024 * 1024) throw new Error('private_life_model_export_byte_limit');
-  for (let offset = 0; offset < targets.length; offset += 400) {
-    await db.runTransaction(async transaction => {
+  // All original version reads join one bounded authority transaction. Separate
+  // successful 400-row transactions cannot protect an earlier source from
+  // withdrawal while a later page is being read. Reuse this exact snapshot
+  // checkpoint around upload and the caller's terminal publication transaction.
+  const assertSnapshot: RightsCheckpoint = async supplied => {
+    const verify = async (transaction: Transaction) => {
       await checkpoint(transaction);
+      if ((await transaction.get(blockRef)).data()?.active === true) throw new Error('private_life_model_export_consent_revoked');
       const fence = (await transaction.get(db.collection('uraiPrivateLifeModelOwnerFences').doc(ownerHash(ownerUid)))).data();
       const epoch = fence?.deletionEpoch ?? (fence?.deleted === true ? 1 : 0);
       if (fence?.deleted === true || epoch !== before.epoch) throw new Error('private_life_model_owner_deleted_or_epoch_changed');
-      for (const target of targets.slice(offset, offset + 400)) {
-        const current = await transaction.get(target.ref);
+      for (let offset = 0; offset < targets.length; offset += 400) {
+        const slice = targets.slice(offset, offset + 400), snapshots = await transaction.getAll(...slice.map(target => target.ref));
+        for (const [index, target] of slice.entries()) {
+        const current = snapshots[index];
         if (!current.exists || current.data()?.ownerUid !== ownerUid || !current.updateTime?.isEqual(target.updateTime)) {
           throw new Error('private_life_model_export_owner_or_version_changed');
         }
+        }
       }
       await checkpoint(transaction);
-    });
-  }
-  await checkpoint();
-  await assertPrivateLifeModelOwnerEpoch(db, ownerUid, before.epoch);
+    };
+    if (supplied) await verify(supplied); else {
+      await db.runTransaction(verify);
+      await checkpoint();
+      await assertPrivateLifeModelOwnerEpoch(db, ownerUid, before.epoch);
+      if ((await blockRef.get()).data()?.active === true) throw new Error('private_life_model_export_consent_revoked');
+    }
+  };
+  await assertSnapshot();
+  captureAuthority?.(assertSnapshot);
   return { schemaVersion: 'urai-private-life-model-owner-export-v2', ownerDeletionEpoch: before.epoch, records,
     completeEcosystemExport: false, unresolvedDomains: ['legacy-ownerless-life-model-records', 'external-transcription-provider-storage', 'original-private-source-storage'] };
 }
