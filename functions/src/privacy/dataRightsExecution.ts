@@ -7,7 +7,7 @@ import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { uploadToGcs } from '../core/gcs.js';
 import { deleteCapturedRealityEngineJob, deleteCapturedRealityPublishedRuntimeForOwner } from './capturedRealityDerivativeRevocation.js';
-import { assertPrivateDataRightsExportDestination, assertPrivateLifeModelOwnerEpoch, deleteOwnedPrivateLifeModel, exportOwnedPrivateLifeModel, removePrivateDataRightsExportAttempt } from './privateLifeModelDataRights.js';
+import { assertPrivateDataRightsExportDestination, deleteOwnedPrivateLifeModel, exportOwnedPrivateLifeModel, removePrivateDataRightsExportAttempt } from './privateLifeModelDataRights.js';
 import { continuationReason, recordFailure, retryCounters } from './dataRightsContinuationPolicy.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
@@ -29,6 +29,9 @@ type RequestRecord = {
   status?: string;
   executionState?: string;
   requestedFormat?: 'json' | 'csv' | null;
+  requestId?: string;
+  note?: string | null;
+  payloadFingerprint?: string;
 };
 
 function executionAdmission() {
@@ -91,14 +94,42 @@ function canonicalDigest(value: unknown) {
   return createHash('sha256').update(canonical(value)).digest('hex');
 }
 
-async function buildExport(db: Firestore, requestId: string, ownerUid: string, checkpoint: () => Promise<void>, attemptKey: string) {
+// Bind the existing immutable submission fields. Executor-owned progress and
+// timestamps remain outside the identity, so genuine continuation stays valid.
+function requestPayloadDigest(record: RequestRecord) {
+  return canonicalDigest({ requestId: record.requestId ?? null, requestedFormat: record.requestedFormat ?? null,
+    note: record.note ?? null, payloadFingerprint: record.payloadFingerprint ?? null });
+}
+
+async function buildExport(db: Firestore, requestId: string, ownerUid: string, checkpoint: (transaction?: Transaction) => Promise<void>, attemptKey: string,
+  captureAuthority: (authority: (transaction?: Transaction) => Promise<void>) => void) {
   await checkpoint();
   await assertPrivateDataRightsExportDestination();
+  let privateSnapshot: (transaction?: Transaction) => Promise<void> = async () => {};
   const [userSnap, jobs, privateLifeModel] = await Promise.all([
     db.collection('users').doc(ownerUid).get(),
     ownedJobs(db, ownerUid),
-    exportOwnedPrivateLifeModel(db, ownerUid, checkpoint),
+    exportOwnedPrivateLifeModel(db, ownerUid, checkpoint, authority => { privateSnapshot = authority; }),
   ]);
+  const exportCheckpoint = async (transaction?: Transaction) => {
+    const verify = async (tx: Transaction) => {
+      await privateSnapshot(tx);
+      const profile = await tx.get(userSnap.ref);
+      if (profile.exists !== userSnap.exists || (profile.exists && !profile.updateTime?.isEqual(userSnap.updateTime!))) {
+        throw httpsError('failed-precondition', 'Owned profile export snapshot changed.');
+      }
+      for (let offset = 0; offset < jobs.length; offset += 400) {
+        const slice = jobs.slice(offset, offset + 400), current = await tx.getAll(...slice.map(job => job.ref));
+        for (const [index, original] of slice.entries()) if (!current[index].exists
+          || current[index].data()?.ownerUid !== ownerUid || !current[index].updateTime?.isEqual(original.updateTime)) {
+          throw httpsError('failed-precondition', 'Owned job export snapshot changed.');
+        }
+      }
+      await checkpoint(tx);
+    };
+    if (transaction) await verify(transaction); else { await db.runTransaction(verify); await privateSnapshot(); }
+  };
+  captureAuthority(exportCheckpoint);
   const exportedJobs = jobs.map((document) => {
     const source = redact(document.data()) as Record<string, unknown>;
     return {
@@ -138,11 +169,9 @@ async function buildExport(db: Firestore, requestId: string, ownerUid: string, c
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   // Distinct attempt paths prevent a delayed upload from replacing a successor.
   const destination = `privacy/data-rights/${createHash('sha256').update(ownerUid).digest('hex')}/${requestId}/${attemptKey}/export.json`;
-  await checkpoint();
-  await assertPrivateLifeModelOwnerEpoch(db, ownerUid, privateLifeModel.ownerDeletionEpoch);
+  await exportCheckpoint();
   const gcsRef = await uploadToGcs(bytes, destination, 'application/json');
-  await checkpoint();
-  await assertPrivateLifeModelOwnerEpoch(db, ownerUid, privateLifeModel.ownerDeletionEpoch);
+  await exportCheckpoint();
   return { recordCount: exportedJobs.length + privateLifeModel.records.length + (userSnap.exists ? 1 : 0), sha256, gcsRef,
     completeEcosystemExport: false, unresolvedDomains: payload.unresolvedDomains };
 }
@@ -315,13 +344,13 @@ const handler = async (data: unknown, context: CallableContext) => {
     const requestHash = canonicalDigest({ schemaVersion: EXECUTION_SCHEMA, requestId: parsed.data.requestId,
       idempotencyKeyHash: canonicalDigest(parsed.data.idempotencyKey),
       ownerHash: createHash('sha256').update(record.ownerUid).digest('hex'), requestType: record.requestType,
-      retentionDecisionReceiptId: parsed.data.retentionDecisionReceiptId, admission });
+      retentionDecisionReceiptId: parsed.data.retentionDecisionReceiptId, admission, requestPayloadDigest: requestPayloadDigest(record) });
     if (prior && prior.requestHash !== requestHash) throw httpsError('already-exists', 'Data-rights idempotency authority differs or an unbound legacy attempt requires reconciliation.');
     if (!['APPROVED', 'IN_REVIEW'].includes(String(record.status))) throw httpsError('failed-precondition', 'Stored data-rights approval is no longer current.');
     if (prior?.event === 'DATA_RIGHTS_EXECUTION_FINISHED') {
       if (prior.schemaVersion !== EXECUTION_SCHEMA || !prior.result || typeof prior.result !== 'object'
         || prior.resultDigest !== canonicalDigest(prior.result)) throw httpsError('failed-precondition', 'Retained data-rights receipt requires reconciliation.');
-      return { replay: prior, record, requestHash, attemptNumber: prior.attemptNumber };
+      return { replay: prior, record, requestHash, requestUpdateTime: requestSnap.updateTime, receiptUpdateTime: priorExecution.updateTime, attemptNumber: prior.attemptNumber };
     }
     const failedRetry = prior?.event === 'DATA_RIGHTS_EXECUTION_FAILED'
       && record.status === 'IN_REVIEW' && record.executionState === 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE';
@@ -374,7 +403,27 @@ const handler = async (data: unknown, context: CallableContext) => {
     return { replay: null, record, requestHash, attemptNumber, failureAttempts, continuationDeliveries };
   });
 
-  if (request.replay) { await currentActor(); return { replay: true, receipt: request.replay }; }
+  if (request.replay) {
+    if (request.record.requestType === 'EXPORT') await db.runTransaction(async transaction => {
+      const owner = String(request.record.ownerUid), hash = (value: string) => createHash('sha256').update(value).digest('hex');
+      const [currentRequest, currentReceipt] = await Promise.all([transaction.get(requestRef), transaction.get(executionRef)]);
+      const current = currentRequest.data(), retained = currentReceipt.data();
+      const fence = await transaction.get(db.collection('uraiPrivateLifeModelOwnerFences').doc(hash(owner)));
+      const block = await transaction.get(db.collection('jobConsentBlocks').doc(hash(owner + '\n' + 'memory.storage')));
+      if (current?.ownerUid !== owner || current.requestType !== 'EXPORT' || !['APPROVED', 'IN_REVIEW'].includes(String(current.status))
+        || !currentRequest.updateTime?.isEqual(request.requestUpdateTime!) || !currentReceipt.updateTime?.isEqual(request.receiptUpdateTime!)
+        || requestPayloadDigest(current) !== requestPayloadDigest(request.record)
+        || current.executionState !== request.replay.terminalState || current.executionReceiptPath !== executionRef.path
+        || retained?.event !== 'DATA_RIGHTS_EXECUTION_FINISHED' || retained.schemaVersion !== EXECUTION_SCHEMA
+        || retained.requestHash !== request.requestHash || retained.resultDigest !== canonicalDigest(retained.result)
+        || canonicalDigest(retained) !== canonicalDigest(request.replay)
+        || fence.data()?.deleted === true || block.data()?.active === true) {
+        throw httpsError('failed-precondition', 'Current private export owner or consent authority changed.');
+      }
+      await currentActor(transaction);
+    });
+    await currentActor(); return { replay: true, receipt: request.replay };
+  }
   const record = request.record;
   const ownerUid = String(record.ownerUid);
   const attemptRef = executionRef.collection('attempts').doc(String(request.attemptNumber).padStart(2, '0'));
@@ -384,6 +433,7 @@ const handler = async (data: unknown, context: CallableContext) => {
     if (active?.event !== 'DATA_RIGHTS_EXECUTION_STARTED' || active.requestHash !== request.requestHash
       || active.leaseToken !== leaseToken || !Number.isSafeInteger(active.leaseExpiresAtMs) || active.leaseExpiresAtMs <= Date.now()
       || current?.ownerUid !== ownerUid || current.requestType !== record.requestType || current.status !== 'IN_REVIEW'
+      || requestPayloadDigest(current) !== requestPayloadDigest(record)
       || current.executionState !== 'PROTECTED_STAGING_EXECUTION_IN_PROGRESS') throw httpsError('unavailable', 'Data-rights execution authority changed or its lease expired.');
     await currentActor(transaction);
     return active;
@@ -391,9 +441,10 @@ const handler = async (data: unknown, context: CallableContext) => {
   const checkpoint = async (transaction?: Transaction) => {
     if (transaction) await currentExecution(transaction); else await db.runTransaction(currentExecution);
   };
+  let exportAuthority: ((transaction?: Transaction) => Promise<void>) | undefined;
   try {
     const result = record.requestType === 'EXPORT'
-      ? await buildExport(db, parsed.data.requestId, ownerUid, checkpoint, canonicalDigest(leaseToken).slice(0, 32))
+      ? await buildExport(db, parsed.data.requestId, ownerUid, checkpoint, canonicalDigest(leaseToken).slice(0, 32), authority => { exportAuthority = authority; })
       : await executeDelete(db, parsed.data.requestId, ownerUid, checkpoint);
     const resultDigest = canonicalDigest(result);
     const terminalState = record.requestType === 'EXPORT'
@@ -411,6 +462,7 @@ const handler = async (data: unknown, context: CallableContext) => {
     };
     await db.runTransaction(async transaction => {
       await currentExecution(transaction);
+      await exportAuthority?.(transaction);
       transaction.set(executionRef, { ...receipt, leaseToken: FieldValue.delete(), leaseExpiresAtMs: 0,
         failureCode: FieldValue.delete(), failedAt: FieldValue.delete() }, { merge: true });
       transaction.set(attemptRef, { event: 'DATA_RIGHTS_ATTEMPT_FINISHED', resultDigest,
@@ -447,7 +499,8 @@ const handler = async (data: unknown, context: CallableContext) => {
       // An expired predecessor cannot mark its successor failed or revive approval.
       if (active?.event !== 'DATA_RIGHTS_EXECUTION_STARTED' || active.leaseToken !== leaseToken
         || active.requestHash !== request.requestHash || current?.ownerUid !== ownerUid
-        || current.requestType !== record.requestType || current.status !== 'IN_REVIEW') return;
+        || current.requestType !== record.requestType || current.status !== 'IN_REVIEW'
+        || requestPayloadDigest(current) !== requestPayloadDigest(record)) return;
       transaction.set(executionRef, {
         event: continuation ? 'DATA_RIGHTS_EXECUTION_CONTINUATION_REQUIRED' : 'DATA_RIGHTS_EXECUTION_FAILED',
         failureCode: cleanupPending ? 'PRIVATE_EXPORT_CLEANUP_RECONCILIATION_REQUIRED'

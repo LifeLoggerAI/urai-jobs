@@ -54,6 +54,7 @@ function fixture(options = {}) {
         set: (ref, value, settings) => writes.push(() => write(ref.path, value, settings?.merge)),
         create: (ref, value) => writes.push(() => { assert.equal(records.has(ref.path), false); write(ref.path, value); }),
         update: (ref, value) => writes.push(() => { assert.ok(records.has(ref.path)); write(ref.path, value, true, true); }) };
+      tx.getAll = async (...refs) => Promise.all(refs.map(ref => tx.get(ref)));
       const value = await callback(tx); await options.beforeTransactionCommit?.(reads, writes, records);
       for (const [query, original] of queries) if (JSON.stringify(query.capture().docs.map(doc => [doc.ref.path, doc.updateTime.seconds, doc.updateTime.nanoseconds])) !== original) throw new Error('fictional-transaction-query-conflict');
       for (const [path, stamp] of reads) if (!stamp.isEqual(version(path))) throw new Error('fictional-transaction-read-conflict');
@@ -64,7 +65,7 @@ function fixture(options = {}) {
       if (deletedPaths.some(path => path.startsWith('uraiPrivate') && path.split('/').length === 2)) {
         stats.recursiveDeletes++; if (options.failFirstDelete && stats.recursiveDeletes === 1) throw new Error('fictional-delete-interruption');
       }
-      for (const write of writes) write(); return value;
+      for (const write of writes) write(); await options.afterTransactionCommit?.(reads, writes, records); return value;
     }); serial = operation.catch(() => {}); return operation; },
     batch: () => { const writes = []; return { delete: ref => writes.push(() => records.delete(ref.path)),
       set: (ref, value, settings) => writes.push(() => write(ref.path, value, settings?.merge)),
@@ -388,4 +389,68 @@ test('root correction after an awaited child transaction read conflicts before d
   } });
   await assert.rejects(f.helper.deleteOwnedPrivateLifeModel(f.db, uid, 'fictional_delete'));
   assert.equal(f.records.has(child), true); assert.equal(f.records.has(modelPath), true);
+});
+
+test('existing memory.storage consent block denies private derivative export before upload', async () => {
+  const f = fixture(); f.records.set('jobConsentBlocks/' + hash(uid + '\n' + 'memory.storage'), { ownerUid: uid, purpose: 'memory.storage', active: true });
+  await assert.rejects(f.execute()); assert.equal(f.stats.uploads, 0);
+});
+test('source revoked after its earlier 400-row validation cannot return stale private bytes', async () => {
+  let changed = false, sourceRead = false;
+  const f = fixture({ afterTransactionRead: (path, records) => {
+    if (path === sourcePath) sourceRead = true;
+    if (!changed && sourceRead && path.startsWith(sourcePath + '/transcripts/') && path !== sourcePath + '/transcripts/' + hash(transcriptRef)) {
+      // With over 400 original transcripts, this hook occurs after the original
+      // source root was validated in the predecessor's earlier transaction.
+      if (++f.extraReads >= 401) { changed = true; records.get(sourcePath).status = 'REVOKED'; }
+    }
+  } }); f.extraReads = 0;
+  for (let index = 0; index < 501; index++) { const ref = 'private:fictional/extra-' + index;
+    f.records.set(sourcePath + '/transcripts/' + hash(ref), { ...f.records.get(sourcePath + '/transcripts/' + hash(transcriptRef)), transcriptRef: ref }); }
+  await assert.rejects(f.helper.exportOwnedPrivateLifeModel(f.db, uid)); assert.equal(changed, true); assert.equal(f.stats.uploads, 0);
+});
+for (const reason of ['block', 'source', 'job-owner', 'profile']) test(`withdrawal during awaited upload cannot publish private output receipt: ${reason}`, async () => {
+  const f = fixture({ onUpload: (_call, records) => {
+    if (reason === 'block') records.set('jobConsentBlocks/' + hash(uid + '\n' + 'memory.storage'), { ownerUid: uid, purpose: 'memory.storage', active: true });
+    if (reason === 'source') records.get(sourcePath).status = 'REVOKED';
+    if (reason === 'job-owner') records.get('jobs/fictional_job').ownerUid = 'different_owner';
+    if (reason === 'profile') records.get('users/' + uid).privateBiography = 'Fictional corrected profile';
+  } }); await assert.rejects(f.execute()); assert.equal(f.stats.uploads, 1); assert.equal(f.stats.cleanup.length, 1);
+  assert.equal([...f.records.values()].some(record => record.event === 'DATA_RIGHTS_EXECUTION_FINISHED'), false);
+});
+test('consent withdrawal before terminal receipt transaction preserves failed outcome', async () => {
+  let withdrawn = false;
+  const f = fixture({ beforeTransactionCommit: (reads, writes, records) => {
+    if (withdrawn || writes.length !== 3 || !reads.has(requestPath) || f.stats.uploads !== 1) return;
+    withdrawn = true; records.set('jobConsentBlocks/' + hash(uid + '\n' + 'memory.storage'), { ownerUid: uid, purpose: 'memory.storage', active: true });
+  } }); await assert.rejects(f.execute()); assert.equal(withdrawn, true); assert.equal(f.stats.cleanup.length, 1);
+  assert.equal([...f.records.values()].some(record => record.event === 'DATA_RIGHTS_EXECUTION_FINISHED'), false);
+});
+test('a consent-withdrawn terminal export cannot replay its private object pointer', async () => {
+  const f = fixture(); await f.execute(); f.records.set('jobConsentBlocks/' + hash(uid + '\n' + 'memory.storage'), { ownerUid: uid, purpose: 'memory.storage', active: true });
+  await assert.rejects(f.execute()); assert.equal(f.stats.uploads, 1);
+});
+
+for (const field of ['requestedFormat', 'payloadFingerprint']) test(`terminal private export replay denies a rebound existing request payload: ${field}`, async () => {
+  const f = fixture(); await f.execute(); f.records.get(requestPath)[field] = field === 'requestedFormat' ? 'csv' : 'fictional_rebound_request_payload';
+  await assert.rejects(f.execute()); assert.equal(f.stats.uploads, 1);
+});
+for (const reason of ['request-payload', 'execution-receipt', 'request-receipt-path']) test(`terminal replay binds original approval and receipt across the admission await: ${reason}`, async () => {
+  let armed = false, changed = false;
+  const executionPath = requestPath + '/audit/execution-' + hash(JSON.stringify(body.idempotencyKey)).slice(0, 24);
+  const f = fixture({ afterTransactionCommit: (reads, writes, records) => {
+    if (!armed || changed || writes.length || !reads.has(requestPath) || !reads.has(executionPath)) return;
+    changed = true;
+    if (reason === 'request-payload') records.get(requestPath).note = 'Fictional replaced approval details';
+    if (reason === 'execution-receipt') records.get(executionPath).requestHash = 'fictional_rebound_execution_identity';
+    if (reason === 'request-receipt-path') records.get(requestPath).executionReceiptPath = requestPath + '/audit/fictional_replacement';
+  } }); await f.execute(); armed = true;
+  await assert.rejects(f.execute()); assert.equal(changed, true); assert.equal(f.stats.uploads, 1);
+});
+test('existing approved request payload withdrawn during upload cannot publish its old result', async () => {
+  const f = fixture({ onUpload: (_call, records) => { records.get(requestPath).payloadFingerprint = 'fictional_rebound_request_payload'; } });
+  await assert.rejects(f.execute()); assert.equal(f.stats.uploads, 1); assert.equal(f.stats.cleanup.length, 1);
+  assert.equal([...f.records.values()].some(record => record.event === 'DATA_RIGHTS_EXECUTION_FINISHED'), false);
+  assert.equal(f.records.get(requestPath).payloadFingerprint, 'fictional_rebound_request_payload');
+  assert.equal(f.records.get(requestPath).executionState, 'PROTECTED_STAGING_EXECUTION_IN_PROGRESS', 'stale failure does not replace rebound request progress');
 });

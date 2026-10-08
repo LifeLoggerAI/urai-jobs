@@ -62,9 +62,11 @@ function database() {
       let unlock; const next = new Promise(resolve=>unlock=resolve); const prior=tail;tail=next;await prior;
       try { for(let attempt=0;attempt<3;attempt++) {
         const reads=new Map(),writes=[];let wrote=false;
-        const result=await fn({ get: async target => { assert.equal(wrote,false,'Firestore requires all reads before writes');if (!target.id) return target.get();reads.set(target.path,versions.get(target.path)||0);return snapshot(target.path); },
+        const transaction={ get: async target => { assert.equal(wrote,false,'Firestore requires all reads before writes');if (!target.id) return target.get();reads.set(target.path,versions.get(target.path)||0);return snapshot(target.path); },
           delete: (target, precondition)=>{wrote=true;writes.push([target,precondition,'delete']);},
-          update: (target,data)=>{wrote=true;writes.push([target,data,'merge']);},create: (target,data)=>{wrote=true;writes.push([target,data,'create']);},set:(target,data,options)=>{wrote=true;writes.push([target,data,options?.merge?'merge':'set']);} });
+          update: (target,data)=>{wrote=true;writes.push([target,data,'merge']);},create: (target,data)=>{wrote=true;writes.push([target,data,'create']);},set:(target,data,options)=>{wrote=true;writes.push([target,data,options?.merge?'merge':'set']);} };
+        transaction.getAll=async(...refs)=>Promise.all(refs.map(ref=>transaction.get(ref)));
+        const result=await fn(transaction);
         if(beforeCommit){const hook=beforeCommit;beforeCommit=undefined;await hook();}
         if([...reads].some(([path,version])=>(versions.get(path)||0)!==version))continue;
         for(const [target,data,mode]of writes){if(mode==='delete'){if(data?.lastUpdateTime)assert.equal(data.lastUpdateTime.isEqual(stamp(target.path)),true);records.delete(target.path);versions.set(target.path,(versions.get(target.path)||0)+1);continue;}if(mode==='create')assert.equal(records.has(target.path),false,'create must be unique');set(target.path,mode==='merge'?{...records.get(target.path),...data}:data);}
