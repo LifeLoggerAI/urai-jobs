@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { FieldPath, FieldValue, getFirestore, type Firestore, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue, getFirestore, type Firestore, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import type { CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
 import { withAuthenticatedRole } from '../core/auth.js';
@@ -96,7 +97,7 @@ async function buildExport(db: Firestore, requestId: string, ownerUid: string, c
   const [userSnap, jobs, privateLifeModel] = await Promise.all([
     db.collection('users').doc(ownerUid).get(),
     ownedJobs(db, ownerUid),
-    exportOwnedPrivateLifeModel(db, ownerUid),
+    exportOwnedPrivateLifeModel(db, ownerUid, checkpoint),
   ]);
   const exportedJobs = jobs.map((document) => {
     const source = redact(document.data()) as Record<string, unknown>;
@@ -146,7 +147,7 @@ async function buildExport(db: Firestore, requestId: string, ownerUid: string, c
     completeEcosystemExport: false, unresolvedDomains: payload.unresolvedDomains };
 }
 
-async function executeDelete(db: Firestore, requestId: string, ownerUid: string, checkpoint: () => Promise<void>) {
+async function executeDelete(db: Firestore, requestId: string, ownerUid: string, checkpoint: (transaction?: Transaction) => Promise<void>) {
   await checkpoint();
   const ownerHash = createHash('sha256').update(ownerUid).digest('hex');
   const privateLifeModel = await deleteOwnedPrivateLifeModel(db, ownerUid, requestId, checkpoint);
@@ -165,8 +166,10 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string,
       await checkpoint();
       // Fence in-flight worker/callback attempts before mutating owned records.
       const currentJob = await db.runTransaction(async transaction => {
+        await checkpoint(transaction);
         const current = (await transaction.get(document.ref)).data();
         if (!current || current.ownerUid !== ownerUid) throw httpsError('permission-denied', 'Owned job authority changed during deletion.');
+        await checkpoint(transaction);
         transaction.update(document.ref, { status: 'CANCELLED', lease: FieldValue.delete(), 'execution.asyncCallbackPending': false,
           'execution.leaseToken': FieldValue.delete(), 'execution.callbackLeaseToken': FieldValue.delete(),
           'execution.callbackTokenHash': FieldValue.delete(), 'execution.callbackDeadlineAt': FieldValue.delete(),
@@ -183,22 +186,38 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string,
         await checkpoint();
         const logs = await logsRef.limit(400).get();
         if (!logs.size) break;
-        const logBatch = db.batch();
-        for (const log of logs.docs) logBatch.delete(log.ref);
-        await logBatch.commit(); logDeletes += logs.size;
+        const committed = await db.runTransaction(async transaction => {
+          await checkpoint(transaction);
+          const current = (await transaction.get(document.ref)).data();
+          if (!current || current.ownerUid !== ownerUid) throw httpsError('permission-denied', 'Owned job authority changed during log deletion.');
+          const targets = [];
+          for (const log of logs.docs) {
+            const observed = await transaction.get(log.ref);
+            if (!observed.exists) continue;
+            if (!observed.updateTime?.isEqual(log.updateTime)) throw httpsError('failed-precondition', 'Owned job log version changed during deletion.');
+            targets.push(observed);
+          }
+          await checkpoint(transaction);
+          for (const target of targets) transaction.delete(target.ref, { lastUpdateTime: target.updateTime! });
+          return targets.length;
+        });
+        logDeletes += committed;
       }
       if ((await logsRef.limit(1).get()).size) throw httpsError('resource-exhausted', 'Bounded job log deletion requires continuation.');
       await checkpoint();
-      const currentOwner = (await document.ref.get()).data()?.ownerUid;
-      if (currentOwner !== ownerUid) throw httpsError('permission-denied', 'Owned job authority changed during deletion.');
-      const batch = db.batch();
       const queueRef = db.collection('jobQueue').doc(document.id);
-      const queueSnap = await queueRef.get();
-      if (queueSnap.exists) {
-        batch.delete(queueRef);
-        queueDeletes += 1;
-      }
-      batch.set(document.ref, {
+      const queueDeleted = await db.runTransaction(async transaction => {
+        await checkpoint(transaction);
+        const current = await transaction.get(document.ref);
+        const queueSnap = await transaction.get(queueRef), queue = queueSnap.data();
+        if (current.data()?.ownerUid !== ownerUid) throw httpsError('permission-denied', 'Owned job authority changed during deletion.');
+        if (queue && ((queue.ownerUid !== undefined && queue.ownerUid !== ownerUid)
+          || (queue.jobId !== undefined && queue.jobId !== document.id))) {
+          throw httpsError('permission-denied', 'Owned job queue authority changed during deletion.');
+        }
+        await checkpoint(transaction);
+        if (queueSnap.exists) transaction.delete(queueRef, { lastUpdateTime: queueSnap.updateTime! });
+        transaction.set(document.ref, {
         ownerUid: `deleted:${ownerHash}`,
         payload: FieldValue.delete(),
         output: FieldValue.delete(),
@@ -213,8 +232,10 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string,
           deletedAt: FieldValue.serverTimestamp(),
         },
         updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-      await batch.commit();
+        }, { merge: true });
+        return queueSnap.exists;
+      });
+      if (queueDeleted) queueDeletes++;
       jobsAnonymized += 1;
     }
   }
@@ -223,11 +244,20 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string,
   // Jobs does not own Firebase Auth deletion, external provider derivatives, or
   // every cross-system artifact. Never mark the user's request globally complete.
   await checkpoint();
-  await db.collection('users').doc(ownerUid).set({
-    dataRightsDeletionPendingCentralPrivacy: true,
-    dataRightsDeletionRequestId: requestId,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  const profilePendingMarkerApplied = await db.runTransaction(async transaction => {
+    await checkpoint(transaction);
+    const ref = db.collection('users').doc(ownerUid), snapshot = await transaction.get(ref), current = snapshot.data();
+    // Central Privacy may already have physically removed the profile. Never
+    // resurrect it by merging a Jobs-only pending marker into a missing record.
+    if (!snapshot.exists) return false;
+    if ((current?.uid !== undefined && current.uid !== ownerUid) || (current?.userId !== undefined && current.userId !== ownerUid)) {
+      throw httpsError('permission-denied', 'Owned profile authority changed during deletion.');
+    }
+    await checkpoint(transaction);
+    transaction.update(ref, { dataRightsDeletionPendingCentralPrivacy: true,
+      dataRightsDeletionRequestId: requestId, updatedAt: FieldValue.serverTimestamp() });
+    return true;
+  });
 
   return {
     jobsAnonymized,
@@ -235,6 +265,7 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string,
     capturedRealityRuntime,
     queueDeletes,
     logDeletes,
+    profilePendingMarkerApplied,
     unresolvedDomains: [
       'firebase-auth-account',
       'provider-side-derivatives',
@@ -245,13 +276,27 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string,
   };
 }
 
-const handler = async (data: unknown, _context: CallableContext) => {
+const handler = async (data: unknown, context: CallableContext) => {
   const parsed = ExecuteSchema.safeParse(data);
   if (!parsed.success) {
     throw httpsError('invalid-argument', 'Invalid governed data-rights execution request.', parsed.error.flatten());
   }
   const admission = executionAdmission();
   const db = getFirestore();
+  const actorUid = context.auth?.uid;
+  const currentActor = async (transaction?: Transaction) => {
+    const token = context.rawRequest?.get('authorization')?.match(/^Bearer\s+(\S+)$/i)?.[1];
+    try {
+      if (!actorUid || !token || (await getAuth().verifyIdToken(token, true)).uid !== actorUid
+        || (await getAuth().getUser(actorUid)).disabled) throw new Error();
+    } catch { throw httpsError('unauthenticated', 'Current data-rights operator authentication is required.'); }
+    const actorRef = db.collection('users').doc(actorUid);
+    const actor = (await (transaction ? transaction.get(actorRef) : actorRef.get())).data();
+    if (!actor || !['admin', 'operator'].includes(String(actor.role))) {
+      throw httpsError('permission-denied', 'Current data-rights operator role is required.');
+    }
+  };
+  await currentActor();
   const requestRef = db.collection(DATA_RIGHTS_COLLECTION).doc(parsed.data.requestId);
   const executionRef = requestRef.collection('audit').doc(`execution-${canonicalDigest(parsed.data.idempotencyKey).slice(0, 24)}`);
   const leaseToken = randomUUID();
@@ -300,6 +345,7 @@ const handler = async (data: unknown, _context: CallableContext) => {
       throw httpsError('resource-exhausted', reason);
     }
     const { attemptNumber, failureAttempts, continuationDeliveries } = budget;
+    await currentActor(transaction);
     const execution = {
       event: 'DATA_RIGHTS_EXECUTION_STARTED',
       attemptNumber, failureAttempts, continuationDeliveries,
@@ -328,20 +374,23 @@ const handler = async (data: unknown, _context: CallableContext) => {
     return { replay: null, record, requestHash, attemptNumber, failureAttempts, continuationDeliveries };
   });
 
-  if (request.replay) return { replay: true, receipt: request.replay };
+  if (request.replay) { await currentActor(); return { replay: true, receipt: request.replay }; }
   const record = request.record;
   const ownerUid = String(record.ownerUid);
   const attemptRef = executionRef.collection('attempts').doc(String(request.attemptNumber).padStart(2, '0'));
-  const currentExecution = async (transaction: any) => {
+  const currentExecution = async (transaction: Transaction) => {
     const [execution, currentRequest] = await Promise.all([transaction.get(executionRef), transaction.get(requestRef)]);
     const active = execution.data(), current = currentRequest.data();
     if (active?.event !== 'DATA_RIGHTS_EXECUTION_STARTED' || active.requestHash !== request.requestHash
       || active.leaseToken !== leaseToken || !Number.isSafeInteger(active.leaseExpiresAtMs) || active.leaseExpiresAtMs <= Date.now()
       || current?.ownerUid !== ownerUid || current.requestType !== record.requestType || current.status !== 'IN_REVIEW'
       || current.executionState !== 'PROTECTED_STAGING_EXECUTION_IN_PROGRESS') throw httpsError('unavailable', 'Data-rights execution authority changed or its lease expired.');
+    await currentActor(transaction);
     return active;
   };
-  const checkpoint = async () => { await db.runTransaction(currentExecution); };
+  const checkpoint = async (transaction?: Transaction) => {
+    if (transaction) await currentExecution(transaction); else await db.runTransaction(currentExecution);
+  };
   try {
     const result = record.requestType === 'EXPORT'
       ? await buildExport(db, parsed.data.requestId, ownerUid, checkpoint, canonicalDigest(leaseToken).slice(0, 32))
@@ -416,11 +465,12 @@ const handler = async (data: unknown, _context: CallableContext) => {
     if (cleanupPending) throw httpsError('internal', 'Private export cleanup requires reconciliation.');
     if (continuation) throw httpsError('resource-exhausted', 'Bounded data-rights deletion continuation required.');
     const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
-    if (['unavailable', 'resource-exhausted', 'permission-denied', 'failed-precondition'].includes(code)) throw error;
+    if (['unavailable', 'resource-exhausted', 'permission-denied', 'failed-precondition', 'unauthenticated'].includes(code)) throw error;
     // Storage/database errors can include owner IDs, private paths and payloads.
     throw httpsError('internal', 'Protected data-rights execution failed.');
   }
 };
 
 export const processDataRightsRequest = withAuthenticatedRole(['admin', 'operator'], handler);
+
 

@@ -4,8 +4,12 @@ on:
   pull_request:
     branches:
       - fix/private-consent-cleanup-continuation-20261007
+      - repair/life-movie-convergence-20261007
+      - main
     paths:
       - functions/src/privacy/dataRightsExecution.ts
+      - functions/src/privacy/privateLifeModelDataRights.ts
+      - scripts/privacy-data-rights-execution-authority.test.mjs
       - functions/src/privacy/dataRightsContinuationPolicy.ts
       - scripts/privacy-data-rights-continuation-policy.test.mjs
       - scripts/privacy-data-rights-execution-contract.mjs
@@ -34,4 +38,6 @@ jobs:
       - run: node --test scripts/privacy-data-rights-continuation-policy.test.mjs
       - run: node scripts/privacy-data-rights-execution-contract.mjs
       - run: node --test scripts/private-life-model-rights-recovery.test.mjs
+      - run: node scripts/privacy-data-rights-execution-authority.test.mjs
       - run: pnpm --dir functions typecheck
+

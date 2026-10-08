@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { FieldPath, FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue, getFirestore, type Firestore, type Transaction, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 
 const SOURCE_EVIDENCE_CLASSES = new Set(['SOURCE_CAPTURED', 'SOURCE_DERIVED', 'DIRECT_SUBJECT_TESTIMONY', 'ATTRIBUTED_TESTIMONY', 'CORROBORATED_INFERENCE', 'CONTEXTUAL_RESEARCH']);
@@ -91,10 +91,74 @@ async function ownedRoots(db: Firestore, collection: string, ownerUid: string) {
   return snapshot.docs;
 }
 
-export async function exportOwnedPrivateLifeModel(db: Firestore, ownerUid: string) {
+type RightsCheckpoint = (transaction?: Transaction) => Promise<void>;
+type RootAuthority = (snapshot: FirebaseFirestore.DocumentSnapshot) => void;
+
+function assertRootVersion(snapshot: FirebaseFirestore.DocumentSnapshot, root: QueryDocumentSnapshot, ownerUid: string) {
+  if (!snapshot.exists || snapshot.data()?.ownerUid !== ownerUid || !snapshot.updateTime?.isEqual(root.updateTime)) {
+    throw new Error('private_life_model_root_owner_or_version_changed');
+  }
+}
+
+// Query snapshots are discovery only. Current operation, parent authority and
+// every exact child version join the same transaction as the bounded deletes.
+async function purgePrivateRootChildren(db: Firestore, root: QueryDocumentSnapshot, ownerUid: string,
+  children: string[], checkpoint: RightsCheckpoint, authority: RootAuthority, limitReason: string) {
+  for (const child of children) {
+    const ref = root.ref.collection(child);
+    for (let page = 0; page < MAX_DELETE_PAGES; page++) {
+      await checkpoint();
+      const documents = await ref.limit(DELETE_PAGE_SIZE).get();
+      if (!documents.size) break;
+      await db.runTransaction(async transaction => {
+        await checkpoint(transaction);
+        authority(await transaction.get(root.ref));
+        const targets = [];
+        for (const document of documents.docs) {
+          const current = await transaction.get(document.ref);
+          if (!current.exists) continue;
+          if (current.data()?.ownerUid !== ownerUid) throw new Error('private_life_model_delete_child_owner_mismatch');
+          if (!current.updateTime?.isEqual(document.updateTime)) throw new Error('private_life_model_delete_child_version_changed');
+          targets.push(current);
+        }
+        await checkpoint(transaction);
+        for (const target of targets) transaction.delete(target.ref, { lastUpdateTime: target.updateTime! });
+      });
+    }
+    if ((await ref.limit(1).get()).size) throw new Error(limitReason);
+  }
+}
+
+async function deletePrivateRoot(db: Firestore, root: QueryDocumentSnapshot, children: string[],
+  checkpoint: RightsCheckpoint, authority: RootAuthority, limitReason: string) {
+  return db.runTransaction(async transaction => {
+    await checkpoint(transaction);
+    const current = await transaction.get(root.ref);
+    authority(current);
+    // Transactional emptiness reads also protect against registered late child
+    // writers at commit. Never recursively erase an uninspected foreign child.
+    for (const child of children) {
+      if ((await transaction.get(root.ref.collection(child).limit(1))).size) throw new Error(limitReason);
+    }
+    await checkpoint(transaction);
+    transaction.delete(root.ref, { lastUpdateTime: current.updateTime! });
+  });
+}
+
+function stableSourceRevocationDigest(value: Record<string, unknown>) {
+  const canonical = (entry: any): string => Array.isArray(entry) ? '[' + entry.map(canonical).join(',') + ']'
+    : entry && typeof entry === 'object' ? '{' + Object.entries(entry).sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, child]) => JSON.stringify(key) + ':' + canonical(child)).join(',') + '}' : JSON.stringify(entry);
+  const { status: _status, revokedByEventId: _event, updatedAt: _updated, ...source } = value;
+  return ownerHash(canonical(source));
+}
+
+export async function exportOwnedPrivateLifeModel(db: Firestore, ownerUid: string, checkpoint: RightsCheckpoint = async () => {}) {
+  await checkpoint();
   const before = await ownerEpoch(db, ownerUid);
   if (before.deleted) throw new Error('private_life_model_owner_deleted');
   const records: Array<{ path: string; data: Record<string, unknown> }> = [];
+  const targets: QueryDocumentSnapshot[] = [];
   const sourceRoots = await ownedRoots(db, 'uraiPrivateSourceReceipts', ownerUid);
   const sources = new Map(sourceRoots.map(root => [root.id, root.data()]));
   for (const root of sourceRoots) {
@@ -109,7 +173,7 @@ export async function exportOwnedPrivateLifeModel(db: Firestore, ownerUid: strin
   for (const collection of ['uraiPrivateLifeModel', 'uraiPrivateSourceReceipts']) {
     for (const root of collection === 'uraiPrivateSourceReceipts' ? sourceRoots : await ownedRoots(db, collection, ownerUid)) {
       if (collection === 'uraiPrivateLifeModel' && (root.data().sourceHandleHash !== root.id || root.data().historicalSourceAuthority !== false)) throw new Error('private_life_model_root_lineage_invalid');
-      records.push({ path: root.ref.path, data: root.data() });
+      targets.push(root); records.push({ path: root.ref.path, data: root.data() });
       for (const child of collection === 'uraiPrivateLifeModel' ? ['state', 'revisions', 'idempotency'] : ['transcripts', 'transcriptionAttempts']) {
         const snapshot = await root.ref.collection(child).limit(MAX_EXPORT_RECORDS + 1).get();
         if (snapshot.size + records.length > MAX_EXPORT_RECORDS) throw new Error('private_life_model_export_record_limit');
@@ -128,24 +192,41 @@ export async function exportOwnedPrivateLifeModel(db: Firestore, ownerUid: strin
             if (data.schemaVersion !== 'urai-private-source-transcript-v2' || data.sourceReceiptRef !== root.data().sourceReceiptRef
               || typeof data.transcriptRef !== 'string' || document.id !== ownerHash(data.transcriptRef)) throw new Error('private_source_transcript_lineage_invalid');
           }
-          records.push({ path: document.ref.path, data: document.data() });
+          targets.push(document); records.push({ path: document.ref.path, data: document.data() });
         }
       }
     }
   }
   if (Buffer.byteLength(JSON.stringify(records), 'utf8') > 16 * 1024 * 1024) throw new Error('private_life_model_export_byte_limit');
+  for (let offset = 0; offset < targets.length; offset += 400) {
+    await db.runTransaction(async transaction => {
+      await checkpoint(transaction);
+      const fence = (await transaction.get(db.collection('uraiPrivateLifeModelOwnerFences').doc(ownerHash(ownerUid)))).data();
+      const epoch = fence?.deletionEpoch ?? (fence?.deleted === true ? 1 : 0);
+      if (fence?.deleted === true || epoch !== before.epoch) throw new Error('private_life_model_owner_deleted_or_epoch_changed');
+      for (const target of targets.slice(offset, offset + 400)) {
+        const current = await transaction.get(target.ref);
+        if (!current.exists || current.data()?.ownerUid !== ownerUid || !current.updateTime?.isEqual(target.updateTime)) {
+          throw new Error('private_life_model_export_owner_or_version_changed');
+        }
+      }
+      await checkpoint(transaction);
+    });
+  }
+  await checkpoint();
   await assertPrivateLifeModelOwnerEpoch(db, ownerUid, before.epoch);
   return { schemaVersion: 'urai-private-life-model-owner-export-v2', ownerDeletionEpoch: before.epoch, records,
     completeEcosystemExport: false, unresolvedDomains: ['legacy-ownerless-life-model-records', 'external-transcription-provider-storage', 'original-private-source-storage'] };
 }
 
-export async function deleteOwnedPrivateLifeModel(db: Firestore, ownerUid: string, requestId: string, checkpoint: () => Promise<void> = async () => {}) {
+export async function deleteOwnedPrivateLifeModel(db: Firestore, ownerUid: string, requestId: string, checkpoint: RightsCheckpoint = async () => {}) {
   // Permanent owner tombstone precedes enumeration. It also fences an unknown or
   // pre-admission source so a delayed extraction cannot recreate deleted data.
   const fence = db.collection('uraiPrivateLifeModelOwnerFences').doc(ownerHash(ownerUid));
   assertOwner(ownerUid);
   await checkpoint();
   await db.runTransaction(async transaction => {
+    await checkpoint(transaction);
     const old = (await transaction.get(fence)).data() || {};
     const epoch = old.deletionEpoch ?? (old.deleted === true ? 1 : 0);
     if (!Number.isSafeInteger(epoch) || epoch < 0 || epoch >= Number.MAX_SAFE_INTEGER) throw new Error('private_life_model_owner_epoch_invalid');
@@ -161,29 +242,22 @@ export async function deleteOwnedPrivateLifeModel(db: Firestore, ownerUid: strin
       if (!roots.size) break;
       for (const root of roots.docs) {
         if (root.data().ownerUid !== ownerUid) throw new Error('private_life_model_owner_mismatch');
-        for (const child of collection === 'uraiPrivateLifeModel' ? ['state', 'revisions', 'idempotency'] : ['transcripts', 'transcriptionAttempts']) {
-          const ref = root.ref.collection(child);
-          for (let childPage = 0; childPage < MAX_DELETE_PAGES; childPage++) {
-            await checkpoint();
-            const documents = await ref.limit(DELETE_PAGE_SIZE).get();
-            if (!documents.size) break;
-            const batch = db.batch();
-            for (const document of documents.docs) {
-              if (document.data().ownerUid !== ownerUid) throw new Error('private_life_model_delete_child_owner_mismatch');
-              batch.delete(document.ref);
-            }
-            await batch.commit();
-          }
-          if ((await ref.limit(1).get()).size) throw new Error('private_life_model_delete_child_limit');
-        }
-        await checkpoint();
-        await db.recursiveDelete(root.ref); rootDeletions++;
+        const children = collection === 'uraiPrivateLifeModel' ? ['state', 'revisions', 'idempotency'] : ['transcripts', 'transcriptionAttempts'];
+        const authority: RootAuthority = snapshot => assertRootVersion(snapshot, root, ownerUid);
+        await purgePrivateRootChildren(db, root, ownerUid, children, checkpoint, authority, 'private_life_model_delete_child_limit');
+        await deletePrivateRoot(db, root, children, checkpoint, authority, 'private_life_model_delete_child_limit');
+        rootDeletions++;
       }
     }
     if ((await db.collection(collection).where('ownerUid', '==', ownerUid).limit(1).get()).size) throw new Error('private_life_model_delete_scope_limit');
   }
   await checkpoint();
-  await fence.set({ localRootDeletionsAcknowledged: rootDeletions, cleanupAcknowledgedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await db.runTransaction(async transaction => {
+    await checkpoint(transaction);
+    const current = (await transaction.get(fence)).data();
+    if (current?.ownerHash !== ownerHash(ownerUid) || current.deleted !== true) throw new Error('private_life_model_deletion_fence_changed');
+    transaction.set(fence, { localRootDeletionsAcknowledged: rootDeletions, cleanupAcknowledgedAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
   return { localRootDeletionsAcknowledged: rootDeletions, ownerAdmissionPermanentlyBlocked: true,
     completeEcosystemDeletion: false, unresolvedDomains: ['legacy-ownerless-life-model-records', 'external-transcription-provider-storage', 'original-private-source-storage'] };
 }
@@ -230,7 +304,7 @@ export async function invalidatePrivateLifeModelForConsent(event: { ownerUid: st
       throw new Error('private_life_model_revocation_concurrent_continuation');
     }
   };
-  const checkpoint = async () => { await db.runTransaction(current); };
+  const checkpoint: RightsCheckpoint = async transaction => { if (transaction) await current(transaction); else await db.runTransaction(current); };
   const advance = async (next: Progress) => {
     await db.runTransaction(async transaction => {
       await current(transaction);
@@ -242,23 +316,6 @@ export async function invalidatePrivateLifeModelForConsent(event: { ownerUid: st
     let query = db.collection(collection).where('ownerUid', '==', event.ownerUid).orderBy(FieldPath.documentId()).limit(limit);
     if (cursor) query = query.startAfter(cursor);
     return query;
-  };
-  const purgeChildren = async (root: any, children: string[]) => {
-    for (const child of children) {
-      const ref = root.ref.collection(child);
-      for (let page = 0; page < MAX_DELETE_PAGES; page++) {
-        await checkpoint();
-        const documents = await ref.limit(DELETE_PAGE_SIZE).get();
-        if (!documents.size) break;
-        const batch = db.batch();
-        for (const document of documents.docs) {
-          if (document.data().ownerUid !== event.ownerUid) throw new Error('private_life_model_revocation_child_owner_mismatch');
-          batch.delete(document.ref);
-        }
-        await batch.commit();
-      }
-      if ((await ref.limit(1).get()).size) throw new Error('private_life_model_revocation_child_continuation');
-    }
   };
   while (progress.phase !== 'DONE') {
     const phase = progress.phase;
@@ -272,15 +329,19 @@ export async function invalidatePrivateLifeModelForConsent(event: { ownerUid: st
         const increment = await db.runTransaction(async transaction => {
           await current(transaction);
           const snapshots = await Promise.all(roots.docs.map(document => transaction.get(document.ref)));
+          const queues = await Promise.all(snapshots.map(snapshot => transaction.get(db.collection('jobQueue').doc(snapshot.id))));
           let count = 0;
-          for (const snapshot of snapshots) {
+          for (const [index, snapshot] of snapshots.entries()) {
             const job = snapshot.data();
             if (!job || job.ownerUid !== event.ownerUid) throw new Error('private_life_model_revocation_owner_mismatch');
             if (!['memory.private-source.index','memory.private-source.transcribe'].includes(job.type || job.jobType)) continue;
+            const queue = queues[index];
+            if (queue.exists && ((queue.data()?.ownerUid !== undefined && queue.data()?.ownerUid !== event.ownerUid)
+              || (queue.data()?.jobId !== undefined && queue.data()?.jobId !== snapshot.id))) throw new Error('private_life_model_revocation_queue_owner_mismatch');
             transaction.update(snapshot.ref, { status: 'CANCELLED', output: FieldValue.delete(), result: FieldValue.delete(), lease: FieldValue.delete(),
               'execution.leaseToken': FieldValue.delete(), 'execution.asyncCallbackPending': false,
               consentRevocationEventId: event.eventId, derivativeAccessState: 'REVOKED', updatedAt: FieldValue.serverTimestamp() });
-            transaction.set(db.collection('jobQueue').doc(snapshot.id), { status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+            if (queue.exists) transaction.update(queue.ref, { status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() });
             count++;
           }
           transaction.set(receiptRef, { privateLifeModelInvalidationProgress: { ...progress,
@@ -293,12 +354,24 @@ export async function invalidatePrivateLifeModelForConsent(event: { ownerUid: st
           if (root.data().ownerUid !== event.ownerUid) throw new Error('private_life_model_revocation_owner_mismatch');
           await checkpoint();
           if (phase === 'sources') {
-            await root.ref.update({ status: 'REVOKED', revokedByEventId: event.eventId, updatedAt: FieldValue.serverTimestamp() });
-            await purgeChildren(root, ['transcripts','transcriptionAttempts']);
+            const sourceDigest = stableSourceRevocationDigest(root.data());
+            await db.runTransaction(async transaction => {
+              await current(transaction);
+              const observed = await transaction.get(root.ref);
+              assertRootVersion(observed, root, event.ownerUid);
+              transaction.update(root.ref, { status: 'REVOKED', revokedByEventId: event.eventId, updatedAt: FieldValue.serverTimestamp() });
+            });
+            const authority: RootAuthority = snapshot => {
+              const value = snapshot.data();
+              if (!value || value.ownerUid !== event.ownerUid || value.status !== 'REVOKED' || value.revokedByEventId !== event.eventId
+                || stableSourceRevocationDigest(value) !== sourceDigest) throw new Error('private_life_model_revocation_source_owner_or_version_changed');
+            };
+            await purgePrivateRootChildren(db, root, event.ownerUid, ['transcripts','transcriptionAttempts'], checkpoint,
+              authority, 'private_life_model_revocation_child_continuation');
           } else {
-            await purgeChildren(root, ['state','revisions','idempotency']);
-            await checkpoint();
-            await db.recursiveDelete(root.ref);
+            const children = ['state','revisions','idempotency'], authority: RootAuthority = snapshot => assertRootVersion(snapshot, root, event.ownerUid);
+            await purgePrivateRootChildren(db, root, event.ownerUid, children, checkpoint, authority, 'private_life_model_revocation_child_continuation');
+            await deletePrivateRoot(db, root, children, checkpoint, authority, 'private_life_model_revocation_child_continuation');
           }
           await advance({ ...progress, cursor: root.id,
             localRootDeletionsAcknowledged: progress.localRootDeletionsAcknowledged + (phase === 'models' ? 1 : 0) });
@@ -315,3 +388,4 @@ export async function invalidatePrivateLifeModelForConsent(event: { ownerUid: st
   return { jobsInvalidated: progress.jobsInvalidated, localRootDeletionsAcknowledged: progress.localRootDeletionsAcknowledged,
     completePrivateSourceRevocation: false };
 }
+

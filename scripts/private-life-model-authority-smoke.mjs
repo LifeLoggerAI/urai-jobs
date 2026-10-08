@@ -41,7 +41,8 @@ function database() {
   const records = new Map(), versions = new Map();
   let tail = Promise.resolve(), beforeCommit;
   const set = (path, data) => { records.set(path, clone(data)); versions.set(path,(versions.get(path)||0)+1); };
-  const snapshot = path => ({ id: path.split('/').at(-1), ref: ref(path), exists: records.has(path), data: () => clone(records.get(path)) });
+  const stamp = path => { const value = versions.get(path) || 0; return { seconds: value, nanoseconds: 0, isEqual: other => other?.seconds === value && other?.nanoseconds === 0 }; };
+  const snapshot = path => ({ updateTime: stamp(path), id: path.split('/').at(-1), ref: ref(path), exists: records.has(path), data: () => clone(records.get(path)) });
   const query = (path, filter, bound = Infinity, after = '') => ({ path,
     where: (key,op,value) => { assert.equal(op,'=='); return query(path,[key,value],bound,after); },
     orderBy: () => query(path,filter,bound,after), startAfter: value => query(path,filter,bound,typeof value==='string'?value:value.id),
@@ -61,11 +62,12 @@ function database() {
       let unlock; const next = new Promise(resolve=>unlock=resolve); const prior=tail;tail=next;await prior;
       try { for(let attempt=0;attempt<3;attempt++) {
         const reads=new Map(),writes=[];let wrote=false;
-        const result=await fn({ get: async target => { assert.equal(wrote,false,'Firestore requires all reads before writes');reads.set(target.path,versions.get(target.path)||0);return snapshot(target.path); },
+        const result=await fn({ get: async target => { assert.equal(wrote,false,'Firestore requires all reads before writes');if (!target.id) return target.get();reads.set(target.path,versions.get(target.path)||0);return snapshot(target.path); },
+          delete: (target, precondition)=>{wrote=true;writes.push([target,precondition,'delete']);},
           update: (target,data)=>{wrote=true;writes.push([target,data,'merge']);},create: (target,data)=>{wrote=true;writes.push([target,data,'create']);},set:(target,data,options)=>{wrote=true;writes.push([target,data,options?.merge?'merge':'set']);} });
         if(beforeCommit){const hook=beforeCommit;beforeCommit=undefined;await hook();}
         if([...reads].some(([path,version])=>(versions.get(path)||0)!==version))continue;
-        for(const [target,data,mode]of writes){if(mode==='create')assert.equal(records.has(target.path),false,'create must be unique');set(target.path,mode==='merge'?{...records.get(target.path),...data}:data);}
+        for(const [target,data,mode]of writes){if(mode==='delete'){if(data?.lastUpdateTime)assert.equal(data.lastUpdateTime.isEqual(stamp(target.path)),true);records.delete(target.path);versions.set(target.path,(versions.get(target.path)||0)+1);continue;}if(mode==='create')assert.equal(records.has(target.path),false,'create must be unique');set(target.path,mode==='merge'?{...records.get(target.path),...data}:data);}
         return result;
       }throw new Error('transaction conflict exhausted');}finally{unlock();}
     }
@@ -99,7 +101,11 @@ function fixture({onExtract, resolver, env = {}, indexSource=source}={}) {
   return {...data,exports,fetches,logs,execute,routes};
 }
 if (process.argv.includes('--baseline')) {
-  const indexSource = execFileSync('git', ['show', '16835a63b2152fde6ca9c9fa4e74af7f65ae0824:workers/private-life-model-index-provider/src/index.ts'], { encoding: 'utf8' });
+  const indexSource = process.env.URAI_PRIVATE_RIGHTS_PREDECESSOR_SOURCE
+    ? fs.readFileSync(process.env.URAI_PRIVATE_RIGHTS_PREDECESSOR_SOURCE, 'utf8')
+    : execFileSync('git', ['show', '16835a63b2152fde6ca9c9fa4e74af7f65ae0824:workers/private-life-model-index-provider/src/index.ts'], { encoding: 'utf8' });
+  assert.equal(crypto.createHash('sha1').update(`blob ${Buffer.byteLength(indexSource)}\0`).update(indexSource).digest('hex'),
+    '8b13ee9c18028bcefd85369d5c6597d04a15901d', 'predecessor regression must execute the exact recorded source blob');
   const f = fixture({ indexSource, resolver: () => ({ ...resolverProof, ownerUid: 'foreign_owner', requestedPurpose: 'transcribe', currentConsent: false, transcriptSha256: 'b'.repeat(64) }) });
   const legacy = { ...request }; for (const key of ['ownerUid','jobId','leaseToken','sourceReceiptRef','sourceSha256','sourceFixityRef','sourceByteLength','sourceRevision']) delete legacy[key];
   const first = await f.execute(legacy), second = await f.execute(legacy);
@@ -350,3 +356,4 @@ await check('ASR timing/span bounds, readiness and absent exact execution grant 
   }
 });
 console.log(`[PASS] PRIVATE_LIFE_MODEL_AUTHORITY ${passed} source contract scenarios; synthetic control tests only, no provider/private reconstruction acceptance`);
+

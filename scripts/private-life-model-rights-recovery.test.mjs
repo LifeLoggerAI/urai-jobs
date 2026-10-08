@@ -16,6 +16,7 @@ const consent = { purpose: 'memory.storage', policyVersion: 'fictional-policy', 
 
 function fixture(options = {}) {
   const records = new Map(), stats = { uploads: 0, exports: [], destinations: [], cleanup: [], batches: 0, recursiveDeletes: 0, runtimeCleanup: 0 };
+  let versionClock = 0; const versions = new Map();
   let clock = 1_780_000_000_000, serial = Promise.resolve();
   const DELETE = '__fixture_delete_field__', clone = value => value === undefined ? undefined : structuredClone(value);
   function write(path, value, merge = false, dotted = false) {
@@ -27,11 +28,18 @@ function fixture(options = {}) {
     }
     records.set(path, result);
   }
-  function snapshot(path) { const value = records.get(path); return { id: path.split('/').at(-1), ref: document(path), exists: value !== undefined, data: () => clone(value) }; }
+  function version(path) { const fingerprint = JSON.stringify(records.get(path)); const old = versions.get(path);
+    if (!old || old.fingerprint !== fingerprint) versions.set(path, { fingerprint, clock: ++versionClock });
+    const stamp = versions.get(path).clock; return { seconds: stamp, nanoseconds: 0, isEqual: other => other?.seconds === stamp && other?.nanoseconds === 0 }; }
+  function snapshot(path) { const value = clone(records.get(path)); return { id: path.split('/').at(-1), ref: document(path),
+    exists: value !== undefined, updateTime: version(path), data: () => clone(value) }; }
   function document(path) { return { path, id: path.split('/').at(-1), collection: name => query(`${path}/${name}`),
     get: async () => snapshot(path), set: async (value, settings) => write(path, value, settings?.merge),
     update: async value => { assert.ok(records.has(path)); write(path, value, true, true); }, delete: async () => records.delete(path) }; }
-  function query(path, filters = [], maximum = Infinity, after = '') { return { path, doc: id => document(`${path}/${id}`),
+  function query(path, filters = [], maximum = Infinity, after = '') {
+    const capture = () => ({ docs: [...records.keys()].filter(key => key.startsWith(path + '/') && !key.slice(path.length + 1).includes('/'))
+      .filter(key => key.slice(path.length + 1) > after && filters.every(([field, value]) => records.get(key)?.[field] === value)).sort().slice(0, maximum).map(snapshot) });
+    return { path, capture, doc: id => document(`${path}/${id}`),
     where: (key, operator, value) => { assert.equal(operator, '=='); return query(path, [...filters, [key, value]], maximum, after); },
     orderBy: key => { assert.equal(key, '__name__'); return query(path, filters, maximum, after); }, limit: value => query(path, filters, value, after),
     startAfter: value => query(path, filters, maximum, typeof value === 'string' ? value : value.id),
@@ -39,12 +47,24 @@ function fixture(options = {}) {
       .filter(key => key.slice(path.length + 1) > after && filters.every(([field, value]) => records.get(key)?.[field] === value)).sort().slice(0, maximum).map(snapshot);
       await options.afterQuery?.(path, records); return { docs, size: docs.length }; } }; }
   const db = { collection: name => query(name), doc: document,
-    runTransaction: async callback => { const operation = serial.then(async () => { const writes = [];
-      const tx = { get: async ref => { assert.equal(writes.length, 0); return snapshot(ref.path); },
+    runTransaction: async callback => { const operation = serial.then(async () => { const writes = [], reads = new Map(), queries = new Map(), deletedPaths = [];
+      const tx = { get: async ref => { assert.equal(writes.length, 0); if (!ref.id) { const result = await ref.get(); queries.set(ref, JSON.stringify(result.docs.map(doc => [doc.ref.path, doc.updateTime.seconds, doc.updateTime.nanoseconds]))); return result; }
+          const result = snapshot(ref.path); reads.set(ref.path, result.updateTime); await options.afterTransactionRead?.(ref.path, records); return result; },
+        delete: (ref, precondition) => { deletedPaths.push(ref.path); writes.push(() => { if (precondition?.lastUpdateTime) assert.equal(precondition.lastUpdateTime.isEqual(version(ref.path)), true); records.delete(ref.path); }); },
         set: (ref, value, settings) => writes.push(() => write(ref.path, value, settings?.merge)),
         create: (ref, value) => writes.push(() => { assert.equal(records.has(ref.path), false); write(ref.path, value); }),
         update: (ref, value) => writes.push(() => { assert.ok(records.has(ref.path)); write(ref.path, value, true, true); }) };
-      const value = await callback(tx); for (const write of writes) write(); return value;
+      const value = await callback(tx); await options.beforeTransactionCommit?.(reads, writes, records);
+      for (const [query, original] of queries) if (JSON.stringify(query.capture().docs.map(doc => [doc.ref.path, doc.updateTime.seconds, doc.updateTime.nanoseconds])) !== original) throw new Error('fictional-transaction-query-conflict');
+      for (const [path, stamp] of reads) if (!stamp.isEqual(version(path))) throw new Error('fictional-transaction-read-conflict');
+      assert.ok(writes.length <= 500, 'Firestore transaction exceeds 500 writes');
+      if (writes.length && [...reads.keys()].some(path => /\/(state|revisions|idempotency|transcripts|transcriptionAttempts)\//.test(path))) {
+        stats.batches++; if (options.failFirstBatch && stats.batches === 1) throw new Error('fictional-storage-interruption');
+      }
+      if (deletedPaths.some(path => path.startsWith('uraiPrivate') && path.split('/').length === 2)) {
+        stats.recursiveDeletes++; if (options.failFirstDelete && stats.recursiveDeletes === 1) throw new Error('fictional-delete-interruption');
+      }
+      for (const write of writes) write(); return value;
     }); serial = operation.catch(() => {}); return operation; },
     batch: () => { const writes = []; return { delete: ref => writes.push(() => records.delete(ref.path)),
       set: (ref, value, settings) => writes.push(() => write(ref.path, value, settings?.merge)),
@@ -59,10 +79,11 @@ function fixture(options = {}) {
   class FixtureDate extends Date { static now() { return clock; } }
   const modules = new Map();
   function load(path) { if (modules.has(path)) return modules.get(path); const exports = {}; modules.set(path, exports);
-    const code = ts.transpileModule(fs.readFileSync(new URL(`../functions/src/${path}.ts`, import.meta.url), 'utf8'),
+    const code = ts.transpileModule(fs.readFileSync(path === 'privacy/privateLifeModelDataRights' && process.env.JOBS_PRIVATE_RIGHTS_SOURCE ? process.env.JOBS_PRIVATE_RIGHTS_SOURCE : path === 'privacy/dataRightsExecution' && process.env.JOBS_DELETION_SOURCE ? process.env.JOBS_DELETION_SOURCE : new URL(`../functions/src/${path}.ts`, import.meta.url), 'utf8'),
       { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
     vm.runInNewContext(code, { exports, Buffer, Date: FixtureDate, process: { env }, require(name) {
       if (name === 'firebase-admin/firestore') return firestore;
+      if (name === 'firebase-admin/auth') return { getAuth: () => ({ verifyIdToken: async (token, revoked) => { assert.equal(token, 'fictional-current-operator-token'); assert.equal(revoked, true); return { uid: 'operatorFixture' }; }, getUser: async () => ({ uid: 'operatorFixture', disabled: false }) }) };
       if (name === 'firebase-admin/storage') return { getStorage: () => ({ bucket: () => ({ getMetadata: async () => [{ iamConfiguration: { uniformBucketLevelAccess: { enabled: true }, publicAccessPrevention: 'enforced' } }],
         file: object => ({ delete: async () => { if (options.failCleanup) throw new Error('fictional-cleanup-failure'); stats.cleanup.push(object); } }) }) }) };
       if (name === 'firebase-functions/v1') return { https: { onCall: handler => handler } };
@@ -109,7 +130,7 @@ function fixture(options = {}) {
   records.set('jobQueue/fictional_job', { status: 'SUCCESS' });
   const handler = load('privacy/dataRightsExecution').processDataRightsRequest, helper = load('privacy/privateLifeModelDataRights');
   return { records, stats, db, helper, advance: ms => { clock += ms; },
-    execute: (data = body, context = { auth: { uid: 'operatorFixture' } }) => handler(data, context),
+    execute: (data = body, context = { auth: { uid: 'operatorFixture' }, rawRequest: { get: () => 'Bearer fictional-current-operator-token' } }) => handler(data, context),
     finalize: (patch = {}) => db.runTransaction(tx => helper.canFinalizePrivateSource(db, tx, records.get('jobs/fictional_job'), { result: {
       ownerUid: uid, jobId: 'fictional_job', sourceReceiptRef: sourceRef, requestedPurpose: 'memory-index', sourceEvidenceClass: 'SOURCE_CAPTURED', sourceRevision: 1,
       sourceSha256: 'a'.repeat(64), sourceFixityRef: 'private:fictional/fixity', transcriptRef, provenanceRef,
@@ -302,3 +323,69 @@ test('private consent cleanup revalidates canonical block changes during enumera
   assert.equal(f.records.get(sourcePath).status, 'ACTIVE');
 });
 
+
+
+for (const reason of ['child-owner', 'child-version', 'root-owner', 'request-authority']) test(`deletion rechecks awaited child page: ${reason}`, async () => {
+  const childPath = `${modelPath}/revisions/00000001`; let changed = false, admitted = true;
+  const f = fixture({ afterQuery: (path, records) => { if (path !== `${modelPath}/revisions` || changed) return; changed = true;
+    if (reason === 'child-owner') records.get(childPath).ownerUid = 'different_owner';
+    if (reason === 'child-version') records.get(childPath).extraction = { claims: [{ object: 'Fictional corrected private claim' }] };
+    if (reason === 'root-owner') records.get(modelPath).ownerUid = 'different_owner';
+    if (reason === 'request-authority') admitted = false;
+  } });
+  const checkpoint = async () => { if (!admitted) throw new Error('fictional-request-authority-withdrawn'); };
+  await assert.rejects(f.helper.deleteOwnedPrivateLifeModel(f.db, uid, 'fictional_delete', checkpoint));
+  assert.equal(f.records.has(childPath), true); assert.equal(f.records.has(modelPath), true);
+});
+for (const reason of ['child-owner', 'child-version', 'root-owner', 'block']) test(`consent rechecks awaited transcript page: ${reason}`, async () => {
+  const childPath = `${sourcePath}/transcripts/${hash(transcriptRef)}`; let changed = false;
+  const f = consentFixture({ afterQuery: (path, records) => { if (path !== `${sourcePath}/transcripts` || changed) return; changed = true;
+    if (reason === 'child-owner') records.get(childPath).ownerUid = 'different_owner';
+    if (reason === 'child-version') records.get(childPath).transcriptSha256 = 'd'.repeat(64);
+    if (reason === 'root-owner') records.get(sourcePath).ownerUid = 'different_owner';
+    if (reason === 'block') records.get('jobConsentBlocks/' + hash(uid + String.fromCharCode(10) + 'memory.storage')).active = false;
+  } });
+  await assert.rejects(f.revoke()); assert.equal(f.records.has(childPath), true);
+  assert.notEqual(f.records.get(f.receipt).privateLifeModelInvalidationProgress.phase, 'DONE');
+});
+for (const reason of ['root-owner', 'source-version', 'child-version']) test(`export rechecks exact owned source snapshot: ${reason}`, async () => {
+  let changed = false;
+  const f = fixture({ afterQuery: (path, records) => { if (path !== `${sourcePath}/transcripts` || changed) return; changed = true;
+    if (reason === 'root-owner') records.get(sourcePath).ownerUid = 'different_owner';
+    if (reason === 'source-version') records.get(sourcePath).sourceRevision = 2;
+    if (reason === 'child-version') records.get(`${sourcePath}/transcripts/${hash(transcriptRef)}`).transcriptSha256 = 'd'.repeat(64);
+  } });
+  await assert.rejects(f.helper.exportOwnedPrivateLifeModel(f.db, uid)); assert.equal(f.stats.uploads, 0);
+});
+for (const reason of ['root-owner', 'root-version']) test(`consent model deletion preserves a changed parent after child erasure: ${reason}`, async () => {
+  let changed = false;
+  const f = consentFixture({ afterQuery: (path, records) => { if (path !== `${modelPath}/idempotency` || changed) return; changed = true;
+    if (reason === 'root-owner') records.get(modelPath).ownerUid = 'different_owner';
+    if (reason === 'root-version') records.get(modelPath).corrected = 'Fictional source correction';
+  } });
+  await assert.rejects(f.revoke()); assert.equal(f.records.has(modelPath), true);
+});
+for (const reason of ['foreign', 'missing']) test(`consent job cancellation preserves ${reason} queue identity`, async () => {
+  const f = consentFixture(); if (reason === 'foreign') f.records.set('jobQueue/fictional_job', { ownerUid: 'different_owner', status: 'RUNNING' });
+  else f.records.delete('jobQueue/fictional_job');
+  if (reason === 'foreign') { await assert.rejects(f.revoke()); assert.equal(f.records.get('jobQueue/fictional_job').ownerUid, 'different_owner'); assert.equal(f.records.get('jobQueue/fictional_job').status, 'RUNNING'); }
+  else { await f.revoke(); assert.equal(f.records.has('jobQueue/fictional_job'), false); }
+});
+
+test('registered late child insertion conflicts with atomic empty-root deletion', async () => {
+  let inserted = false; const late = `${modelPath}/revisions/late_foreign_child`;
+  const f = fixture({ beforeTransactionCommit: (reads, writes, records) => {
+    if (inserted || !reads.has(modelPath) || !writes.length || [...records.keys()].some(path => path.startsWith(modelPath + '/'))) return;
+    inserted = true; records.set(late, { ownerUid: 'different_owner', private: 'Fictional late child' });
+  } });
+  await assert.rejects(f.helper.deleteOwnedPrivateLifeModel(f.db, uid, 'fictional_delete'));
+  assert.equal(inserted, true); assert.equal(f.records.has(late), true); assert.equal(f.records.has(modelPath), true);
+});
+test('root correction after an awaited child transaction read conflicts before destruction', async () => {
+  let changed = false; const child = `${modelPath}/state/current`;
+  const f = fixture({ afterTransactionRead: (path, records) => { if (path !== child || changed) return; changed = true;
+    records.get(modelPath).corrected = 'Fictional corrected source';
+  } });
+  await assert.rejects(f.helper.deleteOwnedPrivateLifeModel(f.db, uid, 'fictional_delete'));
+  assert.equal(f.records.has(child), true); assert.equal(f.records.has(modelPath), true);
+});
