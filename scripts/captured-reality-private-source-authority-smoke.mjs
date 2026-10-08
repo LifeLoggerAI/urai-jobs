@@ -103,4 +103,9 @@ function fixture({jobPatch={},grantPatch={},blockedPurpose=null}={}) {
   assert.equal(out.status,403);
 }
 
+const indexSource=fs.readFileSync('workers/private-life-model-index-provider/src/index.ts','utf8');
+assert.match(indexSource,/const sourceConsents = Array\.isArray\(source\?\.consents\)/);
+assert.match(indexSource,/source\?\.consent \? \[source\.consent\] : \[\]/);
+assert.match(indexSource,/sourceConsents\.find\(\(entry:any\) => entry\?\.purpose === consent\.purpose\)/);
+
 console.log('[PASS] captured reality private-source authority requires exact reconstruction job, source membership and dual current consent');
