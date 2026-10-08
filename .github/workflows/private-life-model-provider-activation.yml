@@ -115,12 +115,14 @@ jobs:
           case "$ENABLE_LIFE_MODEL" in true|false) ;; *) exit 1 ;; esac
           if [ "$ENABLE_TRANSCRIPTION" = true ] || [ "$ENABLE_LIFE_MODEL" = true ]; then
             [[ "$SPENDING_AUTHORITY_REF" =~ ^private:[A-Za-z0-9_./:-]{8,512}$ ]] || { echo '[FAIL] private spending authority is required' >&2; exit 1; }
-            test -n "$OPENAI_SECRET_NAME"
+            [[ "$OPENAI_SECRET_NAME" =~ ^[A-Za-z0-9_-]{1,255}$ ]] || { echo '[FAIL] OpenAI secret name is invalid' >&2; exit 1; }
             [[ "$OPENAI_SECRET_VERSION" =~ ^[1-9][0-9]*$ ]]
           else
             test -z "$SPENDING_AUTHORITY_REF"
             test -z "$TRANSCRIPTION_AUTHORITY_REF"
             test -z "$LIFE_MODEL_AUTHORITY_REF"
+            test -z "$OPENAI_SECRET_NAME"
+            test -z "$OPENAI_SECRET_VERSION"
           fi
           if [ "$ENABLE_TRANSCRIPTION" = true ]; then
             [[ "$TRANSCRIPTION_AUTHORITY_REF" =~ ^private:[A-Za-z0-9_./:-]{8,512}$ ]] || exit 1
@@ -128,6 +130,7 @@ jobs:
             [[ "$PRIVATE_SOURCE_ALLOWED_BUCKET" =~ ^[a-z0-9][a-z0-9._-]{2,221}$ ]] || exit 1
           else
             test -z "$TRANSCRIPTION_AUTHORITY_REF"
+            test -z "$TRANSCRIBE_TOKEN_VERSION"
             test -z "$PRIVATE_SOURCE_ALLOWED_BUCKET"
           fi
           if [ "$ENABLE_LIFE_MODEL" = true ]; then
@@ -136,6 +139,7 @@ jobs:
             [[ "$LIFE_MODEL_EXTRACTOR_MODEL" =~ ^[A-Za-z0-9._:-]{8,100}$ ]] || exit 1
           else
             test -z "$LIFE_MODEL_AUTHORITY_REF"
+            test -z "$INDEX_TOKEN_VERSION"
             test -z "$LIFE_MODEL_EXTRACTOR_MODEL"
           fi
 
@@ -179,8 +183,23 @@ jobs:
           test -n "$URL"
           test -n "$REVISION"
           REVISION_JSON="$(gcloud run revisions describe "$REVISION" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format=json)"
-          CURRENT_SHA="$(REVISION_JSON="$REVISION_JSON" node -e "const r=JSON.parse(process.env.REVISION_JSON);const e=(r.spec?.containers?.[0]?.env||[]).find(x=>x.name==='URAI_SOURCE_SHA');process.stdout.write(String(e?.value||''));")"
-          test "$CURRENT_SHA" = "$TARGET_SHA"
+          BASELINE="$(REVISION_JSON="$REVISION_JSON" TARGET_SHA="$TARGET_SHA" node <<'NODE'
+          const r=JSON.parse(process.env.REVISION_JSON);
+          const env=Object.fromEntries((r.spec?.containers?.[0]?.env||[]).filter(v=>Object.prototype.hasOwnProperty.call(v,'value')).map(v=>[v.name,String(v.value)]));
+          const labels=r.metadata?.labels||{};
+          const sha=String(env.URAI_SOURCE_SHA||'');
+          const digest=String(r.status?.imageDigest||'').replace(/^@/,'');
+          const serviceAccount=String(r.spec?.serviceAccountName||'');
+          if(sha!==process.env.TARGET_SHA) throw new Error('provider source SHA mismatch before activation');
+          if(labels['urai-source-sha']!==process.env.TARGET_SHA) throw new Error('provider source label mismatch before activation');
+          if(labels['urai-environment']!=='staging') throw new Error('provider environment label is not staging');
+          if(!digest) throw new Error('provider image digest missing');
+          if(!serviceAccount) throw new Error('provider runtime service account missing');
+          process.stdout.write(JSON.stringify({digest,serviceAccount}));
+          NODE
+          )"
+          IMAGE_DIGEST="$(BASELINE="$BASELINE" node -e "process.stdout.write(JSON.parse(process.env.BASELINE).digest)")"
+          SERVICE_ACCOUNT="$(BASELINE="$BASELINE" node -e "process.stdout.write(JSON.parse(process.env.BASELINE).serviceAccount)")"
           if [ "$ENABLE_TRANSCRIPTION" = true ]; then
             gcloud secrets versions describe "$TRANSCRIBE_TOKEN_VERSION" --secret "$TRANSCRIBE_SECRET" --project "$GCLOUD_PROJECT" --format='value(state)' | grep -qx ENABLED
           fi
@@ -193,6 +212,8 @@ jobs:
           {
             echo "url=$URL"
             echo "revision=$REVISION"
+            echo "image_digest=$IMAGE_DIGEST"
+            echo "service_account=$SERVICE_ACCOUNT"
           } >> "$GITHUB_OUTPUT"
 
       - name: Apply exact activation state
@@ -233,14 +254,19 @@ jobs:
           URL="$(gcloud run services describe "$PROVIDER_SERVICE" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.url)')"
           REVISION="$(gcloud run services describe "$PROVIDER_SERVICE" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.latestReadyRevisionName)')"
           REVISION_JSON="$(gcloud run revisions describe "$REVISION" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format=json)"
-          REVISION_JSON="$REVISION_JSON" TARGET_SHA="$TARGET_SHA" ENABLE_TRANSCRIPTION="$ENABLE_TRANSCRIPTION" ENABLE_LIFE_MODEL="$ENABLE_LIFE_MODEL" SPENDING_AUTHORITY_REF="$SPENDING_AUTHORITY_REF" TRANSCRIPTION_AUTHORITY_REF="$TRANSCRIPTION_AUTHORITY_REF" LIFE_MODEL_AUTHORITY_REF="$LIFE_MODEL_AUTHORITY_REF" PRIVATE_SOURCE_ALLOWED_BUCKET="$PRIVATE_SOURCE_ALLOWED_BUCKET" LIFE_MODEL_EXTRACTOR_MODEL="$LIFE_MODEL_EXTRACTOR_MODEL" DIARIZATION_MODEL="$DIARIZATION_MODEL" URL="$URL" node <<'NODE'
+          REVISION_JSON="$REVISION_JSON" TARGET_SHA="$TARGET_SHA" ENABLE_TRANSCRIPTION="$ENABLE_TRANSCRIPTION" ENABLE_LIFE_MODEL="$ENABLE_LIFE_MODEL" SPENDING_AUTHORITY_REF="$SPENDING_AUTHORITY_REF" TRANSCRIPTION_AUTHORITY_REF="$TRANSCRIPTION_AUTHORITY_REF" LIFE_MODEL_AUTHORITY_REF="$LIFE_MODEL_AUTHORITY_REF" PRIVATE_SOURCE_ALLOWED_BUCKET="$PRIVATE_SOURCE_ALLOWED_BUCKET" LIFE_MODEL_EXTRACTOR_MODEL="$LIFE_MODEL_EXTRACTOR_MODEL" DIARIZATION_MODEL="$DIARIZATION_MODEL" URL="$URL" EXPECTED_IMAGE_DIGEST="${{ steps.provider.outputs.image_digest }}" EXPECTED_SERVICE_ACCOUNT="${{ steps.provider.outputs.service_account }}" node <<'NODE'
           const r=JSON.parse(process.env.REVISION_JSON);
           const entries=r.spec?.containers?.[0]?.env||[];
           const env=Object.fromEntries(entries.filter(v=>Object.prototype.hasOwnProperty.call(v,'value')).map(v=>[v.name,String(v.value)]));
           const secret=Object.fromEntries(entries.map(v=>[v.name,String(v.valueSource?.secretKeyRef?.key||v.valueFrom?.secretKeyRef?.key||'')]));
           const labels=r.metadata?.labels||{};
           const fail=[];
+          const digest=String(r.status?.imageDigest||'').replace(/^@/,'');
           if(env.URAI_SOURCE_SHA!==process.env.TARGET_SHA) fail.push('source SHA');
+          if(labels['urai-source-sha']!==process.env.TARGET_SHA) fail.push('source label');
+          if(labels['urai-environment']!=='staging') fail.push('environment label');
+          if(digest!==process.env.EXPECTED_IMAGE_DIGEST) fail.push('image digest drift');
+          if(String(r.spec?.serviceAccountName||'')!==process.env.EXPECTED_SERVICE_ACCOUNT) fail.push('runtime service account drift');
           if(env.URAI_PRIVATE_SOURCE_TRANSCRIPTION_ENABLED!==process.env.ENABLE_TRANSCRIPTION) fail.push('transcription state');
           if(env.URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED!==process.env.ENABLE_LIFE_MODEL) fail.push('Life Model state');
           if((env.URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF||'')!==process.env.SPENDING_AUTHORITY_REF) fail.push('spending authority');
