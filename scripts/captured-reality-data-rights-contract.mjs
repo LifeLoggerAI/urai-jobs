@@ -50,6 +50,9 @@ assert.ok(rights.indexOf('await deleteCapturedRealityEngineJob(document.id)') < 
 // remain discoverable and may never masquerade as a completed replay.
 const requestRecords = new Map(), requestId = 'synthetic_rights_01', ownerUid = 'synthetic_owner';
 requestRecords.set(`dataRightsRequests/${requestId}`, { ownerUid, requestType: 'DELETE', status: 'APPROVED' });
+const actorUid = 'synthetic_operator';
+requestRecords.set(`users/${actorUid}`, { uid: actorUid, role: 'operator' });
+const context = { auth: { uid: actorUid }, rawRequest: { get: name => name.toLowerCase() === 'authorization' ? 'Bearer synthetic-current-token' : undefined } };
 let engineCalls = 0, failEngineOnce = true;
 const jobRecord = { ownerUid, status: 'RUNNING', type: 'memory.private-source.reconstruct-place', result: { runtime: 'opaque' }, output: { runtime: 'opaque' } };
 const jobRef = { id: 'synthetic_job_01', path: 'jobs/synthetic_job_01', get: async () => ({ exists: true, data: () => jobRecord }),
@@ -81,6 +84,7 @@ const rightsExports = {};
 vm.runInNewContext(ts.transpileModule(rights, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
   exports: rightsExports, process: { env: { URAI_JOBS_DATA_RIGHTS_EXECUTION_MODE: 'protected-staging', GCLOUD_PROJECT: 'demo-private-staging', URAI_JOBS_DATA_RIGHTS_ALLOWED_PROJECT: 'demo-private-staging' } }, Buffer,
   require: (name) => name === 'firebase-admin/firestore' ? { getFirestore: () => db, FieldPath: { documentId: () => '__name__' }, FieldValue: { delete: () => 'deleted', serverTimestamp: () => 'time' } }
+    : name === 'firebase-admin/auth' ? { getAuth: () => ({ verifyIdToken: async (token, checkRevoked) => { assert.equal(token, 'synthetic-current-token'); assert.equal(checkRevoked, true); return { uid: actorUid }; }, getUser: async uid => { assert.equal(uid, actorUid); return { uid, disabled: false }; } }) }
     : name === '../core/auth.js' ? { withAuthenticatedRole: (_roles, handler) => handler }
     : name === '../core/errors.js' ? { httpsError: (code, message) => Object.assign(new Error(message), { code }) }
     : name === '../core/gcs.js' ? { uploadToGcs: async () => 'opaque-private-export' }
@@ -90,22 +94,28 @@ vm.runInNewContext(ts.transpileModule(rights, { compilerOptions: { module: ts.Mo
     : require(name),
 });
 const request = { requestId, retentionDecisionReceiptId: 'synthetic_retention_01', idempotencyKey: 'synthetic_idempotency_01' };
-await assert.rejects(rightsExports.processDataRightsRequest(request, {}), error => error.code === 'internal');
+await assert.rejects(rightsExports.processDataRightsRequest(request, {}), error => error.code === 'unauthenticated');
+assert.equal(engineCalls, 0, 'missing current operator authentication must not invoke engine cleanup');
+requestRecords.set(`users/${actorUid}`, { uid: actorUid, role: 'user' });
+await assert.rejects(rightsExports.processDataRightsRequest(request, context), error => error.code === 'permission-denied');
+assert.equal(engineCalls, 0, 'missing current operator role must not invoke engine cleanup');
+requestRecords.set(`users/${actorUid}`, { uid: actorUid, role: 'operator' });
+await assert.rejects(rightsExports.processDataRightsRequest(request, context), error => error.code === 'internal');
 assert.equal(engineCalls, 1, 'the actual engine cleanup failed before safe error redaction');
 assert.equal(jobRecord.ownerUid, ownerUid, 'failed engine deletion must retain discoverable owner scope');
 assert.equal(jobRecord.status, 'CANCELLED');
 assert.equal(requestRecords.get(`dataRightsRequests/${requestId}`).executionState, 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE');
-const retried = await rightsExports.processDataRightsRequest(request, {});
+const retried = await rightsExports.processDataRightsRequest(request, context);
 assert.equal(retried.replay, false); assert.equal(engineCalls, 2); assert.equal(jobRecord.result, 'deleted');
-assert.ok(jobRecord.ownerUid.startsWith('deleted:')); assert.equal((await rightsExports.processDataRightsRequest(request, {})).replay, true); assert.equal(engineCalls, 2);
+assert.ok(jobRecord.ownerUid.startsWith('deleted:')); assert.equal((await rightsExports.processDataRightsRequest(request, context)).replay, true); assert.equal(engineCalls, 2);
 const executionPath = [...requestRecords.keys()].find((key) => key.includes('/audit/execution-'));
 const boundExecution = { ...requestRecords.get(executionPath) };
 requestRecords.set(executionPath, { ...boundExecution, event: 'DATA_RIGHTS_EXECUTION_FAILED', attemptNumber: 3, failureAttempts: 3, continuationDeliveries: 0 });
 requestRecords.set(`dataRightsRequests/${requestId}`, { ownerUid, requestType: 'DELETE', status: 'IN_REVIEW', executionState: 'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE' });
-await assert.rejects(rightsExports.processDataRightsRequest(request, {}), (error) => error.code === 'resource-exhausted');
+await assert.rejects(rightsExports.processDataRightsRequest(request, context), (error) => error.code === 'resource-exhausted');
 requestRecords.set(executionPath, { ...boundExecution, event: 'DATA_RIGHTS_EXECUTION_STARTED', attemptNumber: 1, leaseExpiresAtMs: Date.now() + 180000 });
 requestRecords.set(`dataRightsRequests/${requestId}`, { ownerUid, requestType: 'DELETE', status: 'IN_REVIEW', executionState: 'PROTECTED_STAGING_EXECUTION_IN_PROGRESS' });
-await assert.rejects(rightsExports.processDataRightsRequest(request, {}), error => error.code === 'unavailable');
+await assert.rejects(rightsExports.processDataRightsRequest(request, context), error => error.code === 'unavailable');
 console.log('[PASS] captured reality data rights: cancel/scrub/delete acknowledgement, failed cleanup pending, owner isolation and replay; protected runtime not certified');
 
 
