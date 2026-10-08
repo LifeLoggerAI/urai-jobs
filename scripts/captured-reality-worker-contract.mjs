@@ -6,6 +6,11 @@ for(const marker of [
   "memory.private-source.reconstruct-place",
   "PRIVATE_SOURCE_AUTHORITY_URL",
   "requestedPurpose:'reconstruct-place'",
+  "schemaVersion:'urai-private-source-receipt-v2'",
+  "jobId:job.jobId",
+  "leaseToken:job.leaseToken",
+  "idempotencyKey:job.jobId",
+
   "CAPTURED_REALITY_ENGINE_URL",
   "CAPTURED_REALITY_ENGINE_TOKEN",
   "sourceHandles",
