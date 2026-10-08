@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { packageGaussian, conservativeCollisionGlb } = require('../workers/captured-reality-worker/gaussian-package.js');
 const { createResolver, firestoreReconstructionAuthority, sha } = require('../workers/captured-reality-worker/private-media-resolver.js');
-const { createEngine, validateRequest, commandPlan, runtimeReadiness, command } = require('../workers/captured-reality-worker/reconstruction-engine.js');
+const { createEngine, validateRequest, commandPlan, runtimeReadiness, computeBudget, command } = require('../workers/captured-reality-worker/reconstruction-engine.js');
 
 function fixturePly({ value = 1, count = 2 } = {}) {
   const fields = ['x','y','z','f_dc_0','f_dc_1','f_dc_2','opacity','scale_0','scale_1','scale_2','rot_0','rot_1','rot_2','rot_3'];
@@ -39,20 +39,21 @@ assert.equal(unavailable.ok, false); assert.equal(unavailable.checks.cuda, false
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'urai-engine-contract-'));
 const servers = [];
 async function listen(server) { server.listen(0, '127.0.0.1'); await once(server, 'listening'); servers.push(server); return `http://127.0.0.1:${server.address().port}`; }
-let revoked = false, runnerFails = false, runnerWaits = false, callbackDrops = false, callbacks = [], commands = [], authorityBarrier, runnerEntered;
+let revoked = false, runnerFails = false, runnerWaits = false, runnerMissingHoldout = false, callbackDrops = false, callbacks = [], commands = [], authorityBarrier, runnerEntered, authorityChecks = 0;
 const callbackTokenHash = sha(Buffer.from('b'.repeat(64)));
 const jobId = 'synthetic_job_01', sourceHandle = 'synthetic_handle_01', sourceRoot = path.join(temp, 'sources');
 await fs.mkdir(sourceRoot, { mode: 0o700 });
 const inputs = [];
-for (let i = 0; i < 3; i++) {
+for (let i = 0; i < 5; i++) {
   const bytes = Buffer.from(`synthetic-frame-${i}`), name = `${i}.png`; await fs.writeFile(path.join(sourceRoot, name), bytes, { mode: 0o600 });
-  inputs.push({ accepted: true, inputRef: `synthetic_input_${i}`, frameProvenanceRef: `synthetic_frame_receipt_${i}`, path: name, sha256: sha(bytes), byteSize: bytes.length, mimeType: 'image/png' });
+  inputs.push({ accepted: true, inputRef: `synthetic_input_${i}`, frameProvenanceRef: `synthetic_frame_receipt_${i}`, path: name, sha256: sha(bytes), byteSize: bytes.length,
+    mimeType: 'image/png', dynamicsPresent: false, maskRequired: false });
 }
 const manifestPath = path.join(temp, 'private-manifest.json');
 const manifest = { entries: [{ jobId, sourceHandle, ownerUid: 'synthetic_owner_01', sourceReceiptRef: 'synthetic_receipt_01', expiresAt: new Date(Date.now() + 600000).toISOString(), acceptedInputs: inputs }] };
 await fs.writeFile(manifestPath, JSON.stringify(manifest), { mode: 0o600 });
 const resolver = createResolver({ manifestPath, sourceRoot, token: 'synthetic-resolver-token', local: true,
-  validateAuthority: async (body) => { if (authorityBarrier) { authorityBarrier.entered(); await authorityBarrier.wait; }
+  validateAuthority: async (body) => { authorityChecks++; if (authorityBarrier && authorityChecks >= (authorityBarrier.after || 0)) { authorityBarrier.entered(); await authorityBarrier.wait; }
     return { authorized: !revoked, ownerBound: true, jobId: body.jobId, sourceHandles: body.sourceHandles, callbackTokenHash: body.callbackTokenHash, purposes: ['memory.storage', 'location.context'] }; } });
 const resolverUrl = await listen(resolver.server);
 const worker = http.createServer(async (req, res) => {
@@ -78,11 +79,18 @@ await assert.rejects(resolver.redeem({ jobId, sourceHandle, callbackTokenHash, i
 await fs.writeFile(path.join(sourceRoot, '0.png'), Buffer.from('synthetic-frame-0'));
 const denial = await fetch(`${resolverUrl}/resolve`, { method: 'POST', body: JSON.stringify({ jobId, sourceHandle, callbackTokenHash }) }); assert.equal(denial.status, 401);
 
-const dbJob = { status: 'RUNNING', ownerUid: 'synthetic_owner_01', payload: { sourceReceiptRefs: ['synthetic_receipt_01'] }, consents: [{ purpose: 'memory.storage' }, { purpose: 'location.context' }],
+const sourceConsents = ['memory.storage', 'location.context'].map(purpose => ({ purpose, policyVersion: 'synthetic-v1', decisionReceiptId: 'synthetic-'+purpose }));
+Object.assign(manifest.entries[0], { sourceRevision: 1, sourceSha256: 'a'.repeat(64), sourceByteLength: 1234, sourceFixityRef: 'private:synthetic/fixity' });
+await fs.writeFile(manifestPath, JSON.stringify(manifest));
+const dbGrant = { schemaVersion: 'urai-private-source-receipt-v2', ownerUid: 'synthetic_owner_01', sourceReceiptRef: 'synthetic_receipt_01', sourceHandle,
+  status: 'ACTIVE', synthetic: false, purposes: ['reconstruct-place'], consents: sourceConsents,
+  sourceRevision: 1, sourceSha256: 'a'.repeat(64), sourceByteLength: 1234, sourceFixityRef: 'private:synthetic/fixity' };
+const dbJob = { type: 'memory.private-source.reconstruct-place', status: 'RUNNING', ownerUid: 'synthetic_owner_01', payload: { sourceReceiptRefs: ['synthetic_receipt_01'] }, consents: sourceConsents,
   execution: { callbackTokenHash, leaseToken: 'lease_01', callbackLeaseToken: 'lease_01', asyncCallbackPending: true, callbackDeadlineAt: { toMillis: () => Date.now() + 60000 } } };
 const db = { collection: (name) => ({ doc: (id) => ({ name, id }) }), runTransaction: (fn) => fn({ get: async (ref) => ref.name === 'jobs'
-  ? { exists: true, data: () => dbJob } : { exists: revoked, data: () => ({ active: true }) } }) };
-const policy = firestoreReconstructionAuthority(db, manifestPath);
+  ? { exists: true, data: () => dbJob } : ref.name === 'uraiPrivateSourceReceipts' ? { exists: true, data: () => dbGrant }
+  : { exists: ref.name === 'jobConsentBlocks' && revoked, data: () => ({ active: true }) } }) };
+const policy = firestoreReconstructionAuthority(db, manifestPath, { getOwner: async uid => ({ uid, disabled: false, metadata: { creationTime: 'synthetic-created' } }) });
 assert.equal((await policy({ jobId, sourceHandles: [sourceHandle], callbackTokenHash })).authorized, true);
 await assert.rejects(policy({ jobId, sourceHandles: [sourceHandle], callbackTokenHash: 'f'.repeat(64) }), /ATTEMPT/);
 dbJob.execution.leaseToken = 'successor_lease'; await assert.rejects(policy({ jobId, sourceHandles: [sourceHandle], callbackTokenHash }), /LEASE/); dbJob.execution.leaseToken = 'lease_01';
@@ -93,28 +101,80 @@ const run = async (binary, args, { cwd, signal }) => {
   if (runnerWaits) { runnerEntered?.resolve(); await new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true })); }
   if (binary === 'ns-process-data') {
     await fs.mkdir(path.join(cwd, '05_colmap_processed'), { recursive: true });
-    await fs.writeFile(path.join(cwd, '05_colmap_processed', 'transforms.json'), JSON.stringify({ frames: [{}, {}, {}] }));
+    const pose = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
+    await fs.writeFile(path.join(cwd, '05_colmap_processed', 'transforms.json'), JSON.stringify({ w: 4, h: 4, frames: (runnerMissingHoldout ? inputs.slice(0, 2) : inputs).map((_input, i) => ({
+      file_path: `images/frame_${String(i + 1).padStart(5, '0')}.png`, transform_matrix: pose })) }));
   }
-  if (binary === 'ns-train') { await fs.mkdir(path.join(cwd, '06_training', 'fixed'), { recursive: true }); await fs.writeFile(path.join(cwd, '06_training', 'fixed', 'config.yml'), 'synthetic: true'); }
+  if (binary === 'ns-eval') await fs.writeFile(path.join(cwd, 'heldout-metrics.json'), JSON.stringify({ method_name: 'splatfacto', results: { psnr: 23, ssim: 0.8, lpips: 0.3 } }));
+  if (binary === 'ns-train') {
+    await fs.mkdir(path.join(cwd, '06_training', 'fixed', 'nerfstudio_models'), { recursive: true });
+    await fs.writeFile(path.join(cwd, '06_training', 'fixed', 'config.yml'), 'synthetic: true');
+    await fs.writeFile(path.join(cwd, '06_training', 'fixed', 'nerfstudio_models', 'step-000000009.ckpt'), 'synthetic checkpoint, no model training');
+    await fs.writeFile(path.join(cwd, 'private-command.log'), 'synthetic command adapter log');
+  }
   if (binary === 'ns-export') { await fs.mkdir(path.join(cwd, '07_archival'), { recursive: true }); await fs.writeFile(path.join(cwd, '07_archival', 'splat.ply'), ply); }
 };
 const config = { token: 'synthetic-engine-token', sourceSha: 'c'.repeat(40), runtimeRevision: 'synthetic-revision', spatialAuthorityHead: 'a'.repeat(40), componentEnvelopeSha256: 'd'.repeat(64),
-  resolverUrl, resolverToken: 'synthetic-resolver-token', callbackOrigin, storageRoot: path.join(temp, 'engine'), local: true, computeAuthorityRef: 'synthetic-compute-authority', enabled: true };
+  resolverUrl, resolverToken: 'synthetic-resolver-token', callbackOrigin, storageRoot: path.join(temp, 'engine'), local: true, computeAuthorityRef: 'synthetic-compute-authority', enabled: true,
+  computeBudgetReceipt: { schemaVersion: 'urai-prepaid-reconstruction-admission-v1', provider: 'prepaid-private-runner', operation: 'captured-reality.gaussian-reconstruction',
+    authorityRef: 'synthetic-compute-authority', budgetSourceRef: 'synthetic-budget-reference', prepaidVerified: true, newCardChargeAuthorized: false,
+    maxAutomaticRetries: 0, estimatedCostUsd: 1, prepaidAvailableUsd: 2, maxRunMs: 2700000, verifiedAt: new Date().toISOString() } };
+assert.equal(computeBudget(config).maxAutomaticRetries, 0);
+assert.throws(() => computeBudget({ ...config, computeBudgetReceipt: undefined }), /BUDGET_NOT_CURRENT/);
+assert.throws(() => computeBudget({ ...config, computeBudgetReceipt: { ...config.computeBudgetReceipt, prepaidAvailableUsd: 0 } }), /BUDGET_NOT_CURRENT/);
+assert.throws(() => computeBudget({ ...config, computeBudgetReceipt: { ...config.computeBudgetReceipt, newCardChargeAuthorized: true } }), /BUDGET_NOT_CURRENT/);
+assert.throws(() => computeBudget({ ...config, computeBudgetReceipt: { ...config.computeBudgetReceipt, verifiedAt: new Date(Date.now() - 16 * 60000).toISOString() } }), /BUDGET_NOT_CURRENT/);
 const engine = createEngine(config, { run, checkRuntime: async () => ({ ok: true, checks: { syntheticBoundaryOnly: true } }) });
 await engine.initialize(); const engineUrl = await listen(engine.server);
 try {
   const unauthorized = await fetch(`${engineUrl}/reconstruct`, { method: 'POST', body: JSON.stringify(request) }); assert.equal(unauthorized.status, 401); assert.equal(commands.length, 0);
   const first = await engine.submit(request); assert.equal(first.status, 202); const result = await first.completion; assert.equal(result.success, true);
-  assert.deepEqual(commands, ['ns-process-data', 'ns-train', 'ns-export']);
+  assert.deepEqual(commands, ['ns-process-data', 'ns-train', 'ns-eval', 'ns-export']);
   assert.equal(callbacks[0].status, 'success'); assert.equal(callbacks[0].result.runtime.sha256, sha(packaged.runtime));
   for (const kind of ['archival', 'runtime', 'collision']) { assert.match(callbacks[0].result[kind].ref, /^cr-artifact:/); assert.ok(callbacks[0].result[kind].byteSize > 0); }
+  const firstState = JSON.parse(await fs.readFile(path.join(config.storageRoot, 'state', `${sha(Buffer.from(jobId))}.json`), 'utf8'));
+  assert.equal(firstState.callbackAttempts, 1);
+  assert.deepEqual(firstState.pipeline.events.map((event) => event.stage), ['RECEIVED', 'AUTHORIZED', 'FIXITY_VERIFIED', 'POSE_SOLVED', 'TRAINING', 'RECONSTRUCTED', 'RUNTIME_PACKAGED', 'QA']);
+  assert.equal(firstState.pipeline.privateAcceptance, false);
+  assert.equal(firstState.pipeline.events.at(-1).literalReviewCompleted, false);
+  const artifactRoot = path.join(config.storageRoot, 'artifacts', sha(Buffer.from(jobId)));
+  const trainingReceipt = JSON.parse(await fs.readFile(path.join(artifactRoot, result.output.trainingReceiptRef.split(':').at(-1)), 'utf8'));
+  const evidence = JSON.parse(await fs.readFile(path.join(artifactRoot, trainingReceipt.archivalEvidence.sha256), 'utf8'));
+  assert.equal(trainingReceipt.checkpointAvailable, true); assert.equal(trainingReceipt.resumeAutomaticallyAuthorized, false);
+  assert.equal(trainingReceipt.computeAdmission.provider, 'prepaid-private-runner'); assert.equal(trainingReceipt.actualCostUsd, null);
+  assert.equal(trainingReceipt.actualCostReceiptAvailable, false);
+  assert.deepEqual(evidence.artifacts.map((artifact) => artifact.role), ['configuration', 'cameras', 'checkpoint', 'processing-log']);
+  assert.ok(!JSON.stringify(evidence).includes(sourceRoot));
+  for (const artifact of evidence.artifacts) {
+    const bytes = await fs.readFile(path.join(artifactRoot, artifact.sha256));
+    assert.equal(bytes.length, artifact.byteSize); assert.equal(sha(bytes), artifact.sha256);
+  }
   assert.equal((await fs.readdir(path.join(config.storageRoot, 'work'))).length, 0, 'ephemeral source/log/config workspaces must be deleted');
-  const replay = await engine.submit(request); assert.equal(replay.body.idempotent, true); assert.equal(commands.length, 3, 'idempotent replay cannot train twice');
+  const replay = await engine.submit(request); assert.equal(replay.body.idempotent, true); assert.equal(commands.length, 4, 'idempotent replay cannot train twice');
   assert.equal((await engine.submit({ ...request, studioProjectRef: 'other_studio_01' })).status, 409);
   await assert.rejects(engine.submit({ ...request, spatialAuthorityHead: 'f'.repeat(40) }), /SPATIAL_AUTHORITY/);
   revoked = true;
   const artifactDenied = await fetch(`${engineUrl}/artifact`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId, ref: result.output.runtime.ref }) });
   assert.equal(artifactDenied.status, 403); revoked = false;
+  // Pause the second64KiB private delivery authority check. Deletion must write
+  // its tombstone without waiting for the streaming request's lifecycle lock.
+  const deliveryBytes = Buffer.alloc(1024 * 1024, 9), deliveryHash = sha(deliveryBytes);
+  await fs.writeFile(path.join(artifactRoot, deliveryHash), deliveryBytes, { mode: 0o600 });
+  let releaseDelivery, observedDelivery;
+  const deliveryWait = new Promise((resolve) => { releaseDelivery = resolve; });
+  const deliveryEntered = new Promise((resolve) => { observedDelivery = resolve; });
+  authorityBarrier = { after: authorityChecks + 3, entered: observedDelivery, wait: deliveryWait };
+  const streamed = await fetch(`${engineUrl}/artifact`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` },
+    body: JSON.stringify({ jobId, ref: `cr-artifact:${sha(Buffer.from(jobId))}:${deliveryHash}` }) });
+  const reader = streamed.body.getReader(); const firstChunk = await reader.read(); assert.ok(firstChunk.value.length <= 64 * 1024);
+  await deliveryEntered;
+  const deletionDuringStream = await fetch(`${engineUrl}/delete`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId }) });
+  assert.ok([200, 409].includes(deletionDuringStream.status));
+  assert.equal(JSON.parse(await fs.readFile(path.join(config.storageRoot, 'state', `${sha(Buffer.from(jobId))}.json`), 'utf8')).status, 'DELETED');
+  releaseDelivery(); authorityBarrier = undefined;
+  let deliveredBytes = firstChunk.value.length;
+  try { while (true) { const chunk = await reader.read(); if (chunk.done) break; deliveredBytes += chunk.value.length; } } catch {}
+  assert.ok(deliveredBytes < deliveryBytes.length, 'deletion prevents all remaining private artifact delivery');
   const deleted = await fetch(`${engineUrl}/delete`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId }) }); assert.equal(deleted.status, 200);
   assert.equal((await engine.submit(request)).body.accepted, false, 'deleted attempts cannot restart compute');
   assert.equal((await fs.readFile(path.join(config.storageRoot, 'state', `${sha(Buffer.from(jobId))}.json`), 'utf8')).includes('callbackToken'), false, 'deletion scrubs callback/source authority');
@@ -123,22 +183,77 @@ try {
   const second = await engine.submit({ ...request, jobId: secondId }); assert.equal((await second.completion).success, false);
   assert.equal((await fs.readdir(path.join(config.storageRoot, 'work'))).length, 0);
   assert.equal(callbacks.at(-1).status, 'failed'); runnerFails = false;
+  const missingHoldoutId = 'synthetic_missing_holdout_01'; manifest.entries[0].jobId = missingHoldoutId; await fs.writeFile(manifestPath, JSON.stringify(manifest));
+  runnerMissingHoldout = true; const beforeMissingHoldout = commands.length;
+  const missingHoldout = await engine.submit({ ...request, jobId: missingHoldoutId }); assert.equal((await missingHoldout.completion).success, false);
+  assert.deepEqual(commands.slice(beforeMissingHoldout), ['ns-process-data'], 'invalid camera/holdout coverage must stop before expensive training'); runnerMissingHoldout = false;
+  const maskBytes = Buffer.alloc(33); Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(maskBytes);
+  maskBytes.writeUInt32BE(13, 8); maskBytes.write('IHDR', 12); maskBytes.writeUInt32BE(4, 16); maskBytes.writeUInt32BE(4, 20);
+  const maskedInputs = inputs.map((input, i) => ({ ...input, dynamicsPresent: true, maskRequired: true,
+    mask: { inputRef: `synthetic_mask_${i}`, frameSha256: input.sha256, frameProvenanceRef: input.frameProvenanceRef,
+      maskProvenanceRef: `synthetic_mask_receipt_${i}`, sha256: sha(maskBytes), byteSize: maskBytes.length, mimeType: 'image/png', accepted: true, path: `mask-${i}.png` } }));
+  for (const input of maskedInputs) await fs.writeFile(path.join(sourceRoot, input.mask.path), maskBytes, { mode: 0o600 });
+  const maskedId = 'synthetic_masked_engine_01'; manifest.entries[0].jobId = maskedId; manifest.entries[0].acceptedInputs = maskedInputs;
+  await fs.writeFile(manifestPath, JSON.stringify(manifest));
+  const maskedJob = await engine.submit({ ...request, jobId: maskedId }), maskedResult = await maskedJob.completion;
+  assert.equal(maskedResult.success, true);
+  const maskedArtifactRoot = path.join(config.storageRoot, 'artifacts', sha(Buffer.from(maskedId)));
+  const maskedTraining = JSON.parse(await fs.readFile(path.join(maskedArtifactRoot, maskedResult.output.trainingReceiptRef.split(':').at(-1)), 'utf8'));
+  assert.equal(maskedTraining.maskReceipt.maskedRegisteredViews, 5); assert.equal(maskedTraining.maskReceipt.candidateAcceptance, false);
+  const maskedArchive = JSON.parse(await fs.readFile(path.join(maskedArtifactRoot, maskedTraining.archivalEvidence.sha256), 'utf8'));
+  const maskedCameras = JSON.parse(await fs.readFile(path.join(maskedArtifactRoot, maskedArchive.artifacts.find((artifact) => artifact.role === 'cameras').sha256), 'utf8'));
+  assert.ok(maskedCameras.frames.every((frame) => /^masks\/frame_\d{5}\.png$/.test(frame.mask_path)));
+  assert.ok(commandPlan('/synthetic-private')[1][1].includes('--downscale-factor'));
+  const mismatchId = 'synthetic_mask_dimension_mismatch_01'; manifest.entries[0].jobId = mismatchId;
+  const mismatchBytes = Buffer.from(maskBytes); mismatchBytes.writeUInt32BE(5, 16);
+  await fs.writeFile(path.join(sourceRoot, maskedInputs[0].mask.path), mismatchBytes); maskedInputs[0].mask.sha256 = sha(mismatchBytes);
+  await fs.writeFile(manifestPath, JSON.stringify(manifest));
+  const beforeMaskMismatch = commands.length, mismatched = await engine.submit({ ...request, jobId: mismatchId });
+  assert.equal((await mismatched.completion).success, false);
+  assert.deepEqual(commands.slice(beforeMaskMismatch), ['ns-process-data'], 'mask/camera dimensions must match before paid training');
+  manifest.entries[0].acceptedInputs = inputs;
   const thirdId = 'synthetic_job_03'; manifest.entries[0].jobId = thirdId; await fs.writeFile(manifestPath, JSON.stringify(manifest)); callbackDrops = true;
   const third = await engine.submit({ ...request, jobId: thirdId }); await third.completion;
   const pending = JSON.parse(await fs.readFile(path.join(config.storageRoot, 'state', `${sha(Buffer.from(thirdId))}.json`), 'utf8'));
   assert.equal(pending.status, 'CALLBACK_PENDING'); assert.ok(pending.output.runtime.ref, 'ambiguous callbacks preserve private bytes instead of retraining'); callbackDrops = false;
   const recovery = await fetch(`${engineUrl}/retry-callback`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId: thirdId }) }); assert.equal(recovery.status, 200);
+  assert.equal(JSON.parse(await fs.readFile(path.join(config.storageRoot, 'state', `${sha(Buffer.from(thirdId))}.json`), 'utf8')).callbackAttempts, 2);
+
+  const retryId = 'synthetic_retry_limit_01'; manifest.entries[0].jobId = retryId; await fs.writeFile(manifestPath, JSON.stringify(manifest)); callbackDrops = true;
+  const retryJob = await engine.submit({ ...request, jobId: retryId }); await retryJob.completion;
+  const commandsAfterRetry = commands.length;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const dropped = await fetch(`${engineUrl}/retry-callback`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId: retryId }) });
+    assert.equal(dropped.status, 403);
+  }
+  callbackDrops = false;
+  const exhausted = await fetch(`${engineUrl}/retry-callback`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId: retryId }) });
+  assert.equal(exhausted.status, 403);
+  const exhaustedState = JSON.parse(await fs.readFile(path.join(config.storageRoot, 'state', `${sha(Buffer.from(retryId))}.json`), 'utf8'));
+  assert.equal(exhaustedState.status, 'CALLBACK_PENDING'); assert.equal(exhaustedState.callbackAttempts, 3);
+  assert.equal(commands.length, commandsAfterRetry, 'callback retry exhaustion cannot launch another paid reconstruction');
   const fourthId = 'synthetic_job_04'; manifest.entries[0].jobId = fourthId; await fs.writeFile(manifestPath, JSON.stringify(manifest)); runnerWaits = true;
   const fourth = await engine.submit({ ...request, jobId: fourthId }); await engine.cancel(fourthId);
   assert.equal((await fourth.completion).success, false); assert.equal((await fs.readdir(path.join(config.storageRoot, 'work'))).length, 0); runnerWaits = false;
   const fifthId = 'synthetic_job_05', interruptedKey = sha(Buffer.from(fifthId));
   await fs.mkdir(path.join(config.storageRoot, 'work', interruptedKey), { recursive: true });
   await fs.writeFile(path.join(config.storageRoot, 'work', interruptedKey, 'private-frame'), 'synthetic-private-source');
+  const interruptedWorkspace = path.join(config.storageRoot, 'work', interruptedKey);
+  await fs.mkdir(path.join(interruptedWorkspace, '06_training', 'checkpointed'), { recursive: true });
+  await fs.mkdir(path.join(interruptedWorkspace, '05_colmap_processed'), { recursive: true });
+  await fs.writeFile(path.join(interruptedWorkspace, '06_training', 'checkpointed', 'config.yml'), 'synthetic: interrupted');
+  await fs.writeFile(path.join(interruptedWorkspace, '06_training', 'checkpointed', 'step-000000010.ckpt'), 'synthetic intermediate checkpoint');
+  await fs.writeFile(path.join(interruptedWorkspace, '05_colmap_processed', 'transforms.json'), '{"frames":[]}');
   await fs.writeFile(path.join(config.storageRoot, 'state', `${interruptedKey}.json`), JSON.stringify({ status: 'RUNNING', digest: 'f'.repeat(64), request: { ...request, jobId: fifthId } }), { mode: 0o600 });
   const commandCount = commands.length; await engine.initialize();
   assert.equal(commands.length, commandCount, 'restart recovery must not silently retrain');
   assert.equal((await fs.readdir(path.join(config.storageRoot, 'work'))).length, 0);
-  assert.equal(JSON.parse(await fs.readFile(path.join(config.storageRoot, 'state', `${interruptedKey}.json`), 'utf8')).status, 'FAILED');
+  const interrupted = JSON.parse(await fs.readFile(path.join(config.storageRoot, 'state', `${interruptedKey}.json`), 'utf8'));
+  assert.equal(interrupted.status, 'FAILED'); assert.equal(interrupted.recoveryEvidence.newGovernedAttemptRequired, true);
+  assert.equal(interrupted.recoveryEvidence.automaticallyResumed, false);
+  assert.ok((await fs.stat(path.join(config.storageRoot, 'artifacts', interruptedKey, interrupted.recoveryEvidence.sha256))).size > 0);
+  const recoveryDelete = await fetch(`${engineUrl}/delete`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId: fifthId }) });
+  assert.equal(recoveryDelete.status, 200); assert.equal((await fs.readdir(path.join(config.storageRoot, 'artifacts'))).includes(interruptedKey), false);
 
   // Admission authority deliberately waits while the same job is submitted
   // again. Both callers must share the original reservation, not race training
@@ -159,7 +274,7 @@ try {
   releaseAuthority.resolve(); authorityBarrier = undefined;
   const [sixthA, sixthB] = await Promise.all([sixthFirst, sixthSecond]);
   assert.equal(sixthA.status, 202); assert.equal(sixthB.status, 202); assert.equal(sixthB.body.idempotent, true);
-  assert.equal((await sixthA.completion).success, true); assert.equal(commands.length - beforeConcurrent, 3, 'only one pipeline may run');
+  assert.equal((await sixthA.completion).success, true); assert.equal(commands.length - beforeConcurrent, 4, 'only one pipeline may run');
 
   // Deletion of an unknown attempt is permanent, including across process
   // restart, rather than an acknowledgement that leaves it trainable later.
@@ -211,6 +326,7 @@ try {
   const tenthState = JSON.parse(await fs.readFile(path.join(concurrentConfig.storageRoot, 'state', `${sha(Buffer.from(tenthId))}.json`), 'utf8'));
   assert.equal(tenthState.status, 'DELETED'); assert.deepEqual(Object.keys(tenthState).sort(), ['digest', 'status']);
   assert.equal((await concurrent.submit({ ...request, jobId: tenthId })).body.status, 'DELETED');
+  assert.equal((await fs.readdir(path.join(concurrentConfig.storageRoot, 'artifacts'))).includes(sha(Buffer.from(tenthId))), false);
   for (const [route, extra] of [['/retry-callback', {}], ['/artifact', { ref: result.output.runtime.ref }]]) {
     const denied = await fetch(`${concurrentUrl}${route}`, { method: 'POST', headers: { authorization: `Bearer ${config.token}` }, body: JSON.stringify({ jobId: tenthId, ...extra }) });
     assert.equal(denied.status, 403, 'deleted state cannot be delivered or resurrected');

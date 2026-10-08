@@ -1,0 +1,23 @@
+# Build from independently observed, immutable OCI identities. There are no
+# mutable latest/tag defaults and this recipe grants no source/spend authority.
+ARG NODE_BASE_IMAGE
+ARG NERFSTUDIO_BASE_IMAGE
+FROM ${NODE_BASE_IMAGE} AS node_runtime
+FROM ${NERFSTUDIO_BASE_IMAGE}
+ARG NODE_BASE_IMAGE
+ARG NERFSTUDIO_BASE_IMAGE
+ARG ENGINE_SOURCE_SHA
+COPY --from=node_runtime /usr/local/bin/node /usr/local/bin/node
+RUN node -e 'if (!/^node(?:[:][A-Za-z0-9._-]+)?@sha256:[a-f0-9]{64}$/.test(process.argv[1]) || !/^ghcr.io\/nerfstudio-project\/nerfstudio(?:[:][A-Za-z0-9._-]+)?@sha256:[a-f0-9]{64}$/.test(process.argv[2]) || !/^[a-f0-9]{40}$/.test(process.argv[3])) process.exit(1)' "${NODE_BASE_IMAGE}" "${NERFSTUDIO_BASE_IMAGE}" "${ENGINE_SOURCE_SHA}"
+WORKDIR /app
+COPY reconstruction-engine.js private-media-resolver.js gaussian-package.js reconstruction-holdout.js reconstruction-evidence.js reconstruction-masks.js ./
+COPY inspect-engine-runtime.py ./
+RUN python3 inspect-engine-runtime.py --output /app/engine-runtime.json
+RUN node --check reconstruction-engine.js && node --check reconstruction-holdout.js && node --check reconstruction-evidence.js && node --check reconstruction-masks.js
+LABEL org.opencontainers.image.title="UrAi private Captured Reality engine"
+LABEL org.opencontainers.image.source="https://github.com/LifeLoggerAI/urai-jobs"
+LABEL org.opencontainers.image.revision="${ENGINE_SOURCE_SHA}"
+ENV NODE_ENV=production PORT=8082 HOST=0.0.0.0
+ENV CAPTURED_REALITY_COMPUTE_ENABLED=false
+EXPOSE 8082
+ENTRYPOINT ["node", "reconstruction-engine.js"]

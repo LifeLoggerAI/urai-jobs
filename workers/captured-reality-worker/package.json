@@ -7,8 +7,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "node --check index.js && node --check lifecycle-authority.js && node --check reconstruction-engine.js && node --check private-media-resolver.js && node --check gaussian-package.js",
-    "typecheck": "node --check index.js && node --check lifecycle-authority.js && node --check reconstruction-engine.js && node --check private-media-resolver.js && node --check gaussian-package.js",
+    "build": "node --check index.js && node --check lifecycle-authority.js && node --check reconstruction-engine.js && node --check reconstruction-evidence.js && node --check reconstruction-holdout.js && node --check reconstruction-masks.js && node --check private-media-resolver.js && node --check gaussian-package.js",
+    "typecheck": "node --check index.js && node --check lifecycle-authority.js && node --check reconstruction-engine.js && node --check reconstruction-evidence.js && node --check reconstruction-holdout.js && node --check reconstruction-masks.js && node --check private-media-resolver.js && node --check gaussian-package.js",
     "start": "node index.js",
     "start:engine": "node reconstruction-engine.js",
     "start:resolver": "node private-media-resolver.js"
