@@ -8,7 +8,7 @@ const { constants } = require('node:fs');
 const { once } = require('node:events');
 const { finished } = require('node:stream/promises');
 const { packageGaussian, conservativeCollisionGlb } = require('./gaussian-package');
-const { archiveReconstructionEvidence, hashFile } = require('./reconstruction-evidence');
+const { archiveReconstructionEvidence, hashOpenFile } = require('./reconstruction-evidence');
 const { partitionFrames, bindRegisteredSplits, radianceIsolationArguments, readHoldoutMetrics } = require('./reconstruction-holdout');
 const { validateMaskMetadata, pngDimensions, bindMasksToTransforms } = require('./reconstruction-masks');
 const { jsonRequest, privateUrl, readBody, authorized, send, HANDLE, SHA256, sha } = require('./private-media-resolver');
@@ -32,11 +32,13 @@ function commandPlan(workspace, iterations = 30000) {
     ['ns-train', ['splatfacto', '--data', path.join(workspace, '05_colmap_processed'), '--output-dir', path.join(workspace, '06_training'), '--max-num-iterations', String(iterations), '--vis', 'tensorboard', ...radianceIsolationArguments(), '--downscale-factor', '1']],
   ];
 }
-function computeBudget(config, now = Date.now()) {
+function computeBudget(config, binding, now = Date.now()) {
   const receipt = config.computeBudgetReceipt;
   if (!receipt || receipt.schemaVersion !== 'urai-prepaid-reconstruction-admission-v1'
     || !['runpod', 'gcp', 'prepaid-private-runner'].includes(receipt.provider)
     || receipt.operation !== 'captured-reality.gaussian-reconstruction'
+    || !HANDLE.test(String(receipt.jobId || '')) || !SHA256.test(String(receipt.requestDigest || ''))
+    || !SHA256.test(String(receipt.sourceManifestSha256 || ''))
     || !HANDLE.test(String(receipt.authorityRef || '')) || receipt.authorityRef !== config.computeAuthorityRef
     || !HANDLE.test(String(receipt.budgetSourceRef || '')) || receipt.prepaidVerified !== true
     || receipt.newCardChargeAuthorized !== false || receipt.maxAutomaticRetries !== 0
@@ -46,7 +48,15 @@ function computeBudget(config, now = Date.now()) {
     || (config.maxRunMs || 2700000) > receipt.maxRunMs
     || !Number.isFinite(Date.parse(receipt.verifiedAt)) || Date.parse(receipt.verifiedAt) > now
     || now - Date.parse(receipt.verifiedAt) > 15 * 60 * 1000) throw new Error('PREPAID_COMPUTE_BUDGET_NOT_CURRENT');
+  // The existing protected compute authority is a fixed-attempt reservation,
+  // not a reusable assertion about an account balance. It grants no second job.
+  if (binding && (binding.jobId !== receipt.jobId || binding.requestDigest !== receipt.requestDigest
+    || (binding.sourceManifestSha256 !== undefined && binding.sourceManifestSha256 !== receipt.sourceManifestSha256))) throw new Error('PREPAID_COMPUTE_RESERVATION_BINDING_MISMATCH');
   return JSON.parse(JSON.stringify(receipt));
+}
+function acceptedSourceManifestSha256(lineage) {
+  return sha(Buffer.from(JSON.stringify(lineage.map(({ filename, inputRef, sourceReceiptRef, frameProvenanceRef, sha256, byteSize, dynamicsPresent, maskRequired, mask }) => ({
+    filename, inputRef, sourceReceiptRef, frameProvenanceRef, sha256, byteSize, dynamicsPresent, maskRequired, ...(mask ? { mask } : {}) })) )));
 }
 async function command(executable, args, { cwd, signal, logfile, timeoutMs = 2700000 } = {}) {
   const allowed = new Set(['ns-process-data', 'ns-train', 'ns-export', 'ns-eval', 'nvidia-smi', 'python3']);
@@ -203,7 +213,9 @@ function createEngine(config, { run = command, checkRuntime = runtimeReadiness }
         }
       }
       if (count < 3) throw new Error('INSUFFICIENT_ACCEPTED_FRAMES');
-      const sourceManifestSha256 = sha(Buffer.from(JSON.stringify(lineage)));
+      const sourceManifestSha256 = acceptedSourceManifestSha256(lineage);
+      const computeAdmission = (await readState(request.jobId))?.computeAdmission;
+      computeBudget({ ...config, computeBudgetReceipt: computeAdmission }, { jobId: request.jobId, requestDigest: digest, sourceManifestSha256 });
       await stage(request.jobId, 'FIXITY_VERIFIED', { sourceManifestSha256, frameCount: count, byteSize: total });
       const reservation = partitionFrames(lineage);
       if (!reservation.reserved) throw new Error('INSUFFICIENT_DISJOINT_HOLDOUT_INPUTS');
@@ -347,11 +359,11 @@ function createEngine(config, { run = command, checkRuntime = runtimeReadiness }
     });
     if (existingResult) return existingResult;
     try {
+      const computeAdmission = computeBudget(config, { jobId: request.jobId, requestDigest: digest });
       ready = await checkRuntime(config);
       if ((await readState(request.jobId))?.status === 'DELETED') return deletedResult();
       if (controller.signal.aborted) return { status: 409, body: { accepted: false, code: 'ADMISSION_CANCELLED' } };
       if (!ready.ok) return { status: 503, body: { accepted: false, code: 'ENGINE_NOT_READY', checks: ready.checks } };
-      const computeAdmission = computeBudget(config);
       await sourceCheck(request, controller.signal);
       return await exclusive(request.jobId, async () => {
         if ((await readState(request.jobId))?.status === 'DELETED') return deletedResult();
@@ -454,19 +466,28 @@ function createEngine(config, { run = command, checkRuntime = runtimeReadiness }
         controller.signal.addEventListener('abort', () => res.destroy(), { once: true });
         let file;
         try {
-          const fixity = await hashFile(admitted.filename, 2 * 1024 ** 3);
-          if (fixity.sha256 !== admitted.sha256) throw new Error('ARTIFACT_FIXITY_MISMATCH');
           file = await fs.open(admitted.filename, constants.O_RDONLY | constants.O_NOFOLLOW);
-          if ((await file.stat()).size !== fixity.byteSize) throw new Error('ARTIFACT_FIXITY_MISMATCH');
-          const stream = file.createReadStream({ autoClose: false, highWaterMark: 64 * 1024 });
+          const fixity = await hashOpenFile(file, 2 * 1024 ** 3);
+          if (fixity.sha256 !== admitted.sha256) throw new Error('ARTIFACT_FIXITY_MISMATCH');
+          const immutableStat = fixity.identity;
+          async function requireImmutableFile() {
+            const current = await file.stat({ bigint: true }), target = await fs.stat(admitted.filename, { bigint: true });
+            if (['dev', 'ino', 'size', 'mtimeNs', 'ctimeNs'].some((field) => current[field] !== immutableStat[field])
+              || target.dev !== immutableStat.dev || target.ino !== immutableStat.ino) throw new Error('ARTIFACT_CHANGED_DURING_DELIVERY');
+          }
+          const stream = file.createReadStream({ autoClose: false, highWaterMark: 64 * 1024, start: 0 });
           for await (const bytes of stream) {
             if (controller.signal.aborted || (await readState(body.jobId))?.status !== 'SUCCESS') throw new Error('ARTIFACT_DELETED');
             await sourceCheck(admitted.request, controller.signal);
-            if (controller.signal.aborted) throw new Error('ARTIFACT_DELETED');
+            await requireImmutableFile();
+            if (controller.signal.aborted || (await readState(body.jobId))?.status !== 'SUCCESS') throw new Error('ARTIFACT_DELETED');
             if (!res.headersSent) res.writeHead(200, { 'content-type': 'application/octet-stream', 'cache-control': 'no-store', 'content-length': fixity.byteSize });
             if (!res.write(bytes)) await once(res, 'drain', { signal: controller.signal });
           }
-          await sourceCheck(admitted.request, controller.signal); res.end();
+          await sourceCheck(admitted.request, controller.signal);
+          await requireImmutableFile();
+          if (controller.signal.aborted || (await readState(body.jobId))?.status !== 'SUCCESS') throw new Error('ARTIFACT_DELETED');
+          res.end();
         } catch {
           if (res.headersSent || controller.signal.aborted) res.destroy();
           else send(res, 403, { ok: false, code: 'PRIVATE_RECONSTRUCTION_REJECTED' });
@@ -493,4 +514,4 @@ if (require.main === module) {
   const engine = createEngine(config); engine.initialize().then(() => engine.server.listen(Number(process.env.PORT || 8082), process.env.HOST || '127.0.0.1'))
     .catch(() => { process.stderr.write('PRIVATE_ENGINE_START_FAILED\n'); process.exitCode = 1; });
 }
-module.exports = { createEngine, validateRequest, commandPlan, runtimeReadiness, computeBudget, command };
+module.exports = { createEngine, validateRequest, commandPlan, runtimeReadiness, computeBudget, acceptedSourceManifestSha256, command };

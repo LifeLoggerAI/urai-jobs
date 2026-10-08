@@ -7,18 +7,25 @@ const SHA256 = /^[a-f0-9]{64}$/;
 const DEFAULT_LIMITS = { maxFiles: 64, maxFileBytes: 2 * 1024 ** 3, maxTotalBytes: 8 * 1024 ** 3 };
 const digest = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 
+async function hashOpenFile(file, limit) {
+  const before = await file.stat({ bigint: true });
+  const stat = await file.stat();
+  if (!stat.isFile() || !Number.isSafeInteger(stat.size) || stat.size < 1 || stat.size > limit) throw new Error('EVIDENCE_FILE_BUDGET_INVALID');
+  const hash = crypto.createHash('sha256'); let received = 0;
+  for await (const bytes of file.createReadStream({ autoClose: false, start: 0 })) {
+    received += bytes.length; if (received > stat.size || received > limit) throw new Error('EVIDENCE_FILE_CHANGED');
+    hash.update(bytes);
+  }
+  if (received !== stat.size) throw new Error('EVIDENCE_FILE_CHANGED');
+  const after = await file.stat({ bigint: true });
+  if (['dev', 'ino', 'size', 'mtimeNs', 'ctimeNs'].some((field) => before[field] !== after[field])) throw new Error('EVIDENCE_FILE_CHANGED');
+  return { sha256: hash.digest('hex'), byteSize: stat.size, identity: after };
+}
 async function hashFile(filename, limit) {
   const file = await fs.open(filename, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
-    const stat = await file.stat();
-    if (!stat.isFile() || !Number.isSafeInteger(stat.size) || stat.size < 1 || stat.size > limit) throw new Error('EVIDENCE_FILE_BUDGET_INVALID');
-    const hash = crypto.createHash('sha256'); let received = 0;
-    for await (const bytes of file.createReadStream({ autoClose: false })) {
-      received += bytes.length; if (received > stat.size || received > limit) throw new Error('EVIDENCE_FILE_CHANGED');
-      hash.update(bytes);
-    }
-    if (received !== stat.size) throw new Error('EVIDENCE_FILE_CHANGED');
-    return { sha256: hash.digest('hex'), byteSize: stat.size };
+    const { sha256, byteSize } = await hashOpenFile(file, limit);
+    return { sha256, byteSize };
   } finally { await file.close(); }
 }
 
@@ -107,4 +114,4 @@ async function archiveReconstructionEvidence({ workspace, configurationPath, tra
   return { manifest, ref: `cr-artifact:${jobKey}:${manifestHash}`, sha256: manifestHash, byteSize: manifestBytes.length };
 }
 
-module.exports = { archiveReconstructionEvidence, storeEvidenceFile, hashFile };
+module.exports = { archiveReconstructionEvidence, storeEvidenceFile, hashFile, hashOpenFile };
