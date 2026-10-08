@@ -1,0 +1,81 @@
+{
+  "schema": "urai-job-current-execution-authority-proof-1",
+  "inputSourceSha": "2a8f0a3e5f16b4e970fabffa8afc1479b2eb7ea5",
+  "inputTree": "6a3327e76107f0911298dea0efc0cbf2c9bd13cd",
+  "releaseController": "https://github.com/LifeLoggerAI/urai-jobs/pull/170",
+  "change": {
+    "paths": [
+      "functions/src/jobs/executeJob.ts",
+      "functions/src/jobs/executionGuards.ts",
+      "scripts/worker-dispatch-redirect-smoke.mjs"
+    ],
+    "behavior": "Pins admitted owner, tenant/org, type, payload, consent and source identity before dispatch and final result commit; cancels changed same-lease attempt, clears output/callback authority and prevents automatic replay"
+  },
+  "localExecution": {
+    "node": "24.19.0",
+    "typescript": "5.9.3",
+    "axios": "1.16.0",
+    "graph": "Read-only existing declared-compatible packages; not complete exact frozen workspace or Node22 native evidence",
+    "database": "Explicit local Firestore transaction adapter",
+    "workerTransport": "Actual Axios http adapter and real owned loopback HTTP servers"
+  },
+  "tests": [
+    {
+      "name": "Original current dispatcher/Axios boundaries",
+      "status": "PASS",
+      "cases": 118,
+      "localEvidence": "lane-intelligence/evidence/jobs-dispatch-current.log"
+    },
+    {
+      "name": "Exact predecessor identity/timing reproduction",
+      "status": "PASS",
+      "reproducedDefects": 90,
+      "description": "All9 worker routes and5 authority changes before dispatch and during worker response committed old output asSUCCESS under original2a8 source",
+      "localEvidence": "lane-intelligence/evidence/jobs-authority-baseline.log"
+    },
+    {
+      "name": "Corrected current dispatcher/Axios boundaries",
+      "status": "PASS",
+      "cases": 208,
+      "retainedCases": 118,
+      "addedCases": 90,
+      "localEvidence": "lane-intelligence/evidence/jobs-authority-successor.log"
+    },
+    {
+      "name": "Current existing narrator actual TS/trackedJS paid leaves",
+      "status": "PASS",
+      "cases": 659,
+      "providerNetworkCalls": 0,
+      "spending": 0,
+      "localEvidence": "lane-intelligence/evidence/jobs-narrator-current.log",
+      "scope": "Unmodified narrator components at input2a8; separate dispatcher changes do not certify cloud/provider runtime"
+    },
+    {
+      "name": "Existing execution and lease-recovery guards",
+      "status": "PASS",
+      "localEvidence": "lane-intelligence/evidence/jobs-execution-guards-current.log",
+      "scope": "Actual current unchanged guard module emitted with TypeScript5.9.3 before new identity guard; new guard exercised by208 dispatcher cases"
+    }
+  ],
+  "persistence": {
+    "status": "Source reconstructed from retained exact GitHub baseline and locally executed apply_patch deltas after unified exec transport disconnected. Source byte comparison with local disk and raw-log import must occur when terminal recovers.",
+    "localEvidenceAvailable": false
+  },
+  "nativeExactHeadCI": "NOT RUN; existing aggregate already registers worker-dispatch-redirect-smoke.mjs and runtime workflow performs frozen Node22 build/typecheck/emulator",
+  "providerCalls": 0,
+  "spending": 0,
+  "deployed": false,
+  "releaseAccepted": false,
+  "blockers": [
+    {
+      "blocked": "Current native graph/build/emulator and exact-head integration",
+      "reason": "Scratch terminal exec transport disconnected; local raw evidence and final byte comparison temporarily unavailable",
+      "action": "Recover current shared execution session, byte-verify donor3paths against preserved local tested source, retain raw logs, then run existing exact-head Jobs runtime CI. Parent release integrator owns admission toPR170."
+    },
+    {
+      "blocked": "Real deployed worker/provider lifecycle",
+      "reason": "No current credentials, ADC, protected budget/reservation or deployed worker receipt in this session",
+      "action": "Authorized operator uses existing managed-worker/deployment runbook with exact source, canonical test identity/grants and approved protected-spend allocation; retain real request, Storage generation, callback, rollback and reconciliation receipts"
+    }
+  ]
+}
