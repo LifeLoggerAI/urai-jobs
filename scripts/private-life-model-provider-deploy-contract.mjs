@@ -21,6 +21,10 @@ for(const marker of [
   '/readyz',
   '/private-source-readyz',
   'AUTH_CODE',
+  "authoritySurfaceConfigured:process.env.DEPLOY_OUTCOME==='success'",
+  "resolverSurfaceConfigured:process.env.DEPLOY_OUTCOME==='success'",
+  "deploymentSucceeded:process.env.DEPLOY_OUTCOME==='success'",
+  "verificationPassed:process.env.VERIFY_OUTCOME==='success'",
   'paidExecutionAuthorized:false',
   'familyMediaProcessed:false',
   'publicReleaseAuthorized:false',
@@ -29,6 +33,8 @@ for(const marker of [
 assert.ok(!source.includes('OPENAI_API_KEY='),'deployment must not bind paid provider API key');
 assert.ok(!source.includes('URAI_PRIVATE_SOURCE_TRANSCRIPTION_ENABLED=true'),'transcription must stay hard-off');
 assert.ok(!source.includes('URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED=true'),'Life Model extraction must stay hard-off');
+assert.ok(!source.includes('authoritySurfaceConfigured:true'),'deployment evidence must not claim authority configured unconditionally');
+assert.ok(!source.includes('resolverSurfaceConfigured:true'),'deployment evidence must not claim resolver configured unconditionally');
 assert.ok(!/credentials_json\s*:/.test(source),'raw JSON credentials forbidden');
 assert.ok(!/FIREBASE_TOKEN|GCP_SERVICE_ACCOUNT_JSON|GCP_SA_KEY/.test(source),'legacy credential secret forbidden');
 assert.match(source,/authority_token_version:/);
