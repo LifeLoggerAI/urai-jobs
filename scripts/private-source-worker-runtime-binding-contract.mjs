@@ -36,7 +36,28 @@ assert.match(workflow,/enabled private-source execution requires an opaque priva
 assert.match(deploy,/enabled private-source execution requires an opaque private authority ref/);
 assert.match(workflow,/private_source_execution_authority_ref must be empty while execution is disabled/);
 assert.match(deploy,/private-source execution authority ref must be empty while execution is disabled/);
-assert.ok(!/URAI_PRIVATE_SOURCE_EXECUTION_ENABLED:\\s*true/.test(workflow),'workflow must not hard-enable private execution');
+// Exercise the same detector used on the actual workflow. A double-escaped
+// whitespace token here would silently stop recognizing ordinary YAML values.
+const hardEnabledWorkflow = /URAI_PRIVATE_SOURCE_EXECUTION_ENABLED:\s*true/;
+const hardEnableCases = [
+  ['URAI_PRIVATE_SOURCE_EXECUTION_ENABLED:true', true],
+  ['URAI_PRIVATE_SOURCE_EXECUTION_ENABLED: true', true],
+  ['URAI_PRIVATE_SOURCE_EXECUTION_ENABLED:  true', true],
+  ['URAI_PRIVATE_SOURCE_EXECUTION_ENABLED:\ttrue', true],
+  ['URAI_PRIVATE_SOURCE_EXECUTION_ENABLED:\n  true', true],
+  ['URAI_PRIVATE_SOURCE_EXECUTION_ENABLED:\r\n  true', true],
+  ['  URAI_PRIVATE_SOURCE_EXECUTION_ENABLED: true # forbidden', true],
+  ['URAI_PRIVATE_SOURCE_EXECUTION_ENABLED:false', false],
+  ['URAI_PRIVATE_SOURCE_EXECUTION_ENABLED: false', false],
+  ['URAI_PRIVATE_SOURCE_EXECUTION_ENABLED: ${{ env.ENABLE_PRIVATE_SOURCE_EXECUTION }}', false],
+  ['URAI_PRIVATE_SOURCE_EXECUTION_ENABLED: ${{ inputs.enable_private_source_execution }}', false],
+  ['REQUIRE_PRIVATE_SOURCE_EXECUTION_ENABLED: true', false],
+  ['', false],
+];
+for (const [input, expected] of hardEnableCases) {
+  assert.equal(hardEnabledWorkflow.test(input), expected, `hard-enable detector: ${JSON.stringify(input)}`);
+}
+assert.ok(!hardEnabledWorkflow.test(workflow),'workflow must not hard-enable private execution');
 assert.ok(!/URAI_PRIVATE_SOURCE_EXECUTION_ENABLED="true"/.test(deploy),'deploy script must not hard-enable private execution');
 
 console.log('[PASS] private-source worker runtime enable binding is explicit, fail-closed, revision-verified, and receipt-bound');
