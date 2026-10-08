@@ -4,6 +4,24 @@ import { EventEmitter } from 'node:events';
 import { Writable } from 'node:stream';
 import { harness } from './life-movies-delivery-authority-smoke.mjs';
 
+// A response grants an authenticated descriptor, never a direct media URL.
+// Inspect JSON keys and values, including URLs embedded in textual values.
+function assertNoDirectMediaUrls(value) {
+  if (typeof value === 'string') {
+    const embedded = value.match(/\b(?:https?|gs):\/\/[^\s"'<>]+/gi) || [];
+    for (const candidate of new Set([value, ...embedded])) {
+      let url;
+      try { url = new URL(candidate); } catch {
+        assert.ok(!embedded.includes(candidate), 'malformed direct media URL');
+        continue;
+      }
+      assert.ok(!['http:', 'https:', 'gs:'].includes(url.protocol), 'private response must use authenticated delivery descriptors');
+    }
+  } else if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) { assertNoDirectMediaUrls(key); assertNoDirectMediaUrls(child); }
+  }
+}
+
 class Response extends Writable {
   constructor(onChunk) { super(); this.statusCode = 200; this.headers = {}; this.chunks = []; this.headersSent = false;
     this.onChunk = onChunk; this.on('error', error => { this.streamError = error; }); }
@@ -38,8 +56,7 @@ async function prepare(h, form, large = false) {
   const playback = response.body.playback;
   const descriptor = form === 'narrator' ? playback.delivery : form === 'short' ? playback.video.delivery : playback.finalFile.video.delivery;
   assert.equal(descriptor.requiresAuthorization, true); assert.equal(descriptor.action, 'deliver');
-  assert.equal(JSON.stringify(response.body).includes('https://fixture.invalid'), false);
-  assert.equal(JSON.stringify(response.body).includes('gs://'), false); assert.equal(h.state.signs.length, 0);
+  assertNoDirectMediaUrls(response.body); assert.equal(h.state.signs.length, 0);
   const delivery = Object.fromEntries(['action', 'kind', 'authorityHash', 'expiresAt', 'generation', 'artifact', 'disposition']
     .filter(key => descriptor[key] !== undefined).map(key => [key, descriptor[key]]));
   return { delivery, bytes, jobId };
@@ -47,8 +64,22 @@ async function prepare(h, form, large = false) {
 function rejected(response, label) {
   assert.ok(response.statusCode !== 200 || !response.writableFinished, label);
   assert.equal(response.chunks.length, 0, label);
-  assert.equal(JSON.stringify(response.body).includes('gs://'), false, label);
+  assertNoDirectMediaUrls(response.body);
 }
+let urlCases = 0;
+assert.doesNotThrow(() => assertNoDirectMediaUrls({ playback: { delivery: { requiresAuthorization: true, action: 'deliver', authorityHash: 'a'.repeat(64), expiresAt: 123, generation: '1' } }, captions: 'Synthetic caption' })); urlCases++;
+for (const value of [
+  { playback: { url: 'https://fixture.invalid/private/1' } },
+  { playback: { url: 'https://fixture.invalid.other.invalid/private/1' } },
+  { playback: { url: 'https://other.invalid/private/1' } },
+  { playback: { url: 'http://fixture.invalid/private/1' } },
+  { playback: { url: 'https://synthetic:fixture@fixture.invalid/private/1' } },
+  { playback: [{ url: 'gs://synthetic-private-bucket/private/1' }] },
+  { playback: { note: 'Synthetic media at https://fixture.invalid/private/1' } },
+  { 'https://fixture.invalid/private/1': 'synthetic' },
+  { playback: { url: 'https:\\\\fixture.invalid\\private\\1' } },
+]) { assert.throws(() => assertNoDirectMediaUrls(value)); urlCases++; }
+console.log(`[PASS] ${urlCases} private response URL guard cases: exact parsed URLs, nested projections, embedded references and authenticated descriptors`);
 let cases = 0;
 for (const form of ['short', 'long', 'narrator']) {
   const h = harness(), p = await prepare(h, form), response = await http(h, form, p.delivery);
