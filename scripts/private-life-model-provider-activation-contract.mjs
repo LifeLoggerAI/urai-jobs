@@ -22,6 +22,10 @@ for(const marker of [
   'PRIVATE_SOURCE_INDEX_TOKEN=',
   'OPENAI_API_KEY=',
   'private-provider-activation.json',
+  "transcribeUrl:process.env.VERIFIED_URL+'/transcribe'",
+  'authorityUrl:process.env.VERIFIED_URL',
+  'resolverUrl:process.env.VERIFIED_URL',
+  'indexUrl:process.env.VERIFIED_URL',
   'paidProviderCallExecuted:false',
   'familyMediaProcessed:false',
   'publicReleaseAuthorized:false'
