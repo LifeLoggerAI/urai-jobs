@@ -124,12 +124,14 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Deploy authority and resolver surface with paid execution hard-off
+        id: deploy
         shell: bash
         run: |
           set -euo pipefail
           gcloud run deploy "$PROVIDER_SERVICE"             --project "$GCLOUD_PROJECT"             --region "$GCP_REGION"             --platform managed             --image "${{ steps.build.outputs.image }}"             --service-account "$RUNTIME_SERVICE_ACCOUNT"             --allow-unauthenticated             --memory 1Gi             --cpu 1             --min-instances 0             --max-instances 2             --concurrency 20             --timeout 300             --labels "urai-source-sha=$TARGET_SHA,urai-environment=$URAI_ENV,urai-paid-execution=disabled"             --set-env-vars "URAI_ENV=$URAI_ENV,FIREBASE_PROJECT_ID=$GCLOUD_PROJECT,GOOGLE_CLOUD_PROJECT=$GCLOUD_PROJECT,URAI_SOURCE_SHA=$TARGET_SHA,URAI_PRIVATE_SOURCE_CONTRACT=urai-private-source-receipt-v2,URAI_PRIVATE_SOURCE_TRANSCRIPTION_ENABLED=false,URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED=false"             --set-secrets "PRIVATE_SOURCE_AUTHORITY_TOKEN=$AUTHORITY_SECRET:$AUTHORITY_TOKEN_VERSION,PRIVATE_SOURCE_REF_RESOLVER_TOKEN=$RESOLVER_SECRET:$RESOLVER_TOKEN_VERSION"             --quiet
 
       - name: Verify deployed source and hard-off posture
+        id: verify
         shell: bash
         run: |
           set -euo pipefail
@@ -173,7 +175,7 @@ jobs:
           mkdir -p docs/release-evidence
           URL="$(gcloud run services describe "$PROVIDER_SERVICE" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.url)' 2>/dev/null || true)"
           REVISION="$(gcloud run services describe "$PROVIDER_SERVICE" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.latestReadyRevisionName)' 2>/dev/null || true)"
-          TARGET_SHA="$TARGET_SHA" ROLLBACK_SHA="$ROLLBACK_SHA" URL="$URL" REVISION="$REVISION" DIGEST="${{ steps.build.outputs.digest }}" node <<'NODE'
+          TARGET_SHA="$TARGET_SHA" ROLLBACK_SHA="$ROLLBACK_SHA" URL="$URL" REVISION="$REVISION" DIGEST="${{ steps.build.outputs.digest }}" DEPLOY_OUTCOME="${{ steps.deploy.outcome }}" VERIFY_OUTCOME="${{ steps.verify.outcome }}" node <<'NODE'
           const fs=require('fs');
           fs.writeFileSync('docs/release-evidence/private-life-model-provider-deploy.json',JSON.stringify({
             schemaVersion:'urai-private-life-model-provider-deploy-1',
@@ -188,8 +190,10 @@ jobs:
             serviceUrl:process.env.URL||null,
             revision:process.env.REVISION||null,
             imageDigest:process.env.DIGEST||null,
-            authoritySurfaceConfigured:true,
-            resolverSurfaceConfigured:true,
+            authoritySurfaceConfigured:process.env.DEPLOY_OUTCOME==='success',
+            resolverSurfaceConfigured:process.env.DEPLOY_OUTCOME==='success',
+            deploymentSucceeded:process.env.DEPLOY_OUTCOME==='success',
+            verificationPassed:process.env.VERIFY_OUTCOME==='success',
             privateSourceTranscriptionEnabled:false,
             privateLifeModelExecutionEnabled:false,
             providerCallsAuthorized:false,
