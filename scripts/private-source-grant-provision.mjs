@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
@@ -110,6 +111,6 @@ async function main(){
   });
   process.stdout.write(JSON.stringify({...result,project,createdOrAlreadyExact:true})+'\n');
 }
-if(import.meta.url===new URL(process.argv[1],'file:').href){
+if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
   main().catch(error=>{console.error('[FAIL] '+(error instanceof Error?error.message:String(error)));process.exit(1);});
 }
