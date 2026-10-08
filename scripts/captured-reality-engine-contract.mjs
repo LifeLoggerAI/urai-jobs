@@ -78,11 +78,18 @@ await assert.rejects(resolver.redeem({ jobId, sourceHandle, callbackTokenHash, i
 await fs.writeFile(path.join(sourceRoot, '0.png'), Buffer.from('synthetic-frame-0'));
 const denial = await fetch(`${resolverUrl}/resolve`, { method: 'POST', body: JSON.stringify({ jobId, sourceHandle, callbackTokenHash }) }); assert.equal(denial.status, 401);
 
-const dbJob = { status: 'RUNNING', ownerUid: 'synthetic_owner_01', payload: { sourceReceiptRefs: ['synthetic_receipt_01'] }, consents: [{ purpose: 'memory.storage' }, { purpose: 'location.context' }],
+const sourceConsents = ['memory.storage', 'location.context'].map(purpose => ({ purpose, policyVersion: 'synthetic-v1', decisionReceiptId: 'synthetic-'+purpose }));
+Object.assign(manifest.entries[0], { sourceRevision: 1, sourceSha256: 'a'.repeat(64), sourceByteLength: 1234, sourceFixityRef: 'private:synthetic/fixity' });
+await fs.writeFile(manifestPath, JSON.stringify(manifest));
+const dbGrant = { schemaVersion: 'urai-private-source-receipt-v2', ownerUid: 'synthetic_owner_01', sourceReceiptRef: 'synthetic_receipt_01', sourceHandle,
+  status: 'ACTIVE', synthetic: false, purposes: ['reconstruct-place'], consents: sourceConsents,
+  sourceRevision: 1, sourceSha256: 'a'.repeat(64), sourceByteLength: 1234, sourceFixityRef: 'private:synthetic/fixity' };
+const dbJob = { type: 'memory.private-source.reconstruct-place', status: 'RUNNING', ownerUid: 'synthetic_owner_01', payload: { sourceReceiptRefs: ['synthetic_receipt_01'] }, consents: sourceConsents,
   execution: { callbackTokenHash, leaseToken: 'lease_01', callbackLeaseToken: 'lease_01', asyncCallbackPending: true, callbackDeadlineAt: { toMillis: () => Date.now() + 60000 } } };
 const db = { collection: (name) => ({ doc: (id) => ({ name, id }) }), runTransaction: (fn) => fn({ get: async (ref) => ref.name === 'jobs'
-  ? { exists: true, data: () => dbJob } : { exists: revoked, data: () => ({ active: true }) } }) };
-const policy = firestoreReconstructionAuthority(db, manifestPath);
+  ? { exists: true, data: () => dbJob } : ref.name === 'uraiPrivateSourceReceipts' ? { exists: true, data: () => dbGrant }
+  : { exists: ref.name === 'jobConsentBlocks' && revoked, data: () => ({ active: true }) } }) };
+const policy = firestoreReconstructionAuthority(db, manifestPath, { getOwner: async uid => ({ uid, disabled: false, metadata: { creationTime: 'synthetic-created' } }) });
 assert.equal((await policy({ jobId, sourceHandles: [sourceHandle], callbackTokenHash })).authorized, true);
 await assert.rejects(policy({ jobId, sourceHandles: [sourceHandle], callbackTokenHash: 'f'.repeat(64) }), /ATTEMPT/);
 dbJob.execution.leaseToken = 'successor_lease'; await assert.rejects(policy({ jobId, sourceHandles: [sourceHandle], callbackTokenHash }), /LEASE/); dbJob.execution.leaseToken = 'lease_01';

@@ -42,25 +42,60 @@ async function readManifest(manifestPath) {
 
 // Consume the existing Jobs consent blocks and stored job identity. This is an
 // adapter to canonical authority, not another purpose/consent decision registry.
-function firestoreReconstructionAuthority(db, manifestPath) {
+function firestoreReconstructionAuthority(db, manifestPath, { getOwner } = {}) {
   return async (body) => {
+    if (typeof getOwner !== 'function') throw new Error('SOURCE_ACCOUNT_AUTHORITY_UNCONFIGURED');
     const manifest = await readManifest(manifestPath);
     const entries = body.sourceHandles.map((sourceHandle) => manifest.entries.find((row) => row.jobId === body.jobId && row.sourceHandle === sourceHandle));
     if (entries.some((row) => !row || Date.parse(row.expiresAt) <= Date.now() || !Number.isFinite(Date.parse(row.expiresAt)))) throw new Error('SOURCE_GRANT_EXPIRED');
+    const ownerUid = entries[0].ownerUid;
+    const owner = await getOwner(ownerUid);
+    if (owner?.uid !== ownerUid || owner.disabled !== false || !owner.metadata?.creationTime) throw new Error('SOURCE_ACCOUNT_DENIED');
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(db.collection('jobs').doc(body.jobId)), job = snap.exists ? snap.data() : null;
-      if (!job || !['RUNNING', 'SUCCESS'].includes(job.status) || entries.some((row) => row.ownerUid !== job.ownerUid || !job.payload?.sourceReceiptRefs?.includes(row.sourceReceiptRef))) throw new Error('SOURCE_OWNER_OR_JOB_DENIED');
+      if (!job || (job.type || job.jobType) !== 'memory.private-source.reconstruct-place' || !['RUNNING', 'SUCCESS'].includes(job.status)
+        || String(job.derivativeAccessState || '').startsWith('REVOKED') || job.ownerUid !== ownerUid
+        || entries.some((row) => row.ownerUid !== job.ownerUid || !job.payload?.sourceReceiptRefs?.includes(row.sourceReceiptRef))) throw new Error('SOURCE_OWNER_OR_JOB_DENIED');
       const attemptHash = job.status === 'SUCCESS' ? job.execution?.capturedRealityAcceptedCallbackHash : job.execution?.callbackTokenHash;
       if (!SHA256.test(String(body.callbackTokenHash || '')) || attemptHash !== body.callbackTokenHash) throw new Error('SOURCE_ATTEMPT_DENIED');
       if (job.status === 'RUNNING' && (job.execution?.asyncCallbackPending !== true || job.execution?.callbackLeaseToken !== job.execution?.leaseToken
         || (job.execution?.callbackDeadlineAt?.toMillis?.() || 0) <= Date.now())) throw new Error('SOURCE_LEASE_DENIED');
-      const purposes = [...new Set((Array.isArray(job.consents) ? job.consents : []).map((row) => row.purpose))];
-      if (!['memory.storage', 'location.context'].every((purpose) => purposes.includes(purpose))) throw new Error('SOURCE_CONSENT_DENIED');
+      const consents = Array.isArray(job.consents) ? job.consents : [];
+      const purposes = [...new Set(consents.map((row) => row?.purpose))];
+      if (consents.length !== 2 || purposes.length !== 2 || !['memory.storage', 'location.context'].every((purpose) => purposes.includes(purpose))
+        || consents.some((row) => typeof row.policyVersion !== 'string' || !row.policyVersion || typeof row.decisionReceiptId !== 'string' || !row.decisionReceiptId)) throw new Error('SOURCE_CONSENT_DENIED');
+      const ownerHash = sha(Buffer.from(ownerUid));
+      const fence = await tx.get(db.collection('uraiPrivateLifeModelOwnerFences').doc(ownerHash));
+      if (fence.exists && (fence.data()?.ownerHash !== ownerHash || fence.data()?.deleted !== false
+        || fence.data()?.deletionEpoch !== 0)) throw new Error('SOURCE_OWNER_DELETED');
+      const deletion = await tx.get(db.collection('privacyDeletionTombstones').doc(ownerUid));
+      if (deletion.exists) {
+        const marker = deletion.data(), keys = Object.keys(marker || {});
+        const stamp = marker?.updatedAt;
+        const validStamp = stamp instanceof Date ? Number.isFinite(stamp.getTime()) : typeof stamp?.toMillis === 'function' && Number.isFinite(stamp.toMillis());
+        const released = !keys.includes('active') && keys.every((key) => ['uid', 'updatedAt'].includes(key)) && validStamp;
+        if (marker?.uid !== ownerUid || keys.some((key) => key.startsWith('deletionPlanningLease')) || (marker.active !== false && !released)) throw new Error('SOURCE_OWNER_DELETED');
+      }
       for (const purpose of purposes) {
         const blockId = sha(Buffer.from(job.ownerUid + '\n' + purpose)), block = await tx.get(db.collection('jobConsentBlocks').doc(blockId));
-        if (block.exists && block.data()?.active === true) throw new Error('SOURCE_CONSENT_REVOKED');
+        if (block.exists && (block.data()?.ownerUid !== ownerUid || block.data()?.purpose !== purpose || block.data()?.active !== false)) throw new Error('SOURCE_CONSENT_REVOKED');
+      }
+      for (const row of entries) {
+        const source = await tx.get(db.collection('uraiPrivateSourceReceipts').doc(sha(Buffer.from(row.sourceReceiptRef))));
+        const grant = source.data();
+        if (!source.exists || grant?.schemaVersion !== 'urai-private-source-receipt-v2' || grant.ownerUid !== ownerUid
+          || grant.status !== 'ACTIVE' || grant.synthetic !== false || grant.fixtureOnly === true
+          || grant.sourceReceiptRef !== row.sourceReceiptRef || grant.sourceHandle !== row.sourceHandle
+          || !Number.isSafeInteger(row.sourceRevision) || row.sourceRevision < 1 || !SHA256.test(String(row.sourceSha256 || ''))
+          || !Number.isSafeInteger(row.sourceByteLength) || row.sourceByteLength < 1 || typeof row.sourceFixityRef !== 'string'
+          || !row.sourceFixityRef.startsWith('private:') || !Array.isArray(grant.purposes) || !grant.purposes.includes('reconstruct-place')
+          || ['sourceRevision', 'sourceSha256', 'sourceByteLength', 'sourceFixityRef'].some((key) => grant[key] !== row[key])
+          || !consents.every((consent) => Array.isArray(grant.consents) && grant.consents.filter((entry) => entry?.purpose === consent.purpose).length === 1
+            && grant.consents.some((entry) => entry?.purpose === consent.purpose && entry.policyVersion === consent.policyVersion && entry.decisionReceiptId === consent.decisionReceiptId))) throw new Error('SOURCE_REVISION_OR_GRANT_DENIED');
       }
     });
+    const currentOwner = await getOwner(ownerUid);
+    if (currentOwner?.uid !== ownerUid || currentOwner.disabled !== false || currentOwner.metadata?.creationTime !== owner.metadata.creationTime) throw new Error('SOURCE_ACCOUNT_CHANGED');
     return { authorized: true, ownerBound: true, jobId: body.jobId, sourceHandles: body.sourceHandles, callbackTokenHash: body.callbackTokenHash, purposes: ['memory.storage', 'location.context'] };
   };
 }
@@ -80,7 +115,6 @@ function createResolver({ manifestPath, sourceRoot, token, authorityUrl, authori
     return { authorized: true, jobId: body.jobId, sourceHandles: body.sourceHandles, callbackTokenHash: body.callbackTokenHash };
   }
   async function load(body) {
-    await check({ jobId: body.jobId, sourceHandles: [body.sourceHandle], callbackTokenHash: body.callbackTokenHash });
     if (!manifestPath || !sourceRoot) throw new Error('RESOLVER_STORAGE_UNCONFIGURED');
     const manifest = await readManifest(manifestPath);
     const entry = manifest.entries?.find((row) => row.jobId === body.jobId && row.sourceHandle === body.sourceHandle);
@@ -92,6 +126,9 @@ function createResolver({ manifestPath, sourceRoot, token, authorityUrl, authori
         || !['image/png', 'image/jpeg'].includes(input.mimeType)) throw new Error('ACCEPTED_INPUT_INVALID');
     }
     if (new Set(entry.acceptedInputs.map((row) => row.inputRef)).size !== entry.acceptedInputs.length) throw new Error('DUPLICATE_INPUT_REF');
+    await check({ jobId: body.jobId, sourceHandles: [body.sourceHandle], callbackTokenHash: body.callbackTokenHash });
+    const current = await readManifest(manifestPath);
+    if (JSON.stringify(current.entries.find((row) => row.jobId === body.jobId && row.sourceHandle === body.sourceHandle)) !== JSON.stringify(entry)) throw new Error('SOURCE_MANIFEST_CHANGED');
     return entry;
   }
   async function resolve(body) {
@@ -112,8 +149,12 @@ function createResolver({ manifestPath, sourceRoot, token, authorityUrl, authori
       if (!stat.isFile() || stat.size !== input.byteSize) throw new Error('SOURCE_SIZE_MISMATCH');
       const bytes = await file.readFile();
       if (sha(bytes) !== input.sha256) throw new Error('SOURCE_HASH_MISMATCH');
-      return { bytes, mimeType: input.mimeType, sha256: input.sha256 };
+      try { await requireCurrentEntry(body, entry); } catch (error) { bytes.fill(0); throw error; }
+      return { bytes, mimeType: input.mimeType, sha256: input.sha256, requireCurrent: () => requireCurrentEntry(body, entry) };
     } finally { await file.close(); }
+  }
+  async function requireCurrentEntry(body, entry) {
+    if (JSON.stringify(await load(body)) !== JSON.stringify(entry)) throw new Error('SOURCE_MANIFEST_CHANGED');
   }
   const server = http.createServer(async (req, res) => {
     if (!authorized(req, token)) return send(res, 401, { ok: false, code: 'UNAUTHORIZED' });
@@ -124,11 +165,23 @@ function createResolver({ manifestPath, sourceRoot, token, authorityUrl, authori
       if (req.url === '/resolve') return send(res, 200, await resolve(body));
       if (req.url === '/redeem') {
         const result = await redeem(body);
-        res.writeHead(200, { 'content-type': result.mimeType, 'content-length': result.bytes.length, 'cache-control': 'no-store', 'x-content-sha256': result.sha256 });
-        return res.end(result.bytes);
+        try {
+          for (let offset = 0; offset < result.bytes.length; offset += 65536) {
+            await result.requireCurrent();
+            if (req.aborted || res.destroyed) throw new Error('SOURCE_CONNECTION_CLOSED');
+            if (!res.headersSent) res.writeHead(200, { 'content-type': result.mimeType, 'content-length': result.bytes.length, 'cache-control': 'private, no-store', 'x-content-sha256': result.sha256 });
+            if (!res.write(result.bytes.subarray(offset, offset + 65536))) await new Promise((resolve, reject) => {
+              const closed = () => { res.off('drain', drained); reject(new Error('SOURCE_CONNECTION_CLOSED')); };
+              const drained = () => { res.off('close', closed); resolve(); };
+              res.once('drain', drained); res.once('close', closed);
+            });
+          }
+          await result.requireCurrent();
+          return res.end();
+        } finally { result.bytes.fill(0); }
       }
       send(res, 404, { ok: false, code: 'NOT_FOUND' });
-    } catch { send(res, 403, { ok: false, code: 'PRIVATE_SOURCE_DENIED' }); }
+    } catch { if (res.headersSent || res.destroyed) res.destroy(); else send(res, 403, { ok: false, code: 'PRIVATE_SOURCE_DENIED' }); }
   });
   server.requestTimeout = 30000;
   return { server, check, resolve, redeem };
@@ -140,7 +193,7 @@ if (require.main === module) {
     const admin = require('firebase-admin');
     if (!process.env.FIREBASE_PROJECT_ID) throw new Error('PRIVATE_CANONICAL_PROJECT_UNCONFIGURED');
     if (!admin.apps.length) admin.initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID });
-    validateAuthority = firestoreReconstructionAuthority(admin.firestore(), process.env.CAPTURED_REALITY_PRIVATE_MANIFEST);
+    validateAuthority = firestoreReconstructionAuthority(admin.firestore(), process.env.CAPTURED_REALITY_PRIVATE_MANIFEST, { getOwner: (uid) => admin.auth().getUser(uid) });
   }
   const service = createResolver({ manifestPath: process.env.CAPTURED_REALITY_PRIVATE_MANIFEST, sourceRoot: process.env.CAPTURED_REALITY_PRIVATE_SOURCE_ROOT,
     token: process.env.CAPTURED_REALITY_RESOLVER_TOKEN, authorityUrl: process.env.PRIVATE_SOURCE_AUTHORITY_URL,
