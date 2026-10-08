@@ -21,7 +21,7 @@ type Dependencies = {
   boundedResponse: (response: globalThis.Response, maximum: number) => Promise<string>;
 };
 type ProtectedRequest = { schemaVersion: string; ownerUid: string; jobId: string; leaseToken: string; sourceReceiptRef: string;
-  requestedPurpose: 'transcribe' | 'memory-index'; idempotencyKey: string; [key: string]: unknown };
+  requestedPurpose: 'transcribe' | 'memory-index' | 'reconstruct-place'; idempotencyKey: string; [key: string]: unknown };
 
 function parseRequest(value: any): ProtectedRequest {
   const allowed = new Set(['schemaVersion','ownerUid','jobId','leaseToken','sourceReceiptRef','requestedPurpose','idempotencyKey','requestReceipt',
@@ -30,7 +30,7 @@ function parseRequest(value: any): ProtectedRequest {
   if (value.schemaVersion !== CONTRACT && value.schemaVersion !== TRANSCRIPT_CONTRACT) throw new Error('protected_source_contract_required');
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(value.ownerUid) || !/^[A-Za-z0-9._:-]{8,200}$/.test(value.jobId)
     || !/^[A-Za-z0-9._:-]{8,256}$/.test(value.leaseToken) || value.idempotencyKey !== value.jobId
-    || !/^psr_[A-Za-z0-9_-]{16,128}$/.test(value.sourceReceiptRef) || !['transcribe','memory-index'].includes(value.requestedPurpose)) throw new Error('protected_source_invalid_authority');
+    || !/^psr_[A-Za-z0-9_-]{16,128}$/.test(value.sourceReceiptRef) || !['transcribe','memory-index','reconstruct-place'].includes(value.requestedPurpose)) throw new Error('protected_source_invalid_authority');
   return value;
 }
 
@@ -67,34 +67,58 @@ export function registerProtectedSourceRoutes(app: Express, deps: Dependencies) 
   async function currentGrant(tx: any, request: ProtectedRequest) {
     const db = firestore();
     const job = (await tx.get(db.collection('jobs').doc(request.jobId))).data();
-    const expectedType = request.requestedPurpose === 'memory-index' ? 'memory.private-source.index' : 'memory.private-source.transcribe';
+    const expectedType = request.requestedPurpose === 'memory-index'
+      ? 'memory.private-source.index'
+      : request.requestedPurpose === 'reconstruct-place'
+        ? 'memory.private-source.reconstruct-place'
+        : 'memory.private-source.transcribe';
+    const sourceRefs = request.requestedPurpose === 'reconstruct-place'
+      ? (Array.isArray(job?.payload?.sourceReceiptRefs) ? job.payload.sourceReceiptRefs : [])
+      : [job?.payload?.sourceReceiptRef];
     if (!job || job.ownerUid !== request.ownerUid || (job.type || job.jobType) !== expectedType || job.status !== 'RUNNING'
-      || job.execution?.leaseToken !== request.leaseToken || job.payload?.sourceReceiptRef !== request.sourceReceiptRef
+      || job.execution?.leaseToken !== request.leaseToken || !sourceRefs.includes(request.sourceReceiptRef)
       || job.payload?.requestedPurpose !== request.requestedPurpose) throw new Error('protected_source_job_mismatch');
     if (request.locale && request.locale !== job.payload?.locale) throw new Error('protected_source_locale_mismatch');
-    if (request.requestReceipt && request.requestReceipt !== job.payload?.requestReceipt) throw new Error('protected_source_request_receipt_mismatch');
-    const consent = job.consent;
-    if (consent?.purpose !== 'memory.storage' || !consent.policyVersion || !consent.decisionReceiptId) throw new Error('protected_source_memory_consent_required');
-    const [source, block, fence] = await Promise.all([tx.get(sourceRef(request)),
-      tx.get(db.collection('jobConsentBlocks').doc(hash(request.ownerUid+'\n'+consent.purpose))),
-      tx.get(db.collection('uraiPrivateLifeModelOwnerFences').doc(hash(request.ownerUid)))]);
+    if (request.requestReceipt && request.requestReceipt !== job.payload?.requestReceipt && request.requestReceipt !== job.jobId) throw new Error('protected_source_request_receipt_mismatch');
+
+    const requiredConsents = request.requestedPurpose === 'reconstruct-place'
+      ? (Array.isArray(job.consents) ? job.consents : [])
+      : (job.consent ? [job.consent] : []);
+    const requiredPurposes = request.requestedPurpose === 'reconstruct-place'
+      ? new Set(['memory.storage','location.context'])
+      : new Set(['memory.storage']);
+    const consentByPurpose = new Map(requiredConsents.map((entry:any)=>[entry?.purpose,entry]));
+    if (consentByPurpose.size !== requiredPurposes.size || [...requiredPurposes].some(purpose => {
+      const consent = consentByPurpose.get(purpose);
+      return !consent?.policyVersion || !consent?.decisionReceiptId;
+    })) throw new Error('protected_source_required_consent_missing');
+    const blocks = await Promise.all([...requiredPurposes].map(purpose =>
+      tx.get(db.collection('jobConsentBlocks').doc(hash(request.ownerUid+'\n'+purpose)))
+    ));
+    const [source, fence] = await Promise.all([
+      tx.get(sourceRef(request)),
+      tx.get(db.collection('uraiPrivateLifeModelOwnerFences').doc(hash(request.ownerUid)))
+    ]);
     const grant = source.data();
-    if (block.data()?.active === true || fence.data()?.deleted === true) throw new Error('protected_source_revoked_deleted');
+    if (blocks.some(block => block.data()?.active === true) || fence.data()?.deleted === true) throw new Error('protected_source_revoked_deleted');
     if (!grant || grant.schemaVersion !== CONTRACT || grant.ownerUid !== request.ownerUid || grant.sourceReceiptRef !== request.sourceReceiptRef
       || grant.status !== 'ACTIVE' || grant.synthetic !== false || !/^psh_[A-Za-z0-9_-]{16,256}$/.test(grant.sourceHandle)
       || !EVIDENCE.has(grant.sourceEvidenceClass) || !PRIVATE_REF.test(grant.sourceFixityRef) || !SHA256.test(grant.sourceSha256)
       || !Number.isSafeInteger(grant.sourceByteLength) || grant.sourceByteLength < 1 || grant.sourceByteLength > 2 * 1024 ** 3
       || !Number.isSafeInteger(grant.sourceRevision) || grant.sourceRevision < 1
       || !Array.isArray(grant.purposes) || !grant.purposes.includes(request.requestedPurpose)
-      || grant.consent?.purpose !== consent.purpose || grant.consent?.policyVersion !== consent.policyVersion
-      || grant.consent?.decisionReceiptId !== consent.decisionReceiptId) throw new Error('protected_source_grant_mismatch');
+      || !requiredConsents.every((consent:any) => {
+        const grants = Array.isArray(grant.consents) ? grant.consents : (grant.consent ? [grant.consent] : []);
+        const current = grants.find((entry:any)=>entry?.purpose === consent.purpose);
+        return current?.policyVersion === consent.policyVersion && current?.decisionReceiptId === consent.decisionReceiptId;
+      })) throw new Error('protected_source_grant_mismatch');
     for (const key of ['sourceHandle','sourceSha256','sourceByteLength','sourceFixityRef','sourceRevision']) {
       if (request[key] !== undefined && request[key] !== grant[key]) throw new Error('protected_source_fixity_mismatch');
     }
     if (request.sourceEvidenceClass !== undefined && request.sourceEvidenceClass !== grant.sourceEvidenceClass) throw new Error('protected_source_evidence_mismatch');
     return { grant, job, grantDigest: digest({ownerUid:grant.ownerUid,sourceReceiptRef:grant.sourceReceiptRef,sourceHandle:grant.sourceHandle,
       sourceRevision:grant.sourceRevision,sourceSha256:grant.sourceSha256,sourceByteLength:grant.sourceByteLength,sourceFixityRef:grant.sourceFixityRef,
-      sourceEvidenceClass:grant.sourceEvidenceClass,purposes:grant.purposes,consent:grant.consent,storage:grant.storage || null}) };
+      sourceEvidenceClass:grant.sourceEvidenceClass,purposes:grant.purposes,consent:grant.consent || null,consents:grant.consents || null,storage:grant.storage || null}) };
   }
   const current = (request: ProtectedRequest) => firestore().runTransaction(tx => currentGrant(tx,request));
   function proof(request: ProtectedRequest, grant: any) {

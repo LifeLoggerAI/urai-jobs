@@ -111,9 +111,9 @@ async function authorizeSources(job) {
   const token=String(process.env.PRIVATE_SOURCE_AUTHORITY_TOKEN||'');
   const handles=[];
   for(const sourceReceiptRef of job.payload.sourceReceiptRefs){
-    const response=await fetch(`${authorityUrl}/authorize`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${token}`},body:JSON.stringify({sourceReceiptRef,ownerUid:job.ownerUid,requestedPurpose:'reconstruct-place',requestReceipt:job.jobId})});
+    const response=await fetch(`${authorityUrl}/authorize`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${token}`},body:JSON.stringify({schemaVersion:'urai-private-source-receipt-v2',sourceReceiptRef,ownerUid:job.ownerUid,jobId:job.jobId,leaseToken:job.leaseToken,requestedPurpose:'reconstruct-place',requestReceipt:job.jobId,idempotencyKey:job.jobId})});
     const data=await response.json().catch(()=>({}));
-    if(response.status!==200||data.authorized!==true||!PRIVATE_HANDLE.test(String(data.sourceHandle||''))) throw new Error('private source authorization denied or invalid');
+    if(response.status!==200||data.authorized!==true||data.schemaVersion!=='urai-private-source-receipt-v2'||data.ownerUid!==job.ownerUid||data.jobId!==job.jobId||data.sourceReceiptRef!==sourceReceiptRef||data.requestedPurpose!=='reconstruct-place'||data.idempotencyKey!==job.jobId||!PRIVATE_HANDLE.test(String(data.sourceHandle||''))) throw new Error('private source authorization denied or invalid');
     handles.push(String(data.sourceHandle));
   }
   return handles;

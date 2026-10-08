@@ -2,7 +2,8 @@ import {readFileSync} from 'node:fs';
 
 const activeWorkflowPaths = [
   '.github/workflows/urai-jobs-production-deploy.yml',
-  '.github/workflows/post-deploy-verify.yml'
+  '.github/workflows/post-deploy-verify.yml',
+  '.github/workflows/private-life-model-provider-deploy.yml'
 ];
 
 const retiredWorkflowPaths = [

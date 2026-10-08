@@ -39,7 +39,7 @@ const PrivateSourceIndexPayloadSchema = z.object({
 }).strict();
 
 const CapturedRealityReconstructionPayloadSchema = z.object({
-  sourceReceiptRefs: z.array(z.string().trim().min(8).max(256).regex(/^[A-Za-z0-9._:-]+$/)).min(1).max(32),
+  sourceReceiptRefs: z.array(z.string().trim().regex(/^psr_[A-Za-z0-9_-]{16,128}$/)).min(1).max(32),
   studioProjectRef: z.string().trim().min(8).max(256).regex(/^[A-Za-z0-9._:-]+$/),
   assetFactoryGovernanceRef: z.string().trim().min(8).max(256).regex(/^[A-Za-z0-9._:-]+$/),
   spatialAuthorityHead: z.string().trim().regex(/^[0-9a-f]{40}$/),

@@ -454,13 +454,15 @@ async function requireCurrentAuthority(tx: any, request: IndexRequest, resolved:
   if (block.data()?.active === true || fence.data()?.deleted === true) throw new Error('private authority revoked/deleted');
   const source = sourceSnap.data();
   const transcript = transcriptSnap.data();
+  const sourceConsents = Array.isArray(source?.consents) ? source.consents : (source?.consent ? [source.consent] : []);
+  const sourceConsent = sourceConsents.find((entry:any) => entry?.purpose === consent.purpose);
   if (!source || source.schemaVersion !== SOURCE_CONTRACT || source.ownerUid !== request.ownerUid
     || source.sourceReceiptRef !== request.sourceReceiptRef || source.sourceHandle !== request.sourceHandle
     || source.status !== 'ACTIVE' || source.synthetic !== false
     || source.sourceEvidenceClass !== request.sourceEvidenceClass
     || !Array.isArray(source.purposes) || !source.purposes.includes(request.requestedPurpose)
-    || source.consent?.purpose !== consent.purpose || source.consent?.policyVersion !== consent.policyVersion
-    || source.consent?.decisionReceiptId !== consent.decisionReceiptId) throw new Error('protected source grant mismatch');
+    || sourceConsent?.policyVersion !== consent.policyVersion
+    || sourceConsent?.decisionReceiptId !== consent.decisionReceiptId) throw new Error('protected source grant mismatch');
   for (const key of ['sourceRevision','sourceFixityRef','sourceSha256','sourceByteLength']) {
     if (source[key] !== resolved[key as keyof ResolvedInputs]) throw new Error('protected source corrected/fixity mismatch');
   }

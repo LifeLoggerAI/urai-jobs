@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "urai-private-source-receipt-v2",
+  "ownerUid": "synthetic_owner_01",
+  "sourceReceiptRef": "psr_synthetic_source_000001",
+  "sourceHandle": "psh_synthetic_handle_000001",
+  "status": "ACTIVE",
+  "synthetic": false,
+  "sourceEvidenceClass": "SOURCE_CAPTURED",
+  "purposes": [
+    "reconstruct-place"
+  ],
+  "consents": [
+    {
+      "purpose": "memory.storage",
+      "policyVersion": "synthetic-v1",
+      "decisionReceiptId": "synthetic-memory-decision"
+    },
+    {
+      "purpose": "location.context",
+      "policyVersion": "synthetic-v1",
+      "decisionReceiptId": "synthetic-location-decision"
+    }
+  ],
+  "sourceRevision": 1,
+  "sourceFixityRef": "private:synthetic/source-fixity",
+  "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "sourceByteLength": 1234
+}

@@ -13,12 +13,12 @@ const check = (name, ok) => {
 
 check('captured reconstruction has dedicated worker URL', runtime.includes("workerEnvKey: 'CAPTURED_REALITY_WORKER_URL'"));
 check('captured reconstruction is async/callback fenced', runtime.includes("'memory.private-source.reconstruct-place'") && runtime.includes("cancellation: 'callback-fenced'"));
-check('payload is opaque receipt/project/governance references', create.includes('CapturedRealityReconstructionPayloadSchema'));
 check('payload forbids provider spend', create.includes('providerSpendAuthorized: z.literal(false)'));
 check('payload forbids public release', create.includes('publicReleaseAuthorized: z.literal(false)'));
 const schemaStart = create.indexOf('const CapturedRealityReconstructionPayloadSchema');
 const schemaEnd = create.indexOf('}).strict();', schemaStart) + '}).strict();'.length;
 const reconstructionSchemaSource = schemaStart >= 0 && schemaEnd > schemaStart ? create.slice(schemaStart, schemaEnd) : '';
+check('payload is opaque receipt/project/governance references', create.includes('CapturedRealityReconstructionPayloadSchema') && reconstructionSchemaSource.includes('regex(/^psr_[A-Za-z0-9_-]{16,128}$/)'));
 check('payload contains no raw media URL field', Boolean(reconstructionSchemaSource) && !/(rawMediaUrl|sourceUrl|address|latitude|longitude)\s*:/.test(reconstructionSchemaSource));
 check('dual consent requires memory storage', create.includes("purposes.has('memory.storage')"));
 check('dual consent requires location context', create.includes("purposes.has('location.context')"));
