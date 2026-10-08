@@ -24,6 +24,14 @@ const protectedCanonical = value => {
 };
 const requestDigest = (endpoint, body) => hash(Buffer.concat([Buffer.from(`POST\n${endpoint}\n`), Buffer.from(body)]));
 const gatewayUrl = 'https://synthetic-gateway.example/api/worker/production-spend';
+function assertSyntheticTransportUrl(value, expectedUrl) {
+  const target = new URL(String(value)), expected = new URL(expectedUrl);
+  assert.equal(target.protocol, 'https:', 'synthetic transport requires HTTPS');
+  assert.equal(target.username, '', 'synthetic transport forbids URL credentials');
+  assert.equal(target.password, '', 'synthetic transport forbids URL credentials');
+  assert.equal(target.origin, expected.origin, 'unexpected network origin prohibited');
+  assert.equal(String(value), expectedUrl, 'unexpected network call prohibited');
+}
 const gatewaySha = 'b'.repeat(40);
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'urai-narrator-leaf-'));
 function git(...args) { return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); }
@@ -79,7 +87,8 @@ function fixture(provider, options = {}, extension = 'ts') {
     return { ok: true, ...(options.missingPreflightExpiry ? {} : { admission_expires_at: new Date(verifiedPreflightExpiry).toISOString() }), envelope: { job: protectedJob, ...(options.missingControls ? {} : { protected_controls: controls }), ...(options.missingPricing ? {} : { protected_pricing: price }) }, provider_call_authorized: false, execution_performed: false };
   }
   const fetch = async (url, init) => {
-    if (String(url).startsWith('https://synthetic-gateway.example')) {
+    if (new URL(String(url)).origin === new URL(gatewayUrl).origin) {
+      assertSyntheticTransportUrl(url, gatewayUrl);
       const fields = JSON.parse(init.body); events.push({ action: fields.action, fields });
       assert.equal(String(url), gatewayUrl); assert.equal(init.redirect, 'error');
       assert.equal(new Headers(init.headers).get('authorization'), `Bearer ${mapping[requestDigest(endpoint, body)].token}`);
@@ -112,7 +121,7 @@ function fixture(provider, options = {}, extension = 'ts') {
       }
       throw new Error('Unexpected synthetic gateway operation');
     }
-    assert.equal(String(url), endpoint, 'unexpected network call prohibited');
+    assertSyntheticTransportUrl(url, endpoint);
     submitted.push({ url: String(url), init });
     if (options.providerLost) throw new Error('synthetic provider response lost');
     if (options.providerTimeout) { clock.now += 2000; return new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('synthetic provider timeout')), { once: true })); }
@@ -348,6 +357,20 @@ try {
   else if (args.includes('--reproduce')) {
     for (const provider of ['google', 'elevenlabs']) await test(`predecessor ${provider} invokes actual paid leaf without canonical approval`, async () => { const f = fixture(provider, { env: { URAI_NARRATOR_SPEND_BINDINGS_JSON: '{}' } }); await f.execute(); assert.equal(f.events.length, 0); assert.equal(f.submitted.length, 1); });
   } else {
+    for (const expected of [gatewayUrl, 'https://texttospeech.googleapis.com/v1/text:synthesize', 'https://api.elevenlabs.io/v1/text-to-speech/synthetic-voice?output_format=mp3_44100_128']) {
+      await test('synthetic transport accepts exact credential-free HTTPS URL ' + new URL(expected).host,
+        () => assertSyntheticTransportUrl(expected, expected));
+    }
+    await test('synthetic transport accepts an exact URL object', () => assertSyntheticTransportUrl(new URL(gatewayUrl), gatewayUrl));
+    for (const [label, value] of [
+      ['malformed', 'not-a-url'], ['relative', '/api/worker/production-spend'],
+      ['HTTP', 'http://synthetic-gateway.example/api/worker/production-spend'],
+      ['credentials', 'https://synthetic:fixture@synthetic-gateway.example/api/worker/production-spend'],
+      ['foreign origin', 'https://other.invalid/api/worker/production-spend'],
+      ['hostname suffix', 'https://synthetic-gateway.example.other.invalid/api/worker/production-spend'],
+      ['alternate port', 'https://synthetic-gateway.example:444/api/worker/production-spend'],
+      ['different path', 'https://synthetic-gateway.example/other'],
+    ]) await test('synthetic transport rejects ' + label, () => assert.throws(() => assertSyntheticTransportUrl(value, gatewayUrl)));
     for (const extension of ['ts', 'js']) for (const provider of ['google', 'elevenlabs']) {
       const prefix = `${extension} ${provider}`;
       await test(`${prefix} missing protected mapping blocks actual provider`, () => denied(provider, { env: { URAI_NARRATOR_SPEND_BINDINGS_JSON: '{}' } }, undefined, extension));
