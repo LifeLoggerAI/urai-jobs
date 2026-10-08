@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const authority = require('../workers/captured-reality-worker/lifecycle-authority.js');
 const attempt = { jobId: 'private_job_01', leaseToken: 'lease_01', ownerUid: 'synthetic_owner_01' };
-attempt.payload = { sourceReceiptRefs: ['receipt_01'], spatialAuthorityHead: 'a'.repeat(40), reconstructionMethod: '3dgs',
+attempt.payload = { sourceReceiptRefs: ['psr_synthetic_capture_000001'], spatialAuthorityHead: 'a'.repeat(40), reconstructionMethod: '3dgs',
   studioProjectRef: '', assetFactoryGovernanceRef: '' };
 const baseJob = () => ({
   status: 'RUNNING', ownerUid: attempt.ownerUid, type: 'memory.private-source.reconstruct-place', payload: structuredClone(attempt.payload),
@@ -51,9 +51,9 @@ async function exercise({ job = baseJob(), blocked = false, revokeAfterAuthorize
     process: { env: { URAI_ENV: 'test', PRIVATE_SOURCE_AUTHORITY_URL: 'https://authority.invalid', PRIVATE_SOURCE_AUTHORITY_TOKEN: 'synthetic',
       CAPTURED_REALITY_ENGINE_URL: 'https://engine.invalid', CAPTURED_REALITY_ENGINE_TOKEN: 'synthetic', CAPTURED_REALITY_WORKER_PUBLIC_URL: 'https://worker.invalid' } },
     URL, Date, console: { log() {}, error() {} },
-    fetch: async (url) => {
+    fetch: async (url, options) => {
       calls.push(url);
-      if (url.includes('/authorize')) { authorized = true; return { status: 200, json: async () => ({ authorized: true, sourceHandle: 'opaque_handle_01' }) }; }
+      if (url.includes('/authorize')) { authorized = true; const authorityRequest=JSON.parse(options?.body || '{}'); return { status: 200, json: async () => ({ schemaVersion:'urai-private-source-receipt-v2',authorized:true,ownerUid:attempt.ownerUid,jobId:attempt.jobId,sourceReceiptRef:authorityRequest.sourceReceiptRef,requestedPurpose:'reconstruct-place',idempotencyKey:attempt.jobId,sourceHandle:'psh_synthetic_capture_000001' }) }; }
       return { ok: true, json: async () => ({ accepted: true }) };
     },
   };
@@ -61,7 +61,7 @@ async function exercise({ job = baseJob(), blocked = false, revokeAfterAuthorize
   let status, body;
   const res = { status(value) { status = value; return this; }, send(value) { body = value; return this; } };
   const req = { body: callback ? { jobId: attempt.jobId, status: 'failed' } : { ...attempt, jobType: 'memory.private-source.reconstruct-place',
-    payload: { sourceReceiptRefs: ['receipt_01'], spatialAuthorityHead: 'a'.repeat(40), reconstructionMethod: '3dgs', providerSpendAuthorized: false, publicReleaseAuthorized: false } },
+    payload: { sourceReceiptRefs: ['psr_synthetic_capture_000001'], spatialAuthorityHead: 'a'.repeat(40), reconstructionMethod: '3dgs', providerSpendAuthorized: false, publicReleaseAuthorized: false } },
     query: { callbackToken: 'synthetic_callback_01' }, get: () => '' };
   await routes.get(callback ? '/engine-callback' : '/execute-job')(req, res);
   return { status, body, writes, calls };
@@ -70,7 +70,7 @@ async function exercise({ job = baseJob(), blocked = false, revokeAfterAuthorize
 for (const options of [
   { job: { ...baseJob(), ownerUid: 'another_owner' } },
   { job: { ...baseJob(), consents: [{ purpose: 'memory.storage' }] } },
-  { job: { ...baseJob(), payload: { ...attempt.payload, sourceReceiptRefs: ['unrelated_receipt_01'] } } },
+  { job: { ...baseJob(), payload: { ...attempt.payload, sourceReceiptRefs: ['unrelated_psr_synthetic_capture_000001'] } } },
   { blocked: true },
 ]) {
   const result = await exercise(options);
