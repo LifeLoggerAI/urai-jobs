@@ -118,7 +118,19 @@ async function admitGrantTransaction(db, grant, project) {
     }
     if (canonicalDeletion.exists) {
       const marker = canonicalDeletion.data();
-      if (marker?.uid !== grant.ownerUid || marker.active !== false) {
+      const keys = Object.keys(marker || {});
+      const planningFields = ['deletionPlanningLeaseToken','deletionPlanningLeaseUntil',
+        'deletionPlanningLeaseRequestId','deletionPlanningLeaseOperation','deletionPlanningLeaseBy'];
+      const timestamp = marker?.updatedAt;
+      const validTimestamp = timestamp instanceof Date ? Number.isFinite(timestamp.getTime())
+        : typeof timestamp?.toMillis === 'function' && Number.isFinite(timestamp.toMillis());
+      // The canonical planning controller leaves uid + updatedAt after releasing
+      // its lease. This exact server shape is neither an active tombstone nor a
+      // generic missing-active compatibility grant.
+      const releasedPlanningOnly = !keys.includes('active')
+        && keys.every(key => ['uid','updatedAt'].includes(key)) && validTimestamp;
+      if (marker?.uid !== grant.ownerUid || keys.some(key => planningFields.includes(key))
+        || (marker.active !== false && !releasedPlanningOnly)) {
         fail('canonical privacy deletion authority forbids provisioning');
       }
     }
