@@ -17,6 +17,7 @@ const original = fs.readFileSync(baselinePath ? baselinePath.slice('--baseline-s
 let cases = 0;
 const reproduceFinalRevocation = process.argv.includes('--reproduce-final-revocation');
 const reproduceFinalAuthority = process.argv.includes('--reproduce-final-authority');
+const reproduceNonterminalAuthority = process.argv.includes('--reproduce-nonterminal-authority');
 const authorityChanges = ['owner-changed', 'tenant-changed', 'payload-changed', 'consent-changed', 'type-changed'];
 function compile(source, dependencies, environment) {
   const exports = {};
@@ -29,8 +30,8 @@ const registry = compile(fs.readFileSync(new URL('functions/src/core/runtimeJobT
 const routes = Object.entries(registry.RUNTIME_JOB_REGISTRY).filter(([, value]) => value.workerEnvKey);
 const deletion = { marker: 'delete' };
 const fieldValue = { serverTimestamp: () => new Date(), delete: () => deletion, increment: amount => ({ marker: 'increment', amount }) };
-function fixture(jobType, origin, extra = {}, beforeDispatchChange) {
-  const job = { jobId: 'synthetic-worker-job', type: jobType, jobType, status: 'LEASED', ownerUid: 'synthetic-owner', tenantId: 'synthetic-tenant', lease: { leaseToken: 'synthetic-lease' }, execution: { maxAttempts: 1 }, consent: { purpose: 'synthetic.private', policyVersion: 'synthetic-v1', decisionReceiptId: 'synthetic-decision' }, payload: { text: 'synthetic-private-job-bytes' } };
+function fixture(jobType, origin, extra = {}, beforeDispatchChange, maxAttempts = 1) {
+  const job = { jobId: 'synthetic-worker-job', type: jobType, jobType, status: 'LEASED', ownerUid: 'synthetic-owner', tenantId: 'synthetic-tenant', lease: { leaseToken: 'synthetic-lease' }, execution: { maxAttempts }, consent: { purpose: 'synthetic.private', policyVersion: 'synthetic-v1', decisionReceiptId: 'synthetic-decision' }, payload: { text: 'synthetic-private-job-bytes' } };
   const docs = new Map([['jobs/' + job.jobId, job], ['jobQueue/' + job.jobId, { jobId: job.jobId, status: 'LEASED', lease: { leaseToken: 'synthetic-lease' } }]]);
   const logs = [];
   function changeAuthority(mode) {
@@ -87,11 +88,15 @@ function fixture(jobType, origin, extra = {}, beforeDispatchChange) {
   };
   imports['../privacy/consentBlocks.js'] = compile(fs.readFileSync(new URL('functions/src/privacy/consentBlocks.ts', root), 'utf8'), name => name === 'node:crypto' ? require(name) : imports[name], environment);
   const handler = compile(original, name => { assert.ok(Object.hasOwn(imports, name), name); return imports[name]; }, environment).executeJob;
-  return { docs, logs, job, changeAuthority, revokeConsent: () => docs.set(imports['../privacy/consentBlocks.js'].consentBlockRef(job.ownerUid, job.consent.purpose).path, { active: true }), execute: () => handler({ data: { message: { json: { jobId: job.jobId, leaseToken: 'synthetic-lease' } } } }) };
+  return { docs, logs, job, changeAuthority, registerAsyncCallback() {
+    const current = structuredClone(docs.get('jobs/' + job.jobId));
+    Object.assign(current.execution, { asyncCallbackPending: true, callbackLeaseToken: 'synthetic-lease', callbackTokenHash: 'synthetic-callback-hash', callbackDeadlineAt: new Date(Date.now() + 60000) });
+    docs.set('jobs/' + job.jobId, current);
+  }, revokeConsent: () => docs.set(imports['../privacy/consentBlocks.js'].consentBlockRef(job.ownerUid, job.consent.purpose).path, { active: true }), execute: () => handler({ data: { message: { json: { jobId: job.jobId, leaseToken: 'synthetic-lease' } } } }) };
 }
 async function listen(server) { server.listen(0, '127.0.0.1'); await once(server, 'listening'); return 'http://127.0.0.1:' + server.address().port; }
 async function close(server) { server.closeAllConnections(); await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
-async function scenario(jobType, status, sameOrigin, mode = 'redirect') {
+async function scenario(jobType, status, sameOrigin, mode = 'redirect', maxAttempts = 1, callbackPending = false) {
   const received = [], escaped = [];
   const consume = async request => { const chunks = []; for await (const chunk of request) chunks.push(chunk); return Buffer.concat(chunks).toString(); };
   const sink = http.createServer(async (req, res) => { escaped.push({ body: await consume(req), authorization: req.headers.authorization }); res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"ok":true}'); });
@@ -103,11 +108,11 @@ async function scenario(jobType, status, sameOrigin, mode = 'redirect') {
     received.push(input);
     if (mode === 'redirect') { res.writeHead(status, { location: (sameOrigin ? origin : sinkOrigin) + '/redirected' }); res.end(); }
     else if (mode === 'hang') { /* The synthetic timeout closes this request. */ }
-    else { if (mode === 'revoked') f.revokeConsent(); if (authorityChanges.includes(mode)) f.changeAuthority(mode); res.writeHead(status, { 'content-type': 'application/json' }); res.end('{"ok":true,"fixture":"owned-worker-response"}'); }
+    else { if (callbackPending) f.registerAsyncCallback(); if (mode === 'revoked') f.revokeConsent(); if (authorityChanges.includes(mode)) f.changeAuthority(mode); res.writeHead(status, { 'content-type': 'application/json' }); res.end('{"ok":true,"fixture":"owned-worker-response"}'); }
   });
   origin = await listen(worker);
   const beforeChange = mode.startsWith('before-') ? mode.slice(7) : undefined;
-  const f = fixture(jobType, origin, mode === 'hang' ? { URAI_JOBS_WORKER_TIMEOUT_MS: '40' } : {}, beforeChange);
+  const f = fixture(jobType, origin, mode === 'hang' ? { URAI_JOBS_WORKER_TIMEOUT_MS: '40' } : {}, beforeChange, maxAttempts);
   try {
     await f.execute();
     if (beforeChange && !reproduceFinalAuthority) {
@@ -127,7 +132,11 @@ async function scenario(jobType, status, sameOrigin, mode = 'redirect') {
     assert.equal(JSON.parse(received[0].body).payload.text, f.job.payload.text);
     assert.equal(received[0].path, registry.workerRouteForJobType(jobType));
     const final = f.docs.get('jobs/' + f.job.jobId);
-    if (reproduceFinalAuthority && (authorityChanges.includes(mode) || beforeChange)) {
+    if (reproduceNonterminalAuthority) {
+      assert.equal(final.status, status === 202 ? 'RUNNING' : 'PENDING', 'predecessor retained or retried an attempt after admitted authority changed');
+      assert.equal(final.output, undefined);
+      if (status === 500) assert.equal(final.retryCount, 1, 'predecessor automatically retried changed authority');
+    } else if (reproduceFinalAuthority && (authorityChanges.includes(mode) || beforeChange)) {
       assert.equal(final.status, 'SUCCESS', 'predecessor applied old worker output to changed execution authority');
       assert.equal(final.output.fixture, 'owned-worker-response');
     } else if (reproduceFinalRevocation && mode === 'revoked') {
@@ -143,16 +152,31 @@ async function scenario(jobType, status, sameOrigin, mode = 'redirect') {
       if (mode === 'revoked' || authorityChanges.includes(mode)) {
         assert.equal(final.status, 'CANCELLED'); assert.equal(final.output, undefined); assert.equal(final.result, undefined);
         assert.equal(final.execution.leaseToken, undefined); assert.equal(final.execution.asyncCallbackPending, false);
+        assert.equal(final.execution.callbackTokenHash, undefined); assert.equal(final.execution.callbackLeaseToken, undefined);
+        assert.equal(final.execution.callbackDeadlineAt, undefined); assert.equal(final.retryCount, undefined, 'changed authority must not enqueue an automatic retry');
         assert.equal(f.docs.get('jobQueue/' + f.job.jobId).status, 'CANCELLED');
+      } else if (mode === 'failure') {
+        assert.equal(final.status, 'PENDING'); assert.equal(final.retryCount, 1);
+        assert.equal(f.docs.get('jobQueue/' + f.job.jobId).status, 'PENDING');
+      } else if (mode === 'callback-pending') {
+        assert.equal(final.status, 'RUNNING'); assert.equal(final.execution.asyncCallbackPending, true);
+        assert.equal(final.execution.callbackLeaseToken, 'synthetic-lease'); assert.equal(final.retryCount, undefined);
       } else if (mode === 'redirect' || mode === 'hang') { assert.equal(final.status, 'DEAD'); assert.equal(final.output, undefined); assert.equal(final.result, undefined); }
       else if (status === 202) { assert.equal(final.status, 'RUNNING'); assert.equal(final.output, undefined); }
       else { assert.equal(final.status, 'SUCCESS'); assert.equal(final.output.fixture, 'owned-worker-response'); }
     }
     cases++;
-    console.log('[PASS] ' + jobType + ' ' + mode + ' ' + status + ' ' + (sameOrigin ? 'same-origin' : 'cross-origin'));
+    console.log('[PASS] ' + jobType + ' ' + mode + ' ' + status + ' ' + (sameOrigin ? 'same-origin' : 'cross-origin') + (callbackPending ? ' active-callback' : ''));
   } finally { await close(worker); await close(sink); }
 }
-if (reproduceFinalAuthority) {
+if (reproduceNonterminalAuthority) {
+  assert.ok(baselinePath, 'reproduction requires exact predecessor source');
+  for (const [jobType] of routes) for (const change of [...authorityChanges, 'revoked']) {
+    await scenario(jobType, 202, true, change);
+    await scenario(jobType, 500, true, change, 3);
+  }
+  console.log('[REPRODUCED] ' + cases + ' actual dispatcher asynchronous acknowledgments or automatic retries retained changed authority');
+} else if (reproduceFinalAuthority) {
   assert.ok(baselinePath, 'reproduction requires exact predecessor source');
   for (const [jobType] of routes) for (const change of authorityChanges) for (const phase of ['', 'before-']) await scenario(jobType, 200, true, phase + change);
   console.log('[REPRODUCED] ' + cases + ' actual dispatcher outputs finalized after owner, tenant, input, consent or type authority changed');
@@ -168,8 +192,17 @@ if (reproduceFinalAuthority) {
     for (const status of [301, 302, 303, 307, 308]) for (const sameOrigin of [true, false]) await scenario(jobType, status, sameOrigin);
     await scenario(jobType, 200, true, 'success');
     await scenario(jobType, 202, true, 'accepted');
+    await scenario(jobType, 202, true, 'accepted', 3, true);
+    await scenario(jobType, 500, true, 'failure', 3);
+    await scenario(jobType, 500, true, 'callback-pending', 3, true);
     await scenario(jobType, 200, true, 'revoked');
     for (const change of authorityChanges) await scenario(jobType, 200, true, change);
+    for (const change of [...authorityChanges, 'revoked']) {
+      await scenario(jobType, 202, true, change);
+      await scenario(jobType, 500, true, change, 3);
+      await scenario(jobType, 202, true, change, 3, true);
+      await scenario(jobType, 500, true, change, 3, true);
+    }
     for (const change of authorityChanges) await scenario(jobType, 200, true, 'before-' + change);
   }
   await scenario('narrator.tts', 0, true, 'hang');
