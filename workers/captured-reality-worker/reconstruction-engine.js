@@ -10,7 +10,7 @@ const { finished } = require('node:stream/promises');
 const { packageGaussian, conservativeCollisionGlb } = require('./gaussian-package');
 const { archiveReconstructionEvidence, hashOpenFile } = require('./reconstruction-evidence');
 const { partitionFrames, bindRegisteredSplits, radianceIsolationArguments, readHoldoutMetrics } = require('./reconstruction-holdout');
-const { validateMaskMetadata, pngDimensions, bindMasksToTransforms } = require('./reconstruction-masks');
+const { validateMaskMetadata, pngDimensions, bindMasksToTransforms, prepareSfmMasks, verifySfmMaskReceipt } = require('./reconstruction-masks');
 const { jsonRequest, privateUrl, readBody, authorized, send, HANDLE, SHA256, sha } = require('./private-media-resolver');
 const REQUEST_KEYS = new Set(['jobId', 'sourceHandles', 'reconstructionMethod', 'spatialAuthorityHead', 'studioProjectRef', 'assetFactoryGovernanceRef', 'callbackUrl']);
 
@@ -25,10 +25,15 @@ function validateRequest(body, callbackOrigin, local = false) {
     || !/^[0-9a-f]{64}$/.test(callback.searchParams.get('callbackToken') || '')) throw new Error('CALLBACK_AUTHORITY_INVALID');
   return JSON.parse(JSON.stringify(body));
 }
-function commandPlan(workspace, iterations = 30000) {
+function commandPlan(workspace, iterations = 30000, masked = false, maskManifestSha256) {
   if (!Number.isSafeInteger(iterations) || iterations < 1 || iterations > 30000) throw new Error('TRAINING_BUDGET_INVALID');
+  const wrapper = path.join(__dirname, 'masked-colmap.py');
+  if (masked && !/^\/[A-Za-z0-9_./-]+$/.test(wrapper)) throw new Error('MASK_SFM_WRAPPER_PATH_INVALID');
+  if (masked && !SHA256.test(String(maskManifestSha256 || ''))) throw new Error('MASK_SFM_AUTHORITY_REQUIRED');
   return [
-    ['ns-process-data', ['images', '--data', path.join(workspace, '04_frames_accepted'), '--output-dir', path.join(workspace, '05_colmap_processed')]],
+    ...(masked ? [['python3', [wrapper, '--authority-sha256', maskManifestSha256, '--validate-source']]] : []),
+    ['ns-process-data', ['images', '--data', path.join(workspace, '04_frames_accepted'), '--output-dir', path.join(workspace, '05_colmap_processed'),
+      ...(masked ? ['--sfm-tool', 'colmap', '--colmap-cmd', `${wrapper} --authority-sha256 ${maskManifestSha256}`, '--num-downscales', '0'] : [])]],
     ['ns-train', ['splatfacto', '--data', path.join(workspace, '05_colmap_processed'), '--output-dir', path.join(workspace, '06_training'), '--max-num-iterations', String(iterations), '--vis', 'tensorboard', ...radianceIsolationArguments(), '--downscale-factor', '1']],
   ];
 }
@@ -220,14 +225,20 @@ function createEngine(config, { run = command, checkRuntime = runtimeReadiness }
       const reservation = partitionFrames(lineage);
       if (!reservation.reserved) throw new Error('INSUFFICIENT_DISJOINT_HOLDOUT_INPUTS');
       await fs.writeFile(path.join(workspace, 'holdout-reservation.json'), JSON.stringify(reservation), { mode: 0o600 });
-      const startedAt = new Date().toISOString(), plan = commandPlan(workspace, config.iterations || 30000), logfile = path.join(workspace, 'private-command.log');
+      const sfmMaskPreparation = await prepareSfmMasks(workspace, lineage);
+      const startedAt = new Date().toISOString(), plan = commandPlan(workspace, config.iterations || 30000, Boolean(sfmMaskPreparation), sfmMaskPreparation?.manifestSha256), logfile = path.join(workspace, 'private-command.log');
       const deadline = Date.now() + Math.min(config.maxRunMs || 2700000, 2700000);
-      let splitReceipt, maskReceipt;
+      let splitReceipt, maskReceipt, sfmMaskReceipt;
       for (const [binary, args] of plan) {
         await sourceCheck(request, signal);
         if (binary === 'ns-train') await stage(request.jobId, 'TRAINING', { computeAuthorityRef: config.computeAuthorityRef, automaticTrainingRetries: 0 });
         await run(binary, args, { cwd: workspace, signal, logfile, timeoutMs: Math.max(1, deadline - Date.now()) });
         if (binary === 'ns-process-data') {
+          if (sfmMaskPreparation) {
+            const bytes = await fs.readFile(path.join(workspace, 'sfm-mask-application.json'));
+            if (bytes.length > 1024 * 1024) throw new Error('MASK_SFM_RECEIPT_LIMIT');
+            sfmMaskReceipt = verifySfmMaskReceipt(JSON.parse(bytes.toString('utf8')), sfmMaskPreparation);
+          }
           const transformPath = path.join(workspace, '05_colmap_processed', 'transforms.json'), cameraBytes = await fs.readFile(transformPath);
           if (cameraBytes.length > 16 * 1024 * 1024) throw new Error('CAMERA_MANIFEST_LIMIT');
           const bound = bindRegisteredSplits(JSON.parse(cameraBytes.toString('utf8')), reservation);
@@ -284,7 +295,7 @@ function createEngine(config, { run = command, checkRuntime = runtimeReadiness }
           computeAdmission: (await readState(request.jobId)).computeAdmission, actualCostUsd: null, actualCostReceiptAvailable: false,
           configurationSha256: sha(await fs.readFile(configurations[0])), archivalEvidence: { ref: retainedEvidence.ref, sha256: retainedEvidence.sha256, byteSize: retainedEvidence.byteSize },
           checkpointAvailable: retainedEvidence.manifest.checkpointAvailable, resumeAutomaticallyAuthorized: false,
-          holdoutReservation: reservation, splitReceipt, holdoutMetrics: holdout, maskReceipt,
+          holdoutReservation: reservation, splitReceipt, holdoutMetrics: holdout, maskReceipt, sfmMaskReceipt,
           startedAt, completedAt, sourceBytes: total, gaussianRecords: packaged.records },
         comparison: { schemaVersion: 'urai-source-reconstruction-review-v1', ...binding, machineCameraCoverage: transforms.frames.length / count,
           sourceVsReconstructionReviewed: false, literalReviewState: 'unreviewed', heldOutViewCount: holdout.heldOutViewCount, holdoutMetrics: holdout,
