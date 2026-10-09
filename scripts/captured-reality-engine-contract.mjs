@@ -34,6 +34,9 @@ assert.equal(gltf.extras.classification, 'CONSERVATIVE_VISUAL_ENVELOPE');
 await assert.rejects(command('sh', ['-c', 'true']), /COMMAND_NOT_ALLOWED/);
 assert.throws(() => commandPlan('/tmp/private', 30001), /BUDGET/);
 assert.deepEqual(commandPlan('/tmp/private').map(([binary]) => binary), ['ns-process-data', 'ns-train']);
+assert.deepEqual(commandPlan('/tmp/private', 30000, true, 'a'.repeat(64)).map(([binary]) => binary), ['python3', 'ns-process-data', 'ns-train']);
+assert.ok(commandPlan('/tmp/private', 30000, true, 'a'.repeat(64))[1][1].includes('--colmap-cmd'), 'native camera extraction must receive source-bound masks');
+assert.throws(() => commandPlan('/tmp/private', 30000, true), /MASK_SFM_AUTHORITY_REQUIRED/);
 const unavailable = await runtimeReadiness({}, async () => { throw new Error('unavailable'); });
 assert.equal(unavailable.ok, false); assert.equal(unavailable.checks.cuda, false); assert.equal(unavailable.checks.computeAuthorized, false);
 
@@ -101,6 +104,21 @@ const run = async (binary, args, { cwd, signal }) => {
   commands.push(binary); if (runnerFails) throw new Error('synthetic runner failure'); if (signal.aborted) throw new Error('cancelled');
   if (runnerWaits) { runnerEntered?.resolve(); await new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true })); }
   if (binary === 'ns-process-data') {
+    if (manifest.entries[0].acceptedInputs.some((input) => input.mask)) {
+      assert.ok(args.includes('--colmap-cmd'), 'source masks must enter native camera processing, before radiance training');
+      const authorityBytes = await fs.readFile(path.join(cwd, 'sfm-mask-authority.json'));
+      const authority = JSON.parse(authorityBytes.toString('utf8'));
+      assert.equal(authority.entries.length, inputs.length);
+      for (const entry of authority.entries) {
+        const bytes = await fs.readFile(path.join(cwd, '05_colmap_processed', 'sfm-masks', `${entry.imageName}.png`));
+        assert.equal(sha(bytes), entry.maskSha256, 'every verified native mask must exist before the camera command');
+      }
+      // Explicit command adapter only; the native Python/COLMAP tests cover
+      // parsing, dimensions, zeros and actual feature extraction separately.
+      await fs.writeFile(path.join(cwd, 'sfm-mask-application.json'), JSON.stringify({ schemaVersion: 'urai-native-colmap-mask-application-v1',
+        manifestSha256: sha(authorityBytes), maskedInputViews: authority.entries.length, maskFlag: '--ImageReader.mask_path',
+        nativeDimensionsVerified: true, featureExtractionSucceeded: true, candidateAcceptance: false, publicReleaseAuthorized: false }));
+    }
     await fs.mkdir(path.join(cwd, '05_colmap_processed'), { recursive: true });
     const pose = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
     await fs.writeFile(path.join(cwd, '05_colmap_processed', 'transforms.json'), JSON.stringify({ w: 4, h: 4, frames: (runnerMissingHoldout ? inputs.slice(0, 2) : inputs).map((_input, i) => ({
@@ -245,6 +263,8 @@ try {
   const maskedArtifactRoot = path.join(config.storageRoot, 'artifacts', sha(Buffer.from(maskedId)));
   const maskedTraining = JSON.parse(await fs.readFile(path.join(maskedArtifactRoot, maskedResult.output.trainingReceiptRef.split(':').at(-1)), 'utf8'));
   assert.equal(maskedTraining.maskReceipt.maskedRegisteredViews, 5); assert.equal(maskedTraining.maskReceipt.candidateAcceptance, false);
+  assert.equal(maskedTraining.sfmMaskReceipt.maskedInputViews, 5);
+  assert.equal(maskedTraining.sfmMaskReceipt.maskFlag, '--ImageReader.mask_path');
   const maskedArchive = JSON.parse(await fs.readFile(path.join(maskedArtifactRoot, maskedTraining.archivalEvidence.sha256), 'utf8'));
   const maskedCameras = JSON.parse(await fs.readFile(path.join(maskedArtifactRoot, maskedArchive.artifacts.find((artifact) => artifact.role === 'cameras').sha256), 'utf8'));
   assert.ok(maskedCameras.frames.every((frame) => /^masks\/frame_\d{5}\.png$/.test(frame.mask_path)));
@@ -255,7 +275,7 @@ try {
   await fs.writeFile(manifestPath, JSON.stringify(manifest));
   const beforeMaskMismatch = commands.length, mismatched = await permittedSubmit(engine, config, { ...request, jobId: mismatchId });
   assert.equal((await mismatched.completion).success, false);
-  assert.deepEqual(commands.slice(beforeMaskMismatch), ['ns-process-data'], 'mask/camera dimensions must match before paid training');
+  assert.deepEqual(commands.slice(beforeMaskMismatch), ['python3', 'ns-process-data'], 'mask/camera dimensions must match before paid training');
   manifest.entries[0].acceptedInputs = inputs;
   const thirdId = 'synthetic_job_03'; manifest.entries[0].jobId = thirdId; await fs.writeFile(manifestPath, JSON.stringify(manifest)); callbackDrops = true;
   const third = await permittedSubmit(engine, config, { ...request, jobId: thirdId }); await third.completion;

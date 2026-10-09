@@ -2,6 +2,7 @@ import './life-movies-dimensions-smoke.mjs';
 import './life-movies-worker-authority-smoke.mjs';
 import './life-movies-output-generation-smoke.mjs';
 import './life-movies-ordinary-subtitles-smoke.mjs';
+import './life-movies-source-interval-smoke.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
