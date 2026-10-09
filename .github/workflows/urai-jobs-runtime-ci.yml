@@ -84,6 +84,7 @@ jobs:
             sudo apt-get install -y ffmpeg
           fi
           node scripts/life-movies-media-timing-smoke.mjs
+          node scripts/life-movies-source-interval-smoke.mjs --media
           node scripts/life-movies-delayed-audio-smoke.mjs
           node scripts/life-movies-cancellation-smoke.mjs
           node scripts/life-movies-render-budget-smoke.mjs
@@ -124,7 +125,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          MODEL_FORGE_FACTORY_SHA: e2cfa78d406f50902d542f4d0dd78db949e8f488
+          MODEL_FORGE_FACTORY_SHA: e9402bc64aadbd6087f0e84250eb56ebbab85b37
         run: |
           set -euo pipefail
           actual_factory_sha="$(gh api repos/LifeLoggerAI/asset-factory/pulls/421 --jq .head.sha)"
