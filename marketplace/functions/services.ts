@@ -1,5 +1,5 @@
-import type { CandidateProfile, JobApplication, MarketplaceJob } from '../shared/types';
-import { seedJobs } from '../shared/seed-jobs';
+import type { CandidateProfile, JobApplication, MarketplaceJob } from '../shared/types.js';
+import { seedJobs } from '../shared/seed-jobs.js';
 
 const jobs = new Map<string, MarketplaceJob>();
 const profiles = new Map<string, CandidateProfile>();

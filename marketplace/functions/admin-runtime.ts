@@ -1,76 +1,48 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { initializeMarketplaceAdminRuntime } from './firebase-admin-runtime';
-import { marketplaceCollections } from './collections';
-import type { MarketplaceAuthContext } from './auth';
-
-export const requireAdmin = (auth: MarketplaceAuthContext) => {
-  if (!auth.admin) {
-    throw new Error('ADMIN_REQUIRED');
-  }
-
-  return auth.uid;
-};
+import { initializeMarketplaceAdminRuntime } from './firebase-admin-runtime.js';
+import { marketplaceCollections } from './collections.js';
+import type { MarketplaceAuthContext } from './auth.js';
+import { requireAdmin } from './auth.js';
+import { assertCurrentMarketplaceActor, assertCurrentMarketplaceAuth, assertTenant, requireIdentifier } from './auth-runtime.js';
+import { requireApprovedEmployer } from './ownership-runtime.js';
 
 export const createMarketplaceAdminRuntime = () => {
-  const runtime = initializeMarketplaceAdminRuntime();
-  const db = runtime.firestore;
-
+  const db = initializeMarketplaceAdminRuntime().firestore;
+  const moderate = (actor: MarketplaceAuthContext, input: { jobId: string; reason?: string }, approved: boolean) => {
+    requireAdmin(actor);
+    return db.runTransaction(async transaction => {
+      const current = await assertCurrentMarketplaceActor(db, transaction, actor);
+      const ref = db.collection(marketplaceCollections.publicJobs).doc(requireIdentifier(input.jobId, 'jobId'));
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) throw new Error('JOB_NOT_FOUND');
+      const data = snapshot.data() || {};
+      assertTenant(data, current.tenantId);
+      if (data.status !== 'pending_review' || data.moderationStatus !== 'pending') throw new Error('JOB_NOT_EDITABLE');
+      const employer = await transaction.get(db.collection(marketplaceCollections.employers).doc(String(data.employerId)));
+      assertTenant(employer.data(), current.tenantId);
+      if (approved) requireApprovedEmployer(employer.data() || {});
+      await assertCurrentMarketplaceAuth(actor);
+      const now = FieldValue.serverTimestamp();
+      const patch = approved ? { status: 'published', moderationStatus: 'approved',
+        approvedBy: current.uid, approvedAt: now, publishedAt: now, updatedAt: now }
+        : { status: 'rejected', moderationStatus: 'rejected', rejectedBy: current.uid,
+          rejectedReason: input.reason ?? null, rejectedAt: now, updatedAt: now };
+      transaction.update(ref, patch);
+      return { ok: true, jobId: input.jobId, status: patch.status, moderationStatus: patch.moderationStatus };
+    });
+  };
   return {
-    async listModerationQueue() {
-      return db
-        .collection(marketplaceCollections.jobs)
-        .where('moderationStatus', '==', 'pending')
-        .limit(100)
-        .get();
+    async listModerationQueue(actor: MarketplaceAuthContext) {
+      requireAdmin(actor);
+      return db.runTransaction(async transaction => {
+        const current = await assertCurrentMarketplaceActor(db, transaction, actor);
+        const snapshot = await transaction.get(db.collection(marketplaceCollections.publicJobs)
+          .where('tenantId', '==', current.tenantId).where('moderationStatus', '==', 'pending').limit(100));
+        await assertCurrentMarketplaceAuth(actor);
+        return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      });
     },
-
-    async approveJob(input: {
-      adminUid: string;
-      jobId: string;
-    }) {
-      await db.collection(marketplaceCollections.jobs).doc(input.jobId).set(
-        {
-          moderationStatus: 'approved',
-          status: 'published',
-          approvedBy: input.adminUid,
-          approvedAt: FieldValue.serverTimestamp(),
-          publishedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      return {
-        ok: true,
-        jobId: input.jobId,
-        moderationStatus: 'approved',
-        status: 'published',
-      };
-    },
-
-    async rejectJob(input: {
-      adminUid: string;
-      jobId: string;
-      reason?: string;
-    }) {
-      await db.collection(marketplaceCollections.jobs).doc(input.jobId).set(
-        {
-          moderationStatus: 'rejected',
-          status: 'rejected',
-          rejectedBy: input.adminUid,
-          rejectedReason: input.reason ?? null,
-          rejectedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      return {
-        ok: true,
-        jobId: input.jobId,
-        moderationStatus: 'rejected',
-        status: 'rejected',
-      };
-    },
+    approveJob(actor: MarketplaceAuthContext, input: { jobId: string }) { return moderate(actor, input, true); },
+    rejectJob(actor: MarketplaceAuthContext, input: { jobId: string; reason?: string }) { return moderate(actor, input, false); },
   };
 };
