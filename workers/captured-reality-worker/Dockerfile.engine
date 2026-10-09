@@ -12,6 +12,8 @@ RUN node -e 'if (!/^node(?:[:][A-Za-z0-9._-]+)?@sha256:[a-f0-9]{64}$/.test(proce
 WORKDIR /app
 COPY reconstruction-engine.js private-media-resolver.js gaussian-package.js reconstruction-holdout.js reconstruction-evidence.js reconstruction-masks.js ./
 COPY inspect-engine-runtime.py ./
+COPY --chmod=755 masked-colmap.py ./
+RUN python3 masked-colmap.py --check-support
 RUN python3 inspect-engine-runtime.py --output /app/engine-runtime.json
 RUN node --check reconstruction-engine.js && node --check reconstruction-holdout.js && node --check reconstruction-evidence.js && node --check reconstruction-masks.js
 LABEL org.opencontainers.image.title="UrAi private Captured Reality engine"

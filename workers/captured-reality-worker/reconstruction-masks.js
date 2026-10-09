@@ -1,5 +1,10 @@
 'use strict';
 
+const crypto = require('node:crypto');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { constants } = require('node:fs');
+
 const HANDLE = /^[A-Za-z0-9._:-]{8,512}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const FRAME = /^\d{6}\.(png|jpg)$/;
@@ -76,4 +81,43 @@ function bindMasksToTransforms(transforms, lineage) {
     publicReleaseAuthorized: false } };
 }
 
-module.exports = { validateMaskMetadata, pngDimensions, bindMasksToTransforms };
+async function prepareSfmMasks(workspace, lineage) {
+  if (!Array.isArray(lineage) || lineage.length < 3 || lineage.length > 3000) throw new Error('MASK_SFM_INPUT_INVALID');
+  const sorted = [...lineage].sort((a, b) => String(a.filename).localeCompare(String(b.filename), 'en'));
+  const masks = sorted.map(validateMaskMetadata);
+  if (masks.every((mask) => !mask)) return null;
+  // Native COLMAP and radiance training must use the same admitted masks. Do
+  // not fill a missing static mask, or defer coverage failure until after SfM.
+  if (masks.some((mask) => !mask)) throw new Error('MASK_SFM_COVERAGE_INCOMPLETE');
+  const destination = path.join(workspace, '05_colmap_processed', 'sfm-masks');
+  await fs.mkdir(destination, { recursive: true, mode: 0o700 });
+  const names = new Set(), entries = [];
+  for (const [index, input] of sorted.entries()) {
+    if (!FRAME.test(String(input.filename || '')) || names.has(input.filename)) throw new Error('MASK_FRAME_NAME_INVALID');
+    names.add(input.filename);
+    const bytes = await fs.readFile(path.join(workspace, 'source-masks', input.filename.replace(/\.(png|jpg)$/, '.png')));
+    const mask = masks[index], dimensions = pngDimensions(bytes);
+    if (bytes.length !== mask.byteSize || crypto.createHash('sha256').update(bytes).digest('hex') !== mask.sha256) throw new Error('MASK_SFM_FIXITY_MISMATCH');
+    const imageName = `frame_${String(index + 1).padStart(5, '0')}.${input.filename.split('.').at(-1)}`;
+    // COLMAP appends .png to the complete image name, including its extension.
+    await fs.copyFile(path.join(workspace, 'source-masks', input.filename.replace(/\.(png|jpg)$/, '.png')),
+      path.join(destination, `${imageName}.png`), constants.COPYFILE_EXCL);
+    entries.push({ sourceFilename: input.filename, imageName, sourceSha256: input.sha256, sourceByteSize: input.byteSize,
+      maskSha256: mask.sha256, maskByteSize: mask.byteSize, ...dimensions });
+  }
+  const manifest = { schemaVersion: 'urai-source-bound-sfm-mask-v1', entries };
+  const bytes = Buffer.from(JSON.stringify(manifest));
+  await fs.writeFile(path.join(workspace, 'sfm-mask-authority.json'), bytes, { flag: 'wx', mode: 0o600 });
+  return { schemaVersion: manifest.schemaVersion, manifestSha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+    maskedInputViews: entries.length, candidateAcceptance: false, publicReleaseAuthorized: false };
+}
+
+function verifySfmMaskReceipt(receipt, prepared) {
+  if (!prepared || receipt?.schemaVersion !== 'urai-native-colmap-mask-application-v1'
+    || receipt.manifestSha256 !== prepared.manifestSha256 || receipt.maskedInputViews !== prepared.maskedInputViews
+    || receipt.maskFlag !== '--ImageReader.mask_path' || receipt.nativeDimensionsVerified !== true
+    || receipt.featureExtractionSucceeded !== true || receipt.candidateAcceptance !== false) throw new Error('MASK_SFM_APPLICATION_UNVERIFIED');
+  return JSON.parse(JSON.stringify(receipt));
+}
+
+module.exports = { validateMaskMetadata, pngDimensions, bindMasksToTransforms, prepareSfmMasks, verifySfmMaskReceipt };
