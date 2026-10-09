@@ -25,7 +25,7 @@ async function mount(handler){
       res.status=code=>{res.statusCode=code;return res;};res.set=(key,value)=>{res.setHeader(key,value);return res;};
       res.json=body=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(body));return res;};
       res.send=body=>{res.end(body);return res;};await handler(req,res);
-    }catch(error){res.statusCode=500;res.end(JSON.stringify({fixtureError:String(error)}));}
+    }catch{res.statusCode=500;res.end(JSON.stringify({fixtureError:'FIXTURE_INTERNAL_ERROR'}));}
   });
   await new Promise(r=>server.listen(0,'127.0.0.1',r));
   return{server,base:'http://127.0.0.1:'+server.address().port};
@@ -37,12 +37,24 @@ mount.toString(),'const{marketplaceApi}=await import('+JSON.stringify(mainUrl)+'
 "assert.equal(marketplaceApi.__endpoint.platform,'gcfv2');assert.equal(getApps().length,0);",
 "const{server,base}=await mount(marketplaceApi);try{for(const[method,path,status]of[['GET','/api/marketplace/jobs',503],['POST','/api/marketplace/profiles',503],['PATCH','/api/marketplace/applications/fixture/withdraw',503],['GET','/api/marketplace/health',200],['OPTIONS','/api/marketplace/profiles',204]]){",
 "const response=await fetch(base+path,{method,headers:{Origin:'http://127.0.0.1','Content-Type':'application/json'},...(method==='POST'?{body:'{}'}:{})});assert.equal(response.status,status);if(status===503)assert.equal((await response.json()).code,'MARKETPLACE_LAUNCH_BLOCKED');if(path.endsWith('/health'))assert.equal((await response.json()).ready,false);}",
-"assert.equal((await fetch(base+'/api/marketplace/health',{headers:{Origin:'https://foreign.invalid'}})).status,403);assert.equal(getApps().length,0);console.log(JSON.stringify({node:process.version,platform:'gcfv2',defaultHoldCases:6,firebaseAppsInitialized:0,adapter:'none'}));",
+"assert.equal((await fetch(base+'/api/marketplace/health',{headers:{Origin:'https://foreign.invalid'}})).status,403);assert.equal(getApps().length,0);",
+"const malformed=await fetch(base+'/api/marketplace/profiles',{method:'POST',headers:{Origin:'http://127.0.0.1','Content-Type':'application/json'},body:'{'});assert.equal(malformed.status,500);assert.deepEqual(await malformed.json(),{fixtureError:'FIXTURE_INTERNAL_ERROR'});",
+"assert.equal(getApps().length,0);console.log(JSON.stringify({node:process.version,platform:'gcfv2',defaultHoldCases:6,fixtureErrorResponseCases:1,firebaseAppsInitialized:0,adapter:'none'}));",
 "}finally{await new Promise(r=>server.close(r));}"].join('\n');
 const held=spawnSync(process.execPath,['--input-type=module','-e',heldSource],{cwd:functionsDir,env:{...process.env,URAI_JOBS_MARKETPLACE_LAUNCH_APPROVED:'false'},encoding:'utf8',timeout:20000});
 assert.equal(held.status,0,held.stderr+held.stdout);
 const defaultHold=JSON.parse(held.stdout.trim().split('\n').at(-1));
 console.log('PASS genuine compiled entry import/default hold over HTTP (6 cases)');
+const failingFixture=await mount(()=>{throw new Error('synthetic-fixture-private-detail');});
+try{
+  const response=await fetch(failingFixture.base+'/owned-fixture');
+  assert.equal(response.status,500);
+  const body=await response.text();
+  assert.deepEqual(JSON.parse(body),{fixtureError:'FIXTURE_INTERNAL_ERROR'});
+  assert.equal(body.includes('synthetic-fixture-private-detail'),false);
+  assert.equal(body.includes('Error:'),false);
+}finally{await new Promise(r=>failingFixture.server.close(r));}
+console.log('PASS fixture HTTP errors disclose no exception detail (2 cases)');
 const copy=value=>value===undefined?undefined:structuredClone(value);
 function normalize(value,stamp){
   if(value===undefined)throw Error('synthetic Firestore rejects undefined');
@@ -360,7 +372,7 @@ try{
     await denied('POST','/api/marketplace/resume-intent','candidate',{contentType:'application/pdf'},'RESUME_UPLOAD_UNAVAILABLE',503);assert.equal(metrics.storageCalls,0);
   });
   assert.equal(metrics.storageCalls,0);
-  console.log(JSON.stringify({ok:true,node:process.version,actualPackageMain:pkg.main,actualHttpsPlatform:marketplaceApi.__endpoint.platform,defaultHold,actualLoopbackCases:cases.length,cases,
+  console.log(JSON.stringify({ok:true,node:process.version,actualPackageMain:pkg.main,actualHttpsPlatform:marketplaceApi.__endpoint.platform,defaultHold,fixtureErrorResponseCases:defaultHold.fixtureErrorResponseCases+1,actualLoopbackCases:cases.length,cases,
     persistence:'synthetic versioned Firestore interface with conflict retries; current Auth interface',
     authFirestoreAtomicity:'separate services; Auth re-read at final decision; no atomic cross-service claim',
     consent:'supplied purpose metadata plus existing Jobs revocation authority; no canonical positive-grant proof',
