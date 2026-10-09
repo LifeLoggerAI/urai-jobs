@@ -1,5 +1,5 @@
-import { dispatchMarketplaceRequest } from './dispatcher';
-import { readMarketplaceEnv } from './env';
+import { dispatchMarketplaceRequest } from './dispatcher.js';
+import { readMarketplaceEnv } from './env.js';
 
 export const createFirebaseHttpAdapter = () => {
   const env = readMarketplaceEnv();

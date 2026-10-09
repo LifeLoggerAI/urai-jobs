@@ -1,5 +1,5 @@
-import { initializeMarketplaceFirebaseAdmin } from './firebase-admin';
-import { marketplaceCollections } from './collections';
+import { initializeMarketplaceFirebaseAdmin } from './firebase-admin.js';
+import { marketplaceCollections } from './collections.js';
 
 export const createFirestoreRuntime = () => {
   const firebase = initializeMarketplaceFirebaseAdmin();
