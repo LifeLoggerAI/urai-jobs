@@ -715,7 +715,9 @@ async function mixAudioCues(baseMoviePath, outputPath, audioCues, localBySource,
     const sourceStartSeconds = cue.sourceStartMs / 1000;
     const label = `cue${index}`;
     filters.push(
-      `[${inputIndex}:a:0]atrim=start=${sourceStartSeconds}:duration=${durationSeconds},asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo,volume=${cue.gainDb}dB,adelay=${cue.startMs}|${cue.startMs}[${label}]`,
+      // Materialize a camera track's delayed start before selecting its source
+      // interval. Resetting timestamps first advances dialogue into that silence.
+      `[${inputIndex}:a:0]aresample=48000:first_pts=0,atrim=start=${sourceStartSeconds}:duration=${durationSeconds},asetpts=PTS-STARTPTS,aformat=channel_layouts=stereo,volume=${cue.gainDb}dB,adelay=${cue.startMs}|${cue.startMs}[${label}]`,
     );
     mixInputs.push(`[${label}]`);
   }

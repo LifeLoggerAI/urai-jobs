@@ -35,7 +35,7 @@ type InlineWorkerResult = {
   completedAt: string;
 };
 
-type FailureOutcome = 'failed' | 'ignored' | 'callback-pending';
+type FailureOutcome = 'failed' | 'ignored' | 'callback-pending' | 'cancelled';
 
 const JobExecutionMessageSchema = z.object({
   jobId: z.string().min(1),
@@ -269,7 +269,7 @@ function cancelChangedAttempt(transaction: Transaction, jobRef: DocumentReferenc
   transaction.set(queueRef, { jobId, status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: now }, { merge: true });
 }
 
-async function handleJobFailure(jobId: string, leaseToken: string, error: unknown) {
+async function handleJobFailure(jobId: string, leaseToken: string, error: unknown, admitted: Job) {
   const db = getFirestore();
   const jobRef = jobDoc(jobId);
   const queueRef = jobQueueEntryDoc(jobId);
@@ -282,6 +282,20 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
     const current = snapshot.data() as Job;
     if (current.status !== 'RUNNING' || current.execution?.leaseToken !== leaseToken) {
       return 'ignored';
+    }
+    // An ambiguous or failed dispatch cannot retain a callback or automatically
+    // retry private input under account/consent authority that did not admit it.
+    if (!executionAuthorityUnchanged(current, admitted)) {
+      cancelChangedAttempt(transaction, jobRef, queueRef, jobId, 'execution_authority_changed');
+      return 'cancelled';
+    }
+    const contexts = jobConsentContexts(current);
+    if (current.ownerUid && contexts.length) {
+      const blocks = await Promise.all(contexts.map(context => transaction.get(consentBlockRef(current.ownerUid!, context.purpose))));
+      if (blocks.some(block => block.exists && block.data()?.active === true)) {
+        cancelChangedAttempt(transaction, jobRef, queueRef, jobId, 'consent_revoked');
+        return 'cancelled';
+      }
     }
     if (activeAsyncCallbackForLease(current, leaseToken, Date.now())) {
       return 'callback-pending';
@@ -354,6 +368,15 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
 
   if (outcome === 'ignored') {
     console.warn(`Ignored execution failure for stale, non-running, or terminal job ${jobId}:`, errorMessage);
+    return;
+  }
+
+  if (outcome === 'cancelled') {
+    await appendJobLog(jobId, {
+      level: 'warn', source: 'executeJob',
+      message: 'Failed dispatch was cancelled because admitted account, input or consent authority changed.',
+      metadata: { jobId, leaseTokenBound: true },
+    });
     return;
   }
 
@@ -582,6 +605,7 @@ export const executeJob = onMessagePublished({
       result = response.data;
 
       if (response.status === 202) {
+        if (!await currentDispatchAuthority()) return;
         await appendJobLog(jobId, {
           level: 'info',
           source: 'executeJob',
@@ -693,6 +717,6 @@ export const executeJob = onMessagePublished({
       metadata: { jobType },
     });
   } catch (error) {
-    await handleJobFailure(jobId, leaseToken, error);
+    await handleJobFailure(jobId, leaseToken, error, job);
   }
 });

@@ -564,6 +564,7 @@ async function persistRevision(request: IndexRequest, extraction: Extraction, re
       producer: { repository: 'LifeLoggerAI/urai-jobs', sourceSha: process.env.URAI_SOURCE_SHA,
         runtimeRevision: process.env.K_REVISION, model: process.env.URAI_LIFE_MODEL_EXTRACTOR_MODEL,
         executionAuthorityRef: process.env.URAI_PRIVATE_LIFE_MODEL_EXECUTION_AUTHORITY_REF,
+        spendingAuthorityRef: process.env.URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF,
         candidateAcceptance: false, publicReleaseAuthorized: false },
       importCandidate: quarantinedImport(request, extraction, resolved),
     };
@@ -600,6 +601,7 @@ function readiness() {
     auth: Boolean(process.env.PRIVATE_SOURCE_INDEX_TOKEN),
     executionEnabled: process.env.URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED === 'true',
     executionAuthority: PRIVATE_REF.test(String(process.env.URAI_PRIVATE_LIFE_MODEL_EXECUTION_AUTHORITY_REF || '')),
+    spendingAuthority: PRIVATE_REF.test(String(process.env.URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF || '')),
     sourceContract: process.env.URAI_PRIVATE_SOURCE_CONTRACT === SOURCE_CONTRACT,
     resolverUrl: Boolean(process.env.PRIVATE_SOURCE_REF_RESOLVER_URL),
     resolverToken: Boolean(process.env.PRIVATE_SOURCE_REF_RESOLVER_TOKEN),

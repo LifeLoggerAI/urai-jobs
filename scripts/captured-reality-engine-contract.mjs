@@ -378,3 +378,7 @@ try {
   }
 } finally { for (const server of servers) server.closeAllConnections(); await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve)))); await fs.rm(temp, { recursive: true, force: true }); }
 console.log('[PASS] captured reality engine/resolver contracts: synthetic transport/command doubles only; no CUDA, training, private-source or runtime acceptance');
+
+// Keep auth-free GPU diagnostic controls in the adopted engine verification entry point.
+await import('./captured-reality-gpu-smoke-contract.mjs');
+await import('./captured-reality-gpu-deadline-watchdog.test.mjs');

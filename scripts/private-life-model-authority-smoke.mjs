@@ -91,7 +91,7 @@ function fixture({onExtract, resolver, env = {}, indexSource=source}={}) {
   const exports={};
   const process={env:{URAI_ENV:'test',PRIVATE_SOURCE_INDEX_TOKEN:'synthetic-token',PRIVATE_SOURCE_REF_RESOLVER_URL:'https://resolver.invalid',PRIVATE_SOURCE_REF_RESOLVER_TOKEN:'synthetic-token',
     URAI_SOURCE_SHA:'a'.repeat(40),K_REVISION:'synthetic-revision',OPENAI_API_KEY:'synthetic-key',URAI_LIFE_MODEL_EXTRACTOR_MODEL:'synthetic-model-01',FIREBASE_PROJECT_ID:'synthetic-project',
-    URAI_PRIVATE_SOURCE_CONTRACT:'urai-private-source-receipt-v2',URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED:'true',URAI_PRIVATE_LIFE_MODEL_EXECUTION_AUTHORITY_REF:'private:synthetic/execution',...env}};
+    URAI_PRIVATE_SOURCE_CONTRACT:'urai-private-source-receipt-v2',URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED:'true',URAI_PRIVATE_LIFE_MODEL_EXECUTION_AUTHORITY_REF:'private:synthetic/execution',URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF:'private:synthetic/spending',...env}};
   vm.runInNewContext(compile(indexSource)+'\nObject.assign(exports,{assertRequest,resolvePrivateInputs,validateExtraction,readiness,...(typeof reserveExtraction === "function" ? {reserveExtraction,persistRevision,requireCurrentAuthority,quarantinedImport} : {})});',{
     exports,process,Buffer,URL,AbortSignal,Response,setTimeout,clearTimeout,console:{log:v=>logs.push(v),error:v=>logs.push(v)},
     require:name=>name==='express-rate-limit'?{rateLimit:()=>()=>{}}:name==='express'?express:name==='./protected-source-provider'?{registerProtectedSourceRoutes(){}}:name==='./contracts.js'?graphContract:name==='firebase-admin/app'?{getApps:()=>[1],initializeApp(){},applicationDefault(){}}:
@@ -181,7 +181,7 @@ await check('unsupported lineage/span and excessive extraction input is rejected
   assert.throws(()=>f.exports.validateExtraction({...extraction,entities:Array(257).fill(extraction.entities[0])},request.sourceEvidenceClass));
 });
 await check('readiness remains hard-off without exact versioned contract and explicit execution authority',async()=>{
-  for(const env of [{URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED:'false'},{URAI_PRIVATE_SOURCE_CONTRACT:'legacy'},{URAI_PRIVATE_LIFE_MODEL_EXECUTION_AUTHORITY_REF:''},{URAI_LIFE_MODEL_EXTRACTOR_MODEL:''}]){
+  for(const env of [{URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED:'false'},{URAI_PRIVATE_SOURCE_CONTRACT:'legacy'},{URAI_PRIVATE_LIFE_MODEL_EXECUTION_AUTHORITY_REF:''},{URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF:''},{URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF:'public:synthetic/spending'},{URAI_LIFE_MODEL_EXTRACTOR_MODEL:''}]){
     const f=fixture({env});assert.equal(f.exports.readiness().ok,false);assert.equal((await f.execute()).status,503);assert.equal(f.fetches.length,0);
   }
 });
@@ -291,7 +291,7 @@ function protectedFixture({onProvider,bucketPrivate=true,badBytes=false,badGener
     AbortController,AbortSignal,setTimeout,clearTimeout,setInterval,clearInterval,
     process:{env:{URAI_PRIVATE_SOURCE_CONTRACT:'urai-private-source-receipt-v2',FIREBASE_PROJECT_ID:'synthetic-project',URAI_SOURCE_SHA:'a'.repeat(40),K_REVISION:'synthetic-revision',
       PRIVATE_SOURCE_AUTHORITY_TOKEN:'synthetic-token',PRIVATE_SOURCE_REF_RESOLVER_TOKEN:'synthetic-token',PRIVATE_SOURCE_TRANSCRIBE_TOKEN:'synthetic-token',
-      URAI_PRIVATE_SOURCE_TRANSCRIPTION_ENABLED:'true',URAI_PRIVATE_SOURCE_TRANSCRIPTION_AUTHORITY_REF:'private:synthetic/execution',
+      URAI_PRIVATE_SOURCE_TRANSCRIPTION_ENABLED:'true',URAI_PRIVATE_SOURCE_TRANSCRIPTION_AUTHORITY_REF:'private:synthetic/execution',URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF:'private:synthetic/spending',
       PRIVATE_SOURCE_ALLOWED_BUCKET:'synthetic-private-bucket',OPENAI_API_KEY:'synthetic-key',URAI_PRIVATE_SOURCE_DIARIZATION_MODEL:'gpt-4o-transcribe-diarize',...env}},
     require:name=>name==='firebase-admin/firestore'?{FieldValue:{serverTimestamp:()=> 'synthetic-time'}}:name==='firebase-admin/storage'?{getStorage:()=>({bucket:name=>({
       getMetadata:async()=>[{iamConfiguration:{uniformBucketLevelAccess:{enabled:true},publicAccessPrevention:bucketPrivate?'enforced':'inherited'}}],
@@ -353,7 +353,7 @@ await check('simultaneous transcription requests admit one provider attempt',asy
 await check('ASR timing/span bounds, readiness and absent exact execution grant fail closed',async()=>{
   for(const providerPatch of [{segments:[{speaker:'test',start:0,end:601,text:'Synthetic audio transcript.'}]},{segments:[{speaker:'test',start:0,end:1,text:'invented missing text'}]},{segments:[]}])
     assert.equal((await protectedFixture({providerPatch}).execute()).status,403);
-  for(const env of [{URAI_PRIVATE_SOURCE_TRANSCRIPTION_ENABLED:'false'},{URAI_PRIVATE_SOURCE_TRANSCRIPTION_AUTHORITY_REF:''},{URAI_SOURCE_SHA:''},{PRIVATE_SOURCE_ALLOWED_BUCKET:''},{URAI_PRIVATE_SOURCE_DIARIZATION_MODEL:'unknown_model'}]){
+  for(const env of [{URAI_PRIVATE_SOURCE_TRANSCRIPTION_ENABLED:'false'},{URAI_PRIVATE_SOURCE_TRANSCRIPTION_AUTHORITY_REF:''},{URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF:''},{URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF:'public:synthetic/spending'},{URAI_SOURCE_SHA:''},{PRIVATE_SOURCE_ALLOWED_BUCKET:''},{URAI_PRIVATE_SOURCE_DIARIZATION_MODEL:'unknown_model'}]){
     const f=protectedFixture({env});assert.equal((await f.execute()).status,503);assert.equal(f.calls.length,0);
   }
 });

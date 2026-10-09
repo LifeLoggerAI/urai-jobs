@@ -68,7 +68,9 @@ try {
     const context = { module: {}, assert, structuredClone, Buffer, crypto, code, require, vm, Readable, Writable, spawn, spawnSync,
       objects, bucketName, sha256, console, AbortController };
     vm.runInNewContext(harnessCode + '\nmodule.exports = harness;', context);
-    for (const dialogue of ['none', 'camera-aac', 'recorder-mp3']) {
+    for (const dialogue of ['none', 'camera-aac', 'camera-aac-offset', 'camera-aac-trimmed', 'recorder-mp3']) {
+      const cameraCue = dialogue.startsWith('camera-aac');
+      const sourceStartMs = dialogue === 'camera-aac-offset' ? 100 : dialogue === 'camera-aac-trimmed' ? 400 : 0;
       const job = { jobId: 'delayed-audio-fixture', ownerUid: 'owner-fixture-1', tenantId: 'tenant-fixture-1',
         type: 'studio.render.video', leaseToken: 'lease-fixture', payload: {
           schemaVersion: 'urai-life-movie-render-v1', projectId: 'project-fixture-1', renderPlanDigest: 'a'.repeat(64),
@@ -78,7 +80,7 @@ try {
             { id: 'recorder', bucket: bucketName, objectPath: dialogueObject, mimeType: 'audio/mpeg', provenance: 'original-source',
               sourceRefs: ['synthetic-recorder-fixture'], consentRef: 'fixture-consent', ownerOrRightsRef: 'fixture-rights' }],
           timeline: [{ sourceId: 'source', startMs: 0, endMs: 5000 }],
-          audioCues: dialogue === 'none' ? [] : [{ sourceId: dialogue === 'camera-aac' ? 'source' : 'recorder', role: 'dialogue', startMs: 0, endMs: 5000, sourceStartMs: 0, gainDb: 0 }],
+          audioCues: dialogue === 'none' ? [] : [{ sourceId: cameraCue ? 'source' : 'recorder', role: 'dialogue', startMs: 0, endMs: 5000, sourceStartMs, gainDb: 0 }],
           subtitleText: '', outputPrefix: 'tenants/tenant-fixture-1/life-movies/project-fixture-1/render',
           spatialRequired: false, publicReleaseAuthorized: false, providerGenerationAuthorized: false,
         } };
@@ -98,6 +100,24 @@ try {
       const wholeOutput = path.join(root, `whole-${dialogue}.mp4`); fs.writeFileSync(wholeOutput, bytes);
       const verified = worker.exports.probeNormalizedMovie(wholeOutput, { width: 320, height: 320, fps: 30 }, 5000);
       assert.equal(verified.videoFrames, 150);
+      if (cameraCue) {
+        const cameraPcm = spawnSync('ffmpeg', ['-v', 'error', '-xerror', '-i', wholeOutput, '-map', '0:a:0', '-f', 's16le', '-ac', '1', '-ar', '48000', '-'], { maxBuffer: 2 * 1024 * 1024 });
+        assert.equal(cameraPcm.status, 0, cameraPcm.stderr.toString());
+        let initialPeak = 0;
+        for (let frame = 0.01 * 48000; frame < 0.05 * 48000; frame++) {
+          initialPeak = Math.max(initialPeak, Math.abs(cameraPcm.stdout.readInt16LE(frame * 2)));
+        }
+        if (sourceStartMs < 184) {
+          assert.ok(initialPeak < 100, 'camera audio cue must preserve initial track silence rather than advance dialogue ahead of its source clock');
+        } else {
+          assert.ok(initialPeak > 500, 'trimming beyond the camera track delay must select audible dialogue at the beginning of the cue');
+        }
+        let dialoguePeak = 0;
+        for (let frame = 0.3 * 48000; frame < 0.35 * 48000; frame++) {
+          dialoguePeak = Math.max(dialoguePeak, Math.abs(cameraPcm.stdout.readInt16LE(frame * 2)));
+        }
+        assert.ok(dialoguePeak > 500, 'camera dialogue must remain audible after its selected track delay');
+      }
       if (dialogue === 'recorder-mp3') {
         const finalPcm = spawnSync('ffmpeg', ['-v', 'error', '-xerror', '-i', wholeOutput, '-map', '0:a:0', '-f', 's16le', '-ac', '1', '-ar', '48000', '-'], { maxBuffer: 2 * 1024 * 1024 });
         assert.equal(finalPcm.status, 0, finalPcm.stderr.toString());

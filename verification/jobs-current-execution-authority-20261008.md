@@ -1,9 +1,0 @@
-# Current execution identity before dispatch and result commit
-
-Sole Jobs controller #170 remains open/draft. This isolated donor begins at exact source `2a8f0a3e5f16b4e970fabffa8afc1479b2eb7ea5`, tree `6a3327e76107f0911298dea0efc0cbf2c9bd13cd` and does not update its branch or main.
-
-The actual dispatcher applied old worker output after owner, tenant, private payload, consent receipt or job type changed under the same running lease. Ninety real loopback timing/identity cases reproduced this behavior across all nine existing worker mappings, both before dispatch and while consuming the result. The repair compares admitted authority immediately before dispatch and inside finalization, cancels changed same-attempt jobs and queues, clears output/callback authority and preserves existing lease/consent/private-source checks. Heartbeats and lifecycle metadata can change normally.
-
-The corrected actual dispatcher and Axios1.16 HTTP adapter passed208 local cases, preserving118 prior boundaries. Unmodified current narrator TS/trackedJS leaves passed659 synthetic protected lifecycle cases and existing emitted lease/execution guards passed. Node24.19/TypeScript5.9.3 used read-only prior declared-compatible packages and explicit local Firestore adapters. No provider request, private-family input, spending, cloud runtime, full frozen dependency graph, nativeNode22, emulator, acceptance or deployment is certified.
-
-The shared terminal disconnected after the tests completed. This donor reconstructs source from retained exact GitHub baseline and the executed patch deltas. Before integration, restore terminal access, compare these three files byte-for-byte to the preserved tested source, retain raw logs and require current native Jobs runtime CI. The existing aggregate already executes the expanded dispatcher script; no worker architecture, registry, runtime scope, release controller or production process is duplicated.

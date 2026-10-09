@@ -50,6 +50,7 @@ export function registerProtectedSourceRoutes(app: Express, deps: Dependencies) 
         transcribeToken: Boolean(process.env.PRIVATE_SOURCE_TRANSCRIBE_TOKEN),
         executionEnabled: process.env.URAI_PRIVATE_SOURCE_TRANSCRIPTION_ENABLED === 'true',
         executionAuthority: PRIVATE_REF.test(String(process.env.URAI_PRIVATE_SOURCE_TRANSCRIPTION_AUTHORITY_REF || '')),
+        spendingAuthority: PRIVATE_REF.test(String(process.env.URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF || '')),
         privateBucket: /^[a-z0-9][a-z0-9._-]{2,221}$/.test(String(process.env.PRIVATE_SOURCE_ALLOWED_BUCKET || '')),
         extractorKey: Boolean(process.env.OPENAI_API_KEY), model: process.env.URAI_PRIVATE_SOURCE_DIARIZATION_MODEL === MODEL,
       } : {}),
@@ -226,7 +227,7 @@ export function registerProtectedSourceRoutes(app: Express, deps: Dependencies) 
       const provenance={schemaVersion:TRANSCRIPT_CONTRACT,ownerUid:request.ownerUid,jobId:request.jobId,sourceReceiptRef:request.sourceReceiptRef,
         sourceSha256:admitted.grant.sourceSha256,sourceByteLength:admitted.grant.sourceByteLength,sourceRevision:admitted.grant.sourceRevision,
         sourceFixityRef:admitted.grant.sourceFixityRef,model:MODEL,provider:'openai',sourceSha:process.env.URAI_SOURCE_SHA,runtimeRevision:process.env.K_REVISION,
-        executionAuthorityRef:process.env.URAI_PRIVATE_SOURCE_TRANSCRIPTION_AUTHORITY_REF,segments:diarized.segments,speakerCount:diarized.speakerCount,
+        executionAuthorityRef:process.env.URAI_PRIVATE_SOURCE_TRANSCRIPTION_AUTHORITY_REF,spendingAuthorityRef:process.env.URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF,segments:diarized.segments,speakerCount:diarized.speakerCount,
         speakerIdentityAccepted:false,historicalSourceAuthority:false,reviewState:'OWNER_REVIEW_REQUIRED',candidateAcceptance:false,publicReleaseAuthorized:false};
       const record={schemaVersion:TRANSCRIPT_CONTRACT,ownerUid:request.ownerUid,jobId:request.jobId,sourceReceiptRef:request.sourceReceiptRef,
         transcriptRef,provenanceRef,transcriptText:diarized.text,transcriptSha256:hash(diarized.text),transcriptByteLength:Buffer.byteLength(diarized.text,'utf8'),
