@@ -108,7 +108,17 @@ export const routeMarketplaceRuntimeRequest = async (request: MarketplaceRuntime
     }
     if (request.method === 'GET' && request.path === '/api/marketplace/admin/review-queue') {
       requireAdmin(actor);
-      return ok({ jobs: await createMarketplaceAdminRuntime().listModerationQueue(actor) });
+      return ok(await createMarketplaceAdminRuntime().listModerationQueue(actor));
+    }
+    const employerModeration = /^\/api\/marketplace\/admin\/employers\/([^/]+)$/.exec(request.path);
+    if (request.method === 'PATCH' && employerModeration) {
+      requireAdmin(actor);
+      assertBodyFields(body, ['action', 'reason']);
+      if (body.action !== 'approve' && body.action !== 'reject') throw new Error('VALIDATION_EMPLOYER_MODERATION:action');
+      return ok(await createMarketplaceAdminRuntime().moderateEmployer(actor, {
+        employerId: requireIdentifier(employerModeration[1], 'employerId'), action: body.action,
+        reason: optionalString(body, 'reason', 2048),
+      }));
     }
     const moderation = /^\/api\/marketplace\/admin\/jobs\/([^/]+)\/(approve|reject)$/.exec(request.path);
     if (request.method === 'POST' && moderation) {

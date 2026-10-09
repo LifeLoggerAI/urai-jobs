@@ -368,6 +368,97 @@ try{
     await createApp();await denied('PATCH',review(aid()),'owner',{status:'accepted'},'APPLICATION_STATUS_INVALID',400);await success('PATCH',review(aid()),'owner',{status:'advanced'});assert.equal(db.data(appKey(aid())).status,'advanced');
     await denied('PATCH',withdrawal(aid()),'candidate',{},'APPLICATION_NOT_PENDING',409);await denied('PATCH',review(aid()),'owner',{status:'reviewing'},'APPLICATION_NOT_REVIEWABLE',409);
   });
+  await check('new employer approval persists and unlocks the authorized posting/application journey',async()=>{
+    await success('POST','/api/marketplace/employers','owner',{employerId:'newEmployer',orgName:'Synthetic newly reviewed employer'});
+    await success('POST','/api/marketplace/jobs','owner',{jobId:'newJob',employerId:'newEmployer',title:'Synthetic role',description:'No real hiring'});
+    const before=db.data(C.employers+'/newEmployer');
+    const queue=await success('GET','/api/marketplace/admin/review-queue','admin');
+    assert.equal(queue.employers.length,1);assert.equal(queue.employers[0].id,'newEmployer');
+    await success('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action:'approve'});
+    const approved=db.data(C.employers+'/newEmployer');assert.equal(approved.status,'approved');assert.equal(approved.moderationStatus,'approved');
+    assert.equal(approved.approvedBy,'admin');assert.equal(approved.createdAt,before.createdAt);assert.equal(approved.createdBy,'owner');assert.equal(approved.ownerUid,'owner');
+    assert.equal(db.data(C.jobs+'/newJob').status,'pending_review','employer approval does not approve a job');
+    const audit=db.writes.filter(w=>w.key.startsWith(C.audit+'/'));assert.equal(audit.length,1);
+    const decision=db.data(audit[0].key);assert.equal(decision.actorUid,'admin');assert.equal(decision.tenantId,'tenant');assert.equal(decision.targetId,'newEmployer');assert.equal(decision.action,'employer.approved');
+    assert.equal((await success('GET','/api/marketplace/admin/review-queue','admin')).employers.length,0);
+    await success('POST','/api/marketplace/admin/jobs/newJob/approve','admin',{});
+    const job=(await success('GET','/api/marketplace/jobs/newJob')).job;assert.equal(job.status,'published');
+    await createApp('candidate',{jobId:'newJob',employerId:'newEmployer'});
+    assert.equal((await success('GET','/api/marketplace/employers/newEmployer/applications','owner')).applications.length,1);
+  });
+  await check('employer rejection persists audit and cannot be reopened by replay',async()=>{
+    await success('POST','/api/marketplace/employers','owner',{employerId:'newEmployer',orgName:'Synthetic rejected employer'});
+    const before=db.data(C.employers+'/newEmployer');
+    await success('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action:'reject',reason:'Synthetic moderation reason'});
+    const rejected=db.data(C.employers+'/newEmployer');assert.equal(rejected.status,'rejected');assert.equal(rejected.moderationStatus,'rejected');assert.equal(rejected.rejectedBy,'admin');assert.equal(rejected.rejectedReason,'Synthetic moderation reason');assert.equal(rejected.createdAt,before.createdAt);
+    const audits=db.writes.filter(w=>w.key.startsWith(C.audit+'/'));assert.equal(audits.length,1);assert.equal(db.data(audits[0].key).action,'employer.rejected');
+    await denied('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action:'approve'},'EMPLOYER_NOT_EDITABLE',409);
+    await denied('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action:'reject'},'EMPLOYER_NOT_EDITABLE',409);
+  });
+  await check('employer moderation requires live admin claim, protected role, current account and tenant',async()=>{
+    await success('POST','/api/marketplace/employers','owner',{employerId:'newEmployer',orgName:'Synthetic'});
+    await denied('PATCH','/api/marketplace/admin/employers/newEmployer',undefined,{action:'approve'},'AUTH_REQUIRED',401);
+    await denied('PATCH','/api/marketplace/admin/employers/newEmployer','candidate',{action:'approve'},'ADMIN_REQUIRED',403);
+    await denied('PATCH','/api/marketplace/admin/employers/newEmployer','otherAdmin',{action:'approve'},'TENANT_MISMATCH',403);
+    authUsers.get('admin').customClaims={};await denied('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action:'approve'},'ADMIN_REQUIRED',403);
+    authUsers.get('admin').customClaims={admin:true};change('users/admin',{role:'user'});await denied('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action:'approve'},'ADMIN_REQUIRED',403);
+    change('users/admin',{role:'admin'});tokens.get('admin').revoked=true;await denied('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action:'approve'},'INVALID_AUTHORIZATION_HEADER',401);
+  });
+  await check('employer moderation rejects missing records, unsafe identifiers, spoofed fields and unsupported actions',async()=>{
+    await denied('PATCH','/api/marketplace/admin/employers/missing','admin',{action:'approve'},'EMPLOYER_NOT_FOUND',404);
+    await denied('PATCH','/api/marketplace/admin/employers/%2Funsafe','admin',{action:'approve'},'VALIDATION_IDENTIFIER',400);
+    for(const action of[undefined,'pause','approved',true])await denied('PATCH','/api/marketplace/admin/employers/employer','admin',{...(action===undefined?{}:{action})},'VALIDATION_EMPLOYER_MODERATION',400);
+    for(const field of['tenantId','ownerUid','approvedBy','status'])await denied('PATCH','/api/marketplace/admin/employers/employer','admin',{action:'approve',[field]:'spoof'},'VALIDATION_FIELD_NOT_ALLOWED',400);
+    await denied('PATCH','/api/marketplace/admin/employers/employer','admin',{action:'approve'},'EMPLOYER_NOT_EDITABLE',409);
+  });
+  await check('employer approval rejects disabled, deleted, missing and foreign-tenant owner accounts',async()=>{
+    for(const invalid of['disabled','deleted','missing','foreign','live-disabled']){
+      reset();await success('POST','/api/marketplace/employers','owner',{employerId:'newEmployer',orgName:'Synthetic'});
+      if(invalid==='missing')db.erase('users/owner');else if(invalid==='foreign')change('users/owner',{tenantId:'other-tenant'});else if(invalid==='live-disabled')authUsers.get('owner').disabled=true;else change('users/owner',{[invalid]:true});
+      await denied('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action:'approve'},invalid==='foreign'?'TENANT_MISMATCH':'ACCOUNT_NOT_ACTIVE',403);
+      assert.equal(db.data(C.employers+'/newEmployer').status,'pending_review');
+    }
+  });
+  await check('late admin Auth downgrade denies employer approval without partial audit',async()=>{
+    await success('POST','/api/marketplace/employers','owner',{employerId:'newEmployer',orgName:'Synthetic'});
+    onceRead(C.employers+'/newEmployer',()=>{authUsers.get('admin').customClaims={};});
+    await denied('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action:'approve'},'ACCOUNT_AUTHORITY_CHANGED',403);
+  });
+  await check('admin Auth remains the final employer-approval decision after owner Auth awaits',async()=>{
+    await success('POST','/api/marketplace/employers','owner',{employerId:'newEmployer',orgName:'Synthetic'});
+    const auth=globalThis[Symbol.for('urai.marketplace.synthetic.runtime')].auth;const getUser=auth.getUser;let reads=0;
+    auth.getUser=async uid=>{const user=await getUser(uid);if(uid==='owner'&&++reads===2)authUsers.get('admin').customClaims={};return user;};
+    try{await denied('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action:'approve'},'ACCOUNT_AUTHORITY_CHANGED',403);}
+    finally{auth.getUser=getUser;}
+    assert.equal(reads,2);assert.equal(db.data(C.employers+'/newEmployer').status,'pending_review');
+  });
+  await check('admin protected-role downgrade retries and denies employer approval',async()=>{
+    await success('POST','/api/marketplace/employers','owner',{employerId:'newEmployer',orgName:'Synthetic'});
+    onceRead(C.employers+'/newEmployer',()=>change('users/admin',{role:'user',accountRevision:1}));
+    await denied('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action:'approve'},'ACCOUNT_AUTHORITY_CHANGED',403);assert.equal(db.retries,1);
+  });
+  await check('late owner account and Auth revocation fence employer approval',async()=>{
+    for(const storage of['protected','Auth']){
+      reset();await success('POST','/api/marketplace/employers','owner',{employerId:'newEmployer',orgName:'Synthetic'});
+      onceRead('users/owner',()=>{if(storage==='Auth')authUsers.get('owner').disabled=true;else change('users/owner',{deleted:true,accountRevision:1});});
+      await denied('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action:'approve'},'ACCOUNT_NOT_ACTIVE',403);
+      assert.equal(db.data(C.employers+'/newEmployer').status,'pending_review');
+    }
+  });
+  await check('employer ownership or review-data mutation cannot redirect an in-flight approval',async()=>{
+    for(const mutation of[{ownerUid:'owner2',createdBy:'owner2'},{orgName:'Changed after admission',companyName:'Changed after admission'},{tenantId:'other-tenant'}]){
+      reset();await success('POST','/api/marketplace/employers','owner',{employerId:'newEmployer',orgName:'Synthetic'});
+      onceRead(C.employers+'/newEmployer',()=>change(C.employers+'/newEmployer',mutation));
+      await denied('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action:'approve'},mutation.tenantId?'TENANT_MISMATCH':'EMPLOYER_REVIEW_CHANGED',mutation.tenantId?403:409);
+      assert.equal(db.data(C.employers+'/newEmployer').status,'pending_review');
+    }
+  });
+  await check('concurrent employer approval/rejection commit exactly one decision and audit',async()=>{
+    await success('POST','/api/marketplace/employers','owner',{employerId:'newEmployer',orgName:'Synthetic'});
+    const results=await Promise.all(['approve','reject'].map(action=>request('PATCH','/api/marketplace/admin/employers/newEmployer','admin',{action})));
+    assert.equal(results.filter(x=>x.status===200).length,1);assert.equal(results.filter(x=>x.status===409).length,1);
+    assert.equal(db.writes.filter(w=>w.key.startsWith(C.audit+'/')).length,1);assert(['approved','rejected'].includes(db.data(C.employers+'/newEmployer').status));
+  });
   await check('upload unavailable even enabled fixture launch; no signer/Storage call',async()=>{
     await denied('POST','/api/marketplace/resume-intent','candidate',{contentType:'application/pdf'},'RESUME_UPLOAD_UNAVAILABLE',503);assert.equal(metrics.storageCalls,0);
   });
@@ -376,6 +467,6 @@ try{
     persistence:'synthetic versioned Firestore interface with conflict retries; current Auth interface',
     authFirestoreAtomicity:'separate services; Auth re-read at final decision; no atomic cross-service claim',
     consent:'supplied purpose metadata plus existing Jobs revocation authority; no canonical positive-grant proof',
-    employerApproval:'preexisting-approved synthetic fixtures; onboarding approval remains OPEN',
+    employerApproval:'actual new-employer approval/rejection and newly-approved application journey; explicit Auth/Firestore interfaces only',
     realFirestoreEmulator:false,realAuthEmulator:false,cloudRequests:0,providerJobs:0,storageCalls:0,candidateEmployerUiAcceptance:false,deployedOrReleaseAcceptance:false}));
 }finally{process.env.URAI_JOBS_MARKETPLACE_LAUNCH_APPROVED='false';await new Promise(r=>server.close(r));delete globalThis[Symbol.for('urai.marketplace.synthetic.runtime')];}
