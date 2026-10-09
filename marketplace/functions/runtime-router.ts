@@ -11,7 +11,7 @@ import { assertBodyFields, employerNameInput, optionalBoolean, optionalString, r
   stringList, privateResumePath, answersRecord } from './validation.js';
 
 export type MarketplaceRuntimeRequest = {
-  method: string; path: string; authorization?: string; body?: Record<string, unknown>;
+  method: string; path: string; authorization?: string; body?: Record<string, unknown>; query?: Record<string, unknown>;
 };
 
 export const routeMarketplaceRuntimeRequest = async (request: MarketplaceRuntimeRequest) => {
@@ -80,7 +80,12 @@ export const routeMarketplaceRuntimeRequest = async (request: MarketplaceRuntime
       }));
     }
     if (request.method === 'GET' && request.path === '/api/marketplace/applications/me') {
-      return ok({ applications: await createApplicationRuntime().listByCandidate(actor) });
+      const query = request.query ?? {};
+      if (Object.keys(query).some(key => key !== 'after') || (query.after !== undefined && typeof query.after !== 'string')) {
+        throw new Error('VALIDATION_APPLICATION_CURSOR');
+      }
+      return ok(await createApplicationRuntime().listByCandidate(actor,
+        query.after === undefined ? undefined : requireApplicationPathIdentifier(encodeURIComponent(query.after))));
     }
     const withdraw = /^\/api\/marketplace\/applications\/([^/]+)\/withdraw$/.exec(request.path);
     if (request.method === 'PATCH' && withdraw) {

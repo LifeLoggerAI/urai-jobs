@@ -19,7 +19,7 @@ Status: scaffolded
 | Route | Purpose | State |
 |---|---|---|
 | `/candidate/profile` | Candidate profile | Isolated editor/client implemented; host binding and release acceptance open |
-| `/candidate/applications` | Candidate application status | Placeholder |
+| `/candidate/applications` | Candidate application status | Isolated status/withdrawal client and view implemented; host and release acceptance open |
 | `/candidate/settings` | Candidate settings/export/delete | Placeholder |
 
 ## Employer routes
@@ -86,3 +86,39 @@ an unavailable/withdrawn receipt, switch accounts during a delayed request,
 interrupt/reconnect after saving, confirm unsaved-change discard, and inspect
 keyboard focus, screen-reader labels/status, 320px layout and 200% text scaling.
 No standalone Auth/consent/bootstrap binding or public route release is implied.
+
+## Candidate applications host contract
+
+The same isolated `mountCareerRoute` entry now handles `/candidate/applications`.
+Its existing SDK-compatible session binding and same-origin API routing remain
+host responsibilities. Load `applications-view.css` in that approved host.
+No operator routes or provider/configuration/launch flags are changed.
+
+The client reads owned application status from the existing authenticated API,
+obtains available job titles through existing public published-job reads, and
+withdraws only a previously loaded pending/reviewing application after the view's
+explicit confirmation. Withdrawal success requires authoritative readback of the
+same application/job/employer identity in `withdrawn` status. Conflicts, lost
+acknowledgment and interrupted readback require reload rather than blind retry.
+Stopping a wait does not imply that the server transaction was canceled.
+
+No new `career.profile` or `career.application` consent receipt is manufactured.
+The existing handlers enforce current account/tenant/consent authority. An owned
+withdrawal remains possible after revocation; its minimal stop receipt is shown
+without restoring candidate snapshots, answers or resume data. Auth denial and
+account changes erase previous private rows. Unsupported status remains unknown;
+a missing/closed job does not acquire an invented title or block an owned stop.
+
+The existing API now provides fixed50-record pages through an owned, current
+candidate/tenant cursor. Load more is manual and preserves already loaded pages;
+reload starts a fresh first page. Withdrawal readback uses its originating page.
+Only the selected verified stop receipt is updated; loaded membership/cursors
+remain intact if a concurrent insertion shifts a page. Discover new records by
+reloading rather than treating separate page reads as an all-current snapshot.
+Missing/deleted cursors and changed/interrupted results require reload, with no
+automatic retries or claim that multiple page reads form an atomic history.
+The client has a shared20-second operation deadline across SDK, transport and
+body reads; Stop waiting aborts client waits without claiming server cancellation.
+Source interaction tests execute
+actual compiled onRequest HTTP with explicitly owned Auth/Firestore/consent/DOM
+fixtures. Real host, provider, rendered-browser and release acceptance stay open.
