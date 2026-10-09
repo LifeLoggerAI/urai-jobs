@@ -315,11 +315,18 @@ function parsePayload(job) {
     if (!sourceById.has(sourceId)) throw new Error(`unknown_timeline_source:${sourceId}`);
     const startMs = Number(raw.startMs);
     const endMs = Number(raw.endMs);
+    const sourceStartMs = raw.sourceStartMs === undefined ? 0 : raw.sourceStartMs;
+    if (!Number.isInteger(sourceStartMs) || sourceStartMs < 0 || sourceStartMs > 45 * 60 * 1000) {
+      throw new Error(`invalid_timeline_source_start:${index}`);
+    }
+    if (sourceById.get(sourceId).mimeType.startsWith('image/') && sourceStartMs !== 0) {
+      throw new Error(`image_source_start_must_be_zero:${index}`);
+    }
     if (!Number.isInteger(startMs) || !Number.isInteger(endMs) || startMs < 0 || endMs <= startMs) {
       throw new Error(`invalid_timeline_range:${index}`);
     }
     if (endMs - startMs > 30 * 60 * 1000) throw new Error(`timeline_item_too_long:${index}`);
-    return { sourceId, startMs, endMs };
+    return { sourceId, startMs, endMs, ...(raw.sourceStartMs === undefined ? {} : { sourceStartMs }) };
   }).sort((left, right) => left.startMs - right.startMs);
 
   for (let i = 1; i < normalizedTimeline.length; i += 1) {
@@ -644,7 +651,7 @@ function probeNormalizedMovie(filePath, input, durationMs, expectedProfile) {
     averageFrameRate: video.avg_frame_rate, inferredFrameRate: video.r_frame_rate };
 }
 
-function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, height, fps) {
+function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, height, fps, sourceStartMs = 0) {
   const visualFilter = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=${fps},format=yuv420p`;
   if (mimeType.startsWith('image/')) {
     return [
@@ -661,7 +668,9 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
 
   const streams = probeStreams(inputPath);
   if (streams.video) {
-    const args = ['-y', '-i', inputPath];
+    // Input seeking retains FFmpeg's accurate decode/discard behavior without
+    // decoding every preceding frame. Video and camera audio share one seek.
+    const args = ['-y', ...(sourceStartMs ? ['-ss', String(sourceStartMs / 1000)] : []), '-i', inputPath];
     if (!streams.audio) {
       args.push('-f', 'lavfi', '-t', String(durationSeconds), '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
     }
@@ -681,7 +690,8 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
   if (streams.audio) {
     return [
       '-y', '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=${fps}`,
-      '-i', inputPath, '-t', String(durationSeconds), '-af', 'apad',
+      ...(sourceStartMs ? ['-ss', String(sourceStartMs / 1000)] : []),
+      '-i', inputPath, '-t', String(durationSeconds), '-af', 'aresample=48000:first_pts=0,apad',
       '-map', '0:v:0', '-map', '1:a:0',
       '-c:v', 'libx264', '-threads', '1', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
@@ -997,7 +1007,7 @@ async function renderLifeMovie(job) {
       } else {
         const source = input.sourceById.get(item.sourceId);
         const sourcePath = localBySource.get(item.sourceId);
-        await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps), { signal: control.signal });
+        await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps, item.sourceStartMs), { signal: control.signal });
       }
       clipPaths.push({ filePath: clipPath, durationMs: item.endMs - item.startMs });
     }
