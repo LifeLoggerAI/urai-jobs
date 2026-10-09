@@ -121,6 +121,48 @@ jobs:
             "urai-jobs-narrator-verify:$TARGET_SHA" \
             -e 'const {narratorExecutorSourceSha}=require("./dist/protected-spend.js");if(narratorExecutorSourceSha()!==process.env.URAI_SOURCE_SHA)throw new Error("Narrator runtime source mismatch");'
 
+      - name: Verify current pinned Model Forge compatibility without provider execution
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODEL_FORGE_FACTORY_SHA: e2cfa78d406f50902d542f4d0dd78db949e8f488
+        run: |
+          set -euo pipefail
+          actual_factory_sha="$(gh api repos/LifeLoggerAI/asset-factory/pulls/421 --jq .head.sha)"
+          if [ "$actual_factory_sha" != "$MODEL_FORGE_FACTORY_SHA" ]; then
+            echo "Factory owner moved: expected $MODEL_FORGE_FACTORY_SHA, observed $actual_factory_sha"
+            exit 1
+          fi
+          factory_dir="$(dirname "$GITHUB_WORKSPACE")/world-factory-assets"
+          test ! -e "$factory_dir"
+          mkdir "$factory_dir"
+          git -C "$factory_dir" init
+          git -C "$factory_dir" remote add origin https://github.com/LifeLoggerAI/asset-factory
+          git -C "$factory_dir" sparse-checkout set --no-cone /model_forge/validate-glb.mjs /model_forge/triangle-budget.mjs /model_forge/glb-container.mjs
+          git -C "$factory_dir" fetch --no-tags --no-recurse-submodules --depth=1 origin "$MODEL_FORGE_FACTORY_SHA"
+          git -C "$factory_dir" checkout --detach "$MODEL_FORGE_FACTORY_SHA"
+          test "$(git -C "$factory_dir" rev-parse HEAD)" = "$MODEL_FORGE_FACTORY_SHA"
+          test -z "$(git -C "$factory_dir" status --porcelain --untracked-files=all)"
+          for file in validate-glb.mjs triangle-budget.mjs glb-container.mjs; do
+            test -f "$factory_dir/model_forge/$file"
+          done
+          node --test --test-reporter=tap workers/generic-world-factory/test/factory.test.mjs | tee "$RUNNER_TEMP/jobs-model-forge-compatibility-$TARGET_SHA.tap"
+          proof="$RUNNER_TEMP/jobs-model-forge-compatibility-$TARGET_SHA.tap"
+          grep -qx '# tests 19' "$proof"
+          grep -qx '# pass 19' "$proof"
+          grep -qx '# fail 0' "$proof"
+          grep -qx '# skipped 0' "$proof"
+          test -z "$(git -C "$factory_dir" status --porcelain --untracked-files=all)"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Retain exact-head Model Forge compatibility log
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: urai-jobs-model-forge-compatibility-${{ env.TARGET_SHA }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/jobs-model-forge-compatibility-${{ env.TARGET_SHA }}.tap
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Unit tests
         run: pnpm test
 
