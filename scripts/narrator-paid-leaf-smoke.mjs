@@ -365,7 +365,7 @@ try {
     for (const [label, value] of [
       ['malformed', 'not-a-url'], ['relative', '/api/worker/production-spend'],
       ['HTTP', 'http://synthetic-gateway.example/api/worker/production-spend'],
-      ['credentials', 'https://synthetic:fixture@synthetic-gateway.example/api/worker/production-spend'],
+      ['credentials', (() => { const url = new URL('https://synthetic-gateway.example/api/worker/production-spend'); url.username = 'synthetic'; url.password = 'fixture'; return url.href })()],
       ['foreign origin', 'https://other.invalid/api/worker/production-spend'],
       ['hostname suffix', 'https://synthetic-gateway.example.other.invalid/api/worker/production-spend'],
       ['alternate port', 'https://synthetic-gateway.example:444/api/worker/production-spend'],

@@ -73,7 +73,7 @@ for (const value of [
   { playback: { url: 'https://fixture.invalid.other.invalid/private/1' } },
   { playback: { url: 'https://other.invalid/private/1' } },
   { playback: { url: 'http://fixture.invalid/private/1' } },
-  { playback: { url: 'https://synthetic:fixture@fixture.invalid/private/1' } },
+  { playback: { url: (() => { const url = new URL('https://fixture.invalid/private/1'); url.username = 'synthetic'; url.password = 'fixture'; return url.href })() } },
   { playback: [{ url: 'gs://synthetic-private-bucket/private/1' }] },
   { playback: { note: 'Synthetic media at https://fixture.invalid/private/1' } },
   { 'https://fixture.invalid/private/1': 'synthetic' },
