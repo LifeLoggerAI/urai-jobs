@@ -416,6 +416,37 @@ try {
   }
   evidence.ordinaryDiagnostics = ordinaryCases.map(item => item.diagnostic);
 
+  // Exercise source offsets through the complete ordinary producer, not just
+  // its FFmpeg argument helper. Output time and recorded-source time differ.
+  const intervalSource = path.join(root, 'selected-interval-source.mp4');
+  ffmpeg(['-f', 'lavfi', '-i', 'color=c=blue:s=320x320:r=30:d=2',
+    '-f', 'lavfi', '-i', 'color=c=red:s=320x320:r=30:d=2',
+    '-f', 'lavfi', '-i', 'sine=frequency=900:sample_rate=48000:duration=4',
+    '-filter_complex', '[0:v][1:v]concat=n=2:v=1:a=0[v]', '-map', '[v]', '-map', '2:a',
+    '-c:v', 'libx264', '-threads', '1', '-pix_fmt', 'yuv420p', '-c:a', 'aac', intervalSource]);
+  const intervalObject = `tenants/${tenantId}/selected-interval-source.mp4`;
+  objects.set(intervalObject, fs.readFileSync(intervalSource));
+  const intervalJob = structuredClone(renderAuthorityJob);
+  intervalJob.jobId = 'ordinary-source-offset-fixture';
+  intervalJob.payload.sources[0].objectPath = intervalObject;
+  intervalJob.payload.timeline = [{ sourceId: 'motion-fixture', startMs: 0, endMs: 1000, sourceStartMs: 2500 }];
+  intervalJob.payload.subtitleText = '1\n00:00:00,000 --> 00:00:01,000\nSelected synthetic source interval\n';
+  const interval = harness(intervalJob);
+  const intervalResult = await interval.worker.renderLifeMovie(intervalJob);
+  assertOutputs(intervalResult);
+  const intervalMovie = path.join(root, 'synthetic-selected-source-interval-diagnostic.mp4');
+  fs.writeFileSync(intervalMovie, objects.get(location(intervalResult.outputs.find(item => item.kind === 'mp4').ref)));
+  const color = spawnSync('ffmpeg', ['-v', 'error', '-i', intervalMovie, '-frames:v', '1',
+    '-vf', 'scale=1:1', '-pix_fmt', 'rgb24', '-f', 'rawvideo', 'pipe:1'], { timeout: 5000 });
+  assert.equal(color.status, 0, String(color.stderr));
+  assert.ok(color.stdout[0] > 200 && color.stdout[2] < 30, 'complete producer must render selected red source interval, not opening blue frames');
+  const intervalReceipt = JSON.parse(objects.get(location(intervalResult.outputs.find(item => item.kind === 'manifest').ref)));
+  assert.equal(intervalReceipt.timeline[0].sourceStartMs, 2500);
+  assert.equal(intervalReceipt.media.durationMs, 1000); assert.equal(intervalReceipt.media.videoFrames, 30);
+  assert.equal(intervalReceipt.sources[0].downloadedBytes.sha256, sha256(objects.get(intervalObject)));
+  assert.equal(intervalReceipt.literalMediaAccepted, false); assert.equal(intervalReceipt.identityAccepted, false);
+  test('actual complete ordinary producer selects later source frames, retains source offset/hash/SceneTruth and publishes normalized private adapter output');
+
   try {
     evidence.diagnostic.audioClock = decodedAudioClock(finalPath, 61000);
     assert.ok(evidence.diagnostic.audioClock.maxClockErrorSamples <= 1,
