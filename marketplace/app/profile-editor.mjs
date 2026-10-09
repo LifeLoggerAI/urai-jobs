@@ -5,6 +5,8 @@ const messages = {
   'signed-out':'Sign in to manage your Career profile.',empty:'Create your Career profile.',ready:'Your saved profile is ready.',saved:'Profile saved and checked.',
   conflict:'Your profile changed elsewhere. Reload the saved profile before making another change.',
   'saved-unverified':'Your save was acknowledged, but the saved profile could not be checked. Reload before saving again.',
+  'save-uncertain':'The save result could not be confirmed. Reload the saved profile before saving again.',
+  'timed-out':'This request took too long. Reload the saved profile to check its current state.',
 };
 function errorMessage(code) {
   if (code === 'MARKETPLACE_LAUNCH_BLOCKED') return 'Career profiles are not available in this environment yet.';
@@ -57,7 +59,7 @@ export function mountProfileEditor(root, bindings) {
     }
     const blocked = ['loading','saving','signed-out','denied'].includes(next.phase);
     for (const input of [...Object.values(fields),consent]) input.disabled = blocked;
-    save.disabled = blocked || ['conflict','saved-unverified','idle'].includes(next.phase);
+    save.disabled = blocked || ['conflict','saved-unverified','save-uncertain','timed-out','idle'].includes(next.phase);
     reload.disabled = ['loading','saving','signed-out'].includes(next.phase);
     privacy.disabled = typeof bindings.reviewPrivacyChoices !== 'function' || !next.uid || ['loading','saving'].includes(next.phase);
   });
