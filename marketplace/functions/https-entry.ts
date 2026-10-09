@@ -31,7 +31,7 @@ export const marketplaceHttpsApi = onRequest({ region: 'us-central1', cors: fals
     // This existing release hold is enforced before any Auth, Firestore or Storage work.
     assertMarketplaceLaunchState(env, request.method + ':' + request.path);
     const result = await routeMarketplaceRuntimeRequest({ method: request.method,
-      path: request.path, authorization: request.headers.authorization, body: readBody(request.body) });
+      path: request.path, authorization: request.headers.authorization, body: readBody(request.body), query: request.query });
     response.status('status' in result && typeof result.status === 'number' ? result.status : result.ok ? 200 : 400).json(result);
   } catch (error) {
     const result = fromError(error);

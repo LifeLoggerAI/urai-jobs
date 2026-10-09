@@ -8,6 +8,8 @@ import { register } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import {runProfileClientScenarios} from './profile-client.mjs';
 import {runProfileEditorScenarios} from './profile-editor.mjs';
+import {runApplicationsClientScenarios} from './applications-client.mjs';
+import {runApplicationsViewScenarios} from './applications-view.mjs';
 
 // Real compiled onRequest + loopback HTTP. Auth/Firestore are explicit synthetic
 // interfaces: no emulator, cloud, provider, upload, UI or release acceptance.
@@ -23,7 +25,7 @@ async function mount(handler){
     try{
       const chunks=[];for await(const chunk of req)chunks.push(chunk);
       const raw=Buffer.concat(chunks).toString('utf8');req.body=raw?JSON.parse(raw):undefined;
-      req.path=new URL(req.url,'http://127.0.0.1').pathname;req.get=req.header=name=>req.headers[name.toLowerCase()];
+      const url=new URL(req.url,'http://127.0.0.1');req.path=url.pathname;req.query={};for(const key of new Set(url.searchParams.keys())){const values=url.searchParams.getAll(key);req.query[key]=values.length===1?values[0]:values;}req.get=req.header=name=>req.headers[name.toLowerCase()];
       res.status=code=>{res.statusCode=code;return res;};res.set=(key,value)=>{res.setHeader(key,value);return res;};
       res.json=body=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(body));return res;};
       res.send=body=>{res.end(body);return res;};await handler(req,res);
@@ -72,11 +74,12 @@ class Doc{
   async update(data){assert(this.db.docs.has(this.key));this.db.put(this.key,{...this.db.data(this.key),...normalize(data,++this.db.clock)});}
 }
 class Query{
-  constructor(db,name,filters=[],count=Infinity){Object.assign(this,{db,name,filters,count});}
+  constructor(db,name,filters=[],count=Infinity,ordered=false,after=null){Object.assign(this,{db,name,filters,count,ordered,after});}
   doc(id){return new Doc(this.db,this.name,id??'audit-'+ ++this.db.autoId);}
-  where(field,op,value){assert.equal(op,'==');return new Query(this.db,this.name,[...this.filters,[field,value]],this.count);}
-  orderBy(){return this;}
-  limit(count){return new Query(this.db,this.name,this.filters,count);}
+  where(field,op,value){assert.equal(op,'==');return new Query(this.db,this.name,[...this.filters,[field,value]],this.count,this.ordered,this.after);}
+  orderBy(field){assert.equal(field.toString(),'__name__');return new Query(this.db,this.name,this.filters,this.count,true,this.after);}
+  startAfter(after){assert.equal(this.ordered,true);assert.equal(typeof after,'string');return new Query(this.db,this.name,this.filters,this.count,true,after);}
+  limit(count){return new Query(this.db,this.name,this.filters,count,this.ordered,this.after);}
   async get(){return this.db.query(this);}
 }
 class SyntheticFirestore{
@@ -88,7 +91,7 @@ class SyntheticFirestore{
   changed(key){this.versions.set(key,(this.versions.get(key)||0)+1);const name=key.slice(0,key.indexOf('/'));this.epochs.set(name,(this.epochs.get(name)||0)+1);}
   data(key){return copy(this.docs.get(key));}
   snapshot(ref){const data=this.data(ref.key);return{id:ref.id,exists:data!==undefined,data:()=>copy(data)};}
-  query(q){const docs=[...this.docs.keys()].filter(key=>key.startsWith(q.name+'/')).map(key=>this.snapshot(new Doc(this,q.name,key.slice(q.name.length+1)))).filter(doc=>q.filters.every(([field,value])=>doc.data()?.[field]===value)).slice(0,q.count);return{docs,empty:!docs.length,size:docs.length};}
+  query(q){let docs=[...this.docs.keys()].filter(key=>key.startsWith(q.name+'/')).map(key=>this.snapshot(new Doc(this,q.name,key.slice(q.name.length+1)))).filter(doc=>q.filters.every(([field,value])=>doc.data()?.[field]===value));if(q.ordered)docs.sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);if(q.after!==null)docs=docs.filter(doc=>doc.id>q.after);docs=docs.slice(0,q.count);return{docs,empty:!docs.length,size:docs.length};}
   async runTransaction(callback){
     for(let attempt=0;attempt<6;attempt++){
       const reads=new Map(),queries=new Map(),writes=[];
@@ -467,6 +470,12 @@ try{
   assert.equal(metrics.storageCalls,0);
   await runProfileClientScenarios({check,base,db,C,pc,authUsers,tokens,change,revoke,reset,origin:env.URAI_JOBS_ALLOWED_ORIGIN});
   await runProfileEditorScenarios({check,base,db,C,pc,origin:env.URAI_JOBS_ALLOWED_ORIGIN});
+  await check('installed Firebase Admin SDK serializes scoped documentID cursor query without network dispatch',async()=>{
+    const source="import assert from 'node:assert/strict';import{initializeApp,deleteApp}from'firebase-admin/app';import{getFirestore,FieldPath}from'firebase-admin/firestore';const app=initializeApp({projectId:'demo-marketplace-source-proof'},'owned-query-proof');try{const cursor='candidate:job049',query=getFirestore(app).collection('marketplaceJobApplications').where('candidateUid','==','candidate').where('tenantId','==','tenant').orderBy(FieldPath.documentId()).startAfter(cursor).limit(51),proto=query.toProto().structuredQuery;assert.deepEqual(proto.where.compositeFilter.filters.map(x=>x.fieldFilter),[{field:{fieldPath:'candidateUid'},op:'EQUAL',value:{stringValue:'candidate'}},{field:{fieldPath:'tenantId'},op:'EQUAL',value:{stringValue:'tenant'}}]);assert.deepEqual(proto.orderBy,[{field:{fieldPath:'__name__'},direction:'ASCENDING'}]);assert.equal(proto.limit.value,51);assert.equal(proto.startAt.before===true,false);assert.equal(proto.startAt.values[0].referenceValue.endsWith('/marketplaceJobApplications/'+cursor),true);console.log('owned installed SDK query serialization passed; no get/commit');}finally{await deleteApp(app);}";
+    const proof=spawnSync(process.execPath,['--input-type=module','-e',source],{cwd:functionsDir,encoding:'utf8',timeout:10000});assert.equal(proof.status,0,proof.stderr);assert(proof.stdout.includes('no get/commit'));
+  });
+  await runApplicationsClientScenarios({check,base,origin:env.URAI_JOBS_ALLOWED_ORIGIN,createApp,db,C,aid,change,revoke,reset,authUsers,tokens,success});
+  await runApplicationsViewScenarios({check,base,origin:env.URAI_JOBS_ALLOWED_ORIGIN,createApp,db,C,aid,change});
   console.log(JSON.stringify({ok:true,node:process.version,actualPackageMain:pkg.main,actualHttpsPlatform:marketplaceApi.__endpoint.platform,defaultHold,fixtureErrorResponseCases:defaultHold.fixtureErrorResponseCases+1,actualLoopbackCases:cases.length,cases,
     persistence:'synthetic versioned Firestore interface with conflict retries; current Auth interface',
     authFirestoreAtomicity:'separate services; Auth re-read at final decision; no atomic cross-service claim',

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, FieldPath } from 'firebase-admin/firestore';
 import type { Transaction } from 'firebase-admin/firestore';
 import { initializeMarketplaceAdminRuntime } from './firebase-admin-runtime.js';
 import { marketplaceCollections } from './collections.js';
@@ -81,15 +81,30 @@ export const createApplicationRuntime = () => {
       });
     },
 
-    async listByCandidate(actor: MarketplaceAuthContext) {
+    async listByCandidate(actor: MarketplaceAuthContext, after?: string) {
+      if (after !== undefined) requireApplicationIdentifier(after);
       return db.runTransaction(async transaction => {
         const current = await assertCurrentMarketplaceActor(db, transaction, actor);
-        const snapshot = await transaction.get(db.collection(marketplaceCollections.jobApplications)
-          .where('candidateUid', '==', current.uid).where('tenantId', '==', current.tenantId).limit(50));
+        const applications = db.collection(marketplaceCollections.jobApplications);
+        if (after !== undefined) {
+          const anchor = await transaction.get(applications.doc(after));
+          const data = anchor.exists ? anchor.data() : undefined;
+          // Do not disclose whether a foreign/deleted cursor exists. Its only
+          // authority is the current subject and tenant, never caller scope.
+          if (!data || data.candidateUid !== current.uid || data.tenantId !== current.tenantId) {
+            throw new Error('VALIDATION_APPLICATION_CURSOR');
+          }
+        }
+        let query = applications.where('candidateUid', '==', current.uid)
+          .where('tenantId', '==', current.tenantId).orderBy(FieldPath.documentId());
+        if (after !== undefined) query = query.startAfter(after);
+        const snapshot = await transaction.get(query.limit(51));
         const finalCandidateChecks: (() => Promise<void>)[] = [];
         const result: Record<string, unknown>[] = [];
-        for (const doc of snapshot.docs) {
+        for (const doc of snapshot.docs.slice(0, 50)) {
           const data = doc.data();
+          assertTenant(data, current.tenantId);
+          if (data.candidateUid !== current.uid) throw new Error('APPLICATION_OWNER_REQUIRED');
           if (data.status === 'withdrawn') {
             // A stop receipt remains visible without re-disclosing a revoked snapshot.
             result.push({ id: doc.id, jobId: data.jobId, employerId: data.employerId, status: 'withdrawn' });
@@ -100,7 +115,7 @@ export const createApplicationRuntime = () => {
         }
         for (const check of finalCandidateChecks) await check();
         await assertCurrentMarketplaceAuth(actor);
-        return result;
+        return { applications: result, nextCursor: snapshot.docs.length > 50 ? snapshot.docs[49].id : null };
       });
     },
 
