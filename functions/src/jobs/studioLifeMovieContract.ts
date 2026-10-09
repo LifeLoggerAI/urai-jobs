@@ -32,6 +32,8 @@ export const LifeMovieTimelineItemSchema = z.object({
   sourceId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
   startMs: z.number().int().nonnegative(),
   endMs: z.number().int().positive(),
+  // Source time is separate from output time. Omission retains existing plans.
+  sourceStartMs: z.number().int().nonnegative().max(45 * 60 * 1000).optional(),
 }).strict().refine((value) => value.endMs > value.startMs && value.endMs - value.startMs <= 30 * 60 * 1000, {
   message: 'Each timeline item must have a positive duration no longer than 30 minutes.',
 });
@@ -90,6 +92,10 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
   for (const [index, item] of value.timeline.entries()) {
     if (!sourceIds.has(item.sourceId)) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index, 'sourceId'], message: 'Timeline source must exist in sources.' });
+    }
+    const source = value.sources.find((candidate) => candidate.id === item.sourceId);
+    if (source?.mimeType.startsWith('image/') && (item.sourceStartMs ?? 0) !== 0) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index, 'sourceStartMs'], message: 'Still-image source time must be zero.' });
     }
   }
   for (const [index, cue] of value.audioCues.entries()) {
