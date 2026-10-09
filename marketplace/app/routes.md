@@ -75,6 +75,15 @@ conflicts and interrupted readback require reload. Auth changes cancel previous
 requests, erase previous profile/draft/consent UI and require a new scoped load.
 The global server launch hold and resume-upload hold remain unchanged.
 
+Each profile operation has one fixed20-second deadline across SDK token refresh,
+the supplied consent authority, transport/body reads and saved-profile readback.
+Account changes, superseding operations and disposal stop client waits; they do
+not claim that SDK/provider/server work was terminated. Timed-out reads and
+attempted or acknowledged writes with unverified outcomes require manual reload
+before another save. Late settlements/rejections cannot restore private state or
+claim saved acceptance. The owned Node test clock verifies these boundaries;
+there is no public option to extend the production deadline.
+
 `marketplace/tests/lifecycle-scenarios.mjs` runs client persistence/readback and
 mounted-editor interactions over the compiled v2 onRequest loopback endpoint.
 Auth/Firestore/consent and DOM interfaces are explicitly synthetic; these tests

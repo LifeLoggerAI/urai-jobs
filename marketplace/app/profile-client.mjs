@@ -8,7 +8,7 @@ const validDraft = d => d && typeof d.displayName === 'string' && d.displayName.
 const validConsent = c => c && c.purpose === 'career.profile' && typeof c.policyVersion === 'string' && /^[A-Za-z0-9._:-]{1,80}$/.test(c.policyVersion)
   && typeof c.decisionReceiptId === 'string' && /^[A-Za-z0-9._:-]{1,160}$/.test(c.decisionReceiptId) && Object.keys(c).length === 3;
 const copy = x => structuredClone(x);
-class ProfileError extends Error { constructor(code) { super(code); this.code = code; } }
+class ProfileError extends Error { constructor(code, authoritative = false) { super(code); this.code = code; this.authoritative = authoritative; } }
 
 export function firebaseProfileSession(auth, onIdTokenChanged) {
   return {currentUser:() => auth.currentUser, subscribe:listener => onIdTokenChanged(auth, listener)};
@@ -20,7 +20,7 @@ export function createProfileClient({session, consentAuthority, fetch:send = glo
   let user = session.currentUser(), epoch = 0, operation = 0, abort, disposed = false;
   let state = {phase:user ? 'idle' : 'signed-out',uid:user?.uid ?? null,profile:null,draft:emptyDraft(),revision:0,dirty:false,code:null};
   const emit = patch => { state = {...state,...patch}; for (const listener of listeners) listener(copy(state)); };
-  const cancel = () => { operation++; abort?.abort(); abort = undefined; };
+  const cancel = () => { operation++; abort?.abort('PROFILE_REQUEST_SUPERSEDED'); abort = undefined; };
   const reset = next => {
     cancel(); epoch++; user = next;
     emit({phase:next ? 'idle' : 'signed-out',uid:next?.uid ?? null,profile:null,draft:emptyDraft(),revision:0,dirty:false,code:null});
@@ -34,18 +34,42 @@ export function createProfileClient({session, consentAuthority, fetch:send = glo
     if (current !== user) reset(current);
     if (!user) { emit({phase:'signed-out',code:'AUTH_REQUIRED'}); return null; }
     cancel(); abort = new AbortController();
-    const context = {user,epoch,operation,signal:abort.signal};
+    const context = {user,epoch,operation,signal:abort.signal,controller:abort,attempted:false};
+    // One fixed production deadline covers the entire operation, including
+    // token refresh, consent authority, transport and authoritative readback.
+    context.timer = setTimeout(() => { if (!context.signal.aborted) context.controller.abort('PROFILE_REQUEST_TIMEOUT'); },20000);
     emit({phase,code:null}); return context;
   }
   const current = c => !disposed && c.epoch === epoch && c.operation === operation && session.currentUser() === c.user && user === c.user;
+  const assertCurrent = c => {
+    if (!disposed && session.currentUser() !== user) reset(session.currentUser());
+    if (!current(c)) throw new ProfileError('PROFILE_REQUEST_SUPERSEDED');
+    if (c.signal.aborted) throw new ProfileError(c.signal.reason === 'PROFILE_REQUEST_TIMEOUT' ? 'PROFILE_REQUEST_TIMEOUT' : 'PROFILE_REQUEST_SUPERSEDED');
+  };
+  async function wait(c,start) {
+    assertCurrent(c);
+    let onAbort;
+    const stopped = new Promise((_,reject) => { onAbort = () => reject(new ProfileError(c.signal.reason === 'PROFILE_REQUEST_TIMEOUT' ? 'PROFILE_REQUEST_TIMEOUT' : 'PROFILE_REQUEST_SUPERSEDED')); c.signal.addEventListener('abort',onAbort,{once:true}); });
+    // Observe work even after the race stops waiting. The thunk prevents stale
+    // token/consent/provider work from being started before the current fence.
+    const pending = Promise.resolve().then(() => { assertCurrent(c); return start(); });
+    try { return await Promise.race([pending,stopped]); }
+    finally { c.signal.removeEventListener('abort',onAbort); }
+  }
   async function request(c, method, body) {
-    const token = await c.user.getIdToken(true);
-    if (!current(c)) throw new ProfileError('PROFILE_REQUEST_SUPERSEDED');
-    const response = await send('/api/marketplace/profiles/me', {method,credentials:'same-origin',cache:'no-store',signal:c.signal,
-      headers:{Authorization:'Bearer '+token,...(body ? {'Content-Type':'application/json'} : {})},...(body ? {body:JSON.stringify(body)} : {})});
-    const result = await response.json();
-    if (!current(c)) throw new ProfileError('PROFILE_REQUEST_SUPERSEDED');
-    if (!response.ok || result?.ok !== true) throw new ProfileError(typeof result?.code === 'string' ? result.code : 'PROFILE_RESPONSE_INVALID');
+    const token = await wait(c,() => c.user.getIdToken(true)); assertCurrent(c);
+    const response = await wait(c,() => {
+      if (method === 'POST') c.attempted = true;
+      return send('/api/marketplace/profiles/me', {method,credentials:'same-origin',cache:'no-store',signal:c.signal,
+        headers:{Authorization:'Bearer '+token,...(body ? {'Content-Type':'application/json'} : {})},...(body ? {body:JSON.stringify(body)} : {})});
+    });
+    const result = await wait(c,() => response.json()); assertCurrent(c);
+    if (!response.ok || result?.ok !== true) {
+      // A parsed server rejection is different from an unconfirmed transport
+      // or body failure after POST may already have persisted the write.
+      const rejected = result?.ok === false && typeof result.code === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(result.code);
+      throw new ProfileError(rejected ? result.code : 'PROFILE_RESPONSE_INVALID',rejected);
+    }
     return result;
   }
   function read(result, c) {
@@ -55,11 +79,14 @@ export function createProfileClient({session, consentAuthority, fetch:send = glo
     return {profile:{uid:p.uid,...copy(d),revision:p.revision},draft:copy(d),revision:p.revision,dirty:false};
   }
   function failure(c, error, saved = false) {
+    if (!disposed && session.currentUser() !== user) { reset(session.currentUser()); return; }
     if (!current(c)) return;
-    const code = error?.code || 'PROFILE_CONNECTION_FAILED';
+    const code = typeof error?.code === 'string' && /^(?:[A-Z][A-Z0-9_]{0,79}|auth\/[a-z0-9-]{1,70})$/.test(error.code) ? error.code : 'PROFILE_CONNECTION_FAILED';
     const denied = /^(auth\/|AUTH_|INVALID_AUTHORIZATION|ACCOUNT_|TENANT_|CONSENT_)/.test(code);
     if (denied) emit({phase:'denied',code,profile:null,draft:emptyDraft(),revision:0,dirty:false});
-    else emit({phase:saved ? 'saved-unverified' : code === 'PROFILE_REVISION_CHANGED' ? 'conflict' : 'error',code});
+    else emit({phase:saved ? 'saved-unverified' : code === 'PROFILE_REVISION_CHANGED' ? 'conflict'
+      : c.attempted && (!(error instanceof ProfileError && error.authoritative) || code === 'INTERNAL_MARKETPLACE_ERROR') ? 'save-uncertain'
+      : code === 'PROFILE_REQUEST_TIMEOUT' ? 'timed-out' : 'error',code});
   }
   return {
     snapshot:() => copy(state),
@@ -72,11 +99,12 @@ export function createProfileClient({session, consentAuthority, fetch:send = glo
     },
     async load() {
       const c = begin('loading'); if (!c) return;
-      try { emit({...read(await request(c,'GET'),c),phase:'ready',code:null}); }
+      try { const result = await request(c,'GET'); assertCurrent(c); emit({...read(result,c),phase:'ready',code:null}); }
       catch (error) {
         if (current(c) && error.code === 'PROFILE_NOT_FOUND') emit({phase:'empty',profile:null,draft:emptyDraft(),revision:0,dirty:false,code:null});
         else failure(c,error);
       }
+      finally { clearTimeout(c.timer); }
     },
     async save(consentGranted) {
       if (session.currentUser() !== user) { reset(session.currentUser()); return; }
@@ -87,18 +115,21 @@ export function createProfileClient({session, consentAuthority, fetch:send = glo
       const c = begin('saving'); if (!c) return;
       let saved = false;
       try {
-        const consent = await consentAuthority({uid:c.user.uid,purpose:'career.profile',signal:c.signal});
-        if (!current(c)) return;
+        const consent = await wait(c,() => consentAuthority({uid:c.user.uid,purpose:'career.profile',signal:c.signal}));
+        assertCurrent(c);
         if (!validConsent(consent)) throw new ProfileError('CONSENT_AUTHORITY_UNAVAILABLE');
         const result = await request(c,'POST',{...draft,expectedRevision:revision,consentGranted:true,consent});
+        assertCurrent(c);
         if (result.uid !== c.user.uid || result.revision !== revision + 1) throw new ProfileError('PROFILE_RESPONSE_INVALID');
         saved = true;
         // Success means authoritative readback, not an optimistic local draft.
-        const checked = read(await request(c,'GET'),c);
+        const readback = await request(c,'GET'); assertCurrent(c);
+        const checked = read(readback,c);
         const expected = Object.fromEntries(Object.entries(draft).map(([key,value]) => [key,Array.isArray(value) ? value.map(x=>x.trim()) : value.trim()]));
         if (checked.revision !== result.revision || JSON.stringify(checked.draft) !== JSON.stringify(expected)) throw new ProfileError('PROFILE_READBACK_CHANGED');
         emit({...checked,phase:'saved',code:null});
       } catch (error) { failure(c,error,saved); }
+      finally { clearTimeout(c.timer); }
     },
     dispose() { if (!disposed) { disposed = true; cancel(); unsubscribe(); listeners.clear(); state = {...state,profile:null,draft:emptyDraft()}; } },
   };
