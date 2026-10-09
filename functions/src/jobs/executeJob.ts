@@ -1,4 +1,4 @@
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, type Transaction, type DocumentReference } from 'firebase-admin/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import { onMessagePublished } from 'firebase-functions/v2/pubsub';
 import axios from 'axios';
@@ -8,7 +8,7 @@ import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJobTypes.js';
 import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
-import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
+import { canFinalizeExecution, decideExecutionStart, executionAuthorityUnchanged, isTerminalJobStatus } from './executionGuards.js';
 import { canFinalizePrivateSource } from '../privacy/privateLifeModelDataRights.js';
 
 // URAI Jobs worker routing audit markers.
@@ -255,6 +255,20 @@ async function appendJobLog(jobId: string, input: { level: string; message: stri
   }
 }
 
+function cancelChangedAttempt(transaction: Transaction, jobRef: DocumentReference, queueRef: DocumentReference, jobId: string, code: string) {
+  const now = FieldValue.serverTimestamp();
+  transaction.update(jobRef, {
+    status: 'CANCELLED', error: { code }, result: FieldValue.delete(), output: FieldValue.delete(),
+    lease: FieldValue.delete(), updatedAt: now, completedAt: now,
+    'execution.leaseToken': FieldValue.delete(), 'execution.completedAt': now,
+    'execution.asyncCallbackPending': false,
+    'execution.callbackTokenHash': FieldValue.delete(),
+    'execution.callbackLeaseToken': FieldValue.delete(),
+    'execution.callbackDeadlineAt': FieldValue.delete(),
+  });
+  transaction.set(queueRef, { jobId, status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: now }, { merge: true });
+}
+
 async function handleJobFailure(jobId: string, leaseToken: string, error: unknown) {
   const db = getFirestore();
   const jobRef = jobDoc(jobId);
@@ -450,6 +464,26 @@ export const executeJob = onMessagePublished({
   const jobType = getJobType(job);
   const target = getWorkerTarget(jobType);
 
+  const currentDispatchAuthority = () => db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(jobRef);
+    if (!snapshot.exists) return false;
+    const current = snapshot.data() as Job;
+    if (!canFinalizeExecution(current, leaseToken)) return false;
+    if (!executionAuthorityUnchanged(current, job)) {
+      cancelChangedAttempt(transaction, jobRef, queueRef, jobId, 'execution_authority_changed');
+      return false;
+    }
+    const contexts = jobConsentContexts(current);
+    if (current.ownerUid && contexts.length) {
+      const blocks = await Promise.all(contexts.map(context => transaction.get(consentBlockRef(current.ownerUid!, context.purpose))));
+      if (blocks.some(block => block.exists && block.data()?.active === true)) {
+        cancelChangedAttempt(transaction, jobRef, queueRef, jobId, 'consent_revoked');
+        return false;
+      }
+    }
+    return true;
+  });
+
   await appendJobLog(jobId, {
     level: 'info',
     source: 'executeJob',
@@ -467,6 +501,7 @@ export const executeJob = onMessagePublished({
         message: 'Executing governed TinyFish web job.',
         metadata: { jobType, provider: 'tinyfish' },
       });
+      if (!await currentDispatchAuthority()) return;
       result = await executeTinyFishJob(jobType, getPayloadRecord(job));
     } else if (target) {
       const dispatchConsentContexts = jobConsentContexts(job);
@@ -523,6 +558,8 @@ export const executeJob = onMessagePublished({
         ? await resolveTrustedNarratorProviderAuthorization(job)
         : null;
 
+      if (!await currentDispatchAuthority()) return;
+
       const response = await axios.post(`${workerUrl}${route}`, {
         ...job,
         jobId,
@@ -563,6 +600,7 @@ export const executeJob = onMessagePublished({
         throw new Error(`Worker URL ${envKey} is required for ${normalizedEnv()} runtime; inline fallback is disabled.`);
       }
 
+      if (!await currentDispatchAuthority()) return;
       result = createInlineWorkerResult(job, jobId, jobType);
 
       await appendJobLog(jobId, {
@@ -579,6 +617,10 @@ export const executeJob = onMessagePublished({
 
       const current = currentSnapshot.data() as Job;
       if (!canFinalizeExecution(current, leaseToken)) {
+        return false;
+      }
+      if (!executionAuthorityUnchanged(current, job)) {
+        cancelChangedAttempt(transaction, jobRef, queueRef, jobId, 'execution_authority_changed');
         return false;
       }
 

@@ -6,6 +6,31 @@ type ExecutionGuardJob = {
   execution?: { leaseToken?: unknown };
 };
 
+type ExecutionAuthorityJob = ExecutionGuardJob & {
+  jobId?: unknown; type?: unknown; jobType?: unknown; tenantId?: unknown;
+  orgId?: unknown; ownerUid?: unknown; payload?: unknown; consent?: unknown;
+  consents?: unknown; ownerSubsystem?: unknown; sourceSystem?: unknown;
+  sourceProject?: unknown; createdBy?: unknown;
+};
+
+// Lifecycle timestamps and lease heartbeats may change while a worker runs.
+// The account, routing, private input and consent that admitted it may not.
+function authorityValue(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value !== 'object') return `${typeof value}:${typeof value === 'number' ? String(value) : JSON.stringify(value)}`;
+  if (value instanceof Date) return `date:${value.toISOString()}`;
+  if (Array.isArray(value)) return `[${value.map(authorityValue).join(',')}]`;
+  return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${authorityValue((value as Record<string, unknown>)[key])}`).join(',')}}`;
+}
+
+export function executionAuthorityUnchanged(current: ExecutionAuthorityJob, admitted: ExecutionAuthorityJob): boolean {
+  const fields = ['jobId', 'type', 'jobType', 'tenantId', 'orgId', 'ownerUid',
+    'payload', 'consent', 'consents', 'ownerSubsystem', 'sourceSystem',
+    'sourceProject', 'createdBy'] as const;
+  try { return fields.every(field => authorityValue(current[field]) === authorityValue(admitted[field])); }
+  catch { return false; }
+}
+
 type QueueRecoveryRecord = {
   status?: unknown;
   lease?: { leaseToken?: unknown };

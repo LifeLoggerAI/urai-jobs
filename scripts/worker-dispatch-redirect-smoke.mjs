@@ -16,6 +16,8 @@ const baselinePath = process.argv.find(value => value.startsWith('--baseline-sou
 const original = fs.readFileSync(baselinePath ? baselinePath.slice('--baseline-source='.length) : new URL('functions/src/jobs/executeJob.ts', root), 'utf8');
 let cases = 0;
 const reproduceFinalRevocation = process.argv.includes('--reproduce-final-revocation');
+const reproduceFinalAuthority = process.argv.includes('--reproduce-final-authority');
+const authorityChanges = ['owner-changed', 'tenant-changed', 'payload-changed', 'consent-changed', 'type-changed'];
 function compile(source, dependencies, environment) {
   const exports = {};
   const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
@@ -27,11 +29,23 @@ const registry = compile(fs.readFileSync(new URL('functions/src/core/runtimeJobT
 const routes = Object.entries(registry.RUNTIME_JOB_REGISTRY).filter(([, value]) => value.workerEnvKey);
 const deletion = { marker: 'delete' };
 const fieldValue = { serverTimestamp: () => new Date(), delete: () => deletion, increment: amount => ({ marker: 'increment', amount }) };
-function fixture(jobType, origin, extra = {}) {
+function fixture(jobType, origin, extra = {}, beforeDispatchChange) {
   const job = { jobId: 'synthetic-worker-job', type: jobType, jobType, status: 'LEASED', ownerUid: 'synthetic-owner', tenantId: 'synthetic-tenant', lease: { leaseToken: 'synthetic-lease' }, execution: { maxAttempts: 1 }, consent: { purpose: 'synthetic.private', policyVersion: 'synthetic-v1', decisionReceiptId: 'synthetic-decision' }, payload: { text: 'synthetic-private-job-bytes' } };
   const docs = new Map([['jobs/' + job.jobId, job], ['jobQueue/' + job.jobId, { jobId: job.jobId, status: 'LEASED', lease: { leaseToken: 'synthetic-lease' } }]]);
   const logs = [];
-  const reference = path => ({ path, async get() { return snapshot(path); }, collection() { return { async add(value) { logs.push(value); } }; } });
+  function changeAuthority(mode) {
+    const current = structuredClone(docs.get('jobs/' + job.jobId));
+    if (mode === 'owner-changed') current.ownerUid = 'synthetic-other-owner';
+    if (mode === 'tenant-changed') current.tenantId = 'synthetic-other-tenant';
+    if (mode === 'payload-changed') current.payload.text = 'synthetic-new-input';
+    if (mode === 'consent-changed') current.consent.decisionReceiptId = 'synthetic-new-consent';
+    if (mode === 'type-changed') current.type = current.jobType = 'synthetic-other-type';
+    docs.set('jobs/' + job.jobId, current);
+  }
+  const reference = path => ({ path, async get() { return snapshot(path); }, collection() { return { async add(value) {
+    logs.push(value);
+    if (beforeDispatchChange && value.message === 'Sending job to configured worker.') changeAuthority(beforeDispatchChange);
+  } }; } });
   const snapshot = path => ({ exists: docs.has(path), data: () => structuredClone(docs.get(path)) });
   function update(ref, values, merge = true) {
     const value = merge ? structuredClone(docs.get(ref.path) || {}) : {};
@@ -73,7 +87,7 @@ function fixture(jobType, origin, extra = {}) {
   };
   imports['../privacy/consentBlocks.js'] = compile(fs.readFileSync(new URL('functions/src/privacy/consentBlocks.ts', root), 'utf8'), name => name === 'node:crypto' ? require(name) : imports[name], environment);
   const handler = compile(original, name => { assert.ok(Object.hasOwn(imports, name), name); return imports[name]; }, environment).executeJob;
-  return { docs, logs, job, revokeConsent: () => docs.set(imports['../privacy/consentBlocks.js'].consentBlockRef(job.ownerUid, job.consent.purpose).path, { active: true }), execute: () => handler({ data: { message: { json: { jobId: job.jobId, leaseToken: 'synthetic-lease' } } } }) };
+  return { docs, logs, job, changeAuthority, revokeConsent: () => docs.set(imports['../privacy/consentBlocks.js'].consentBlockRef(job.ownerUid, job.consent.purpose).path, { active: true }), execute: () => handler({ data: { message: { json: { jobId: job.jobId, leaseToken: 'synthetic-lease' } } } }) };
 }
 async function listen(server) { server.listen(0, '127.0.0.1'); await once(server, 'listening'); return 'http://127.0.0.1:' + server.address().port; }
 async function close(server) { server.closeAllConnections(); await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
@@ -89,12 +103,23 @@ async function scenario(jobType, status, sameOrigin, mode = 'redirect') {
     received.push(input);
     if (mode === 'redirect') { res.writeHead(status, { location: (sameOrigin ? origin : sinkOrigin) + '/redirected' }); res.end(); }
     else if (mode === 'hang') { /* The synthetic timeout closes this request. */ }
-    else { if (mode === 'revoked') f.revokeConsent(); res.writeHead(status, { 'content-type': 'application/json' }); res.end('{"ok":true,"fixture":"owned-worker-response"}'); }
+    else { if (mode === 'revoked') f.revokeConsent(); if (authorityChanges.includes(mode)) f.changeAuthority(mode); res.writeHead(status, { 'content-type': 'application/json' }); res.end('{"ok":true,"fixture":"owned-worker-response"}'); }
   });
   origin = await listen(worker);
-  const f = fixture(jobType, origin, mode === 'hang' ? { URAI_JOBS_WORKER_TIMEOUT_MS: '40' } : {});
+  const beforeChange = mode.startsWith('before-') ? mode.slice(7) : undefined;
+  const f = fixture(jobType, origin, mode === 'hang' ? { URAI_JOBS_WORKER_TIMEOUT_MS: '40' } : {}, beforeChange);
   try {
     await f.execute();
+    if (beforeChange && !reproduceFinalAuthority) {
+      assert.equal(received.length, 0, 'changed authority blocks dispatch of admitted private input');
+      assert.equal(escaped.length, 0);
+      const final = f.docs.get('jobs/' + f.job.jobId);
+      assert.equal(final.status, 'CANCELLED'); assert.equal(final.output, undefined); assert.equal(final.result, undefined);
+      assert.equal(final.execution.leaseToken, undefined); assert.equal(final.execution.asyncCallbackPending, false);
+      assert.equal(f.docs.get('jobQueue/' + f.job.jobId).status, 'CANCELLED');
+      cases++; console.log('[PASS] ' + jobType + ' ' + mode + ' before dispatch');
+      return;
+    }
     assert.equal(received.length, 1, 'one owned worker POST');
     assert.equal(received[0].method, 'POST');
     assert.equal(received[0].authorization, 'Bearer synthetic-private-worker-token');
@@ -102,7 +127,10 @@ async function scenario(jobType, status, sameOrigin, mode = 'redirect') {
     assert.equal(JSON.parse(received[0].body).payload.text, f.job.payload.text);
     assert.equal(received[0].path, registry.workerRouteForJobType(jobType));
     const final = f.docs.get('jobs/' + f.job.jobId);
-    if (reproduceFinalRevocation && mode === 'revoked') {
+    if (reproduceFinalAuthority && (authorityChanges.includes(mode) || beforeChange)) {
+      assert.equal(final.status, 'SUCCESS', 'predecessor applied old worker output to changed execution authority');
+      assert.equal(final.output.fixture, 'owned-worker-response');
+    } else if (reproduceFinalRevocation && mode === 'revoked') {
       assert.equal(final.status, 'SUCCESS', 'predecessor finalized after canonical revocation');
       assert.equal(final.output.fixture, 'owned-worker-response');
     } else if (baselinePath && mode === 'redirect') {
@@ -112,7 +140,7 @@ async function scenario(jobType, status, sameOrigin, mode = 'redirect') {
       assert.equal(final.status, 'SUCCESS');
     } else {
       assert.equal(escaped.length, 0, 'private body and worker authority must never reach a redirect target');
-      if (mode === 'revoked') {
+      if (mode === 'revoked' || authorityChanges.includes(mode)) {
         assert.equal(final.status, 'CANCELLED'); assert.equal(final.output, undefined); assert.equal(final.result, undefined);
         assert.equal(final.execution.leaseToken, undefined); assert.equal(final.execution.asyncCallbackPending, false);
         assert.equal(f.docs.get('jobQueue/' + f.job.jobId).status, 'CANCELLED');
@@ -124,7 +152,11 @@ async function scenario(jobType, status, sameOrigin, mode = 'redirect') {
     console.log('[PASS] ' + jobType + ' ' + mode + ' ' + status + ' ' + (sameOrigin ? 'same-origin' : 'cross-origin'));
   } finally { await close(worker); await close(sink); }
 }
-if (reproduceFinalRevocation) {
+if (reproduceFinalAuthority) {
+  assert.ok(baselinePath, 'reproduction requires exact predecessor source');
+  for (const [jobType] of routes) for (const change of authorityChanges) for (const phase of ['', 'before-']) await scenario(jobType, 200, true, phase + change);
+  console.log('[REPRODUCED] ' + cases + ' actual dispatcher outputs finalized after owner, tenant, input, consent or type authority changed');
+} else if (reproduceFinalRevocation) {
   assert.ok(baselinePath, 'reproduction requires exact predecessor source');
   for (const [jobType] of routes) await scenario(jobType, 200, true, 'revoked');
   console.log('[REPRODUCED] ' + cases + ' actual dispatcher results committed after canonical consent revocation');
@@ -137,6 +169,8 @@ if (reproduceFinalRevocation) {
     await scenario(jobType, 200, true, 'success');
     await scenario(jobType, 202, true, 'accepted');
     await scenario(jobType, 200, true, 'revoked');
+    for (const change of authorityChanges) await scenario(jobType, 200, true, change);
+    for (const change of authorityChanges) await scenario(jobType, 200, true, 'before-' + change);
   }
   await scenario('narrator.tts', 0, true, 'hang');
   console.log('[PASS] Actual dispatcher/Axios loopback boundary: ' + cases + ' cases; no provider or private source used');
