@@ -848,9 +848,15 @@ async function assembleLifeMovie(job) {
     const moviePath = path.join(workDir, 'life-movie-final.mp4');
     await run('ffmpeg', [
       '-y', '-f', 'concat', '-safe', '0', '-i', concatPath,
+      '-map', '0:v:0', '-map', '0:a:0',
       '-copyts',
       '-t', String(previousEnd / 1000),
-      '-c', 'copy', '-movflags', '+faststart', moviePath,
+      // AAC packets decode to full frames even when a child container clips
+      // their duration. Remove sample overlaps against the declared PTS before
+      // one final audio encoding, while copying every compressed video packet.
+      '-af', `aresample=48000:async=1:min_hard_comp=0.000001:first_pts=0,apad,atrim=duration=${previousEnd / 1000},asetpts=PTS-STARTPTS`,
+      '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
+      '-movflags', '+faststart', moviePath,
     ], { signal: control.signal });
     await control.check();
     const finalMedia = probeNormalizedMovie(moviePath, input, previousEnd, mediaProfile);
@@ -1004,10 +1010,14 @@ async function renderLifeMovie(job) {
     const baseMoviePath = path.join(workDir, 'life-movie-base.mp4');
     await run('ffmpeg', [
       '-y', '-f', 'concat', '-safe', '0', '-i', concatPath,
+      '-map', '0:v:0', '-map', '0:a:0',
       '-copyts', '-t', String(timelineDurationMs / 1000),
-      // Every segment already has the same H.264/AAC output profile. Remux it;
-      // encoding the full movie again doubles CPU work and loses quality.
-      '-c', 'copy',
+      '-c:v', 'copy',
+      '-af', `aresample=48000:async=1:min_hard_comp=0.000001:first_pts=0,apad,atrim=duration=${timelineDurationMs / 1000},asetpts=PTS-STARTPTS`,
+      // Keep normalized samples lossless until the existing cue mixer encodes
+      // the final AAC stream. Without cues, encode that stream here instead.
+      ...(input.audioCues.length ? ['-c:a', 'pcm_s16le', '-f', 'mov'] : ['-c:a', 'aac', '-b:a', '192k']),
+      '-ar', '48000', '-ac', '2',
       '-movflags', '+faststart', baseMoviePath,
     ], { signal: control.signal });
 

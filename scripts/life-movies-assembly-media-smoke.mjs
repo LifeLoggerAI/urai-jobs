@@ -29,6 +29,56 @@ function ffmpeg(args) {
   const result = spawnSync('ffmpeg', ['-v', 'error', '-y', ...args], { encoding: 'utf8', timeout: 30000 });
   assert.equal(result.status, 0, result.stderr);
 }
+function videoPackets(filePath) {
+  const result = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_packets',
+    '-show_data_hash', 'sha256', '-show_entries', 'packet=pts,dts,duration,data_hash', '-of', 'json', filePath],
+  { encoding: 'utf8', timeout: 5000, maxBuffer: 2 * 1024 * 1024 });
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout).packets;
+}
+function decodedAudioClock(filePath, durationMs) {
+  const result = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'a:0', '-show_frames',
+    '-show_entries', 'frame=pts,pkt_duration,nb_samples', '-of', 'json', filePath],
+  { encoding: 'utf8', timeout: 5000, maxBuffer: 2 * 1024 * 1024 });
+  assert.equal(result.status, 0, result.stderr);
+  const frames = JSON.parse(result.stdout).frames;
+  assert.ok(frames.length > 0);
+  let samples = 0, maxClockErrorSamples = 0;
+  for (const frame of frames) {
+    assert.ok(Number.isInteger(frame.pts) && Number.isInteger(frame.nb_samples) && frame.nb_samples > 0);
+    maxClockErrorSamples = Math.max(maxClockErrorSamples, Math.abs(samples - frame.pts));
+    samples += frame.nb_samples;
+  }
+  const last = frames.at(-1);
+  return { sampleRate: 48000, frames: frames.length, decodedSamples: samples, maxClockErrorSamples,
+    declaredSamples: durationMs * 48, packetEndSamples: last.pts + last.pkt_duration,
+    terminalPaddingSamples: samples - durationMs * 48 };
+}
+function copiedVideoReference(entries, durationSeconds, name) {
+  // A lossless video-only reference accounts for concat's H.264 header
+  // conversion. It never decodes/re-encodes video or implements audio repair.
+  const list = path.join(root, `${name}-video-copy-reference.txt`);
+  fs.writeFileSync(list, entries.map(entry =>
+    `file '${entry.filePath}'\nduration ${entry.durationMs / 1000}`).join('\n') + '\n');
+  const output = path.join(root, `${name}-video-copy-reference.mp4`);
+  ffmpeg(['-f', 'concat', '-safe', '0', '-i', list, '-map', '0:v:0',
+    '-copyts', '-t', String(durationSeconds), '-c:v', 'copy', '-movflags', '+faststart', output]);
+  return videoPackets(output);
+}
+function audioActivity(filePath, windows) {
+  const result = spawnSync('ffmpeg', ['-v', 'error', '-xerror', '-i', filePath, '-map', '0:a:0',
+    '-ar', '48000', '-ac', '1', '-f', 's16le', '-'], { timeout: 30000, maxBuffer: 8 * 1024 * 1024 });
+  assert.equal(result.status, 0, result.stderr.toString());
+  return windows.map(([start, end, active]) => {
+    let peak = 0;
+    for (let sample = Math.round(start * 48000); sample < Math.round(end * 48000); sample++) {
+      peak = Math.max(peak, Math.abs(result.stdout.readInt16LE(sample * 2)));
+    }
+    assert.ok(active ? peak > 500 : peak < 100,
+      `declared ${active ? 'child tone' : 'silent gap'} must remain at ${start}-${end}s: peak ${peak}`);
+    return { startSeconds: start, endSeconds: end, active, peakS16: peak };
+  });
+}
 function makeMovie(name, { width = 320, height = 320, fps = 30, duration = 15, audio = true,
   codec = 'libx264', sar = '1', profile } = {}) {
   const file = path.join(root, name);
@@ -46,7 +96,7 @@ function makeMovie(name, { width = 320, height = 320, fps = 30, duration = 15, a
 function harness(job, options = {}) {
   job.consent = { purpose: 'life-movie.render', policyVersion: 'fixture-v1', decisionReceiptId: 'fixture-receipt' };
   const current = { ...structuredClone(job), status: 'RUNNING', execution: { leaseToken: job.leaseToken } };
-  const state = { current, downloads: 0, uploads: [], deleted: [], metadata: new Map(), children: new Set(), consentRevoked: false,
+  const state = { current, downloads: 0, uploads: [], deleted: [], metadata: new Map(), children: new Set(), ffmpegCalls: [], consentRevoked: false,
     fences: new Map(options.fences || []), reads: [] };
   const app = { use() {}, get() {}, post() {}, listen() {} };
   const express = Object.assign(() => app, { json: () => () => {} });
@@ -105,13 +155,14 @@ function harness(job, options = {}) {
     }) }) }),
   };
   const worker = {};
-  vm.runInNewContext(code + '\nmodule.exports = { renderLifeMovie, assembleLifeMovie, parseAssemblyPayload, shiftSrt, probeNormalizedMovie, createRenderControl };', {
+  vm.runInNewContext(code + '\nmodule.exports = { renderLifeMovie, assembleLifeMovie, parseAssemblyPayload, shiftSrt, probeNormalizedMovie, createRenderControl, gapArgs, clipArgs };', {
     module: worker, Buffer, AbortController, console: { log() {}, error() {} },
     process: { env: { GCS_BUCKET_NAME: bucketName, URAI_ENV: 'test', URAI_STUDIO_LEASE_POLL_MS: '25' } },
     require(name) {
       if (name === 'express') return express;
       if (name === 'firebase-admin') return admin;
       if (name === 'node:child_process') return { spawnSync, spawn(command, args, options) {
+        if (command === 'ffmpeg') state.ffmpegCalls.push([...args]);
         const child = spawn(command, args, options);
         state.children.add(child); child.on('close', () => state.children.delete(child));
         return child;
@@ -179,6 +230,8 @@ try {
   } else {
   objects.set(sourceObject, makeMovie('motion-source.mp4'));
   const segments = [];
+  const videoReferenceEntries = [];
+  let previousEnd = 0;
   let renderAuthorityJob;
   const ranges = [[400, 15400], [16000, 31000], [31000, 46000], [46000, 61000]];
   for (const [index, [startMs, endMs]] of ranges.entries()) {
@@ -200,6 +253,15 @@ try {
     assert.equal(h.state.children.size, 0);
     const video = result.outputs.find((item) => item.kind === 'mp4');
     const subtitle = result.outputs.find((item) => item.kind === 'srt');
+    if (startMs > previousEnd) {
+      const gap = path.join(root, `expected-gap-${index}.mp4`);
+      ffmpeg(h.worker.gapArgs(gap, (startMs - previousEnd) / 1000, 320, 320, 30));
+      videoReferenceEntries.push({ filePath: gap, durationMs: startMs - previousEnd });
+    }
+    const child = path.join(root, `actual-render-${index}.mp4`);
+    fs.writeFileSync(child, objects.get(location(video.ref)));
+    videoReferenceEntries.push({ filePath: child, durationMs: endMs - startMs });
+    previousEnd = endMs;
     segments.push({ index, startMs, endMs, videoRef: video.ref, videoChecksum: video.checksum,
       subtitleRef: subtitle.ref, subtitleChecksum: subtitle.checksum });
   }
@@ -231,8 +293,14 @@ try {
   assert.equal(decode.status, 0, decode.stderr);
   assert.equal(decode.stderr.trim(), '', 'assembled media must fully decode without an error');
   test('actual 61-second H.264/AAC assembly fully decodes; gaps, captions and 1830 frames stay on declared timeline');
+  const expectedVideoPackets = copiedVideoReference(videoReferenceEntries, 61, 'assembly');
+  const actualVideoPackets = videoPackets(finalPath);
+  assert.equal(actualVideoPackets.length, 1830);
+  assert.deepEqual(actualVideoPackets, expectedVideoPackets, 'assembly must copy every compressed video packet and its declared timing');
+  test('all 1830 compressed H.264 packets and declared PTS/DTS remain identical to actual children and gaps');
   evidence.diagnostic = { durationMs: receipt.finalMedia.durationMs, declaredDurationMs: 61000,
-    videoFrames: receipt.finalMedia.videoFrames, outputs: result.outputs.map(({ kind, checksum }) => ({ kind, sha256: checksum })) };
+    videoFrames: receipt.finalMedia.videoFrames, videoPacketCopySha256: sha256(JSON.stringify(actualVideoPackets)),
+    outputs: result.outputs.map(({ kind, checksum }) => ({ kind, sha256: checksum })) };
 
   async function rejectMedia(name, bytes, expected) {
     const changed = structuredClone(job);
@@ -305,12 +373,83 @@ try {
   }
   await ownerControlProof();
 
-  const outputArg = process.argv.indexOf('--evidence-dir');
-  if (outputArg >= 0) {
-    assert.ok(process.argv[outputArg + 1], 'evidence directory required');
-    const out = path.resolve(process.argv[outputArg + 1]); fs.mkdirSync(out, { recursive: true });
-    fs.copyFileSync(finalPath, path.join(out, 'synthetic-61-second-diagnostic.mp4'));
-    fs.writeFileSync(path.join(out, 'assembly-source-test-receipt.json'), JSON.stringify(evidence, null, 2) + '\n');
+  const ordinaryCases = [];
+  const referenceEntries = [];
+  const ordinarySource = path.join(root, 'ordinary-clock-source.mp4');
+  fs.writeFileSync(ordinarySource, objects.get(sourceObject));
+  const referenceWorker = harness(renderAuthorityJob).worker;
+  for (const [index, durationMs] of [400, 1500, 600, 1500].entries()) {
+    const clip = path.join(root, `ordinary-copy-reference-${index}.mp4`);
+    ffmpeg(index % 2 === 0 ? referenceWorker.gapArgs(clip, durationMs / 1000, 320, 320, 30)
+      : referenceWorker.clipArgs(ordinarySource, clip, 'video/mp4', durationMs / 1000, 320, 320, 30));
+    referenceEntries.push({ filePath: clip, durationMs });
+  }
+  const ordinaryReferencePackets = copiedVideoReference(referenceEntries, 4, 'ordinary');
+  for (const withCue of [false, true]) {
+    const ordinaryJob = structuredClone(renderAuthorityJob);
+    const name = withCue ? 'camera-cue' : 'no-cue';
+    ordinaryJob.jobId = `ordinary-clock-${name}-fixture`;
+    ordinaryJob.payload.timeline = [{ sourceId: 'motion-fixture', startMs: 400, endMs: 1900 },
+      { sourceId: 'motion-fixture', startMs: 2500, endMs: 4000 }];
+    ordinaryJob.payload.subtitleText = '1\n00:00:00,400 --> 00:00:01,900\nFirst motion\n\n2\n00:00:02,500 --> 00:00:04,000\nSecond motion\n';
+    ordinaryJob.payload.audioCues = withCue ? [{ sourceId: 'motion-fixture', role: 'dialogue',
+      startMs: 400, endMs: 1900, sourceStartMs: 0, gainDb: 0 }] : [];
+    const ordinary = harness(ordinaryJob);
+    const result = await ordinary.worker.renderLifeMovie(ordinaryJob);
+    assert.equal(result.ok, true); assertOutputs(result);
+    assert.equal(ordinary.state.children.size, 0);
+    const filePath = path.join(root, `synthetic-4-second-ordinary-${name}-diagnostic.mp4`);
+    fs.writeFileSync(filePath, objects.get(location(result.outputs.find(item => item.kind === 'mp4').ref)));
+    ffmpeg(['-xerror', '-i', filePath, '-map', '0:v:0', '-map', '0:a:0', '-f', 'null', '-']);
+    assert.equal(objects.get(location(result.outputs.find(item => item.kind === 'srt').ref)).toString(), ordinaryJob.payload.subtitleText);
+    const receipt = JSON.parse(objects.get(location(result.outputs.find(item => item.kind === 'manifest').ref)));
+    assert.equal(receipt.media.durationMs, 4000);
+    assert.equal(receipt.media.videoFrames, 120);
+    const packets = videoPackets(filePath);
+    assert.equal(packets.length, 120);
+    assert.deepEqual(packets, ordinaryReferencePackets,
+      'ordinary output must preserve every compressed video packet and its declared timing');
+    ordinaryCases.push({ name, filePath, calls: ordinary.state.ffmpegCalls,
+      diagnostic: { name, durationMs: 4000, videoFrames: 120, videoPacketCopySha256: sha256(JSON.stringify(packets)),
+        outputs: result.outputs.map(({ kind, checksum }) => ({ kind, sha256: checksum })),
+        audioClock: decodedAudioClock(filePath, 4000) } });
+  }
+  evidence.ordinaryDiagnostics = ordinaryCases.map(item => item.diagnostic);
+
+  try {
+    evidence.diagnostic.audioClock = decodedAudioClock(finalPath, 61000);
+    assert.ok(evidence.diagnostic.audioClock.maxClockErrorSamples <= 1,
+      `AAC joins must not accumulate decoded samples beyond their PTS: ${evidence.diagnostic.audioClock.maxClockErrorSamples} samples`);
+    assert.equal(evidence.diagnostic.audioClock.packetEndSamples, 61000 * 48);
+    assert.ok(evidence.diagnostic.audioClock.terminalPaddingSamples >= 0
+      && evidence.diagnostic.audioClock.terminalPaddingSamples < 1024,
+    'only one terminal AAC packet may contain padding beyond the declared timeline');
+    evidence.diagnostic.audioActivity = audioActivity(finalPath, [[.1, .2, false], [.7, .8, true],
+      [15.2, 15.3, true], [15.65, 15.75, false], [16.3, 16.4, true], [30.8, 30.9, true],
+      [31.2, 31.3, true], [45.8, 45.9, true], [46.2, 46.3, true], [60.8, 60.9, true]]);
+    test('decoded AAC clock has no internal join accumulation and only bounded terminal packet padding');
+    for (const item of ordinaryCases) {
+      const { diagnostic, calls, filePath, name } = item;
+      assert.ok(diagnostic.audioClock.maxClockErrorSamples <= 1,
+        `ordinary AAC joins must not accumulate decoded samples beyond their PTS: ${diagnostic.audioClock.maxClockErrorSamples} samples`);
+      assert.equal(diagnostic.audioClock.packetEndSamples, 4000 * 48);
+      assert.ok(diagnostic.audioClock.terminalPaddingSamples >= 0 && diagnostic.audioClock.terminalPaddingSamples < 1024);
+      diagnostic.audioActivity = audioActivity(filePath,
+        [[.1, .2, false], [.7, .8, true], [1.7, 1.8, true], [2.1, 2.2, false], [2.8, 2.9, true], [3.8, 3.9, true]]);
+      const finalAudioCalls = calls.filter(args => args[args.indexOf('-f') + 1] === 'concat' || args.includes('-filter_complex'));
+      diagnostic.finalAacEncodings = finalAudioCalls.filter(args => args[args.indexOf('-c:a') + 1] === 'aac').length;
+      assert.equal(diagnostic.finalAacEncodings, 1, 'ordinary concat/mix must encode the final AAC stream once');
+      test(`actual ordinary ${name} AAC clock, silent gaps, motion packets and captions stay on the declared timeline`);
+    }
+  } finally {
+    const outputArg = process.argv.indexOf('--evidence-dir');
+    if (outputArg >= 0) {
+      assert.ok(process.argv[outputArg + 1], 'evidence directory required');
+      const out = path.resolve(process.argv[outputArg + 1]); fs.mkdirSync(out, { recursive: true });
+      fs.copyFileSync(finalPath, path.join(out, 'synthetic-61-second-diagnostic.mp4'));
+      for (const item of ordinaryCases) fs.copyFileSync(item.filePath, path.join(out, path.basename(item.filePath)));
+      fs.writeFileSync(path.join(out, 'assembly-source-test-receipt.json'), JSON.stringify(evidence, null, 2) + '\n');
+    }
   }
   }
 } finally { fs.rmSync(root, { recursive: true, force: true }); }
