@@ -1,0 +1,13 @@
+.career-profile { color:#162437; background:#fff; max-width:46rem; margin:0 auto; padding:clamp(1rem,4vw,2.5rem); font:1rem/1.5 system-ui,sans-serif; }
+.career-profile h1 { line-height:1.2; overflow-wrap:anywhere; }
+.career-profile form { display:grid; gap:1rem; }
+.career-profile label { display:grid; gap:.4rem; }
+.career-profile input,.career-profile textarea,.career-profile button { box-sizing:border-box; width:100%; font:inherit; min-height:48px; border:1px solid #52647a; border-radius:.4rem; padding:.65rem; }
+.career-profile textarea { resize:vertical; min-height:7rem; }
+.career-profile button { color:white; background:#153e68; cursor:pointer; }
+.career-profile button:disabled { color:#435367; background:#e7ecf2; cursor:default; }
+.career-profile a { color:#164e85; min-height:48px; display:inline-flex; align-items:center; }
+.career-profile :focus-visible { outline:3px solid #8d4200; outline-offset:3px; }
+.career-profile .career-profile-consent { display:flex; gap:.75rem; align-items:center; }
+.career-profile-consent input { width:28px; min-width:28px; min-height:48px; margin:0; }
+@media(prefers-reduced-motion:reduce) { .career-profile * { scroll-behavior:auto; } }

@@ -6,6 +6,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { register } from 'node:module';
 import { spawnSync } from 'node:child_process';
+import {runProfileClientScenarios} from './profile-client.mjs';
+import {runProfileEditorScenarios} from './profile-editor.mjs';
 
 // Real compiled onRequest + loopback HTTP. Auth/Firestore are explicit synthetic
 // interfaces: no emulator, cloud, provider, upload, UI or release acceptance.
@@ -463,6 +465,8 @@ try{
     await denied('POST','/api/marketplace/resume-intent','candidate',{contentType:'application/pdf'},'RESUME_UPLOAD_UNAVAILABLE',503);assert.equal(metrics.storageCalls,0);
   });
   assert.equal(metrics.storageCalls,0);
+  await runProfileClientScenarios({check,base,db,C,pc,authUsers,tokens,change,revoke,reset,origin:env.URAI_JOBS_ALLOWED_ORIGIN});
+  await runProfileEditorScenarios({check,base,db,C,pc,origin:env.URAI_JOBS_ALLOWED_ORIGIN});
   console.log(JSON.stringify({ok:true,node:process.version,actualPackageMain:pkg.main,actualHttpsPlatform:marketplaceApi.__endpoint.platform,defaultHold,fixtureErrorResponseCases:defaultHold.fixtureErrorResponseCases+1,actualLoopbackCases:cases.length,cases,
     persistence:'synthetic versioned Firestore interface with conflict retries; current Auth interface',
     authFirestoreAtomicity:'separate services; Auth re-read at final decision; no atomic cross-service claim',
