@@ -480,7 +480,7 @@ export const executeJob = onMessagePublished({
       status: 'RUNNING',
       'execution.leaseToken': leaseToken,
       'execution.startedAt': now,
-      'execution.attemptCount': FieldValue.increment(1),
+      'execution.attemptCount': attemptPolicy.attemptCount + 1,
       'execution.asyncCallbackPending': false,
       'execution.callbackTokenHash': FieldValue.delete(),
       'execution.callbackLeaseToken': FieldValue.delete(),

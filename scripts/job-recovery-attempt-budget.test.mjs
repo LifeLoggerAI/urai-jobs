@@ -237,6 +237,15 @@ test('dispatcher admits the final allowed attempt exactly once', async () => {
   await f.dispatch(); assert.equal(f.state.requests, 1); assert.equal(f.job().status, 'SUCCESS');
   assert.equal(f.job().execution.attemptCount, 2);
 });
+for (const responseStatus of [200, 500]) {
+  test(`legacy final attempt preserves consumed count after worker ${responseStatus}`, async () => {
+    const f = harness({ status: 'LEASED', responseStatus, patch: { execution: {}, attempts: 2, maxAttempts: 3 } });
+    await f.dispatch(); assert.equal(f.state.requests, 1);
+    assert.equal(f.job().execution.attemptCount, 3);
+    if (responseStatus === 200) assert.equal(f.job().status, 'SUCCESS');
+    else assertDead(f);
+  });
+}
 for (const mutation of ['queue-lease', 'queue-status', 'missing-queue']) {
   test(`dispatcher cannot overwrite ${mutation} while the master retains an old LEASED token`, async () => {
     const f = harness({ status: 'LEASED' });
