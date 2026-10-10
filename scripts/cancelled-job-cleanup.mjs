@@ -12,6 +12,9 @@ export async function assertCancelledJobCleanup(db, jobId, {
       db.collection('jobs').doc(jobId).get(),
       db.collection('jobQueue').doc(jobId).get(),
     ]);
+    // Delayed SDK reads or a late timer must not certify cleanup outside the
+    // declared observation window, even if the queue has disappeared.
+    if (now() > deadline) throw new Error('Terminal cleanup did not remove the cancelled-job queue entry before the deadline.');
     if (!job.exists || job.data()?.status !== 'CANCELLED') {
       throw new Error('Cancelled job master is missing or no longer CANCELLED.');
     }
