@@ -142,13 +142,13 @@ async function main() {
     await auth.createUser({ uid: ADMIN_UID, email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
     await auth.createUser({ uid: USER_UID, email: USER_EMAIL, password: USER_PASSWORD });
     await auth.setCustomUserClaims(ADMIN_UID, { role: 'admin', roles: ['admin'], uraiJobsAdmin: true });
-    await db.collection('users').doc(ADMIN_UID).set({ role: 'admin', email: ADMIN_EMAIL, permissions: ['jobs:create'] });
-    await db.collection('users').doc(USER_UID).set({ role: 'user', email: USER_EMAIL, permissions: ['jobs:create'] });
+    await db.collection('users').doc(ADMIN_UID).set({ uid: ADMIN_UID, role: 'admin', orgId: null, disabled: false, email: ADMIN_EMAIL, permissions: ['jobs:create'] });
+    await db.collection('users').doc(USER_UID).set({ uid: USER_UID, role: 'user', orgId: null, disabled: false, email: USER_EMAIL, permissions: ['jobs:create'] });
     pass('Test users and roles seeded.');
 
     log('Signing in through the Auth emulator to get callable ID tokens...');
     const adminToken = await signInWithPassword(ADMIN_EMAIL, ADMIN_PASSWORD);
-    const userToken = await signInWithPassword(USER_EMAIL, USER_PASSWORD);
+    let userToken = await signInWithPassword(USER_EMAIL, USER_PASSWORD);
     pass('Emulator ID tokens acquired.');
 
     log('Testing governed data-rights intake retries and owner boundaries...');
@@ -400,6 +400,55 @@ async function main() {
       fail(`listJobsV2 did not return created job ${jobId}.`);
     }
     pass('Admin listJobsV2 can see the created PENDING job.');
+
+    log('Rejecting cached callable tokens when the current owner account is disabled...');
+    await auth.updateUser(USER_UID, { disabled: true });
+    for (const name of ['getJob', 'getJobStatus', 'cancelJob']) {
+      await expectCallableError(name, userToken, { jobId }, ['unauthenticated']);
+    }
+    if ((await jobRef.get()).data()?.status !== 'PENDING' || (await db.collection('jobQueue').doc(jobId).get()).data()?.status !== 'PENDING') {
+      fail('Disabled-owner cancellation changed the job or queue.');
+    }
+    await auth.updateUser(USER_UID, { disabled: false });
+    userToken = await signInWithPassword(USER_EMAIL, USER_PASSWORD);
+    await callCallable('getJob', userToken, { jobId });
+    await callCallable('getJobStatus', userToken, { jobId });
+    pass('Live Auth disable denies owner reads and cancellation; active owner controls still succeed.');
+
+    log('Rejecting cached operator claims after current Auth authority is removed...');
+    await auth.setCustomUserClaims(ADMIN_UID, {});
+    for (const name of ['listJobs', 'listJobsV2', 'listJobLogs', 'listJobLogsV2', 'retryJob', 'retryJobV2', 'processQueueNow']) {
+      await expectCallableError(name, adminToken, { jobId, limit: 1 }, ['permission-denied']);
+    }
+    await expectCallableError('getJob', adminToken, { jobId }, ['permission-denied']);
+    await expectCallableError('getJobStatus', adminToken, { jobId }, ['permission-denied']);
+    await expectCallableError('cancelJob', adminToken, { jobId }, ['permission-denied']);
+    if ((await jobRef.get()).data()?.status !== 'PENDING' || (await db.collection('jobQueue').doc(jobId).get()).data()?.status !== 'PENDING') {
+      fail('Removed operator authority changed or dispatched the pending job.');
+    }
+    await auth.setCustomUserClaims(ADMIN_UID, { role: 'admin', roles: ['admin'], uraiJobsAdmin: true });
+    await callCallable('listJobsV2', adminToken, { status: 'PENDING', limit: 100 });
+    pass('All ten management exports reject stale operator authority before mutation or dispatch.');
+
+    log('Rejecting cached operator claims after the protected profile role is downgraded...');
+    await db.collection('users').doc(ADMIN_UID).update({ role: 'user' });
+    await expectCallableError('listJobs', adminToken, {}, ['permission-denied']);
+    await expectCallableError('listJobsV2', adminToken, {}, ['permission-denied']);
+    await expectCallableError('processQueueNow', adminToken, { limit: 1 }, ['permission-denied']);
+    await expectCallableError('getJob', adminToken, { jobId }, ['permission-denied']);
+    await db.collection('users').doc(ADMIN_UID).update({ role: 'admin' });
+    await callCallable('listJobsV2', adminToken, { status: 'PENDING', limit: 100 });
+    pass('Protected role downgrade blocks cached operator authority; current operator control recovers.');
+
+    log('Rejecting an owner token issued before refresh-token revocation...');
+    // Auth timestamps use whole seconds, so revoke in a later second than auth_time.
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    await auth.revokeRefreshTokens(USER_UID);
+    await expectCallableError('getJob', userToken, { jobId }, ['unauthenticated']);
+    await expectCallableError('cancelJob', userToken, { jobId }, ['unauthenticated']);
+    userToken = await signInWithPassword(USER_EMAIL, USER_PASSWORD);
+    await callCallable('getJob', userToken, { jobId });
+    pass('Revoked owner token is denied and fresh active owner authentication succeeds.');
 
     log('Cancelling the user job to trigger terminal-event outbox persistence...');
     const cancelResult = await callCallable('cancelJob', userToken, { jobId });

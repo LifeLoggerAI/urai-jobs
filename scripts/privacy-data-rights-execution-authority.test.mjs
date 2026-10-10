@@ -48,16 +48,18 @@ function harness(options = {}) {
   class FixtureDate extends Date { constructor(...args) { super(...(args.length ? args : [state.now])); } static now() { return state.now; } }
   class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } }
   const auth = { async verifyIdToken(token, revoked) { assert.equal(revoked, true);
-    if (token !== 'synthetic-current-token' || state.revoked) throw new Error('synthetic withdrawn credential'); return { uid: state.verifiedUid }; },
-    async getUser(uid) { assert.equal(uid, actorUid); return { uid, disabled: state.disabled }; } };
+    if (token !== 'synthetic-current-token' || state.revoked) throw new Error('synthetic withdrawn credential'); return { uid: state.verifiedUid, role: 'operator' }; },
+    async getUser(uid) { assert.equal(uid, actorUid); return { uid, disabled: state.disabled, customClaims: { role: 'operator' } }; } };
   const fixtureRequire = (name, parent) => {
     if (name === 'firebase-admin/firestore') return { getFirestore: () => db, FieldPath: { documentId: () => '__name__' }, FieldValue: { delete: () => deleted, serverTimestamp: () => server } };
     if (name === 'firebase-admin/auth') return { getAuth: () => auth };
     if (name === 'firebase-functions/v1') return { https: { onCall: callback => callback, HttpsError } };
+    if (name === 'firebase-functions/v2/https') return { HttpsError };
     if (name === 'zod') return zod;
     if (name === '../core/errors.js' || name === './errors.js') return { httpsError: (code, message) => new HttpsError(code, message) };
     if (name === './firestore-paths.js') return { userDoc: uid => reference(`users/${uid}`) };
     if (name === '../core/auth.js') return evaluate(new URL('../functions/src/core/auth.ts', import.meta.url));
+    if (name === './currentJobActor.js') return evaluate(new URL('../functions/src/core/currentJobActor.ts', import.meta.url));
     if (name === '../core/gcs.js') return { uploadToGcs: async () => { state.providerCalls++; throw new Error('provider upload forbidden in deletion fixture'); } };
     if (name === './capturedRealityDerivativeRevocation.js') return {
       deleteCapturedRealityEngineJob: async () => { throw new Error('real provider engine fixture not admitted'); },
@@ -84,7 +86,7 @@ function harness(options = {}) {
   documents.set(jobPath, { ownerUid, status: 'RUNNING', jobType: 'synthetic-source', payload: { private: 'synthetic data' } });
   documents.set(queuePath, { ownerUid, jobId: 'synthetic-job' }); documents.set(logPath, { message: 'synthetic private log' });
   const module = evaluate(process.env.JOBS_DELETION_SOURCE || new URL('../functions/src/privacy/dataRightsExecution.ts', import.meta.url));
-  const context = { auth: { uid: actorUid, token: {} }, rawRequest: { get: name => name.toLowerCase() === 'authorization' ? 'Bearer synthetic-current-token' : undefined } };
+  const context = { auth: { uid: actorUid, token: {} }, rawRequest: { headers: { authorization: 'Bearer synthetic-current-token' }, get: name => name.toLowerCase() === 'authorization' ? 'Bearer synthetic-current-token' : undefined } };
   return { documents, state, call: () => module.processDataRightsRequest(input, context) };
 }
 const cases = [], test = (name, callback) => cases.push({ name, callback });

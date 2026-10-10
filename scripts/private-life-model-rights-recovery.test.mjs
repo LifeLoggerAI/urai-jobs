@@ -84,12 +84,18 @@ function fixture(options = {}) {
       { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
     vm.runInNewContext(code, { exports, Buffer, Date: FixtureDate, process: { env }, require(name) {
       if (name === 'firebase-admin/firestore') return firestore;
-      if (name === 'firebase-admin/auth') return { getAuth: () => ({ verifyIdToken: async (token, revoked) => { assert.equal(token, 'fictional-current-operator-token'); assert.equal(revoked, true); return { uid: 'operatorFixture' }; }, getUser: async () => ({ uid: 'operatorFixture', disabled: false }) }) };
+      if (name === 'firebase-admin/auth') return { getAuth: () => ({ verifyIdToken: async (token, revoked) => {
+        assert.equal(revoked, true);
+        if (token === 'fictional-current-operator-token') return { uid: 'operatorFixture', role: 'operator' };
+        assert.equal(token, 'fictional-current-owner-token'); return { uid };
+      }, getUser: async actorUid => ({ uid: actorUid, disabled: false, customClaims: actorUid === 'operatorFixture' ? { role: 'operator' } : {} }) }) };
       if (name === 'firebase-admin/storage') return { getStorage: () => ({ bucket: () => ({ getMetadata: async () => [{ iamConfiguration: { uniformBucketLevelAccess: { enabled: true }, publicAccessPrevention: 'enforced' } }],
         file: object => ({ delete: async () => { if (options.failCleanup) throw new Error('fictional-cleanup-failure'); stats.cleanup.push(object); } }) }) }) };
       if (name === 'firebase-functions/v1') return { https: { onCall: handler => handler } };
+      if (name === 'firebase-functions/v2/https') return { HttpsError: class extends Error { constructor(code, message) { super(message); this.code = code; } } };
       if (name === 'node:crypto' || name === 'zod') return require(name);
       if (name === '../core/auth.js') return load('core/auth');
+      if (name === './currentJobActor.js') return load('core/currentJobActor');
       if (name === './firestore-paths.js') return { userDoc: owner => db.collection('users').doc(owner) };
       if (name === '../core/errors.js' || name === './errors.js') return { httpsError: (code, message) => Object.assign(new Error(message), { code }) };
       if (name === './privateLifeModelDataRights.js') return load('privacy/privateLifeModelDataRights');
@@ -131,7 +137,7 @@ function fixture(options = {}) {
   records.set('jobQueue/fictional_job', { status: 'SUCCESS' });
   const handler = load('privacy/dataRightsExecution').processDataRightsRequest, helper = load('privacy/privateLifeModelDataRights');
   return { records, stats, db, helper, advance: ms => { clock += ms; },
-    execute: (data = body, context = { auth: { uid: 'operatorFixture' }, rawRequest: { get: () => 'Bearer fictional-current-operator-token' } }) => handler(data, context),
+    execute: (data = body, context = { auth: { uid: 'operatorFixture' }, rawRequest: { headers: { authorization: 'Bearer fictional-current-operator-token' }, get: () => 'Bearer fictional-current-operator-token' } }) => handler(data, context),
     finalize: (patch = {}) => db.runTransaction(tx => helper.canFinalizePrivateSource(db, tx, records.get('jobs/fictional_job'), { result: {
       ownerUid: uid, jobId: 'fictional_job', sourceReceiptRef: sourceRef, requestedPurpose: 'memory-index', sourceEvidenceClass: 'SOURCE_CAPTURED', sourceRevision: 1,
       sourceSha256: 'a'.repeat(64), sourceFixityRef: 'private:fictional/fixity', transcriptRef, provenanceRef,
@@ -144,7 +150,8 @@ test('actual approved export retains owned source/graph records privately and re
 test('hard-off project/production/auth gates prevent owned derivative processing', async () => {
   for (const env of [{ URAI_JOBS_DATA_RIGHTS_EXECUTION_MODE: '' }, { URAI_JOBS_DATA_RIGHTS_ALLOWED_PROJECT: 'different-project' }, { URAI_JOBS_DATA_RIGHTS_PRODUCTION_AUTHORIZED: 'true' }]) {
     const f = fixture({ env }); await assert.rejects(f.execute(), error => error.code === 'failed-precondition'); assert.equal(f.stats.uploads, 0); assert.equal(f.records.has(fencePath), false); }
-  const f = fixture(); await assert.rejects(f.execute(body, {}), error => error.code === 'unauthenticated'); await assert.rejects(f.execute(body, { auth: { uid } }), error => error.code === 'permission-denied'); });
+  const f = fixture(); await assert.rejects(f.execute(body, {}), error => error.code === 'unauthenticated');
+  await assert.rejects(f.execute(body, { auth: { uid }, rawRequest: { headers: { authorization: 'Bearer fictional-current-owner-token' } } }), error => error.code === 'permission-denied'); });
 test('initial execution still requires a real stored approved-request state', async () => { const f = fixture(); f.records.get(requestPath).status = 'SUBMITTED';
   await assert.rejects(f.execute(), error => error.code === 'failed-precondition'); assert.equal(f.stats.uploads, 0); });
 test('finished same-input execution replays without another storage write', async () => { const f = fixture(); await f.execute(); assert.equal((await f.execute()).replay, true); assert.equal(f.stats.uploads, 1); });

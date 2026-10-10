@@ -73,6 +73,8 @@ async function harness({ jobs = 1, plans = 1 } = {}) {
   const entries = childIds.flatMap((id) => [[`jobs/${id}`, makeJob(id)], [`jobQueue/${id}`, { jobId: id, status: 'RUNNING', lease: { token: 'fixture-lease' } }]]);
   entries.push(...planIds.map((id) => [`studioLifeMovieLongformPlans/${id}`, { ownerUid, tenantId, projectId, consent, status: 'PENDING' }]));
   await seed(entries);
+  const operatorUid = `synthetic-operator-${crypto.randomUUID()}`;
+  await set(`users/${operatorUid}`, { uid: operatorUid, role: 'operator', disabled: false });
   for (const id of childIds) objects.set(artifact(id).ref, Buffer.from('synthetic-test-derivative'));
   const FieldValue = realFields?.FieldValue || { delete: () => '__DELETE__', serverTimestamp: () => 'fixture-timestamp' };
   const FieldPath = realFields?.FieldPath || { documentId: () => '__name__' };
@@ -192,17 +194,29 @@ async function harness({ jobs = 1, plans = 1 } = {}) {
     const code = fs.readFileSync(new URL(`../functions/src/jobs/${filename}`, import.meta.url), 'utf8');
     vm.runInNewContext(ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
       exports: adminExports,
-      require(importName) {
+      require: function requireAdmin(importName) {
         if (importName === 'firebase-admin/firestore') return { FieldValue, getFirestore: () => db };
         if (importName === 'firebase-admin/app') return { getApps: () => [{}] };
+        if (importName === 'firebase-admin/auth') return { getAuth: () => ({
+          async verifyIdToken(token, revoked) { assert.equal(token, 'synthetic-operator-token'); assert.equal(revoked, true); return { uid: operatorUid, role: 'operator' }; },
+          async getUser(uid) { assert.equal(uid, operatorUid); return { uid, disabled: false, customClaims: { role: 'operator' } }; },
+        }) };
         if (importName === 'firebase-functions/v1') return { https: { HttpsError, onCall: (handler) => handler } };
         if (importName === 'firebase-functions/v2/https') return { HttpsError, onCall: (_options, handler) => handler };
+        if (importName === '../core/currentJobActor.js') {
+          const actorExports = {};
+          const actorCode = fs.readFileSync(new URL('../functions/src/core/currentJobActor.ts', import.meta.url), 'utf8');
+          vm.runInNewContext(ts.transpileModule(actorCode, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText,
+            { exports: actorExports, require: requireAdmin });
+          return actorExports;
+        }
         throw new Error(`Unexpected admin import: ${importName}`);
       },
     });
-    const auth = { uid: 'synthetic-operator', token: { role: 'operator' } };
+    const auth = { uid: operatorUid, token: { role: 'operator' } };
+    const rawRequest = { headers: { authorization: 'Bearer synthetic-operator-token' } };
     return (jobId) => filename === 'admin.ts'
-      ? adminExports[name]({ jobId }, { auth }) : adminExports[name]({ data: { jobId }, auth });
+      ? adminExports[name]({ jobId }, { auth, rawRequest }) : adminExports[name]({ data: { jobId }, auth, rawRequest });
   }
   const h = { state, event, db, get, set, seed, objects, artifact, childIds, planIds, makeJob, assertFence,
     invalidate: () => exports.invalidateLifeMovieDerivativesForConsent(event), ownedPaths,

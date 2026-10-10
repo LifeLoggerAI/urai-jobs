@@ -24,6 +24,9 @@ service cloud.firestore {
         && request.resource.data.orgId == resource.data.orgId
         && request.resource.data.permissions == resource.data.permissions
         && request.resource.data.disabled == resource.data.disabled
+        && request.resource.data.get('deleted', false) == resource.data.get('deleted', false)
+        && request.resource.data.get('suspended', false) == resource.data.get('suspended', false)
+        && request.resource.data.get('status', null) == resource.data.get('status', null)
         && request.resource.data.get('uid', null) == resource.data.get('uid', null);
     }
 
