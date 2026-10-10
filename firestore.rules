@@ -11,12 +11,33 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
+    function activeProfile(profile) {
+      return profile.get('uid', request.auth.uid) == request.auth.uid
+        && profile.role in ['admin', 'operator', 'user']
+        && profile.get('disabled', false) == false
+        && profile.get('deleted', false) == false
+        && profile.get('suspended', false) == false
+        && profile.get('status', 'active') == 'active';
+    }
+
+    function currentProtectedAccount() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && activeProfile(get(/databases/$(database)/documents/users/$(request.auth.uid)).data);
+    }
+
+    function operatorToken() {
+      return request.auth.token.get('role', '') in ['admin', 'operator']
+        || request.auth.token.get('uraiJobsAdmin', false) == true
+        || request.auth.token.get('roles', []).hasAny(['admin', 'operator']);
+    }
+
     function isAdmin() {
-      return signedIn() && getUserRole() == 'admin';
+      return currentProtectedAccount() && getUserRole() == 'admin' && operatorToken();
     }
 
     function isOwner(resource) {
-      return signedIn() && request.auth.uid == resource.data.ownerUid;
+      return currentProtectedAccount() && request.auth.uid == resource.data.ownerUid;
     }
 
     function userProfileFieldsUnchanged() {
@@ -31,9 +52,9 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow read: if currentProtectedAccount() && (request.auth.uid == uid || isAdmin());
       allow create: if false;
-      allow update: if signedIn()
+      allow update: if currentProtectedAccount()
         && request.auth.uid == uid
         && userProfileFieldsUnchanged();
       allow delete: if false;

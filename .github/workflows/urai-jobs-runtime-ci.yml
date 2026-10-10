@@ -237,7 +237,7 @@ jobs:
           set +e
           printf 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT=%s\nURAI_JOBS_PRIVACY_EVENT_TOKEN=%s\n' "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" "$URAI_JOBS_PRIVACY_EVENT_TOKEN" > functions/.env.demo-urai-jobs
           trap 'rm -f functions/.env.demo-urai-jobs' EXIT
-          timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" --project demo-urai-jobs emulators:exec --only firestore,auth,functions "node scripts/jobs-management-current-auth-emulator.mjs && node scripts/life-movies-derivative-revocation-smoke.mjs --emulator && node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
+          timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" --project demo-urai-jobs emulators:exec --only firestore,auth,functions "node scripts/jobs-client-current-profile-emulator.mjs && node scripts/jobs-management-current-auth-emulator.mjs && node scripts/life-movies-derivative-revocation-smoke.mjs --emulator && node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
           status=$?
           rm -f functions/.env.demo-urai-jobs
           trap - EXIT
