@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { createHash } from 'node:crypto';
+import { assertCancelledJobCleanup } from './cancelled-job-cleanup.mjs';
 import { prepareDataRightsRequestExport } from '../functions/lib/functions/privacy/dataRightsRequestExport.js';
 
 const E2E_TIMESTAMP = Date.now();
@@ -459,10 +460,8 @@ async function main() {
     const canceledJobSnap = await jobRef.get();
     const canceledJob = canceledJobSnap.data() || {};
     if (canceledJob.status !== 'CANCELLED') fail(`Expected canceled job.status CANCELLED, got ${canceledJob.status}`);
-    const canceledQueueSnap = await db.collection('jobQueue').doc(jobId).get();
-    const canceledQueue = canceledQueueSnap.data() || {};
-    if (canceledQueue.status !== 'CANCELLED') fail(`Expected canceled queue.status CANCELLED, got ${canceledQueue.status}`);
-    pass('cancelJob callable updates job and queue to CANCELLED.');
+    await assertCancelledJobCleanup(db, jobId);
+    pass('cancelJob retains the CANCELLED master and terminal cleanup removes its queue entry.');
 
     log('Waiting for the terminal Firestore trigger to persist the durable outbox event...');
     const outboxDoc = await pollForOutboxRecord(db, jobId);

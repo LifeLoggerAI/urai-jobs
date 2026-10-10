@@ -125,7 +125,11 @@ function harness({ operator = true, own = false, status = 'FAILED', afterRead } 
 for (const route of ['getJob', 'getJobStatus', 'cancelJob']) {
   test(`${route} retains an active owner's ordinary path`, async () => {
     const f = harness({ operator: false, own: true, status: 'PENDING' });
-    const result = await f.call(route); assert.ok(result); if (route === 'cancelJob') assert.equal(f.job().status, 'CANCELLED');
+    const result = await f.call(route); assert.ok(result);
+    if (route === 'cancelJob') {
+      assert.equal(f.job().status, 'CANCELLED');
+      assert.equal(f.state.docs.get('jobQueue/' + f.state.jobId).status, 'CANCELLED');
+    }
   });
 }
 for (const route of ['listJobs', 'listJobLogs', 'retryJob', 'listJobsV2', 'listJobLogsV2', 'retryJobV2', 'processQueueNow']) {
