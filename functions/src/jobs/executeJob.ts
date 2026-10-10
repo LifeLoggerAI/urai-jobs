@@ -3,12 +3,12 @@ import { defineSecret } from 'firebase-functions/params';
 import { onMessagePublished } from 'firebase-functions/v2/pubsub';
 import axios from 'axios';
 import { z } from 'zod';
-import type { Job } from '@urai-jobs/shared-types';
+import type { Job, JobQueueEntry } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJobTypes.js';
 import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
-import { canFinalizeExecution, decideExecutionStart, executionAuthorityUnchanged, isTerminalJobStatus } from './executionGuards.js';
+import { canFinalizeQueuedExecution, decideExecutionStart, executionAttemptPolicy, executionAuthorityUnchanged, isTerminalJobStatus } from './executionGuards.js';
 import { canFinalizePrivateSource } from '../privacy/privateLifeModelDataRights.js';
 
 // URAI Jobs worker routing audit markers.
@@ -276,11 +276,14 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
   const errorMessage = error instanceof Error ? error.message : String(error);
 
   const outcome = await db.runTransaction<FailureOutcome>(async (transaction) => {
-    const snapshot = await transaction.get(jobRef);
+    const [snapshot, queueSnapshot] = await Promise.all([
+      transaction.get(jobRef), transaction.get(queueRef),
+    ]);
     if (!snapshot.exists) return 'ignored';
 
     const current = snapshot.data() as Job;
-    if (current.status !== 'RUNNING' || current.execution?.leaseToken !== leaseToken) {
+    const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+    if (!canFinalizeQueuedExecution(current, queue, leaseToken)) {
       return 'ignored';
     }
     // An ambiguous or failed dispatch cannot retain a callback or automatically
@@ -302,10 +305,11 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
     }
 
     const now = FieldValue.serverTimestamp();
-    const attemptCount = Number(current.execution?.attemptCount || 0);
-    const maxAttempts = Number(current.execution?.maxAttempts || current.maxAttempts || 3);
+    const attemptPolicy = executionAttemptPolicy(current);
+    const attemptCount = attemptPolicy?.attemptCount ?? 0;
+    const maxAttempts = attemptPolicy?.maxAttempts ?? 0;
 
-    if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || attemptCount >= maxAttempts) {
+    if (!attemptPolicy || attemptCount < 1 || attemptCount >= maxAttempts) {
       transaction.update(jobRef, {
         status: 'DEAD',
         error: { message: errorMessage },
@@ -409,7 +413,9 @@ export const executeJob = onMessagePublished({
   const queueRef = jobQueueEntryDoc(jobId);
 
   const prepared = await db.runTransaction(async (transaction) => {
-    const jobSnapshot = await transaction.get(jobRef);
+    const [jobSnapshot, queueSnapshot] = await Promise.all([
+      transaction.get(jobRef), transaction.get(queueRef),
+    ]);
     if (!jobSnapshot.exists) {
       return { action: 'ignore' as const, reason: 'missing-job' };
     }
@@ -418,6 +424,27 @@ export const executeJob = onMessagePublished({
     const decision = decideExecutionStart(job, leaseToken);
     if (decision.action === 'ignore') {
       return decision;
+    }
+
+    const queueEntry = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+    if (!queueEntry || queueEntry.status !== 'LEASED' || queueEntry.lease?.leaseToken !== leaseToken) {
+      return { action: 'ignore' as const, reason: 'stale-queue-lease' as const };
+    }
+
+    const attemptPolicy = executionAttemptPolicy(job);
+    if (!attemptPolicy || attemptPolicy.attemptCount >= attemptPolicy.maxAttempts) {
+      const now = FieldValue.serverTimestamp();
+      transaction.update(jobRef, {
+        status: 'DEAD', error: { code: attemptPolicy ? 'execution_attempts_exhausted' : 'execution_attempt_policy_invalid' },
+        lease: FieldValue.delete(), updatedAt: now, completedAt: now,
+        'execution.leaseToken': FieldValue.delete(), 'execution.completedAt': now,
+        'execution.asyncCallbackPending': false,
+        'execution.callbackTokenHash': FieldValue.delete(),
+        'execution.callbackLeaseToken': FieldValue.delete(),
+        'execution.callbackDeadlineAt': FieldValue.delete(),
+      });
+      transaction.set(queueRef, { jobId, status: 'DEAD', lease: FieldValue.delete(), updatedAt: now }, { merge: true });
+      return { action: 'ignore' as const, reason: 'execution-attempt-budget' as const };
     }
 
     const consentContexts = jobConsentContexts(job);
@@ -488,10 +515,13 @@ export const executeJob = onMessagePublished({
   const target = getWorkerTarget(jobType);
 
   const currentDispatchAuthority = () => db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(jobRef);
+    const [snapshot, queueSnapshot] = await Promise.all([
+      transaction.get(jobRef), transaction.get(queueRef),
+    ]);
     if (!snapshot.exists) return false;
     const current = snapshot.data() as Job;
-    if (!canFinalizeExecution(current, leaseToken)) return false;
+    const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+    if (!canFinalizeQueuedExecution(current, queue, leaseToken)) return false;
     if (!executionAuthorityUnchanged(current, job)) {
       cancelChangedAttempt(transaction, jobRef, queueRef, jobId, 'execution_authority_changed');
       return false;
@@ -538,10 +568,13 @@ export const executeJob = onMessagePublished({
         if (blockedPurpose) {
           const now = FieldValue.serverTimestamp();
           await db.runTransaction(async (transaction) => {
-            const currentSnapshot = await transaction.get(jobRef);
+            const [currentSnapshot, queueSnapshot] = await Promise.all([
+              transaction.get(jobRef), transaction.get(queueRef),
+            ]);
             if (!currentSnapshot.exists) return;
             const current = currentSnapshot.data() as Job;
-            if (current.status !== 'RUNNING' || current.execution?.leaseToken !== leaseToken) return;
+            const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+            if (!canFinalizeQueuedExecution(current, queue, leaseToken)) return;
             transaction.update(jobRef, {
               status: 'CANCELLED',
               lease: FieldValue.delete(),
@@ -636,11 +669,14 @@ export const executeJob = onMessagePublished({
     }
 
     const finalized = await db.runTransaction(async (transaction) => {
-      const currentSnapshot = await transaction.get(jobRef);
+      const [currentSnapshot, queueSnapshot] = await Promise.all([
+        transaction.get(jobRef), transaction.get(queueRef),
+      ]);
       if (!currentSnapshot.exists) return false;
 
       const current = currentSnapshot.data() as Job;
-      if (!canFinalizeExecution(current, leaseToken)) {
+      const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+      if (!canFinalizeQueuedExecution(current, queue, leaseToken)) {
         return false;
       }
       if (!executionAuthorityUnchanged(current, job)) {

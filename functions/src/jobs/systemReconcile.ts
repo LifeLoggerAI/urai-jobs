@@ -5,6 +5,7 @@ import * as functions from 'firebase-functions/v1';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { Job, JobQueueEntry } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc, jobsCollection } from '../core/firestore-paths.js';
+import { executionAttemptPolicy } from './executionGuards.js';
 
 const MAX_RETRIES = 3;
 const LEASE_STALE_MINUTES = 10;
@@ -76,6 +77,7 @@ async function resetOrDeadLetterStaleRunner(
     if (
       job.status !== 'RUNNING' ||
       job.lease?.leaseToken !== expectedLeaseToken ||
+      job.execution?.leaseToken !== expectedLeaseToken ||
       heartbeatMillis === null ||
       heartbeatMillis > staleBeforeMillis
     ) {
@@ -95,21 +97,29 @@ async function resetOrDeadLetterStaleRunner(
       return;
     }
 
-    const retryCount = Number(job.retryCount || 0);
+    const retryCount = job.retryCount === undefined ? 0 : job.retryCount;
+    const attemptPolicy = executionAttemptPolicy(job);
+    const validPolicy = attemptPolicy !== null && attemptPolicy.attemptCount >= 1
+      && typeof retryCount === 'number' && Number.isSafeInteger(retryCount) && retryCount >= 0;
     const now = FieldValue.serverTimestamp();
 
-    if (retryCount >= MAX_RETRIES) {
-      console.warn(`Job ${jobId} has exhausted all retries. Moving to DEAD state. Reason: Heartbeat stale`);
+    if (!validPolicy || retryCount >= MAX_RETRIES || attemptPolicy.attemptCount >= attemptPolicy.maxAttempts) {
+      const message = !validPolicy
+        ? 'Invalid execution-attempt policy during stale-runner recovery.'
+        : `Job exhausted its execution/recovery budget after ${attemptPolicy.attemptCount} started attempts. Last reason: Heartbeat stale`;
+      console.warn(`Job ${jobId} cannot be retried. Moving to DEAD state. Reason: ${message}`);
       const result = {
         status: 'DEAD',
-        error: { message: `Job failed after ${MAX_RETRIES + 1} attempts. Last reason: Heartbeat stale` },
+        error: { message },
         finishedAt: Timestamp.now(),
       };
       transaction.update(jobRef, {
         status: 'DEAD',
         updatedAt: now,
         lease: FieldValue.delete(),
+        completedAt: now,
         'execution.leaseToken': FieldValue.delete(),
+        'execution.completedAt': now,
         'execution.asyncCallbackPending': false,
         'execution.callbackTokenHash': FieldValue.delete(),
         'execution.callbackLeaseToken': FieldValue.delete(),
@@ -128,9 +138,11 @@ async function resetOrDeadLetterStaleRunner(
     transaction.update(jobRef, {
       status: 'PENDING',
       updatedAt: now,
-      retryCount: FieldValue.increment(1),
+      retryCount: retryCount + 1,
       lease: FieldValue.delete(),
+      completedAt: FieldValue.delete(),
       'execution.leaseToken': FieldValue.delete(),
+      'execution.completedAt': FieldValue.delete(),
       'execution.asyncCallbackPending': false,
       'execution.callbackTokenHash': FieldValue.delete(),
       'execution.callbackLeaseToken': FieldValue.delete(),
@@ -138,6 +150,7 @@ async function resetOrDeadLetterStaleRunner(
     });
     transaction.update(queueRef, {
       status: 'PENDING',
+      retryCount: retryCount + 1,
       lease: FieldValue.delete(),
       availableAt: now,
       updatedAt: now,

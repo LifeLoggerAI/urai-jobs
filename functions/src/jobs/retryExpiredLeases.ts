@@ -3,9 +3,8 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { ulid } from 'ulid';
 import type { Job, JobQueueEntry, JobQueueStatus } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
-import { canRequeueUnstartedLease, isTerminalJobStatus } from './executionGuards.js';
+import { canRequeueUnstartedLease, executionAttemptPolicy, isTerminalJobStatus } from './executionGuards.js';
 
-const MAX_RETRIES = 3;
 const MAX_EXPIRED_LEASES_PER_TICK = 20;
 const RETRY_BACKOFF_MS = 5 * 1000;
 
@@ -97,9 +96,10 @@ export const retryExpiredLeases = onSchedule('every 1 minutes', async () => {
           return 'unsafe-to-requeue' as const;
         }
 
-        const currentRetryCount = Number(job.retryCount || 0);
-        const maxRetries = Number(job.execution?.maxAttempts || job.maxAttempts || MAX_RETRIES);
-        if (!Number.isInteger(maxRetries) || maxRetries < 1) {
+        const currentRetryCount = job.retryCount === undefined ? 0 : job.retryCount;
+        const attemptPolicy = executionAttemptPolicy(job);
+        if (!attemptPolicy || typeof currentRetryCount !== 'number'
+          || !Number.isSafeInteger(currentRetryCount) || currentRetryCount < 0) {
           transaction.update(jobRef, {
             status: 'DEAD',
             lease: FieldValue.delete(),
@@ -115,11 +115,12 @@ export const retryExpiredLeases = onSchedule('every 1 minutes', async () => {
           return 'dead-invalid-policy' as const;
         }
 
-        if (currentRetryCount >= maxRetries) {
+        const maxRetries = attemptPolicy.maxAttempts;
+        if (currentRetryCount >= maxRetries || attemptPolicy.attemptCount >= attemptPolicy.maxAttempts) {
           transaction.update(jobRef, {
             status: 'DEAD',
             lease: FieldValue.delete(),
-            error: { message: `Job exceeded ${maxRetries} expired-lease recoveries before execution started.` },
+            error: { message: `Job exhausted its ${maxRetries}-attempt execution/recovery policy before execution started.` },
             updatedAt: now,
             completedAt: now,
             'dispatch.recoveredAt': now,

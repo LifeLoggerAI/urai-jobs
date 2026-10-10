@@ -63,7 +63,34 @@ export function decideExecutionStart(job: ExecutionGuardJob, leaseToken: string)
 }
 
 export function canFinalizeExecution(job: ExecutionGuardJob, leaseToken: string): boolean {
-  return job.status === 'RUNNING' && job.execution?.leaseToken === leaseToken;
+  return job.status === 'RUNNING'
+    && job.lease?.leaseToken === leaseToken
+    && job.execution?.leaseToken === leaseToken;
+}
+
+export function canFinalizeQueuedExecution(job: ExecutionGuardJob, queue: QueueRecoveryRecord | null, leaseToken: string): boolean {
+  return canFinalizeExecution(job, leaseToken)
+    && queue?.status === 'RUNNING'
+    && queue.lease?.leaseToken === leaseToken;
+}
+
+type ExecutionAttemptJob = {
+  execution?: { attemptCount?: unknown; maxAttempts?: unknown };
+  attempts?: unknown;
+  maxAttempts?: unknown;
+};
+
+/** Started executions consume the admitted budget; lease/publish recovery does not. */
+export function executionAttemptPolicy(job: ExecutionAttemptJob): { attemptCount: number; maxAttempts: number } | null {
+  const attemptCount = job.execution?.attemptCount !== undefined
+    ? job.execution.attemptCount : job.attempts === undefined ? 0 : job.attempts;
+  const maxAttempts = job.execution?.maxAttempts !== undefined
+    ? job.execution.maxAttempts : job.maxAttempts === undefined ? 3 : job.maxAttempts;
+  if (typeof attemptCount !== 'number' || !Number.isSafeInteger(attemptCount) || attemptCount < 0
+    || typeof maxAttempts !== 'number' || !Number.isSafeInteger(maxAttempts) || maxAttempts < 1) {
+    return null;
+  }
+  return { attemptCount, maxAttempts };
 }
 
 export function canRequeueUnstartedLease(
