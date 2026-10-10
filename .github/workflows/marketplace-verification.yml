@@ -5,9 +5,22 @@ on:
     paths:
       - 'marketplace/**'
       - '.github/workflows/marketplace-verification.yml'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - 'pnpm-lock.yaml'
   pull_request:
     paths:
       - 'marketplace/**'
+      - '.github/workflows/marketplace-verification.yml'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - 'pnpm-lock.yaml'
+
+permissions:
+  contents: read
+
+env:
+  TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   marketplace-contracts:
@@ -16,11 +29,47 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          persist-credentials: false
+
+      - name: Prove exact clean head
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 8.15.9
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 20
+          node-version: 22
+
+      - name: Verify declared toolchain
+        shell: bash
+        run: |
+          node --version
+          test "$(node -p 'process.versions.node.split(".")[0]')" = "22"
+          test "$(pnpm --version)" = "8.15.9"
+
+      - name: Install exact dependency graph
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Prove install preserved exact source
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Typecheck marketplace functions
+        run: pnpm marketplace:typecheck
+
+      - name: Build marketplace functions
+        run: pnpm marketplace:build
 
       - name: Verify marketplace contracts
         run: node marketplace/tests/contract-check.mjs

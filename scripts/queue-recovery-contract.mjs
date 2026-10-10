@@ -73,8 +73,7 @@ assert.match(reconcile, /const \[jobSnapshot, queueSnapshot\] = await Promise\.a
 
 for (const marker of [
   'activeAsyncCallbackForLease',
-  "current.status !== 'RUNNING'",
-  'current.execution?.leaseToken !== leaseToken',
+  'canFinalizeQueuedExecution(current, queue, leaseToken)',
   "return 'callback-pending'",
   'Preserved active asynchronous callback attempt',
   "'execution.leaseToken': FieldValue.delete()",

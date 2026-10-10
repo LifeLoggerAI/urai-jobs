@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-grocery-store-shelves-left:v1",
+    "sourceKitSha256": "ca34d7079033603206a35ac7ddcba165d9ad7a577c0e95452232a171ed8af86f",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-grocery-store",
+        "specSha256": "a8a7382bde860263e0a7e8e86cc86f0345a5000adc50f549cdb45bf3a6231510",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 3392460551
+  },
+  "id": "kit-gw-grocery-store-shelves-left-v1-ca34d70790336032",
+  "prompt": "Original generic modular furniture; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Shelf bank left; unbranded and identity-free. Bank bounds are composition envelopes: generate submodules, not a solid block. Target bounding dimensions 3.2m wide x 1.6m high x 10m deep. Materials: painted-metal-neutral. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 10,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

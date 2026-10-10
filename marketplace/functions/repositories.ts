@@ -3,7 +3,7 @@ import type {
   Employer,
   JobApplication,
   MarketplaceJob,
-} from '../shared/types';
+} from '../shared/types.js';
 
 export interface MarketplaceJobRepository {
   listPublished(): Promise<MarketplaceJob[]>;

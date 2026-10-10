@@ -82,23 +82,51 @@ function createRenderControl(job) {
     if (controller.signal.aborted) throw controller.signal.reason;
     if (!checking) {
       checking = (async () => {
-        const snapshot = await wait(admin.firestore().collection('jobs').doc(jobId).get());
-        const current = snapshot.exists ? snapshot.data() : null;
-        if (!current || current.status !== 'RUNNING' || current.execution?.leaseToken !== job.leaseToken) {
-          throw new Error('render_lease_revoked');
-        }
-        if (current.tenantId !== job.tenantId || current.ownerUid !== job.ownerUid
-          || (current.jobType || current.type) !== jobType
-          || canonicalJson(current.payload) !== canonicalJson(job.payload)) {
-          throw new Error('render_job_binding_mismatch');
-        }
-        if (current.ownerUid && current.consent?.purpose) {
-          const id = crypto.createHash('sha256').update(`${current.ownerUid}\n${current.consent.purpose}`).digest('hex');
-          const block = await wait(admin.firestore().collection('jobConsentBlocks').doc(id).get());
-          if (block.exists && block.data()?.active === true) throw new Error('render_consent_revoked');
-        }
+        const db = admin.firestore();
+        await wait(db.runTransaction(async (transaction) => {
+          const snapshot = await transaction.get(db.collection('jobs').doc(jobId));
+          const current = snapshot.exists ? snapshot.data() : null;
+          if (!current || current.status !== 'RUNNING' || current.execution?.leaseToken !== job.leaseToken) {
+            throw new Error('render_lease_revoked');
+          }
+          if (current.jobId !== jobId || current.tenantId !== job.tenantId || current.ownerUid !== job.ownerUid
+            || (current.jobType || current.type) !== jobType
+            || canonicalJson(current.payload) !== canonicalJson(job.payload)
+            || canonicalJson(current.consent) !== canonicalJson(job.consent)
+            || canonicalJson(current.consents) !== canonicalJson(job.consents)) {
+            throw new Error('render_job_binding_mismatch');
+          }
+          const validConsent = value => value && typeof value === 'object'
+            && ['purpose', 'policyVersion', 'decisionReceiptId'].every(key => typeof value[key] === 'string' && value[key].length > 0);
+          if (typeof current.ownerUid !== 'string' || !current.ownerUid
+            || !validConsent(current.consent) || current.consent.purpose !== 'life-movie.render'
+            || (current.consents !== undefined && (!Array.isArray(current.consents)
+              || current.consents.length > 8 || current.consents.some(value => !validConsent(value))))) {
+            throw new Error('render_consent_missing');
+          }
+          const ownerHash = crypto.createHash('sha256').update(current.ownerUid).digest('hex');
+          const [localFence, centralFence, ...blocks] = await Promise.all([
+            transaction.get(db.collection('uraiPrivateLifeModelOwnerFences').doc(ownerHash)),
+            transaction.get(db.collection('privacyDeletionTombstones').doc(current.ownerUid)),
+            ...[current.consent, ...(current.consents || [])].map(context => {
+              const id = crypto.createHash('sha256').update(`${current.ownerUid}\n${context.purpose}`).digest('hex');
+              return transaction.get(db.collection('jobConsentBlocks').doc(id));
+            }),
+          ]);
+          const own = localFence.exists ? localFence.data() : null;
+          const central = centralFence.exists ? centralFence.data() : null;
+          // Only an exact owner with an explicit inactive boolean is known
+          // authority; missing or malformed fence state remains closed.
+          if ((localFence.exists && (own?.ownerHash !== ownerHash || own?.deleted !== false))
+            || (centralFence.exists && (central?.uid !== current.ownerUid || central?.active !== false))) {
+            throw new Error('render_owner_deleted');
+          }
+          for (const block of blocks) {
+            if (block.exists && block.data()?.active === true) throw new Error('render_consent_revoked');
+          }
+        }));
       })().catch((error) => {
-        const allowed = ['render_lease_revoked', 'render_job_binding_mismatch', 'render_consent_revoked', 'render_deadline_exceeded'];
+        const allowed = ['render_lease_revoked', 'render_job_binding_mismatch', 'render_consent_revoked', 'render_consent_missing', 'render_owner_deleted', 'render_deadline_exceeded'];
         abort(allowed.includes(error?.message) ? error.message : 'render_authority_unavailable');
         throw controller.signal.reason;
       }).finally(() => { checking = undefined; });
@@ -114,6 +142,71 @@ function createRenderControl(job) {
     signal: controller.signal, wait, check,
     async start() { await check(); pollTimer = setTimeout(poll, pollMs); },
     stop() { stopped = true; clearTimeout(pollTimer); clearTimeout(deadlineTimer); },
+  };
+}
+
+// Every new artifact has create-only Storage authority and an attempt marker.
+// Cleanup may erase only its immutable generation, never a replacement object.
+function createPrivateOutputControl(bucket, job, attemptPrefix, control) {
+  const written = [];
+  const marker = {
+    uraiLifeMovieJobId: job.jobId,
+    uraiLifeMovieOwnerSha256: crypto.createHash('sha256').update(job.ownerUid).digest('hex'),
+    uraiLifeMovieLeaseSha256: crypto.createHash('sha256').update(job.leaseToken).digest('hex'),
+    uraiLifeMovieAttemptSha256: crypto.createHash('sha256').update(attemptPrefix).digest('hex'),
+  };
+  const bounded = async promise => {
+    let timer;
+    try {
+      return await Promise.race([promise, new Promise((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('render_output_cleanup_timeout')), 5000);
+      })]);
+    } finally { clearTimeout(timer); }
+  };
+  const inspect = async record => {
+    const [metadata] = await record.file.getMetadata();
+    const generation = String(metadata.generation || '');
+    if (!/^[1-9][0-9]*$/.test(generation)
+      || !Object.entries(marker).every(([key, value]) => metadata.metadata?.[key] === value)) {
+      throw new Error('render_output_cleanup_authority_mismatch');
+    }
+    if (record.generation && record.generation !== generation) throw new Error('render_output_generation_changed');
+    record.generation = generation;
+    return generation;
+  };
+  return {
+    async upload(localPath, destination, contentType) {
+      await control.check();
+      const record = { file: bucket.file(destination) };
+      written.push(record);
+      const output = record.file.createWriteStream({
+        resumable: false, preconditionOpts: { ifGenerationMatch: 0 },
+        metadata: { contentType, cacheControl: 'private, no-store', metadata: marker },
+      });
+      // The supported Storage SDK installs the exact upload response metadata
+      // on this File before emitting response. Pin it before any later lookup.
+      output.once('response', () => {
+        const metadata = record.file.metadata;
+        const generation = String(metadata?.generation || '');
+        if (/^[1-9][0-9]*$/.test(generation)
+          && Object.entries(marker).every(([key, value]) => metadata.metadata?.[key] === value)) {
+          record.generation = generation;
+        } else record.invalidReceipt = true;
+      });
+      await pipeline(fs.createReadStream(localPath), output, { signal: control.signal });
+      if (!record.generation || record.invalidReceipt) throw new Error('render_output_receipt_invalid');
+      await control.wait(inspect(record));
+      await control.check();
+    },
+    async cleanup() {
+      const results = await Promise.allSettled(written.map(record => bounded((async () => {
+        let generation;
+        try { generation = await inspect(record); }
+        catch (error) { if (error?.code === 404) return; throw error; }
+        await record.file.delete({ ignoreNotFound: true, ifGenerationMatch: generation });
+      })())));
+      if (results.some(result => result.status === 'rejected')) throw new Error('render_output_cleanup_incomplete');
+    },
   };
 }
 
@@ -222,11 +315,18 @@ function parsePayload(job) {
     if (!sourceById.has(sourceId)) throw new Error(`unknown_timeline_source:${sourceId}`);
     const startMs = Number(raw.startMs);
     const endMs = Number(raw.endMs);
+    const sourceStartMs = raw.sourceStartMs === undefined ? 0 : raw.sourceStartMs;
+    if (!Number.isInteger(sourceStartMs) || sourceStartMs < 0 || sourceStartMs > 45 * 60 * 1000) {
+      throw new Error(`invalid_timeline_source_start:${index}`);
+    }
+    if (sourceById.get(sourceId).mimeType.startsWith('image/') && sourceStartMs !== 0) {
+      throw new Error(`image_source_start_must_be_zero:${index}`);
+    }
     if (!Number.isInteger(startMs) || !Number.isInteger(endMs) || startMs < 0 || endMs <= startMs) {
       throw new Error(`invalid_timeline_range:${index}`);
     }
     if (endMs - startMs > 30 * 60 * 1000) throw new Error(`timeline_item_too_long:${index}`);
-    return { sourceId, startMs, endMs };
+    return { sourceId, startMs, endMs, ...(raw.sourceStartMs === undefined ? {} : { sourceStartMs }) };
   }).sort((left, right) => left.startMs - right.startMs);
 
   for (let i = 1; i < normalizedTimeline.length; i += 1) {
@@ -266,6 +366,14 @@ function parsePayload(job) {
 
   const subtitleText = typeof payload.subtitleText === 'string' ? payload.subtitleText : '';
   if (Buffer.byteLength(subtitleText, 'utf8') > 2 * 1024 * 1024) throw new Error('subtitles_too_large');
+  // Ordinary renders must enforce the same caption timing boundary as final
+  // assembly before accessing a private source or starting FFmpeg. Validation
+  // does not rewrite the original admitted UTF-8 caption payload.
+  try { shiftSrt(subtitleText, 0, 1, totalTimelineMs); }
+  catch (error) {
+    throw new Error(error?.message === 'assembly_subtitle_outside_segment'
+      ? 'life_movie_subtitle_outside_timeline' : 'life_movie_subtitle_invalid');
+  }
 
   return {
     tenantId,
@@ -287,6 +395,8 @@ function parsePayload(job) {
 
 const LIFE_MOVIE_ASSEMBLY_BUDGET = {
   maxSegments: 180,
+  maxSegmentDurationMs: 15_000,
+  maxDurationMs: 45 * 60 * 1000,
   maxVideoBytes: 640 * 1024 * 1024,
   maxSubtitleBytes: 16 * 1024 * 1024,
 };
@@ -333,7 +443,8 @@ function parseAssemblyPayload(job) {
 
   const outputPrefix = safeOutputPrefix(String(payload.outputPrefix || ''), tenantId, projectId);
   const requiredFinalPrefix = `tenants/${tenantId}/life-movies/${projectId}/final/`;
-  if (!outputPrefix.startsWith(requiredFinalPrefix)) throw new Error('assembly_output_prefix_mismatch');
+  if (outputPrefix !== requiredFinalPrefix.slice(0, -1)
+    && !outputPrefix.startsWith(requiredFinalPrefix)) throw new Error('assembly_output_prefix_mismatch');
 
   const segments = Array.isArray(payload.segments) ? payload.segments : [];
   if (!segments.length || segments.length > LIFE_MOVIE_ASSEMBLY_BUDGET.maxSegments) {
@@ -348,6 +459,10 @@ function parseAssemblyPayload(job) {
     const endMs = Number(segment.endMs);
     if (!Number.isInteger(startMs) || !Number.isInteger(endMs) || startMs < previousEnd || endMs <= startMs) {
       throw new Error('assembly_segment_timeline_invalid');
+    }
+    if (endMs - startMs > LIFE_MOVIE_ASSEMBLY_BUDGET.maxSegmentDurationMs
+      || endMs > LIFE_MOVIE_ASSEMBLY_BUDGET.maxDurationMs) {
+      throw new Error('assembly_duration_budget_exceeded');
     }
     previousEnd = endMs;
     const video = parsePrivateGcsRef(segment.videoRef, 'assembly_video_ref');
@@ -373,7 +488,7 @@ function parseAssemblyPayload(job) {
 
 function parseSrtTime(value) {
   const match = /^(\d{2}):(\d{2}):(\d{2}),(\d{3})$/.exec(String(value).trim());
-  if (!match) throw new Error('assembly_subtitle_invalid');
+  if (!match || Number(match[2]) > 59 || Number(match[3]) > 59) throw new Error('assembly_subtitle_invalid');
   return (((Number(match[1]) * 60 + Number(match[2])) * 60 + Number(match[3])) * 1000) + Number(match[4]);
 }
 
@@ -386,7 +501,7 @@ function formatSrtTime(value) {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
 }
 
-function shiftSrt(value, offsetMs, nextIndex) {
+function shiftSrt(value, offsetMs, nextIndex, durationMs) {
   const normalized = String(value || '').replace(/\r\n?/g, '\n').trim();
   if (!normalized) return { text: '', nextIndex };
   const out = [];
@@ -397,9 +512,12 @@ function shiftSrt(value, offsetMs, nextIndex) {
     const match = /^(\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2},\d{3})(?:\s+.*)?$/.exec(String(lines[timingIndex] || '').trim());
     const text = lines.slice(timingIndex + 1).join('\n').trim();
     if (!match || !text) throw new Error('assembly_subtitle_invalid');
-    const start = parseSrtTime(match[1]) + offsetMs;
-    const end = parseSrtTime(match[2]) + offsetMs;
-    if (end <= start) throw new Error('assembly_subtitle_invalid');
+    const localStart = parseSrtTime(match[1]);
+    const localEnd = parseSrtTime(match[2]);
+    if (localEnd <= localStart) throw new Error('assembly_subtitle_invalid');
+    if (localEnd > durationMs) throw new Error('assembly_subtitle_outside_segment');
+    const start = localStart + offsetMs;
+    const end = localEnd + offsetMs;
     out.push(`${cursor}\n${formatSrtTime(start)} --> ${formatSrtTime(end)}\n${text}`);
     cursor += 1;
   }
@@ -472,8 +590,69 @@ function probeStreams(filePath) {
   };
 }
 
-function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, height, fps) {
-  const visualFilter = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,fps=${fps},format=yuv420p`;
+// Hash equality proves fixity, not that a child can safely be concatenated.
+// Only admit the exact H.264/AAC profile produced by this bounded renderer.
+function probeNormalizedMovie(filePath, input, durationMs, expectedProfile) {
+  const result = spawnSync('ffprobe', [
+    '-v', 'error', '-show_data_hash', 'sha256',
+    '-show_entries', 'stream=codec_type,codec_name,width,height,pix_fmt,sample_aspect_ratio,r_frame_rate,avg_frame_rate,time_base,profile,level,extradata_hash,sample_rate,channels,channel_layout,start_time,duration,nb_frames:format=duration',
+    '-of', 'json', filePath,
+  ], { encoding: 'utf8', timeout: 5000, maxBuffer: 1024 * 1024 });
+  if (result.status !== 0) throw new Error('assembly_media_probe_failed');
+  const parsed = JSON.parse(result.stdout || '{}');
+  const streams = Array.isArray(parsed.streams) ? parsed.streams : [];
+  const video = streams.find((stream) => stream.codec_type === 'video');
+  const audio = streams.find((stream) => stream.codec_type === 'audio');
+  const durationSeconds = durationMs / 1000;
+  const [rateNumerator, rateDenominator] = String(video?.avg_frame_rate || '').split('/').map(Number);
+  const averageFps = rateNumerator / rateDenominator;
+  if (streams.length !== 2 || !video || !audio
+    || video.codec_name !== 'h264' || video.pix_fmt !== 'yuv420p'
+    || video.width !== input.width || video.height !== input.height
+    || video.sample_aspect_ratio !== '1:1' || !Number.isFinite(averageFps)
+    || Math.abs(averageFps - input.fps) * durationSeconds > 1.01
+    || audio.codec_name !== 'aac' || audio.profile !== 'LC'
+    || Number(audio.sample_rate) !== 48000 || audio.channels !== 2 || audio.channel_layout !== 'stereo') {
+    throw new Error('assembly_media_profile_mismatch');
+  }
+  // CFR video rounds to a frame and AAC rounds to a 1024-sample packet.
+  // This tolerance applies to one artifact; it must never accumulate per child.
+  const tolerance = 1 / input.fps + 1024 / 48000 + 0.002;
+  for (const actual of [parsed.format?.duration, video.duration, audio.duration]) {
+    if (!Number.isFinite(Number(actual)) || Math.abs(Number(actual) - durationSeconds) > tolerance) {
+      throw new Error('assembly_media_duration_mismatch');
+    }
+  }
+  for (const stream of [video, audio]) {
+    if (!Number.isFinite(Number(stream.start_time)) || Number(stream.start_time) < -0.002
+      || Number(stream.start_time) > tolerance) throw new Error('assembly_media_start_mismatch');
+  }
+  if (!Number.isInteger(Number(video.nb_frames))
+    || Math.abs(Number(video.nb_frames) - durationSeconds * input.fps) > 1.01) {
+    throw new Error('assembly_media_frame_count_mismatch');
+  }
+  const profile = {
+    video: { codec: video.codec_name, pixelFormat: video.pix_fmt, width: video.width, height: video.height,
+      sampleAspectRatio: video.sample_aspect_ratio, expectedFps: input.fps, timeBase: video.time_base,
+      profile: video.profile, level: video.level, configurationHash: video.extradata_hash },
+    audio: { codec: audio.codec_name, profile: audio.profile, sampleRate: Number(audio.sample_rate),
+      channels: audio.channels, channelLayout: audio.channel_layout, timeBase: audio.time_base,
+      configurationHash: audio.extradata_hash },
+  };
+  if (![video.extradata_hash, audio.extradata_hash].every((value) => /^SHA256:[a-f0-9]{64}$/.test(String(value)))) {
+    throw new Error('assembly_media_configuration_missing');
+  }
+  if (expectedProfile && canonicalJson(profile) !== canonicalJson(expectedProfile)) {
+    throw new Error('assembly_media_configuration_mismatch');
+  }
+  // FFprobe's guessed r_frame_rate can increase at concat packet boundaries;
+  // retain that measurement while admitting by actual frame count/average rate.
+  return { profile, durationMs: Number(parsed.format.duration) * 1000, videoFrames: Number(video.nb_frames),
+    averageFrameRate: video.avg_frame_rate, inferredFrameRate: video.r_frame_rate };
+}
+
+function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, height, fps, sourceStartMs = 0) {
+  const visualFilter = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=${fps},format=yuv420p`;
   if (mimeType.startsWith('image/')) {
     return [
       '-y', '-loop', '1', '-framerate', String(fps), '-i', inputPath,
@@ -489,11 +668,16 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
 
   const streams = probeStreams(inputPath);
   if (streams.video) {
-    const args = ['-y', '-i', inputPath];
+    // Input seeking retains FFmpeg's accurate decode/discard behavior without
+    // decoding every preceding frame. Video and camera audio share one seek.
+    const args = ['-y', ...(sourceStartMs ? ['-ss', String(sourceStartMs / 1000)] : []), '-i', inputPath];
     if (!streams.audio) {
       args.push('-f', 'lavfi', '-t', String(durationSeconds), '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
     }
-    args.push('-t', String(durationSeconds), '-vf', `${visualFilter},tpad=stop_mode=clone:stop_duration=${durationSeconds}`, '-af', 'apad', '-map', '0:v:0');
+    // Camera media can start AAC after its first video frame. Normalize audio
+    // to output time zero with leading silence, preserving sync instead of
+    // advancing speech; then pad through the declared clip duration.
+    args.push('-t', String(durationSeconds), '-vf', `${visualFilter},tpad=stop_mode=clone:stop_duration=${durationSeconds}`, '-af', 'aresample=48000:first_pts=0,apad', '-map', '0:v:0');
     args.push(...(streams.audio ? ['-map', '0:a:0'] : ['-map', '1:a:0']));
     args.push(
       '-c:v', 'libx264', '-threads', '1', '-preset', 'medium', '-crf', '20',
@@ -506,7 +690,8 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
   if (streams.audio) {
     return [
       '-y', '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=${fps}`,
-      '-i', inputPath, '-t', String(durationSeconds), '-af', 'apad',
+      ...(sourceStartMs ? ['-ss', String(sourceStartMs / 1000)] : []),
+      '-i', inputPath, '-t', String(durationSeconds), '-af', 'aresample=48000:first_pts=0,apad',
       '-map', '0:v:0', '-map', '1:a:0',
       '-c:v', 'libx264', '-threads', '1', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
@@ -517,7 +702,7 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
   throw new Error('source_has_no_supported_media_stream');
 }
 
-async function mixAudioCues(baseMoviePath, outputPath, audioCues, localBySource, sourceById, signal) {
+async function mixAudioCues(baseMoviePath, outputPath, audioCues, localBySource, sourceById, timelineDurationMs, signal) {
   if (!audioCues.length) {
     fs.renameSync(baseMoviePath, outputPath);
     return;
@@ -540,15 +725,22 @@ async function mixAudioCues(baseMoviePath, outputPath, audioCues, localBySource,
     const sourceStartSeconds = cue.sourceStartMs / 1000;
     const label = `cue${index}`;
     filters.push(
-      `[${inputIndex}:a:0]atrim=start=${sourceStartSeconds}:duration=${durationSeconds},asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo,volume=${cue.gainDb}dB,adelay=${cue.startMs}|${cue.startMs}[${label}]`,
+      // Materialize a camera track's delayed start before selecting its source
+      // interval. Resetting timestamps first advances dialogue into that silence.
+      `[${inputIndex}:a:0]aresample=48000:first_pts=0,atrim=start=${sourceStartSeconds}:duration=${durationSeconds},asetpts=PTS-STARTPTS,aformat=channel_layouts=stereo,volume=${cue.gainDb}dB,adelay=${cue.startMs}|${cue.startMs}[${label}]`,
     );
     mixInputs.push(`[${label}]`);
   }
-  filters.push(`${mixInputs.join('')}amix=inputs=${mixInputs.length}:duration=first:dropout_transition=0:normalize=0[mixedaudio]`);
+  // AAC/MP3 decode in different packet sizes. Ending at the first decoded
+  // stream can truncate the last dialogue packet. Flush all bounded cues,
+  // then pad/trim to the explicit movie timeline without advancing dialogue.
+  const timelineDurationSeconds = timelineDurationMs / 1000;
+  filters.push(`${mixInputs.join('')}amix=inputs=${mixInputs.length}:duration=longest:dropout_transition=0:normalize=0,apad,atrim=duration=${timelineDurationSeconds},asetpts=PTS-STARTPTS[mixedaudio]`);
 
   args.push(
     '-filter_complex', filters.join(';'),
     '-map', '0:v:0', '-map', '[mixedaudio]',
+    '-t', String(timelineDurationSeconds),
     '-c:v', 'copy',
     '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
     '-movflags', '+faststart',
@@ -575,7 +767,7 @@ async function assembleLifeMovie(job) {
   const control = createRenderControl(job);
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'urai-life-movie-assembly-'));
   const attemptPrefix = `${input.outputPrefix.replace(/\/+$/, '')}/attempt-${crypto.randomUUID()}`;
-  const writtenObjects = [];
+  const privateOutputs = createPrivateOutputControl(bucket, job, attemptPrefix, control);
   let completed = false;
 
   async function downloadVerified(location, expectedChecksum, localPath, budget) {
@@ -602,11 +794,7 @@ async function assembleLifeMovie(job) {
   }
 
   async function uploadPrivateFile(localPath, destination, contentType) {
-    await control.check();
-    writtenObjects.push(destination);
-    await pipeline(fs.createReadStream(localPath), bucket.file(destination).createWriteStream({
-      resumable: false, metadata: { contentType, cacheControl: 'private, no-store' },
-    }), { signal: control.signal });
+    await privateOutputs.upload(localPath, destination, contentType);
   }
 
   try {
@@ -618,22 +806,34 @@ async function assembleLifeMovie(job) {
     const subtitleBlocks = [];
     let subtitleIndex = 1;
     let previousEnd = 0;
+    let mediaProfile;
 
     for (const segment of input.segments) {
       await control.check();
       if (segment.startMs > previousEnd) {
         const gapPath = path.join(workDir, `gap-${String(segment.index).padStart(4, '0')}.mp4`);
-        await run('ffmpeg', gapArgs(gapPath, (segment.startMs - previousEnd) / 1000, input.width, input.height, input.fps), { signal: control.signal });
-        concatEntries.push(gapPath);
+        const gapDurationMs = segment.startMs - previousEnd;
+        await run('ffmpeg', gapArgs(gapPath, gapDurationMs / 1000, input.width, input.height, input.fps), { signal: control.signal });
+        const gapMedia = probeNormalizedMovie(gapPath, input, gapDurationMs, mediaProfile);
+        mediaProfile = gapMedia.profile;
+        concatEntries.push({ filePath: gapPath, durationMs: gapDurationMs });
       }
 
       const videoPath = path.join(workDir, `segment-${String(segment.index).padStart(4, '0')}.mp4`);
       const subtitlePath = path.join(workDir, `segment-${String(segment.index).padStart(4, '0')}.srt`);
       const videoBytes = await downloadVerified(segment.video, segment.videoChecksum, videoPath, videoBudget);
       const subtitleBytes = await downloadVerified(segment.subtitle, segment.subtitleChecksum, subtitlePath, subtitleBudget);
-      concatEntries.push(videoPath);
+      const durationMs = segment.endMs - segment.startMs;
+      const media = probeNormalizedMovie(videoPath, input, durationMs, mediaProfile);
+      // Container metadata can survive a damaged media packet. Decode each
+      // bounded child with fatal-error handling before admitting its bytes.
+      await run('ffmpeg', ['-v', 'error', '-xerror', '-i', videoPath,
+        '-map', '0:v:0', '-map', '0:a:0', '-fps_mode', 'passthrough', '-f', 'null', '-'],
+      { signal: control.signal });
+      mediaProfile = media.profile;
+      concatEntries.push({ filePath: videoPath, durationMs });
 
-      const shifted = shiftSrt(fs.readFileSync(subtitlePath, 'utf8'), segment.startMs, subtitleIndex);
+      const shifted = shiftSrt(fs.readFileSync(subtitlePath, 'utf8'), segment.startMs, subtitleIndex, durationMs);
       if (shifted.text) subtitleBlocks.push(shifted.text);
       subtitleIndex = shifted.nextIndex;
       segmentAuthority.push({
@@ -644,17 +844,32 @@ async function assembleLifeMovie(job) {
         subtitleChecksum: segment.subtitleChecksum,
         videoBytes,
         subtitleBytes,
+        media,
       });
       previousEnd = segment.endMs;
     }
 
     const concatPath = path.join(workDir, 'assembly-concat.txt');
-    fs.writeFileSync(concatPath, concatEntries.map((entry) => `file '${entry.replace(/'/g, "'\\''")}'`).join('\n') + '\n');
+    // Position every segment by declared timeline duration instead of allowing
+    // frame/container rounding to compound across up to 180 child artifacts.
+    fs.writeFileSync(concatPath, concatEntries.map((entry) =>
+      `file '${entry.filePath.replace(/'/g, "'\\''")}'\nduration ${entry.durationMs / 1000}`
+    ).join('\n') + '\n');
     const moviePath = path.join(workDir, 'life-movie-final.mp4');
     await run('ffmpeg', [
       '-y', '-f', 'concat', '-safe', '0', '-i', concatPath,
-      '-c', 'copy', '-movflags', '+faststart', moviePath,
+      '-map', '0:v:0', '-map', '0:a:0',
+      '-copyts',
+      '-t', String(previousEnd / 1000),
+      // AAC packets decode to full frames even when a child container clips
+      // their duration. Remove sample overlaps against the declared PTS before
+      // one final audio encoding, while copying every compressed video packet.
+      '-af', `aresample=48000:async=1:min_hard_comp=0.000001:first_pts=0,apad,atrim=duration=${previousEnd / 1000},asetpts=PTS-STARTPTS`,
+      '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
+      '-movflags', '+faststart', moviePath,
     ], { signal: control.signal });
+    await control.check();
+    const finalMedia = probeNormalizedMovie(moviePath, input, previousEnd, mediaProfile);
 
     const subtitlePath = path.join(workDir, 'life-movie-final.srt');
     fs.writeFileSync(subtitlePath, subtitleBlocks.join('\n\n') + (subtitleBlocks.length ? '\n' : ''), 'utf8');
@@ -676,6 +891,12 @@ async function assembleLifeMovie(job) {
       publicReleaseAuthorized: false,
       segmentCount: input.segments.length,
       segmentAuthority,
+      mediaContract: 'urai-life-movie-normalized-media-v1',
+      timelineDurationMs: previousEnd,
+      finalMedia,
+      literalMediaAccepted: false,
+      identityAccepted: false,
+      productionAccepted: false,
       outputs: {
         mp4: { sha256: movieHash, mimeType: 'video/mp4' },
         srt: { sha256: subtitleHash, mimeType: 'application/x-subrip' },
@@ -721,11 +942,7 @@ async function assembleLifeMovie(job) {
     control.stop();
     fs.rmSync(workDir, { recursive: true, force: true });
     if (!completed) {
-      const cleanup = await Promise.allSettled(writtenObjects.map((destination) =>
-        bucket.file(destination).delete({ ignoreNotFound: true })));
-      if (cleanup.some((result) => result.status === 'rejected')) {
-        throw new Error('assembly_cleanup_incomplete');
-      }
+      try { await privateOutputs.cleanup(); } catch { throw new Error('assembly_cleanup_incomplete'); }
     }
   }
 }
@@ -740,7 +957,7 @@ async function renderLifeMovie(job) {
   // Isolate every execution attempt so cancelled/stale work cannot overwrite or
   // delete a newer attempt's objects, even when the requested prefix is reused.
   const attemptPrefix = `${input.outputPrefix}/attempt-${crypto.randomUUID()}`;
-  const writtenObjects = [];
+  const privateOutputs = createPrivateOutputControl(bucket, job, attemptPrefix, control);
   let completed = false;
   try {
     await control.start();
@@ -790,24 +1007,34 @@ async function renderLifeMovie(job) {
       } else {
         const source = input.sourceById.get(item.sourceId);
         const sourcePath = localBySource.get(item.sourceId);
-        await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps), { signal: control.signal });
+        await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps, item.sourceStartMs), { signal: control.signal });
       }
-      clipPaths.push(clipPath);
+      clipPaths.push({ filePath: clipPath, durationMs: item.endMs - item.startMs });
     }
 
     const concatPath = path.join(workDir, 'concat.txt');
-    fs.writeFileSync(concatPath, clipPaths.map((clipPath) => `file '${clipPath.replace(/'/g, "'\\''")}'`).join('\n') + '\n');
+    fs.writeFileSync(concatPath, clipPaths.map((clip) =>
+      `file '${clip.filePath.replace(/'/g, "'\\''")}'\nduration ${clip.durationMs / 1000}`
+    ).join('\n') + '\n');
+    const timelineDurationMs = input.timeline[input.timeline.length - 1].endMs;
     const baseMoviePath = path.join(workDir, 'life-movie-base.mp4');
     await run('ffmpeg', [
       '-y', '-f', 'concat', '-safe', '0', '-i', concatPath,
-      // Every segment already has the same H.264/AAC output profile. Remux it;
-      // encoding the full movie again doubles CPU work and loses quality.
-      '-c', 'copy',
+      '-map', '0:v:0', '-map', '0:a:0',
+      '-copyts', '-t', String(timelineDurationMs / 1000),
+      '-c:v', 'copy',
+      '-af', `aresample=48000:async=1:min_hard_comp=0.000001:first_pts=0,apad,atrim=duration=${timelineDurationMs / 1000},asetpts=PTS-STARTPTS`,
+      // Keep normalized samples lossless until the existing cue mixer encodes
+      // the final AAC stream. Without cues, encode that stream here instead.
+      ...(input.audioCues.length ? ['-c:a', 'pcm_s16le', '-f', 'mov'] : ['-c:a', 'aac', '-b:a', '192k']),
+      '-ar', '48000', '-ac', '2',
       '-movflags', '+faststart', baseMoviePath,
     ], { signal: control.signal });
 
     const moviePath = path.join(workDir, 'life-movie.mp4');
-    await mixAudioCues(baseMoviePath, moviePath, input.audioCues, localBySource, input.sourceById, control.signal);
+    await mixAudioCues(baseMoviePath, moviePath, input.audioCues, localBySource, input.sourceById, timelineDurationMs, control.signal);
+    await control.check();
+    const media = probeNormalizedMovie(moviePath, input, timelineDurationMs);
 
     const subtitlePath = path.join(workDir, 'life-movie.srt');
     fs.writeFileSync(subtitlePath, input.subtitleText, 'utf8');
@@ -834,6 +1061,12 @@ async function renderLifeMovie(job) {
       audioCues: input.audioCues,
       gapTreatment: 'black-video-silent-audio',
       shortSourceTreatment: 'hold-last-video-frame-and-pad-silent-audio-to-declared-duration',
+      mediaContract: 'urai-life-movie-normalized-media-v1',
+      timelineDurationMs,
+      media,
+      literalMediaAccepted: false,
+      identityAccepted: false,
+      productionAccepted: false,
       sources: input.sources.map((source) => ({
         id: source.id,
         bucket: source.bucket,
@@ -861,11 +1094,7 @@ async function renderLifeMovie(job) {
       manifest: `${attemptPrefix}/life-movie.render-manifest.json`,
     };
     async function uploadPrivateFile(localPath, destination, contentType) {
-      await control.check();
-      writtenObjects.push(destination);
-      await pipeline(fs.createReadStream(localPath), bucket.file(destination).createWriteStream({
-        resumable: false, metadata: { contentType, cacheControl: 'private, no-store' },
-      }), { signal: control.signal });
+      await privateOutputs.upload(localPath, destination, contentType);
     }
     await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4');
     await uploadPrivateFile(subtitlePath, outputPaths.srt, 'application/x-subrip');
@@ -897,11 +1126,7 @@ async function renderLifeMovie(job) {
     control.stop();
     fs.rmSync(workDir, { recursive: true, force: true });
     if (!completed) {
-      const cleanup = await Promise.allSettled(writtenObjects.map((destination) =>
-        bucket.file(destination).delete({ ignoreNotFound: true })));
-      if (cleanup.some((result) => result.status === 'rejected')) {
-        throw new Error('render_cleanup_incomplete');
-      }
+      try { await privateOutputs.cleanup(); } catch { throw new Error('render_cleanup_incomplete'); }
     }
   }
 }

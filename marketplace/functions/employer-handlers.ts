@@ -1,5 +1,5 @@
-import { requireAdmin, requireEmployerMember } from './auth';
-import type { MarketplaceAuthContext } from './auth';
+import { requireAdmin, requireEmployerMember } from './auth.js';
+import type { MarketplaceAuthContext } from './auth.js';
 
 export const createEmployerHandler = async (
   auth: MarketplaceAuthContext,

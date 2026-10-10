@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "urai-model-forge-plan-v1",
+  "dryRun": true,
+  "spendAuthorized": false,
+  "assetId": "kit-gw-college-dorm-campus-shell-v1-34cf66a29487bd18",
+  "providers": [
+    {
+      "provider": "meshy",
+      "requiredEnv": "MESHY_API_KEY",
+      "configured": false
+    }
+  ],
+  "target": {
+    "meters": 6.6,
+    "hero": true,
+    "maxTriangles": 120000,
+    "textureResolution": "4k",
+    "pbr": true
+  },
+  "generationPolicy": {
+    "maxProviderAttempts": 1,
+    "seed": 886007458
+  },
+  "referenceCount": 0,
+  "next": "Provider execution remains blocked until URAI_MODEL_FORGE_SPEND_AUTHORIZED=1 and credentials are available."
+}

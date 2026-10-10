@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-rural-house-porch-shell:v1",
+    "sourceKitSha256": "7c4d142996d8709c85be61296c92042e229507a044c508f4a0e32f97e20fc38c",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-rural-house-porch",
+        "specSha256": "a120bd15740676e7ff286bed1efdf88936bd4382b1d6638f859b5a1c8ea466d8",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 2085426217
+  },
+  "id": "kit-gw-rural-house-porch-shell-v1-7c4d142996d8709c",
+  "prompt": "Original generic modular architecture-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Broad front doorway, screened openings optional, porch level with room by default. Raised rural-house layouts require a specified ramp/grade successor, not assumed accessibility. Target bounding dimensions 8m wide x 2.8m high x 6.4m deep. Materials: clapboard-painted-muted. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 8,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

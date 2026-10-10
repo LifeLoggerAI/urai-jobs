@@ -1,0 +1,66 @@
+{
+  "acceptedDoesNotMean": [
+    "runtime-integrated",
+    "production-deployed",
+    "release-accepted",
+    "independently-approved",
+    "XR-device-certified"
+  ],
+  "credentialsInspected": false,
+  "definitionVersion": "1.0.0",
+  "externalTransitions": [
+    {
+      "from": "GENERATED",
+      "guard": "Full geometry, material, UV, scale, collision/nav, LOD and budget QA evidence",
+      "owner": "Asset Factory",
+      "to": "MACHINE_VALIDATED"
+    },
+    {
+      "from": "MACHINE_VALIDATED",
+      "guard": "Literal preview and runtime pixels reviewed",
+      "owner": "Designated visual reviewer",
+      "to": "VISUALLY_REVIEWED"
+    },
+    {
+      "from": "VISUALLY_REVIEWED",
+      "guard": "Explicit visual, rights and asset acceptance; runtime/release acceptance separate",
+      "owner": "Asset Factory governance",
+      "to": "ACCEPTED"
+    }
+  ],
+  "networkCalls": 0,
+  "offlineTransitions": [
+    {
+      "from": "SPECIFIED",
+      "guard": "Generic spec and authority validated; does not authorize spend or submission",
+      "to": "READY_FOR_PROVIDER"
+    },
+    {
+      "from": "READY_FOR_PROVIDER",
+      "guard": "Actual local GLB and exact provider provenance imported into quarantine; no runtime admission",
+      "to": "GENERATED"
+    },
+    {
+      "from": "READY_FOR_PROVIDER",
+      "guard": "External spend, credential, source or license dependency",
+      "to": "BLOCKED"
+    },
+    {
+      "from": "GENERATED",
+      "guard": "Machine or visual defect; retained version and hashes",
+      "to": "NEEDS_REWORK"
+    }
+  ],
+  "paidExecutionImplementation": null,
+  "schemaVersion": "urai-generic-world-offline-state-machine-v1",
+  "states": [
+    "SPECIFIED",
+    "READY_FOR_PROVIDER",
+    "GENERATED",
+    "MACHINE_VALIDATED",
+    "VISUALLY_REVIEWED",
+    "ACCEPTED",
+    "BLOCKED",
+    "NEEDS_REWORK"
+  ]
+}

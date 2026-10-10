@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "urai-model-forge-plan-v1",
+  "dryRun": true,
+  "spendAuthorized": false,
+  "assetId": "kit-gw-east-texas-living-room-side-table-v1-c7a9b58f06894213",
+  "providers": [
+    {
+      "provider": "meshy",
+      "requiredEnv": "MESHY_API_KEY",
+      "configured": false
+    }
+  ],
+  "target": {
+    "meters": 0.56,
+    "hero": true,
+    "maxTriangles": 120000,
+    "textureResolution": "4k",
+    "pbr": true
+  },
+  "generationPolicy": {
+    "maxProviderAttempts": 1,
+    "seed": 3349788047
+  },
+  "referenceCount": 0,
+  "next": "Provider execution remains blocked until URAI_MODEL_FORGE_SPEND_AUTHORIZED=1 and credentials are available."
+}

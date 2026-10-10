@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-clinic-waiting-room-shell:v1",
+    "sourceKitSha256": "0659d81a8c60f95e192f538a799006876c3735991f3a2cc247226d817d58ce97",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-clinic-waiting-room",
+        "specSha256": "306dfda86046a954415a5936a4a8d6913c45b7e4a064fcb14717c6f0804dbab0",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 106551322
+  },
+  "id": "kit-gw-clinic-waiting-room-shell-v1-0659d81a8c60f95e",
+  "prompt": "Original generic modular architecture-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Clear center route, 1.3 m consultation connection, inactive equipment. Waiting chairs stay outside turn radius; no sudden alarms. Target bounding dimensions 8m wide x 2.8m high x 6.4m deep. Materials: paint-institutional-soft. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 8,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

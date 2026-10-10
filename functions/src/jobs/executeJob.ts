@@ -1,14 +1,15 @@
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, type Transaction, type DocumentReference } from 'firebase-admin/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import { onMessagePublished } from 'firebase-functions/v2/pubsub';
 import axios from 'axios';
 import { z } from 'zod';
-import type { Job } from '@urai-jobs/shared-types';
+import type { Job, JobQueueEntry } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJobTypes.js';
 import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
-import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
+import { canFinalizeQueuedExecution, decideExecutionStart, executionAttemptPolicy, executionAuthorityUnchanged, isTerminalJobStatus } from './executionGuards.js';
+import { canFinalizePrivateSource } from '../privacy/privateLifeModelDataRights.js';
 
 // URAI Jobs worker routing audit markers.
 // asset/spatial/studio subsystem workers route: '/'
@@ -34,7 +35,7 @@ type InlineWorkerResult = {
   completedAt: string;
 };
 
-type FailureOutcome = 'failed' | 'ignored' | 'callback-pending';
+type FailureOutcome = 'failed' | 'ignored' | 'callback-pending' | 'cancelled';
 
 const JobExecutionMessageSchema = z.object({
   jobId: z.string().min(1),
@@ -254,29 +255,61 @@ async function appendJobLog(jobId: string, input: { level: string; message: stri
   }
 }
 
-async function handleJobFailure(jobId: string, leaseToken: string, error: unknown) {
+function cancelChangedAttempt(transaction: Transaction, jobRef: DocumentReference, queueRef: DocumentReference, jobId: string, code: string) {
+  const now = FieldValue.serverTimestamp();
+  transaction.update(jobRef, {
+    status: 'CANCELLED', error: { code }, result: FieldValue.delete(), output: FieldValue.delete(),
+    lease: FieldValue.delete(), updatedAt: now, completedAt: now,
+    'execution.leaseToken': FieldValue.delete(), 'execution.completedAt': now,
+    'execution.asyncCallbackPending': false,
+    'execution.callbackTokenHash': FieldValue.delete(),
+    'execution.callbackLeaseToken': FieldValue.delete(),
+    'execution.callbackDeadlineAt': FieldValue.delete(),
+  });
+  transaction.set(queueRef, { jobId, status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: now }, { merge: true });
+}
+
+async function handleJobFailure(jobId: string, leaseToken: string, error: unknown, admitted: Job) {
   const db = getFirestore();
   const jobRef = jobDoc(jobId);
   const queueRef = jobQueueEntryDoc(jobId);
   const errorMessage = error instanceof Error ? error.message : String(error);
 
   const outcome = await db.runTransaction<FailureOutcome>(async (transaction) => {
-    const snapshot = await transaction.get(jobRef);
+    const [snapshot, queueSnapshot] = await Promise.all([
+      transaction.get(jobRef), transaction.get(queueRef),
+    ]);
     if (!snapshot.exists) return 'ignored';
 
     const current = snapshot.data() as Job;
-    if (current.status !== 'RUNNING' || current.execution?.leaseToken !== leaseToken) {
+    const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+    if (!canFinalizeQueuedExecution(current, queue, leaseToken)) {
       return 'ignored';
+    }
+    // An ambiguous or failed dispatch cannot retain a callback or automatically
+    // retry private input under account/consent authority that did not admit it.
+    if (!executionAuthorityUnchanged(current, admitted)) {
+      cancelChangedAttempt(transaction, jobRef, queueRef, jobId, 'execution_authority_changed');
+      return 'cancelled';
+    }
+    const contexts = jobConsentContexts(current);
+    if (current.ownerUid && contexts.length) {
+      const blocks = await Promise.all(contexts.map(context => transaction.get(consentBlockRef(current.ownerUid!, context.purpose))));
+      if (blocks.some(block => block.exists && block.data()?.active === true)) {
+        cancelChangedAttempt(transaction, jobRef, queueRef, jobId, 'consent_revoked');
+        return 'cancelled';
+      }
     }
     if (activeAsyncCallbackForLease(current, leaseToken, Date.now())) {
       return 'callback-pending';
     }
 
     const now = FieldValue.serverTimestamp();
-    const attemptCount = Number(current.execution?.attemptCount || 0);
-    const maxAttempts = Number(current.execution?.maxAttempts || current.maxAttempts || 3);
+    const attemptPolicy = executionAttemptPolicy(current);
+    const attemptCount = attemptPolicy?.attemptCount ?? 0;
+    const maxAttempts = attemptPolicy?.maxAttempts ?? 0;
 
-    if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || attemptCount >= maxAttempts) {
+    if (!attemptPolicy || attemptCount < 1 || attemptCount >= maxAttempts) {
       transaction.update(jobRef, {
         status: 'DEAD',
         error: { message: errorMessage },
@@ -342,6 +375,15 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
     return;
   }
 
+  if (outcome === 'cancelled') {
+    await appendJobLog(jobId, {
+      level: 'warn', source: 'executeJob',
+      message: 'Failed dispatch was cancelled because admitted account, input or consent authority changed.',
+      metadata: { jobId, leaseTokenBound: true },
+    });
+    return;
+  }
+
   await appendJobLog(jobId, {
     level: 'error',
     source: 'executeJob',
@@ -371,7 +413,9 @@ export const executeJob = onMessagePublished({
   const queueRef = jobQueueEntryDoc(jobId);
 
   const prepared = await db.runTransaction(async (transaction) => {
-    const jobSnapshot = await transaction.get(jobRef);
+    const [jobSnapshot, queueSnapshot] = await Promise.all([
+      transaction.get(jobRef), transaction.get(queueRef),
+    ]);
     if (!jobSnapshot.exists) {
       return { action: 'ignore' as const, reason: 'missing-job' };
     }
@@ -380,6 +424,27 @@ export const executeJob = onMessagePublished({
     const decision = decideExecutionStart(job, leaseToken);
     if (decision.action === 'ignore') {
       return decision;
+    }
+
+    const queueEntry = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+    if (!queueEntry || queueEntry.status !== 'LEASED' || queueEntry.lease?.leaseToken !== leaseToken) {
+      return { action: 'ignore' as const, reason: 'stale-queue-lease' as const };
+    }
+
+    const attemptPolicy = executionAttemptPolicy(job);
+    if (!attemptPolicy || attemptPolicy.attemptCount >= attemptPolicy.maxAttempts) {
+      const now = FieldValue.serverTimestamp();
+      transaction.update(jobRef, {
+        status: 'DEAD', error: { code: attemptPolicy ? 'execution_attempts_exhausted' : 'execution_attempt_policy_invalid' },
+        lease: FieldValue.delete(), updatedAt: now, completedAt: now,
+        'execution.leaseToken': FieldValue.delete(), 'execution.completedAt': now,
+        'execution.asyncCallbackPending': false,
+        'execution.callbackTokenHash': FieldValue.delete(),
+        'execution.callbackLeaseToken': FieldValue.delete(),
+        'execution.callbackDeadlineAt': FieldValue.delete(),
+      });
+      transaction.set(queueRef, { jobId, status: 'DEAD', lease: FieldValue.delete(), updatedAt: now }, { merge: true });
+      return { action: 'ignore' as const, reason: 'execution-attempt-budget' as const };
     }
 
     const consentContexts = jobConsentContexts(job);
@@ -415,7 +480,7 @@ export const executeJob = onMessagePublished({
       status: 'RUNNING',
       'execution.leaseToken': leaseToken,
       'execution.startedAt': now,
-      'execution.attemptCount': FieldValue.increment(1),
+      'execution.attemptCount': attemptPolicy.attemptCount + 1,
       'execution.asyncCallbackPending': false,
       'execution.callbackTokenHash': FieldValue.delete(),
       'execution.callbackLeaseToken': FieldValue.delete(),
@@ -449,6 +514,29 @@ export const executeJob = onMessagePublished({
   const jobType = getJobType(job);
   const target = getWorkerTarget(jobType);
 
+  const currentDispatchAuthority = () => db.runTransaction(async (transaction) => {
+    const [snapshot, queueSnapshot] = await Promise.all([
+      transaction.get(jobRef), transaction.get(queueRef),
+    ]);
+    if (!snapshot.exists) return false;
+    const current = snapshot.data() as Job;
+    const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+    if (!canFinalizeQueuedExecution(current, queue, leaseToken)) return false;
+    if (!executionAuthorityUnchanged(current, job)) {
+      cancelChangedAttempt(transaction, jobRef, queueRef, jobId, 'execution_authority_changed');
+      return false;
+    }
+    const contexts = jobConsentContexts(current);
+    if (current.ownerUid && contexts.length) {
+      const blocks = await Promise.all(contexts.map(context => transaction.get(consentBlockRef(current.ownerUid!, context.purpose))));
+      if (blocks.some(block => block.exists && block.data()?.active === true)) {
+        cancelChangedAttempt(transaction, jobRef, queueRef, jobId, 'consent_revoked');
+        return false;
+      }
+    }
+    return true;
+  });
+
   await appendJobLog(jobId, {
     level: 'info',
     source: 'executeJob',
@@ -466,6 +554,7 @@ export const executeJob = onMessagePublished({
         message: 'Executing governed TinyFish web job.',
         metadata: { jobType, provider: 'tinyfish' },
       });
+      if (!await currentDispatchAuthority()) return;
       result = await executeTinyFishJob(jobType, getPayloadRecord(job));
     } else if (target) {
       const dispatchConsentContexts = jobConsentContexts(job);
@@ -479,10 +568,13 @@ export const executeJob = onMessagePublished({
         if (blockedPurpose) {
           const now = FieldValue.serverTimestamp();
           await db.runTransaction(async (transaction) => {
-            const currentSnapshot = await transaction.get(jobRef);
+            const [currentSnapshot, queueSnapshot] = await Promise.all([
+              transaction.get(jobRef), transaction.get(queueRef),
+            ]);
             if (!currentSnapshot.exists) return;
             const current = currentSnapshot.data() as Job;
-            if (current.status !== 'RUNNING' || current.execution?.leaseToken !== leaseToken) return;
+            const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+            if (!canFinalizeQueuedExecution(current, queue, leaseToken)) return;
             transaction.update(jobRef, {
               status: 'CANCELLED',
               lease: FieldValue.delete(),
@@ -522,6 +614,8 @@ export const executeJob = onMessagePublished({
         ? await resolveTrustedNarratorProviderAuthorization(job)
         : null;
 
+      if (!await currentDispatchAuthority()) return;
+
       const response = await axios.post(`${workerUrl}${route}`, {
         ...job,
         jobId,
@@ -531,6 +625,8 @@ export const executeJob = onMessagePublished({
         ...(providerAuthorization ? { providerAuthorization } : {}),
       }, {
         headers: getWorkerAuthHeaders(),
+        // A redirect must never redispatch private job bytes or worker authority.
+        maxRedirects: 0,
         timeout: jobType === 'studio.render.video'
           ? 120000
           : jobType === 'studio.assemble.video'
@@ -542,6 +638,7 @@ export const executeJob = onMessagePublished({
       result = response.data;
 
       if (response.status === 202) {
+        if (!await currentDispatchAuthority()) return;
         await appendJobLog(jobId, {
           level: 'info',
           source: 'executeJob',
@@ -560,6 +657,7 @@ export const executeJob = onMessagePublished({
         throw new Error(`Worker URL ${envKey} is required for ${normalizedEnv()} runtime; inline fallback is disabled.`);
       }
 
+      if (!await currentDispatchAuthority()) return;
       result = createInlineWorkerResult(job, jobId, jobType);
 
       await appendJobLog(jobId, {
@@ -571,13 +669,47 @@ export const executeJob = onMessagePublished({
     }
 
     const finalized = await db.runTransaction(async (transaction) => {
-      const currentSnapshot = await transaction.get(jobRef);
+      const [currentSnapshot, queueSnapshot] = await Promise.all([
+        transaction.get(jobRef), transaction.get(queueRef),
+      ]);
       if (!currentSnapshot.exists) return false;
 
       const current = currentSnapshot.data() as Job;
-      if (!canFinalizeExecution(current, leaseToken)) {
+      const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+      if (!canFinalizeQueuedExecution(current, queue, leaseToken)) {
         return false;
       }
+      if (!executionAuthorityUnchanged(current, job)) {
+        cancelChangedAttempt(transaction, jobRef, queueRef, jobId, 'execution_authority_changed');
+        return false;
+      }
+
+      // Canonical revocation must win atomically even if the worker finished
+      // before asynchronous owner cleanup reaches this job.
+      const finalConsentContexts = jobConsentContexts(current);
+      if (current.ownerUid && finalConsentContexts.length > 0) {
+        const finalBlocks = await Promise.all(finalConsentContexts.map(context =>
+          transaction.get(consentBlockRef(current.ownerUid!, context.purpose))));
+        if (finalBlocks.some(snapshot => snapshot.exists && snapshot.data()?.active === true)) {
+          const cancelledAt = FieldValue.serverTimestamp();
+          transaction.update(jobRef, {
+            status: 'CANCELLED', lease: FieldValue.delete(),
+            updatedAt: cancelledAt, completedAt: cancelledAt,
+            'execution.leaseToken': FieldValue.delete(), 'execution.completedAt': cancelledAt,
+            'execution.asyncCallbackPending': false,
+            'execution.callbackTokenHash': FieldValue.delete(),
+            'execution.callbackLeaseToken': FieldValue.delete(),
+            'execution.callbackDeadlineAt': FieldValue.delete(),
+          });
+          transaction.set(queueRef, {
+            jobId, status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: cancelledAt,
+          }, { merge: true });
+          return false;
+        }
+      }
+
+      if (['memory.private-source.transcribe','memory.private-source.index'].includes(jobType)
+        && !await canFinalizePrivateSource(db, transaction, current, result)) return false;
 
       const now = FieldValue.serverTimestamp();
       transaction.update(jobRef, {
@@ -608,7 +740,7 @@ export const executeJob = onMessagePublished({
       await appendJobLog(jobId, {
         level: 'warn',
         source: 'executeJob',
-        message: 'Worker result was not applied because the job state or lease changed.',
+        message: 'Worker result was not applied because job state, lease or canonical consent changed.',
         metadata: { jobType },
       });
       return;
@@ -621,6 +753,6 @@ export const executeJob = onMessagePublished({
       metadata: { jobType },
     });
   } catch (error) {
-    await handleJobFailure(jobId, leaseToken, error);
+    await handleJobFailure(jobId, leaseToken, error, job);
   }
 });

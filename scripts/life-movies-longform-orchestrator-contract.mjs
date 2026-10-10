@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import './life-movies-output-deletion-smoke.mjs'
 import fs from 'node:fs'
 
 const bridge = fs.readFileSync(new URL('../functions/src/jobs/studioLifeMovieLongformBridge.ts', import.meta.url), 'utf8')
@@ -39,7 +40,7 @@ for (const marker of [
   "allowedBuckets.has(videoLocation.bucket)",
   "allowedBuckets.has(subtitleLocation.bucket)",
   "Date.now() + 5 * 60 * 1000",
-  "responseDisposition: disposition",
+  "artifact: 'final', disposition",
   "schemaVersion: 'urai-life-movie-private-playlist-v1'",
   "gapBeforeMs",
   "playlistDigest",
@@ -88,14 +89,21 @@ console.log('Life Movie durable long-form orchestrator contract passed')
 assert.ok(bridge.includes("status: 'CANCELLED'"), 'parent cancellation must retain explicit cancelled queue semantics')
 assert.doesNotMatch(bridge, /status: 'DONE'[\s\S]{0,120}longform/, 'long-form cancellation must not collapse cancellation into generic DONE state')
 
-assert.doesNotMatch(bridge, /segments\.push\([\s\S]*?ref:/, 'private playback response must not expose raw GCS refs')
+const playbackStart = bridge.indexOf('async function readPlanPlayback(')
+const playbackEnd = bridge.indexOf('async function resumePlan(', playbackStart)
+assert.ok(playbackStart >= 0 && playbackEnd > playbackStart, 'private playback source must be bounded')
+assert.doesNotMatch(bridge.slice(playbackStart, playbackEnd), /segments\.push\([\s\S]*?ref:/, 'private playback response must not expose raw GCS refs')
 assert.ok(bridge.indexOf('assertPlanOwner') < bridge.indexOf('readPlanPlayback'), 'owner/tenant boundary helper must exist before playback implementation')
 
-assert.ok(bridge.includes("readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);"), 'ordinary playback must retain the default inline signed-access mode')
-assert.ok(bridge.includes("readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId, 'attachment')"), 'download must be the explicit attachment signed-access path')
+assert.ok(bridge.includes("readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);"), 'ordinary playback must retain the default inline authenticated descriptor mode')
+assert.ok(bridge.includes("readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId, 'attachment')"), 'download must be the explicit attachment authenticated descriptor path')
 assert.ok(bridge.includes("outputPrefix: `tenants/${tenantId}/life-movies/${plan.projectId}/final/`"), 'assembly output must remain inside the tenant/project final prefix')
 assert.ok(bridge.includes("buildRequestFingerprint('studio.assemble.video'"), 'assembly job replay must bind to exact payload identity')
 
 
-assert.ok(bridge.includes("responseDisposition: disposition"), 'long-form signed access must bind inline versus attachment disposition explicitly')
+assert.ok(bridge.includes("artifact: 'final', disposition"), 'long-form authenticated access must bind inline versus attachment disposition explicitly')
 assert.ok(bridge.includes("if (!result.finalFile) throw new Error('longform_final_assembly_not_ready')"), 'long-form download must require completed final assembly')
+
+assert.doesNotMatch(bridge, /getSignedUrl/, 'long-form must not mint anonymous private-media URLs');
+assert.ok(bridge.includes('streamPrivateMedia('), 'actual byte delivery must recheck live authority');
+assert.ok(bridge.includes("parsed.data.action === 'deliver'"), 'the existing protected bridge must handle authenticated byte delivery');

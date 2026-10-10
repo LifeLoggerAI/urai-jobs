@@ -1,0 +1,27 @@
+{
+  "accepted": false,
+  "actualOutputExists": false,
+  "creator": null,
+  "generationDate": null,
+  "instructions": "Fill only from actual governed provider output and current verified terms. Remove templateOnly and actualOutputExists template fields once output exists. Do not fabricate IDs, hashes, rights or acceptance.",
+  "jobId": "gwjob-9d5d0368ac3b3d630e81c306cdc0f9042f6ac2d9054684760af06dcb2fb08e2d",
+  "license": {
+    "attributionRequirement": "UNKNOWN",
+    "commercialUse": "UNKNOWN",
+    "identifier": null,
+    "restrictions": null,
+    "status": "UNKNOWN",
+    "termsCheckedAt": null,
+    "termsSource": null
+  },
+  "outputSha256": null,
+  "provider": "meshy",
+  "providerSpecSha256": "c267143a603c34e540276824fef0fa340ed9ead9cec881660380fcf5ef488e88",
+  "providerSubmissionId": null,
+  "runtimeIntegrated": false,
+  "schemaVersion": "urai-generic-world-output-provenance-v1",
+  "sourceKitSha256": "61b6da1e97298350c9a9c7b5c9c564c1fb4f17821897abd3db42fa6f76806cc8",
+  "templateOnly": true,
+  "truthClassification": "GENERIC",
+  "visualAcceptance": false
+}

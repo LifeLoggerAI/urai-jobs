@@ -1,4 +1,8 @@
 import './life-movies-dimensions-smoke.mjs';
+import './life-movies-worker-authority-smoke.mjs';
+import './life-movies-output-generation-smoke.mjs';
+import './life-movies-ordinary-subtitles-smoke.mjs';
+import './life-movies-source-interval-smoke.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
@@ -56,22 +60,38 @@ assert.ok(bridge.includes("consentBlockRef(input.userId, consent.purpose)"), 'Sh
 assert.ok(bridge.includes("const consent: JobConsentContext = { purpose, policyVersion, decisionReceiptId }") && bridge.includes("    consent,"), 'Short Life Movie jobs must persist canonical consent context');
 assert.ok(bridge.includes("const fingerprintPayload = { tenantId: input.tenantId, userId: input.userId, consent, payload }"), 'Short Life Movie idempotency must bind consent identity');
 assert.ok(bridge.includes("action: z.enum(['status', 'cancel', 'playback', 'download', 'delete-output'])"), 'Studio bridge must expose bounded status/cancel/playback/download/delete semantics');
-const signedAccessStart = bridge.indexOf('async function signedMovieAccess(');
+const signedAccessStart = bridge.indexOf('async function privateMovieAccess(');
 const signedAccessEnd = bridge.indexOf('async function deleteBoundMovieOutput(', signedAccessStart);
-assert.ok(signedAccessStart >= 0 && signedAccessEnd > signedAccessStart, 'Studio bridge must expose bounded signed playback/download access');
+assert.ok(signedAccessStart >= 0 && signedAccessEnd > signedAccessStart, 'Studio bridge must expose authenticated playback/download descriptors');
 const signedAccess = bridge.slice(signedAccessStart, signedAccessEnd);
-assert.ok(signedAccess.indexOf('await loadBoundJob(tenantId, userId, jobId)') >= 0, 'Playback/download must validate owner/tenant/job boundary');
-assert.ok(signedAccess.indexOf('await loadBoundJob(tenantId, userId, jobId)') < signedAccess.indexOf('getSignedUrl('), 'Boundary validation must occur before any signed playback/download URL is issued');
-assert.ok(signedAccess.includes("String(job.status) !== 'SUCCESS'"), 'Playback must require a successful render');
-assert.ok(signedAccess.includes("isConsentContext(job.consent)"), 'Playback/download must reject legacy or malformed consent context');
-assert.ok(signedAccess.includes("consentBlockRef(userId, job.consent.purpose)"), 'Playback/download must recheck current consent before issuing access');
-assert.ok(signedAccess.indexOf("consentBlockRef(userId, job.consent.purpose)") < signedAccess.indexOf('getSignedUrl('), 'Consent revocation check must run before any signed playback/download URL');
+const authorityStart = bridge.indexOf('async function loadMoviePlaybackAuthority(');
+assert.ok(authorityStart >= 0 && authorityStart < signedAccessStart, 'Playback must retain its bounded authority helper');
+const authority = bridge.slice(authorityStart, signedAccessStart);
+for (const marker of [
+  'getFirestore().runTransaction(', 'transaction.get(jobDoc(jobId))',
+  "job.sourceSystem !== 'urai-studio'", 'job.tenantId !== tenantId', 'job.ownerUid !== userId', 'job.jobId !== jobId',
+  "(job.jobType || job.type) !== 'studio.render.video'", 'isConsentContext(job.consent)',
+  "job.consent.purpose !== 'life-movie.render'", "job.status !== 'SUCCESS'",
+  "['REVOKED', 'DELETED']", "['PENDING', 'COMPLETE']",
+  'transaction.get(consentBlockRef(userId, job.consent.purpose))', "data()?.active === true",
+  'consent: job.consent, payload: job.payload, output: job.output',
+  'expectedFingerprint !== fingerprint', 'life_movie_delivery_changed',
+]) assert.ok(authority.includes(marker), `Playback transactional authority must preserve ${marker}`);
+const initialAuthority = signedAccess.indexOf('await loadMoviePlaybackAuthority(tenantId, userId, jobId)');
+const finalAuthority = signedAccess.indexOf('await loadMoviePlaybackAuthority(tenantId, userId, jobId, authority.fingerprint)');
+assert.ok(initialAuthority >= 0 && initialAuthority < signedAccess.indexOf('await inspectPrivateMedia('), 'Owner and canonical consent snapshot must precede Storage observation');
+assert.ok(finalAuthority > signedAccess.indexOf('await inspectPrivateMedia(') && finalAuthority > signedAccess.indexOf('.download()'), 'All Storage awaits must precede final transactional authority validation');
+assert.ok(finalAuthority < signedAccess.indexOf('  return {'), 'Prepared media must not escape before final authority validation');
+assert.ok(signedAccess.includes('life-movies/${authority.projectId}/'), 'Playback must bind output to the exact project within its tenant');
+assert.ok(signedAccess.includes('Date.now() >= expiresAtMs'), 'Slow Storage observation must not deliver expired credentials');
 assert.ok(signedAccess.includes('Date.now() + 5 * 60 * 1000'), 'Playback access must be short-lived');
-assert.ok(signedAccess.includes('responseDisposition: disposition'), 'Playback/download disposition must remain explicit and caller-bounded');
-assert.ok(bridge.includes("signedMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'inline')"), 'Playback action must request inline private access');
+assert.ok(signedAccess.includes('jobId, disposition'), 'Playback/download disposition must remain explicit and caller-bounded');
+assert.ok(!bridge.includes('getSignedUrl('), 'Private media must not mint anonymous Storage credentials');
+assert.ok(bridge.includes('streamPrivateMedia('), 'Actual delivery must revalidate while streaming');
+assert.ok(bridge.includes("privateMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'inline')"), 'Playback action must request inline private access');
 assert.ok(bridge.includes('life_movie_subtitles_too_large'), 'Subtitle playback response must be byte bounded');
 assert.ok(bridge.includes('sanitizedOutput(job.output)'), 'Status projection must sanitize worker output');
-assert.ok(bridge.includes("signedMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'attachment')"), 'Download must use owner-bound short-lived access');
+assert.ok(bridge.includes("privateMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'attachment')"), 'Download must use owner-bound short-lived access');
 assert.ok(bridge.includes('deleteBoundMovieOutput'), 'Generated-output deletion must use an owner-bound path');
 assert.ok(bridge.includes('output_delete_boundary_mismatch'), 'Deletion must fail closed outside the Life Movies tenant prefix');
 assert.ok(bridge.includes('allowedLifeMovieOutputBuckets'), 'Playback/delete must enforce configured output bucket authority');
@@ -81,7 +101,9 @@ assert.ok(bridge.includes('retainedSourceMedia: true'), 'Deleting generated outp
 assert.ok(bridge.includes('output: FieldValue.delete()'), 'Deletion must scrub generated-output references from the job');
 assert.ok(bridge.includes('result: FieldValue.delete()'), 'Deletion must scrub duplicate generated-result references from the job');
 assert.ok(bridge.includes('outputDeletedAt: now'), 'Deletion must retain an audit timestamp');
-assert.ok(!bridge.includes('output: job.output'), 'Status must not expose raw internal GCS output refs');
+const statusProjection = bridge.slice(bridge.indexOf('function safeJobProjection('), bridge.indexOf('async function createLifeMovieJob('));
+assert.ok(statusProjection.includes('sanitizedOutput(job.output)'), 'Status must preserve its sanitized output projection');
+assert.ok(!statusProjection.includes('output: job.output'), 'Status must not expose raw internal GCS output refs');
 assert.ok(bridge.includes("sourceSystem: 'urai-studio'"), 'Studio bridge jobs must retain source-system authority');
 assert.ok(bridge.includes("'execution.leaseToken': FieldValue.delete()"), 'Studio bridge cancellation must revoke the active lease');
 assert.ok(functionsIndex.includes('studioLifeMovieBridge'), 'Life Movies bridge must be exported from Firebase Functions');

@@ -3,62 +3,58 @@ import type {
   Employer,
   JobApplication,
   MarketplaceJob,
-} from '../shared/types';
-import type { MarketplaceRepositoryBundle } from './repositories';
+} from '../shared/types.js';
+import type { MarketplaceRepositoryBundle } from './repositories.js';
 
-const notConnected = () => {
+const notConnected = (): never => {
   throw new Error('FIRESTORE_NOT_CONNECTED');
 };
 
 export const firestoreRepositories: MarketplaceRepositoryBundle = {
   jobs: {
     async listPublished(): Promise<MarketplaceJob[]> {
-      notConnected();
+      return notConnected();
     },
     async getPublished(
       _jobIdOrSlug: string,
     ): Promise<MarketplaceJob | null> {
-      notConnected();
+      return notConnected();
     },
     async create(job: MarketplaceJob): Promise<MarketplaceJob> {
-      notConnected();
-      return job;
+      return notConnected();
     },
   },
 
   profiles: {
     async get(_uid: string): Promise<CandidateProfile | null> {
-      notConnected();
+      return notConnected();
     },
     async upsert(profile: CandidateProfile): Promise<CandidateProfile> {
-      notConnected();
-      return profile;
+      return notConnected();
     },
   },
 
   applications: {
     async create(application: JobApplication): Promise<JobApplication> {
-      notConnected();
-      return application;
+      return notConnected();
     },
     async listByCandidate(_uid: string): Promise<JobApplication[]> {
-      notConnected();
+      return notConnected();
     },
     async listByEmployer(_employerId: string): Promise<JobApplication[]> {
-      notConnected();
+      return notConnected();
     },
   },
 
   employers: {
     async create(employer: Employer): Promise<Employer> {
-      notConnected();
-      return employer;
+      return notConnected();
     },
     async get(_employerId: string): Promise<Employer | null> {
-      notConnected();
+      return notConnected();
     },
     async listForUser(_uid: string): Promise<Employer[]> {
-      notConnected();
+      return notConnected();
     },
   },
 };

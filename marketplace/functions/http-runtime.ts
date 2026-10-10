@@ -1,5 +1,5 @@
-import { marketplaceRoutes } from './http-routes';
-import { initializeMarketplaceFirebaseAdmin } from './firebase-admin';
+import { marketplaceRoutes } from './http-routes.js';
+import { initializeMarketplaceFirebaseAdmin } from './firebase-admin.js';
 
 export const createMarketplaceRuntime = () => {
   const firebase = initializeMarketplaceFirebaseAdmin();

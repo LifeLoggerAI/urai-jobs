@@ -169,6 +169,7 @@ prepare_worker_build_source() {
   local canonical_dir="workers/$worker"
   local manifest_path="$WORKER_BUILD_SOURCE_ROOT/$worker-source-manifest.json"
   local archive_path="$WORKER_BUILD_SOURCE_ROOT/$worker-$GITHUB_SHA.tgz"
+  local build_dir="$source_dir"
 
   case "$worker" in
     narrator-worker|asset-worker|studio-worker|private-source-worker|captured-reality-worker) ;;
@@ -180,7 +181,12 @@ prepare_worker_build_source() {
   }
   [ -d "$source_dir" ] || { echo "[FAIL] Missing worker source directory: $source_dir" >&2; return 1; }
 
-  SOURCE_DIR="$source_dir" WORKER="$worker" SOURCE_SHA="$GITHUB_SHA" MANIFEST_PATH="$manifest_path" node <<'NODE'
+  if [ "$worker" = "narrator-worker" ]; then
+    build_dir="$WORKER_BUILD_SOURCE_ROOT/narrator-worker-context"
+    node scripts/prepare-narrator-build-context.mjs --source-sha "$GITHUB_SHA" --output "$build_dir" >/dev/null
+  fi
+
+  SOURCE_DIR="$build_dir" WORKER="$worker" SOURCE_SHA="$GITHUB_SHA" MANIFEST_PATH="$manifest_path" node <<'NODE'
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -217,7 +223,7 @@ fs.writeFileSync(process.env.MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)
 NODE
 
   tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner --format=ustar \
-    -cf - -C "$source_dir" . | gzip -n > "$archive_path"
+    -cf - -C "$build_dir" . | gzip -n > "$archive_path"
   [ -s "$archive_path" ] || { echo "[FAIL] Worker build source archive is empty: $archive_path" >&2; return 1; }
 
   WORKER="$worker" SOURCE_DIR="$canonical_dir" SOURCE_SHA="$GITHUB_SHA" MANIFEST_PATH="$manifest_path" \
