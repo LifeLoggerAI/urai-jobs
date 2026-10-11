@@ -51,10 +51,9 @@ export const retryExpiredLeases = onSchedule('every 1 minutes', async () => {
       const outcome = await db.runTransaction(async (transaction) => {
         const jobRef = jobDoc(jobId);
         const queueRef = jobQueueEntryDoc(jobId);
-        const [queueSnapshot, jobSnapshot] = await Promise.all([
-          transaction.get(queueRef),
-          transaction.get(jobRef),
-        ]);
+        // Acquire shared document locks in the same order as every queue transaction.
+        const jobSnapshot = await transaction.get(jobRef);
+        const queueSnapshot = await transaction.get(queueRef);
 
         if (!queueSnapshot.exists) return 'missing-queue' as const;
         const queueEntry = queueSnapshot.data() as JobQueueEntry;

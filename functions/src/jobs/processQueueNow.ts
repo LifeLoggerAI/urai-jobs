@@ -88,10 +88,9 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
       requireJobOperator(await currentJobActor(request, transaction));
       const queueRef = jobQueueEntryDoc(jobId);
       const masterJobRef = jobDoc(jobId);
-      const [queueDoc, masterJobDoc] = await Promise.all([
-        transaction.get(queueRef),
-        transaction.get(masterJobRef),
-      ]);
+      // Acquire shared document locks in the same order as every queue transaction.
+      const masterJobDoc = await transaction.get(masterJobRef);
+      const queueDoc = await transaction.get(queueRef);
       requireJobOperator(await currentJobActor(request, transaction));
 
       if (!queueDoc.exists || queueDoc.data()?.status !== 'PENDING') {

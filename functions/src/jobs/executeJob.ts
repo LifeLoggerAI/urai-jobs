@@ -276,9 +276,9 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
   const errorMessage = error instanceof Error ? error.message : String(error);
 
   const outcome = await db.runTransaction<FailureOutcome>(async (transaction) => {
-    const [snapshot, queueSnapshot] = await Promise.all([
-      transaction.get(jobRef), transaction.get(queueRef),
-    ]);
+    // Acquire shared document locks in the same order as every queue transaction.
+    const snapshot = await transaction.get(jobRef);
+    const queueSnapshot = await transaction.get(queueRef);
     if (!snapshot.exists) return 'ignored';
 
     const current = snapshot.data() as Job;
@@ -413,9 +413,9 @@ export const executeJob = onMessagePublished({
   const queueRef = jobQueueEntryDoc(jobId);
 
   const prepared = await db.runTransaction(async (transaction) => {
-    const [jobSnapshot, queueSnapshot] = await Promise.all([
-      transaction.get(jobRef), transaction.get(queueRef),
-    ]);
+    // Acquire shared document locks in the same order as every queue transaction.
+    const jobSnapshot = await transaction.get(jobRef);
+    const queueSnapshot = await transaction.get(queueRef);
     if (!jobSnapshot.exists) {
       return { action: 'ignore' as const, reason: 'missing-job' };
     }
@@ -515,9 +515,9 @@ export const executeJob = onMessagePublished({
   const target = getWorkerTarget(jobType);
 
   const currentDispatchAuthority = () => db.runTransaction(async (transaction) => {
-    const [snapshot, queueSnapshot] = await Promise.all([
-      transaction.get(jobRef), transaction.get(queueRef),
-    ]);
+    // Acquire shared document locks in the same order as every queue transaction.
+    const snapshot = await transaction.get(jobRef);
+    const queueSnapshot = await transaction.get(queueRef);
     if (!snapshot.exists) return false;
     const current = snapshot.data() as Job;
     const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
@@ -568,9 +568,9 @@ export const executeJob = onMessagePublished({
         if (blockedPurpose) {
           const now = FieldValue.serverTimestamp();
           await db.runTransaction(async (transaction) => {
-            const [currentSnapshot, queueSnapshot] = await Promise.all([
-              transaction.get(jobRef), transaction.get(queueRef),
-            ]);
+            // Acquire shared document locks in the same order as every queue transaction.
+            const currentSnapshot = await transaction.get(jobRef);
+            const queueSnapshot = await transaction.get(queueRef);
             if (!currentSnapshot.exists) return;
             const current = currentSnapshot.data() as Job;
             const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
@@ -669,9 +669,9 @@ export const executeJob = onMessagePublished({
     }
 
     const finalized = await db.runTransaction(async (transaction) => {
-      const [currentSnapshot, queueSnapshot] = await Promise.all([
-        transaction.get(jobRef), transaction.get(queueRef),
-      ]);
+      // Acquire shared document locks in the same order as every queue transaction.
+      const currentSnapshot = await transaction.get(jobRef);
+      const queueSnapshot = await transaction.get(queueRef);
       if (!currentSnapshot.exists) return false;
 
       const current = currentSnapshot.data() as Job;
