@@ -44,7 +44,8 @@ for (const marker of [
   "outcome: 'terminal-job'",
   "outcome: 'master-not-pending'",
 ]) assert.ok(manual.includes(marker), `processQueueNow missing ${marker}`);
-assert.match(manual, /const \[queueDoc, masterJobDoc\] = await Promise\.all\(\[[\s\S]*transaction\.get\(queueRef\),[\s\S]*transaction\.get\(masterJobRef\),[\s\S]*\]\);/);
+assert.match(manual, /const masterJobDoc = await transaction\.get\(masterJobRef\);\s*const queueDoc = await transaction\.get\(queueRef\);/, 'manual dispatch must acquire master job before queue');
+assert.doesNotMatch(manual, /const \[queueDoc, masterJobDoc\] = await Promise\.all/, 'manual dispatch may not reacquire parallel queue/master locks');
 assert.match(manual, /transaction\.update\(queueRef, leaseUpdate\);\s*transaction\.update\(masterJobRef, leaseUpdate\);/);
 
 for (const marker of [
@@ -69,7 +70,8 @@ for (const marker of [
   'queue.lease?.leaseToken !== expectedLeaseToken',
   "'execution.leaseToken': FieldValue.delete()",
 ]) assert.ok(reconcile.includes(marker), `systemReconcile missing ${marker}`);
-assert.match(reconcile, /const \[jobSnapshot, queueSnapshot\] = await Promise\.all\(\[[\s\S]*transaction\.get\(jobRef\),[\s\S]*transaction\.get\(queueRef\),[\s\S]*\]\);/);
+assert.match(reconcile, /const jobSnapshot = await transaction\.get\(jobRef\);\s*const queueSnapshot = await transaction\.get\(queueRef\);/, 'RUNNING recovery must acquire master job before queue');
+assert.doesNotMatch(reconcile, /const \[jobSnapshot, queueSnapshot\] = await Promise\.all/, 'RUNNING recovery may not reacquire parallel job/queue locks');
 
 for (const marker of [
   'activeAsyncCallbackForLease',
