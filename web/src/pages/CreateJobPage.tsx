@@ -103,16 +103,16 @@ export function CreateJobPage() {
           </label>
           <label>
             Payload JSON
-            <textarea rows={14} value={payload} onChange={(event) => setPayload(event.target.value)} />
+            <textarea rows={14} aria-invalid={!payloadIsValid} aria-describedby={!payloadIsValid ? "payload-json-error" : undefined} value={payload} onChange={(event) => setPayload(event.target.value)} />
           </label>
           <div className="form-actions">
             <button type="submit" disabled={status === "loading" || !payloadIsValid}>{status === "loading" ? "Creating..." : "Create Job"}</button>
-            {!payloadIsValid && <span className="form-hint danger-text">Payload JSON is invalid.</span>}
+            {!payloadIsValid && <span id="payload-json-error" className="form-hint danger-text" role="alert">Payload JSON is invalid.</span>}
           </div>
         </form>
 
         {status !== "idle" && (
-          <div className={`notice ${status}`}>
+          <div className={`notice ${status}`} role={status === "error" ? "alert" : "status"}>
             <strong>{status === "success" ? "SUCCESS" : status.toUpperCase()}</strong>
             <p>{message}</p>
             {createdJobId && (
