@@ -6,7 +6,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 
 // Real Auth/Firestore/Functions/PubSub emulators, manually delivered scheduler
-// messages, and an explicitly synthetic authenticated HTTP worker. No provider,
+// HTTP requests (v2) and topic messages (v1), plus a synthetic authenticated HTTP worker. No provider,
 // private source, Cloud Scheduler calendar, deployed worker or cloud proof.
 const project = process.env.GCLOUD_PROJECT;
 assert.equal(process.versions.node.split('.')[0], '22', 'The adopted Functions runtime requires Node 22.');
@@ -80,7 +80,20 @@ const topicPath = name => `/v1/projects/${project}/topics/${name}`;
 async function publish(name, json) {
   return request(pubsubOrigin, `${topicPath(name)}:publish`, 'POST', { messages: [{ data: Buffer.from(JSON.stringify(json)).toString('base64') }] });
 }
-async function schedule(name) { return publish(`firebase-schedule-${name}`, {}); }
+async function schedule(name) {
+  // The adopted CLI registers v2 schedules as topics, but its Pub/Sub delivery
+  // only supports event/cloudevent signatures. Invoke their actual HTTP wrapper,
+  // as v2 Cloud Scheduler does, without importing handlers or changing the CLI.
+  if (name === 'systemReconcile') return publish(`firebase-schedule-${name}`, {});
+  assert.ok(['processQueueTick', 'retryExpiredLeases', 'publishJobTerminalEvents'].includes(name));
+  const response = await fetch(`${functionsOrigin}/${project}/us-central1/${name}`, {
+    method: 'POST', headers: {
+      'X-CloudScheduler-JobName': `projects/${project}/locations/us-central1/jobs/synthetic-${name}`,
+      'X-CloudScheduler-ScheduleTime': new Date().toISOString(),
+    }, signal: AbortSignal.timeout(30_000),
+  });
+  assert.equal(response.status, 200, `${name} scheduler HTTP delivery must succeed.`);
+}
 const jobRef = id => db.doc(`jobs/${id}`);
 const queueRef = id => db.doc(`jobQueue/${id}`);
 const readJob = async id => (await jobRef(id).get()).data();
@@ -182,7 +195,8 @@ try {
     await request(pubsubOrigin, topicPath(`firebase-schedule-${name}`), 'GET');
   }
   await request(pubsubOrigin, topicPath('job-execution'), 'GET');
-  pass('All five previously omitted background exports have real emulator Pub/Sub topics.');
+  pass('All five previously omitted background exports register their real emulator topics.');
+  console.log('[SCOPE] Scheduler deliveries are manual v2 HTTP requests and v1 Pub/Sub messages; no cloud calendar or IAM proof.');
   await request(pubsubOrigin, topicPath(terminalTopic), 'PUT', {});
   await request(pubsubOrigin, `/v1/${subscription}`, 'PUT', { topic: `projects/${project}/topics/${terminalTopic}`, ackDeadlineSeconds: 10 });
   const [actor, other] = await Promise.all([user('owner'), user('second-owner')]);
@@ -224,7 +238,7 @@ try {
   await waitCleanup(success.id);
   const successOutbox = await outbox(success.id);
   assert.equal(successOutbox.data().payload.status, 'SUCCESS');
-  pass('Callable → scheduler topic → queue → Pub/Sub → HTTP transport → durable result → cleanup executes.');
+  pass('Callable → scheduler HTTP wrapper → queue → Pub/Sub → HTTP transport → durable result → cleanup executes.');
   await publish('job-execution', { jobId: success.id, leaseToken: calls.find(call => call.jobId === success.id).leaseToken });
   await waitLog(success.id, log => log.metadata?.reason === 'terminal');
   assert.equal(calls.filter(call => call.jobId === success.id).length, 1);
@@ -373,7 +387,7 @@ try {
   assert.equal((await successOutbox.ref.get()).data().attemptCount, 8);
   pass('Actual terminal publication failure at the admitted eighth attempt becomes DEAD.');
 
-  console.log(`[RECEIPT] ${JSON.stringify({ project, sourceSha: process.env.URAI_SOURCE_SHA || null, firestoreOrigin, authOrigin, pubsubOrigin, functionsOrigin, passes, jobs: receipts, workerTransportCalls: calls.length, proof: 'real-emulator-background-lifecycle', worker: 'synthetic-authenticated-loopback', scheduler: 'manually-published-emulator-schedule-topics', providerCalls: 0, privateSources: 0, deployed: false, calendarDelivery: false, downstreamConsumerAcceptance: false })}`);
+  console.log(`[RECEIPT] ${JSON.stringify({ project, sourceSha: process.env.URAI_SOURCE_SHA || null, firestoreOrigin, authOrigin, pubsubOrigin, functionsOrigin, passes, jobs: receipts, workerTransportCalls: calls.length, proof: 'real-emulator-background-lifecycle', worker: 'synthetic-authenticated-loopback', scheduler: 'manual-v2-http-wrapper-and-v1-pubsub', providerCalls: 0, privateSources: 0, deployed: false, calendarDelivery: false, downstreamConsumerAcceptance: false })}`);
   console.log(`[RESULT] JOBS_BACKGROUND_LIFECYCLE_EMULATOR: ${passes} PASS / 0 FAIL`);
 } finally {
   for (const id of held.keys()) release(id);

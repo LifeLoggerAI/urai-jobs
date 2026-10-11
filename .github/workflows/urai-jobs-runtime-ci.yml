@@ -328,7 +328,7 @@ jobs:
           trap cleanup EXIT
           printf 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT=%s\nURAI_JOBS_PRIVACY_EVENT_TOKEN=%s\nURAI_ENV=local\nURAI_JOBS_ALLOW_INLINE_FALLBACK=false\nNARRATOR_WORKER_URL=%s\n' "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" "$URAI_JOBS_PRIVACY_EVENT_TOKEN" "$NARRATOR_WORKER_URL" > functions/.env.demo-urai-jobs
           printf 'URAI_JOBS_WORKER_TOKEN=%s\nTINYFISH_API_KEY=synthetic-never-used\n' "$URAI_JOBS_WORKER_TOKEN" > functions/.secret.local
-          timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" --project demo-urai-jobs emulators:exec --only firestore,auth,functions,pubsub "node scripts/jobs-background-lifecycle-emulator.mjs" > urai-jobs-background-lifecycle-emulator.log 2>&1
+          timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" --project demo-urai-jobs --debug emulators:exec --only firestore,auth,functions,pubsub "node scripts/jobs-background-lifecycle-emulator.mjs" > urai-jobs-background-lifecycle-emulator.log 2>&1
           status=$?
           cleanup
           trap - EXIT
@@ -343,6 +343,7 @@ jobs:
           name: urai-jobs-background-lifecycle-${{ env.TARGET_SHA }}-${{ github.run_id }}
           path: |
             urai-jobs-background-lifecycle-emulator.log
+            firebase-debug.log
             firestore-debug.log
             pubsub-debug.log
           if-no-files-found: error
