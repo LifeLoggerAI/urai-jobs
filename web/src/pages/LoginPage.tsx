@@ -55,8 +55,8 @@ export function LoginPage() {
             </div>
             <pre>{JSON.stringify(claims, null, 2)}</pre>
             <button type="button" onClick={() => void logout()}>Sign out</button>
-            {hasJobCreateAccess(user, claims) && <a href="/create">Create job</a>}
-            {hasOperatorAccess(claims) && <a href="/admin">Open admin dashboard</a>}
+            {hasJobCreateAccess(user, claims) && <a className="secondary-button" href="/create">Create job</a>}
+            {hasOperatorAccess(claims) && <a className="secondary-button" href="/admin">Open admin dashboard</a>}
           </div>
         ) : (
           <form onSubmit={login} className="form-stack">
