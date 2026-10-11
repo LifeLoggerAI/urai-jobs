@@ -53,7 +53,16 @@ export function LoginPage() {
               <strong>Signed in</strong>
               <p>{user.email}</p>
             </div>
-            <pre>{JSON.stringify(claims, null, 2)}</pre>
+            {claims && (
+              <div className="notice" role="status">
+                <strong>Verified account access</strong>
+                <p>{hasOperatorAccess(claims)
+                  ? "You can review runtime activity and submit approved work."
+                  : hasJobCreateAccess(user, claims)
+                    ? "You can submit approved work."
+                    : "This account does not have operator permissions."}</p>
+              </div>
+            )}
             <button type="button" onClick={() => void logout()}>Sign out</button>
             {hasJobCreateAccess(user, claims) && <a className="secondary-button" href="/create">Create job</a>}
             {hasOperatorAccess(claims) && <a className="secondary-button" href="/admin">Open admin dashboard</a>}
