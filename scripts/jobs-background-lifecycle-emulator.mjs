@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
+import { readFileSync } from 'node:fs';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
@@ -86,7 +87,10 @@ async function schedule(name) {
   // as v2 Cloud Scheduler does, without importing handlers or changing the CLI.
   if (name === 'systemReconcile') return publish(`firebase-schedule-${name}`, {});
   assert.ok(['processQueueTick', 'retryExpiredLeases', 'publishJobTerminalEvents'].includes(name));
-  const response = await fetch(`${functionsOrigin}/${project}/us-central1/${name}`, {
+  const registration = readFileSync('firebase-debug.log', 'utf8');
+  const bindings = [...registration.matchAll(new RegExp(`addTrigger\\(firebase-schedule-${name}, (us-central1-${name}-[0-9]+), http\\)`, 'g'))];
+  assert.equal(bindings.length, 1, `${name} requires one actual registered HTTP scheduler binding.`);
+  const response = await fetch(`${functionsOrigin}/functions/projects/${project}/triggers/${bindings[0][1]}`, {
     method: 'POST', headers: {
       'X-CloudScheduler-JobName': `projects/${project}/locations/us-central1/jobs/synthetic-${name}`,
       'X-CloudScheduler-ScheduleTime': new Date().toISOString(),
@@ -389,6 +393,13 @@ try {
 
   console.log(`[RECEIPT] ${JSON.stringify({ project, sourceSha: process.env.URAI_SOURCE_SHA || null, firestoreOrigin, authOrigin, pubsubOrigin, functionsOrigin, passes, jobs: receipts, workerTransportCalls: calls.length, proof: 'real-emulator-background-lifecycle', worker: 'synthetic-authenticated-loopback', scheduler: 'manual-v2-http-wrapper-and-v1-pubsub', providerCalls: 0, privateSources: 0, deployed: false, calendarDelivery: false, downstreamConsumerAcceptance: false })}`);
   console.log(`[RESULT] JOBS_BACKGROUND_LIFECYCLE_EMULATOR: ${passes} PASS / 0 FAIL`);
+} catch (error) {
+  const states = await Promise.all(receipts.map(async receipt => {
+    const [job, queue] = await Promise.all([readJob(receipt.jobId), readQueue(receipt.jobId)]);
+    return { ...receipt, status: job?.status, attemptCount: job?.execution?.attemptCount, retryCount: job?.retryCount, queueStatus: queue?.status, workerCalls: calls.filter(call => call.jobId === receipt.jobId).length };
+  }));
+  console.error(`[FAILURE_RECEIPT] ${JSON.stringify({ sourceSha: process.env.URAI_SOURCE_SHA || null, passes, error: error.message, jobs: states, calendarDelivery: false, deployed: false })}`);
+  throw error;
 } finally {
   for (const id of held.keys()) release(id);
   worker.closeAllConnections();
