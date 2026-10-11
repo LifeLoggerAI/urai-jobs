@@ -320,7 +320,6 @@ jobs:
           URAI_JOBS_WORKER_TOKEN: jobs-background-emulator-only-token
           URAI_SOURCE_SHA: ${{ env.TARGET_SHA }}
           NO_PROXY: 127.0.0.1,localhost,::1
-          no_proxy: 127.0.0.1,localhost,::1
         run: |
           set +e
           cleanup() {
