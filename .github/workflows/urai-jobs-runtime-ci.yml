@@ -256,3 +256,99 @@ jobs:
       - name: Enforce callable E2E result
         shell: bash
         run: test "${{ steps.emulator.outputs.status }}" = "0"
+
+  background-emulator-e2e:
+    name: Background lifecycle emulator E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact reviewed head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          checkout_home="$RUNNER_TEMP/urai-jobs-checkout-home"
+          rm -rf -- "$checkout_home"
+          mkdir -m 700 -- "$checkout_home"
+          export HOME="$checkout_home"
+          gh auth setup-git >/dev/null
+          find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+          git init .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY"
+          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin "$TARGET_SHA"
+          git checkout --detach --force "$TARGET_SHA"
+          git remote set-url origin "https://github.com/$GITHUB_REPOSITORY"
+          rm -rf -- "$checkout_home"
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 8.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Setup Java 21 for Firebase emulators
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install exact dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove install preserved exact source
+        shell: bash
+        run: test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Build functions and shared types
+        run: pnpm --filter @urai-jobs/shared-types build && pnpm --filter urai-jobs-functions build
+
+      - name: Capture actual background lifecycle emulator result
+        id: background
+        shell: bash
+        env:
+          URAI_ENV: local
+          URAI_JOBS_ALLOW_INLINE_FALLBACK: 'false'
+          NARRATOR_WORKER_URL: http://127.0.0.1:18170
+          URAI_JOBS_WORKER_TOKEN: jobs-background-emulator-only-token
+          URAI_SOURCE_SHA: ${{ env.TARGET_SHA }}
+          NO_PROXY: 127.0.0.1,localhost,::1
+        run: |
+          set +e
+          cleanup() {
+            node -e 'const fs=require("node:fs");for(const file of ["functions/.env.demo-urai-jobs","functions/.secret.local"])if(fs.existsSync(file))fs.unlinkSync(file);'
+          }
+          trap cleanup EXIT
+          printf 'URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT=%s\nURAI_JOBS_PRIVACY_EVENT_TOKEN=%s\nURAI_ENV=local\nURAI_JOBS_ALLOW_INLINE_FALLBACK=false\nNARRATOR_WORKER_URL=%s\n' "$URAI_JOBS_FUNCTIONS_RUNTIME_SERVICE_ACCOUNT" "$URAI_JOBS_PRIVACY_EVENT_TOKEN" "$NARRATOR_WORKER_URL" > functions/.env.demo-urai-jobs
+          printf 'URAI_JOBS_WORKER_TOKEN=%s\nTINYFISH_API_KEY=synthetic-never-used\n' "$URAI_JOBS_WORKER_TOKEN" > functions/.secret.local
+          timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" --project demo-urai-jobs --debug emulators:exec --only firestore,auth,functions,pubsub "node scripts/jobs-background-lifecycle-emulator.mjs" > urai-jobs-background-lifecycle-emulator.log 2>&1
+          status=$?
+          cleanup
+          trap - EXIT
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          test -z "$(git status --porcelain --untracked-files=all)" || exit 1
+          exit 0
+
+      - name: Retain exact-head background lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: urai-jobs-background-lifecycle-${{ env.TARGET_SHA }}-${{ github.run_id }}
+          path: |
+            urai-jobs-background-lifecycle-emulator.log
+            firebase-debug.log
+            firestore-debug.log
+            pubsub-debug.log
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Enforce background lifecycle E2E result
+        shell: bash
+        run: test "${{ steps.background.outputs.status }}" = "0"
