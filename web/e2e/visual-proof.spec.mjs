@@ -20,6 +20,8 @@ const routes = [
 const viewports = [
   { id: 'desktop-1440', width: 1440, height: 1000 },
   { id: 'mobile-390', width: 390, height: 844, isMobile: true, hasTouch: true },
+  { id: 'narrow-mobile-320', width: 320, height: 740, isMobile: true, hasTouch: true },
+  { id: 'mobile-reduced-390', width: 390, height: 844, isMobile: true, hasTouch: true, reducedMotion: 'reduce' },
   { id: 'desktop-reduced-1440', width: 1440, height: 1000, reducedMotion: 'reduce' },
   { id: 'desktop-forced-colors-1440', width: 1440, height: 1000, forcedColors: 'active' },
 ];

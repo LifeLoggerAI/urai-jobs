@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { auth } from "../lib/firebase";
+import { observeCurrentAuth } from "../lib/currentAuth";
+import { hasJobCreateAccess, hasOperatorAccess } from "../lib/authz";
 
 export function LoginPage() {
   const [email, setEmail] = useState("adam@urailabs.com");
@@ -10,14 +12,10 @@ export function LoginPage() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    return onAuthStateChanged(auth, async (nextUser) => {
-      setUser(nextUser);
-      if (nextUser) {
-        const token = await nextUser.getIdTokenResult(true);
-        setClaims(token.claims);
-      } else {
-        setClaims(null);
-      }
+    return observeCurrentAuth(auth, (state) => {
+      setUser(state.user);
+      setClaims(state.claims);
+      setMessage(state.error || "");
     });
   }, []);
 
@@ -27,17 +25,19 @@ export function LoginPage() {
 
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
-      const token = await result.user.getIdTokenResult(true);
-      setClaims(token.claims);
-      setMessage("Signed in.");
+      if (auth.currentUser?.uid === result.user.uid) setMessage("Signed in.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Sign in failed.");
     }
   }
 
   async function logout() {
-    await signOut(auth);
-    setMessage("Signed out.");
+    try {
+      await signOut(auth);
+      setMessage("Signed out.");
+    } catch {
+      setMessage("Sign out failed. Please try again.");
+    }
   }
 
   return (
@@ -55,8 +55,8 @@ export function LoginPage() {
             </div>
             <pre>{JSON.stringify(claims, null, 2)}</pre>
             <button type="button" onClick={() => void logout()}>Sign out</button>
-            <a href="/create">Create production smoke job</a>
-            <a href="/admin">Open admin dashboard</a>
+            {hasJobCreateAccess(user, claims) && <a href="/create">Create production smoke job</a>}
+            {hasOperatorAccess(claims) && <a href="/admin">Open admin dashboard</a>}
           </div>
         ) : (
           <form onSubmit={login} className="form-stack">
@@ -72,7 +72,7 @@ export function LoginPage() {
           </form>
         )}
 
-        {message && <div className="notice"><p>{message}</p></div>}
+        {message && <div className="notice" role="status"><p>{message}</p></div>}
       </section>
     </main>
   );
