@@ -5,7 +5,7 @@ import { observeCurrentAuth } from "../lib/currentAuth";
 import { hasJobCreateAccess, hasOperatorAccess } from "../lib/authz";
 
 export function LoginPage() {
-  const [email, setEmail] = useState("adam@urailabs.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [user, setUser] = useState<User | null>(null);
   const [claims, setClaims] = useState<Record<string, unknown> | null>(null);
@@ -43,9 +43,9 @@ export function LoginPage() {
   return (
     <main className="page-shell">
       <section className="panel">
-        <div className="eyebrow">Live Auth</div>
+        <div className="eyebrow">Operator access</div>
         <h1>Admin sign in</h1>
-        <p>Use the seeded admin account to run production job smoke tests.</p>
+        <p>Sign in with your authorized account to review runtime activity and submit approved work.</p>
 
         {user ? (
           <div className="form-stack">
@@ -55,18 +55,18 @@ export function LoginPage() {
             </div>
             <pre>{JSON.stringify(claims, null, 2)}</pre>
             <button type="button" onClick={() => void logout()}>Sign out</button>
-            {hasJobCreateAccess(user, claims) && <a href="/create">Create production smoke job</a>}
+            {hasJobCreateAccess(user, claims) && <a href="/create">Create job</a>}
             {hasOperatorAccess(claims) && <a href="/admin">Open admin dashboard</a>}
           </div>
         ) : (
           <form onSubmit={login} className="form-stack">
             <label>
               Email
-              <input value={email} onChange={(event) => setEmail(event.target.value)} />
+              <input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} />
             </label>
             <label>
               Password
-              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+              <input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
             </label>
             <button type="submit">Sign in</button>
           </form>
