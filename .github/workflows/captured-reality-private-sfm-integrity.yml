@@ -1,0 +1,29 @@
+name: Captured Reality Private SfM Source Integrity
+
+on:
+  pull_request:
+    branches:
+      - repair/life-movie-convergence-20261007
+      - main
+    paths:
+      - scripts/captured-reality-sfm-integrity-audit.py
+      - scripts/captured-reality-sfm-integrity-audit.test.py
+      - .github/workflows/captured-reality-private-sfm-integrity.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verified-source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact proposed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Provision isolated image decoder
+        run: python3 -m pip install --no-cache-dir 'Pillow==12.0.0'
+      - name: Run synthetic real-handler audit regressions (no private bytes)
+        run: python3 scripts/captured-reality-sfm-integrity-audit.test.py
