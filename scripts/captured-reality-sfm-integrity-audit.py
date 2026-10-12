@@ -94,6 +94,8 @@ def verify_mask_derivative(source_path, mask_path, derivative_path):
             source, mask, actual = src.convert("RGB"), raw_mask.convert("L"), out.convert("RGB")
             mn, mx = mask.getextrema()
             require(mn == 0 and mx == 255, "MASK_NOT_CONSERVATIVE")
+            counts = mask.histogram()
+            require(sum(counts[1:255]) == 0, "MASK_NOT_BINARY")
             expected = Image.new("RGB", source.size, "black")
             expected.paste(source, mask=mask)
             require(ImageChops.difference(expected, actual).getbbox() is None, "MASK_PIXEL_DERIVATION_INVALID")
@@ -187,17 +189,23 @@ def model_points(p):
     off = 8
     errors = []
     track_images = set()
+    point_ids = set()
     for _ in range(count):
         require(off + 51 <= len(data), "POINT_MODEL_TRUNCATED")
         row = struct.unpack_from("<QdddBBBdQ", data, off)
         off += 51
         err, track = row[7], row[8]
+        require(row[0] > 0 and row[0] not in point_ids, "POINT_IDENTITY_INVALID")
+        point_ids.add(row[0])
         require(all(math.isfinite(x) for x in row[1:4])
                 and math.isfinite(err) and err >= 0 and 2 <= track <= 3000
                 and off + track*8 <= len(data), "POINT_MODEL_INVALID")
+        images_for_point = set()
         for index in range(track):
             image_id, point2d_id = struct.unpack_from("<ii", data, off + index*8)
-            require(image_id > 0 and point2d_id >= 0, "POINT_TRACK_INVALID")
+            require(image_id > 0 and point2d_id >= 0 and image_id not in images_for_point,
+                    "POINT_TRACK_INVALID")
+            images_for_point.add(image_id)
             track_images.add(image_id)
         off += track * 8
         errors.append(err)
@@ -226,8 +234,12 @@ def audit(root):
     by_name = {}
     seen_fixes = set()
     split_times = {"candidate": [], "holdout": []}
-    source_part_names = {p.get("name") for p in manifest.get("source_parts", []) if isinstance(p,dict)}
-    require(bool(source_part_names), "SOURCE_PART_MANIFEST_MISSING")
+    parts = manifest.get("source_parts")
+    require(isinstance(parts, list) and 1 <= len(parts) <= 3000
+            and all(isinstance(p, dict) and isinstance(p.get("name"), str) and p["name"] for p in parts),
+            "SOURCE_PART_MANIFEST_INVALID")
+    source_part_names = {p["name"] for p in parts}
+    require(len(source_part_names) == len(parts), "SOURCE_PART_MANIFEST_INVALID")
     candidates = 0
     holdouts = 0
     for f in frames:
@@ -239,7 +251,7 @@ def audit(root):
                 "SOURCE_FRAME_IDENTITY_INVALID")
         by_name[name] = f
         seconds = f.get("source_timestamp_seconds")
-        require(isinstance(seconds,(int,float)) and math.isfinite(seconds) and 0 <= seconds <= 86400
+        require(type(seconds) in (int, float) and math.isfinite(seconds) and 0 <= seconds <= 86400
                 and f.get("source_part") in source_part_names, "SOURCE_TIME_PROVENANCE_INVALID")
         split_times[f["split"]].append((f["source_part"],float(seconds)))
         for field, key in (("frame", "frame_sha256"), ("mask", "mask_sha256")):
@@ -297,7 +309,9 @@ def audit(root):
     distances = [abs(candidate_t - holdout_t) for source_a,candidate_t in split_times["candidate"]
                  for source_b,holdout_t in split_times["holdout"] if source_a == source_b]
     min_holdout_sep = min(distances) if distances else None
-    temporal_isolation = min_holdout_sep is None or min_holdout_sep >= 1.0
+    # Separate part *names* cannot prove separate original captures or sessions.
+    # When no same-part comparison exists, provenance is insufficient: fail closed.
+    temporal_isolation = min_holdout_sep is not None and min_holdout_sep >= 1.0
     return {"schemaVersion": "urai-private-sfm-integrity-audit-v2",
             "classification": "REAL_SOURCE_SPARSE_CAMERA_SOLVE_ONLY",
             "technicalInputIntegrityVerified": True,
