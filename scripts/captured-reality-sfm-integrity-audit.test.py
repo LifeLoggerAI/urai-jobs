@@ -185,6 +185,39 @@ class PrivateCameraSolveTests(unittest.TestCase):
         self.update('camera-solve-pycolmap-4.2.0/camera-solve-quality.json',alter)
         self.denied('METRIC_SCALE_MISREPRESENTED')
 
+    def test_nonbinary_privacy_mask_denied_even_with_rehashed_derivative(self):
+        ref='masks/candidate_000.png'
+        new_mask=png('L',[255,128])
+        fresh=save(self.root,ref,new_mask)
+        self.update('frame-manifest.json',lambda m:m['frames'][0].update({'mask_sha256':fresh}))
+        self.update('sfm-input-receipt.json',lambda x:x.update({
+            'input_manifest_sha256':hashlib.sha256((self.root/'frame-manifest.json').read_bytes()).hexdigest()}))
+        self.denied('MASK_NOT_BINARY')
+
+    def test_different_source_part_labels_do_not_claim_independent_holdout(self):
+        self.update('frame-manifest.json',lambda x:(
+            x['source_parts'].append({'name':'synthetic-chunk-02.mp4'}),
+            x['frames'][-1].update({'source_part':'synthetic-chunk-02.mp4'})))
+        self.update('sfm-input-receipt.json',lambda x:x.update({
+            'input_manifest_sha256':hashlib.sha256((self.root/'frame-manifest.json').read_bytes()).hexdigest()}))
+        receipt=module.audit(self.root)
+        self.assertIsNone(receipt['minSamePartHoldoutSeparationSeconds'])
+        self.assertFalse(receipt['temporalHoldoutIsolationVerified'])
+        self.assertFalse(receipt['independentCaptureSessionVerified'])
+
+    def test_duplicate_point_track_observation_denied(self):
+        p=self.root/'camera-solve-pycolmap-4.2.0/models/0/points3D.bin'
+        raw=bytearray(p.read_bytes())
+        struct.pack_into('<ii',raw,len(raw)-8,1,9)
+        p.write_bytes(raw)
+        self.denied('POINT_TRACK_INVALID')
+
+    def test_duplicate_source_part_entries_are_denied(self):
+        self.update('frame-manifest.json',lambda x:x['source_parts'].append({'name':'synthetic.mp4'}))
+        self.update('sfm-input-receipt.json',lambda x:x.update({
+            'input_manifest_sha256':hashlib.sha256((self.root/'frame-manifest.json').read_bytes()).hexdigest()}))
+        self.denied('SOURCE_PART_MANIFEST_INVALID')
+
     def test_bad_3d_binary_is_denied(self):
         p=self.root/'camera-solve-pycolmap-4.2.0/models/0/points3D.bin'
         p.write_bytes(p.read_bytes()[:-1])
