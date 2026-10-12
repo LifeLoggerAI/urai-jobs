@@ -187,9 +187,15 @@ class PrivateCameraSolveTests(unittest.TestCase):
 
     def test_nonbinary_privacy_mask_denied_even_with_rehashed_derivative(self):
         ref='masks/candidate_000.png'
-        new_mask=png('L',[255,128])
+        new_mask=png('L',[255,128,0],size=(3,1))
         fresh=save(self.root,ref,new_mask)
-        self.update('frame-manifest.json',lambda m:m['frames'][0].update({'mask_sha256':fresh}))
+        frame_sha=save(self.root,'frames/candidate_000.png',
+                       png('RGB',[(30,50,70),(60,70,80),(90,110,130)],size=(3,1)))
+        derived_sha=save(self.root,'sfm-images/candidate_000.png',
+                         png('RGB',[(30,50,70),(30,35,40),(0,0,0)],size=(3,1)))
+        self.update('frame-manifest.json',lambda m:m['frames'][0].update({
+            'mask_sha256':fresh,'frame_sha256':frame_sha}))
+        self.update('sfm-input-receipt.json',lambda x:x['inputs'][0].update({'sha256':derived_sha}))
         self.update('sfm-input-receipt.json',lambda x:x.update({
             'input_manifest_sha256':hashlib.sha256((self.root/'frame-manifest.json').read_bytes()).hexdigest()}))
         self.denied('MASK_NOT_BINARY')
