@@ -234,11 +234,14 @@ class PrivateCameraSolveTests(unittest.TestCase):
         raw=bytearray(p.read_bytes())
         first=raw.find(b'candidate_000.png\x00')
         self.assertGreater(first,0)
-        # Exactly one observation follows its 8-byte length.
+        # Exactly one observation follows its 8-byte length. Rebinding it to
+        # point 2 preserves the other point's own track but leaves point 1's
+        # reciprocal camera observation missing. That is INCOMPLETE, not an
+        # out-of-range or direct mismatch; both conditions deny admission.
         obs=first+len(b'candidate_000.png\x00')+8
         struct.pack_into('<q',raw,obs+16,2)
         p.write_bytes(raw)
-        self.denied('POINT_TRACK_BACKREF_INVALID')
+        self.denied('POINT_TRACK_BACKREF_INCOMPLETE')
 
     def test_untracked_image_observation_is_denied(self):
         p=self.root/'camera-solve-pycolmap-4.2.0/models/0/images.bin'
