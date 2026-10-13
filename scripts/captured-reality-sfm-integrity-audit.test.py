@@ -256,9 +256,9 @@ class PrivateCameraSolveTests(unittest.TestCase):
     def test_image_observation_outside_registered_camera_is_denied(self):
         p=self.root/'camera-solve-pycolmap-4.2.0/models/0/images.bin'
         raw=bytearray(p.read_bytes())
-        first=raw.find(b'candidate_000.png\\x00')
+        first=raw.find(b'candidate_000.png\x00')
         self.assertGreater(first,0)
-        obs=first+len(b'candidate_000.png\\x00')+8
+        obs=first+len(b'candidate_000.png\x00')+8
         struct.pack_into('<d',raw,obs,2.5)
         p.write_bytes(raw)
         self.denied('CAMERA_OBSERVATIONS_INVALID')
