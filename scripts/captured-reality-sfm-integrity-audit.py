@@ -110,7 +110,7 @@ def model_cameras(p):
     require(1 <= total <= 3000, "CAMERA_INTRINSICS_COUNT_INVALID")
     # COLMAP camera model id to intrinsic parameter count.
     param_count = {0: 3, 1: 4, 2: 4, 3: 5, 4: 8, 5: 8, 6: 12, 7: 5, 8: 4, 9: 5, 10: 12}
-    off, cams, sizes = 8, set(), set()
+    off, cams, sizes, dimensions = 8, set(), set(), {}
     for _ in range(total):
         require(off + 24 <= len(data), "CAMERA_INTRINSICS_TRUNCATED")
         cam_id, model_id, width, height = struct.unpack_from("<iiQQ", data, off)
@@ -127,11 +127,12 @@ def model_cameras(p):
                 "CAMERA_INTRINSICS_INVALID")
         cams.add(cam_id)
         sizes.add((width, height))
+        dimensions[cam_id] = (width, height)
     require(off == len(data), "CAMERA_INTRINSICS_TRAILING_DATA")
-    return {"ids": cams, "sizes": sizes}
+    return {"ids": cams, "sizes": sizes, "dimensions": dimensions}
 
 
-def model_images(p):
+def model_images(p, camera_dimensions):
     data = p.read_bytes()
     require(len(data) <= MAX_BINARY and len(data) >= 8, "CAMERA_MODEL_BUDGET_INVALID")
     count = struct.unpack_from("<Q", data, 0)[0]
@@ -144,6 +145,7 @@ def model_images(p):
     observations = 0
     linked_observations = 0
     observation_point_ids = {}
+    frame_calibrations = {}
     for _ in range(count):
         require(off + 64 <= len(data), "CAMERA_MODEL_TRUNCATED")
         v = struct.unpack_from("<i4d3di", data, off)
@@ -160,6 +162,9 @@ def model_images(p):
         names.add(name)
         require(v[0] > 0 and v[0] not in ids and v[8] > 0, "CAMERA_IDENTITY_INVALID")
         ids.add(v[0]); camera_ids.add(v[8])
+        require(v[8] in camera_dimensions, "CAMERA_POINT_TRACK_LINK_INVALID")
+        width, height = camera_dimensions[v[8]]
+        frame_calibrations[name] = (width, height)
         require(off + 8 <= len(data), "CAMERA_MODEL_TRUNCATED")
         pts = struct.unpack_from("<Q", data, off)[0]
         off += 8
@@ -170,7 +175,7 @@ def model_images(p):
         for obs_index in range(pts):
             px, py, point_id = struct.unpack_from("<ddq", data, off + obs_index * 24)
             require(math.isfinite(px) and math.isfinite(py)
-                    and abs(px) <= 1e7 and abs(py) <= 1e7
+                    and 0 <= px < width and 0 <= py < height
                     and (point_id == -1 or point_id > 0), "CAMERA_OBSERVATIONS_INVALID")
             if point_id > 0:
                 require(point_id not in linked_in_image, "CAMERA_POINT_DUPLICATE_OBSERVATION")
@@ -196,7 +201,8 @@ def model_images(p):
     require(sum(v * v for v in spans) > 1e-12, "CAMERA_BASELINE_DEGENERATE")
     return {"count": count, "names": names, "ids": ids, "camera_ids": camera_ids,
             "observations": observations, "linked_observations": linked_observations,
-            "observation_point_ids": observation_point_ids, "spans": spans}
+            "observation_point_ids": observation_point_ids,
+            "frame_calibrations": frame_calibrations, "spans": spans}
 
 
 def model_points(p, observation_point_ids):
@@ -312,7 +318,7 @@ def audit(root):
     require(processed == {x for x in by_name if x.startswith("candidate_")}, "SFM_INPUT_COVERAGE_INVALID")
     model_base = "camera-solve-pycolmap-4.2.0/models/0/"
     cameras = model_cameras(private_file(root, model_base + "cameras.bin", MAX_BINARY))
-    images = model_images(private_file(root, model_base + "images.bin", MAX_BINARY))
+    images = model_images(private_file(root, model_base + "images.bin", MAX_BINARY), cameras["dimensions"])
     points = model_points(private_file(root, model_base + "points3D.bin", MAX_BINARY),
                           images["observation_point_ids"])
     require(points["validated_backrefs"] == images["linked_observations"],
@@ -322,6 +328,11 @@ def audit(root):
             "CAMERA_POINT_TRACK_LINK_INVALID")
     candidate_dimensions = {png_size(private_file(root, by_name[name]["frame"])) for name in processed}
     require(cameras["sizes"].issubset(candidate_dimensions), "CAMERA_INTRINSICS_DIMENSIONS_MISMATCH")
+    # A camera with legitimate dimensions elsewhere in the package cannot be
+    # silently assigned to a different registered frame. Compare per filename.
+    require(all(dimensions == png_size(private_file(root, by_name[name]["frame"]))
+                for name, dimensions in images["frame_calibrations"].items()),
+            "CAMERA_IMAGE_DIMENSIONS_MISMATCH")
     require(images["count"] / candidates >= 0.85, "CAMERA_REGISTRATION_BELOW_FLOOR")
     require(solve.get("models") and solve["models"][0].get("registered_images") == images["count"]
             and solve["models"][0].get("points3d") == points["count"], "CAMERA_RECEIPT_MISMATCH")
