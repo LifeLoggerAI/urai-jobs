@@ -70,7 +70,8 @@ def fixture(root, cameras=5):
     i = struct.pack('<Q', cameras)
     for x in range(cameras):
         i += struct.pack('<i4d3di', x + 1, 1, 0, 0, 0, -x, 0, 0, 1)
-        observations = [(float(x), 0.5, 1 if x < 2 else -1)]
+        observations = [(float(x) + point * .01, 0.5, 1 if (x == 0 and point == 5) or (x == 1 and point == 9) else -1)
+                        for point in range(10)]
         i += f'candidate_{x:03d}.png'.encode() + b'\x00' + struct.pack('<Q',len(observations))
         for px, py, point_id in observations:
             i += struct.pack('<ddq', px, py, point_id)
@@ -231,10 +232,10 @@ class PrivateCameraSolveTests(unittest.TestCase):
     def test_wrong_2d_point_identity_is_denied(self):
         p=self.root/'camera-solve-pycolmap-4.2.0/models/0/images.bin'
         raw=bytearray(p.read_bytes())
-        first=raw.find(b'candidate_000.png\\x00')
+        first=raw.find(b'candidate_000.png\x5cx00')
         self.assertGreater(first,0)
         # Exactly one observation follows its 8-byte length.
-        obs=first+len(b'candidate_000.png\\x00')+8
+        obs=first+len(b'candidate_000.png\x5cx00')+8
         struct.pack_into('<q',raw,obs+16,2)
         p.write_bytes(raw)
         self.denied('POINT_TRACK_BACKREF_INVALID')
@@ -242,9 +243,9 @@ class PrivateCameraSolveTests(unittest.TestCase):
     def test_untracked_image_observation_is_denied(self):
         p=self.root/'camera-solve-pycolmap-4.2.0/models/0/images.bin'
         raw=bytearray(p.read_bytes())
-        first=raw.find(b'candidate_002.png\\x00')
+        first=raw.find(b'candidate_002.png\x5cx00')
         self.assertGreater(first,0)
-        obs=first+len(b'candidate_002.png\\x00')+8
+        obs=first+len(b'candidate_002.png\x5cx00')+8
         struct.pack_into('<q',raw,obs+16,1)
         p.write_bytes(raw)
         self.denied('POINT_TRACK_BACKREF_INCOMPLETE')
