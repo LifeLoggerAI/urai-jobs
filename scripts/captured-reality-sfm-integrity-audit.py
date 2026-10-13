@@ -142,6 +142,8 @@ def model_images(p):
     camera_ids = set()
     centers = []
     observations = 0
+    linked_observations = 0
+    observation_point_ids = {}
     for _ in range(count):
         require(off + 64 <= len(data), "CAMERA_MODEL_TRUNCATED")
         v = struct.unpack_from("<i4d3di", data, off)
@@ -161,7 +163,21 @@ def model_images(p):
         require(off + 8 <= len(data), "CAMERA_MODEL_TRUNCATED")
         pts = struct.unpack_from("<Q", data, off)[0]
         off += 8
-        require(pts <= 1000000 and off + pts * 24 <= len(data), "CAMERA_OBSERVATIONS_INVALID")
+        require(pts <= 1000000 and observations + pts <= 2000000
+                and off + pts * 24 <= len(data), "CAMERA_OBSERVATIONS_INVALID")
+        point_ids = []
+        linked_in_image = set()
+        for obs_index in range(pts):
+            px, py, point_id = struct.unpack_from("<ddq", data, off + obs_index * 24)
+            require(math.isfinite(px) and math.isfinite(py)
+                    and abs(px) <= 1e7 and abs(py) <= 1e7
+                    and (point_id == -1 or point_id > 0), "CAMERA_OBSERVATIONS_INVALID")
+            if point_id > 0:
+                require(point_id not in linked_in_image, "CAMERA_POINT_DUPLICATE_OBSERVATION")
+                linked_in_image.add(point_id)
+                linked_observations += 1
+            point_ids.append(point_id)
+        observation_point_ids[v[0]] = point_ids
         off += pts * 24
         observations += pts
         q = v[1:5]
@@ -178,10 +194,12 @@ def model_images(p):
     require(off == len(data), "CAMERA_MODEL_TRAILING_DATA")
     spans = [max(c[i] for c in centers) - min(c[i] for c in centers) for i in range(3)]
     require(sum(v * v for v in spans) > 1e-12, "CAMERA_BASELINE_DEGENERATE")
-    return {"count": count, "names": names, "ids": ids, "camera_ids": camera_ids, "observations": observations, "spans": spans}
+    return {"count": count, "names": names, "ids": ids, "camera_ids": camera_ids,
+            "observations": observations, "linked_observations": linked_observations,
+            "observation_point_ids": observation_point_ids, "spans": spans}
 
 
-def model_points(p):
+def model_points(p, observation_point_ids):
     data = p.read_bytes()
     require(8 <= len(data) <= MAX_BINARY, "POINT_MODEL_BUDGET_INVALID")
     count = struct.unpack_from("<Q", data, 0)[0]
@@ -190,6 +208,7 @@ def model_points(p):
     errors = []
     track_images = set()
     point_ids = set()
+    validated_backrefs = 0
     for _ in range(count):
         require(off + 51 <= len(data), "POINT_MODEL_TRUNCATED")
         row = struct.unpack_from("<QdddBBBdQ", data, off)
@@ -205,12 +224,17 @@ def model_points(p):
             image_id, point2d_id = struct.unpack_from("<ii", data, off + index*8)
             require(image_id > 0 and point2d_id >= 0 and image_id not in images_for_point,
                     "POINT_TRACK_INVALID")
+            image_observations = observation_point_ids.get(image_id)
+            require(image_observations is not None and point2d_id < len(image_observations)
+                    and image_observations[point2d_id] == row[0], "POINT_TRACK_BACKREF_INVALID")
+            validated_backrefs += 1
             images_for_point.add(image_id)
             track_images.add(image_id)
         off += track * 8
         errors.append(err)
     require(off == len(data), "POINT_MODEL_TRAILING_DATA")
-    return {"count": count, "mean_error": sum(errors) / count, "track_images": track_images}
+    return {"count": count, "mean_error": sum(errors) / count,
+            "track_images": track_images, "validated_backrefs": validated_backrefs}
 
 
 def audit(root):
@@ -289,7 +313,10 @@ def audit(root):
     model_base = "camera-solve-pycolmap-4.2.0/models/0/"
     cameras = model_cameras(private_file(root, model_base + "cameras.bin", MAX_BINARY))
     images = model_images(private_file(root, model_base + "images.bin", MAX_BINARY))
-    points = model_points(private_file(root, model_base + "points3D.bin", MAX_BINARY))
+    points = model_points(private_file(root, model_base + "points3D.bin", MAX_BINARY),
+                          images["observation_point_ids"])
+    require(points["validated_backrefs"] == images["linked_observations"],
+            "POINT_TRACK_BACKREF_INCOMPLETE")
     require(images["names"].issubset(processed), "CAMERA_SOURCE_UNRECOGNIZED")
     require(images["camera_ids"].issubset(cameras["ids"]) and points["track_images"].issubset(images["ids"]),
             "CAMERA_POINT_TRACK_LINK_INVALID")
