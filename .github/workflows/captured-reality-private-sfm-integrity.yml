@@ -16,6 +16,8 @@ on:
       - scripts/captured-reality-colmap-geometric-triage.test.py
       - scripts/captured-reality-colmap-geometric-successor.py
       - scripts/captured-reality-colmap-geometric-successor.test.py
+      - scripts/captured-reality-3dgs-training-job.py
+      - scripts/captured-reality-3dgs-training-job.test.py
       - .github/workflows/captured-reality-private-sfm-integrity.yml
 
 permissions:
@@ -43,3 +45,5 @@ jobs:
         run: python3 scripts/captured-reality-colmap-geometric-triage.test.py
       - name: Run source-preserving v3 geometric successor regressions
         run: python3 scripts/captured-reality-colmap-geometric-successor.test.py
+      - name: Verify private 3DGS training preflight and no-spend refusal
+        run: python3 scripts/captured-reality-3dgs-training-job.test.py
