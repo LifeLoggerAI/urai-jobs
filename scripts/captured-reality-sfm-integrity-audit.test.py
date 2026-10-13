@@ -70,7 +70,7 @@ def fixture(root, cameras=5):
     i = struct.pack('<Q', cameras)
     for x in range(cameras):
         i += struct.pack('<i4d3di', x + 1, 1, 0, 0, 0, -x, 0, 0, 1)
-        observations = [(float(x) + point * .01, 0.5, 1 if (x == 0 and point == 5) or (x == 1 and point == 9) else -1)
+        observations = [(0.25 + point * .1, 0.5, 1 if (x == 0 and point == 5) or (x == 1 and point == 9) else -1)
                         for point in range(10)]
         i += f'candidate_{x:03d}.png'.encode() + b'\x00' + struct.pack('<Q',len(observations))
         for px, py, point_id in observations:
