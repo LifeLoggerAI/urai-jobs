@@ -232,10 +232,10 @@ class PrivateCameraSolveTests(unittest.TestCase):
     def test_wrong_2d_point_identity_is_denied(self):
         p=self.root/'camera-solve-pycolmap-4.2.0/models/0/images.bin'
         raw=bytearray(p.read_bytes())
-        first=raw.find(b'candidate_000.png\x5cx00')
+        first=raw.find(b'candidate_000.png\x00')
         self.assertGreater(first,0)
         # Exactly one observation follows its 8-byte length.
-        obs=first+len(b'candidate_000.png\x5cx00')+8
+        obs=first+len(b'candidate_000.png\x00')+8
         struct.pack_into('<q',raw,obs+16,2)
         p.write_bytes(raw)
         self.denied('POINT_TRACK_BACKREF_INVALID')
@@ -243,9 +243,9 @@ class PrivateCameraSolveTests(unittest.TestCase):
     def test_untracked_image_observation_is_denied(self):
         p=self.root/'camera-solve-pycolmap-4.2.0/models/0/images.bin'
         raw=bytearray(p.read_bytes())
-        first=raw.find(b'candidate_002.png\x5cx00')
+        first=raw.find(b'candidate_002.png\x00')
         self.assertGreater(first,0)
-        obs=first+len(b'candidate_002.png\x5cx00')+8
+        obs=first+len(b'candidate_002.png\x00')+8
         struct.pack_into('<q',raw,obs+16,1)
         p.write_bytes(raw)
         self.denied('POINT_TRACK_BACKREF_INCOMPLETE')
