@@ -12,6 +12,8 @@ on:
       - scripts/captured-reality-colmap-track-repair.test.py
       - scripts/captured-reality-colmap-match-consistency.py
       - scripts/captured-reality-colmap-match-consistency.test.py
+      - scripts/captured-reality-colmap-geometric-triage.py
+      - scripts/captured-reality-colmap-geometric-triage.test.py
       - .github/workflows/captured-reality-private-sfm-integrity.yml
 
 permissions:
@@ -35,3 +37,5 @@ jobs:
         run: python3 scripts/captured-reality-colmap-track-repair.test.py
       - name: Verify original SIFT inlier evidence and derivative admission boundaries
         run: python3 scripts/captured-reality-colmap-match-consistency.test.py
+      - name: Verify independent triangulation does not promote ambiguous camera tracks
+        run: python3 scripts/captured-reality-colmap-geometric-triage.test.py
