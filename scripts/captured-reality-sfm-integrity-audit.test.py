@@ -218,7 +218,7 @@ class PrivateCameraSolveTests(unittest.TestCase):
     def test_duplicate_point_track_observation_denied(self):
         p=self.root/'camera-solve-pycolmap-4.2.0/models/0/points3D.bin'
         raw=bytearray(p.read_bytes())
-        struct.pack_into('<ii',raw,len(raw)-8,1,9)
+        struct.pack_into('<ii',raw,len(raw)-8,1,5)
         p.write_bytes(raw)
         self.denied('POINT_TRACK_INVALID')
 
