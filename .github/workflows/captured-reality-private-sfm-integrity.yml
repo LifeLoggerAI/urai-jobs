@@ -14,6 +14,8 @@ on:
       - scripts/captured-reality-colmap-match-consistency.test.py
       - scripts/captured-reality-colmap-geometric-triage.py
       - scripts/captured-reality-colmap-geometric-triage.test.py
+      - scripts/captured-reality-colmap-geometric-successor.py
+      - scripts/captured-reality-colmap-geometric-successor.test.py
       - .github/workflows/captured-reality-private-sfm-integrity.yml
 
 permissions:
@@ -39,3 +41,5 @@ jobs:
         run: python3 scripts/captured-reality-colmap-match-consistency.test.py
       - name: Verify independent triangulation does not promote ambiguous camera tracks
         run: python3 scripts/captured-reality-colmap-geometric-triage.test.py
+      - name: Run source-preserving v3 geometric successor regressions
+        run: python3 scripts/captured-reality-colmap-geometric-successor.test.py
