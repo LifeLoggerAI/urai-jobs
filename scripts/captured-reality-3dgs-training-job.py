@@ -47,6 +47,31 @@ def model_reader():
     return reader
 
 
+
+def mask_audit_reader():
+    """Load the canonical pixel-derived privacy validator, not a receipt-only hash check."""
+    path = Path(__file__).with_name('captured-reality-sfm-integrity-audit.py')
+    require(path.is_file(), 'MASK_PIXEL_VALIDATOR_REQUIRED')
+    spec = importlib.util.spec_from_file_location('urai_sfm_mask_audit', path)
+    audit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(audit)
+    return audit
+
+
+def verified_masked_candidate(source_root, item, frame, audit):
+    """Reject swapped frames and images that no longer match their source + mask."""
+    require(isinstance(item.get('file'), str) and item['file'] == item['id'] + '.png',
+            'MASKED_FRAME_IDENTITY_INVALID')
+    file = private_file(source_root, 'sfm-images/' + item['file'])
+    require(sha(file) == item['sha256'], 'MASKED_INPUT_HASH_INVALID')
+    audit.verify_mask_derivative(
+        private_file(source_root, frame['frame']),
+        private_file(source_root, frame['mask']),
+        file,
+    )
+    return file
+
+
 def inspect(source_root, model_root, admission=None):
     source_root, model_root = Path(source_root), Path(model_root)
     manifest_path = private_file(source_root, 'frame-manifest.json')
@@ -65,12 +90,11 @@ def inspect(source_root, model_root, admission=None):
     require(len(candidates) == manifest['candidate_count'] and len(holdouts) == manifest['holdout_count']
             and candidates and holdouts, 'SOURCE_SPLIT_COUNT_INVALID')
     masked = {}
+    mask_audit = mask_audit_reader()
     for item in sfm['inputs']:
         require(item['id'] in by_id and by_id[item['id']]['split'] == 'candidate', 'MASKED_INPUT_SPLIT_LEAK')
         require(item['id'] not in masked, 'MASKED_INPUT_DUPLICATED')
-        file = private_file(source_root, 'sfm-images/' + item['file'])
-        require(sha(file) == item['sha256'], 'MASKED_INPUT_HASH_INVALID')
-        masked[item['id']] = file
+        masked[item['id']] = verified_masked_candidate(source_root, item, by_id[item['id']], mask_audit)
     require(len(masked) == len(candidates), 'MASKED_CANDIDATE_MISSING')
     reader = model_reader()
     hashes = {name: sha(private_file(model_root, name)) for name in ('cameras.bin', 'images.bin', 'points3D.bin')}
