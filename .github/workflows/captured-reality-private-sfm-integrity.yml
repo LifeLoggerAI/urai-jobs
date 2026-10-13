@@ -10,6 +10,8 @@ on:
       - scripts/captured-reality-sfm-integrity-audit.test.py
       - scripts/captured-reality-colmap-track-repair.py
       - scripts/captured-reality-colmap-track-repair.test.py
+      - scripts/captured-reality-colmap-match-consistency.py
+      - scripts/captured-reality-colmap-match-consistency.test.py
       - .github/workflows/captured-reality-private-sfm-integrity.yml
 
 permissions:
@@ -31,3 +33,5 @@ jobs:
         run: python3 scripts/captured-reality-sfm-integrity-audit.test.py
       - name: Test source-preserving COLMAP disambiguation and corruption refusal
         run: python3 scripts/captured-reality-colmap-track-repair.test.py
+      - name: Verify original SIFT inlier evidence and derivative admission boundaries
+        run: python3 scripts/captured-reality-colmap-match-consistency.test.py
