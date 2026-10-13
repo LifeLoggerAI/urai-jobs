@@ -253,6 +253,31 @@ class PrivateCameraSolveTests(unittest.TestCase):
         p.write_bytes(raw)
         self.denied('POINT_TRACK_BACKREF_INCOMPLETE')
 
+    def test_image_observation_outside_registered_camera_is_denied(self):
+        p=self.root/'camera-solve-pycolmap-4.2.0/models/0/images.bin'
+        raw=bytearray(p.read_bytes())
+        first=raw.find(b'candidate_000.png\\x00')
+        self.assertGreater(first,0)
+        obs=first+len(b'candidate_000.png\\x00')+8
+        struct.pack_into('<d',raw,obs,2.5)
+        p.write_bytes(raw)
+        self.denied('CAMERA_OBSERVATIONS_INVALID')
+
+    def test_per_frame_camera_dimensions_cannot_be_swapped(self):
+        p=self.root/'frames/candidate_000.png'
+        frame=png('RGB',[(10,20,30),(15,25,35),(20,30,40)],size=(3,1))
+        frame_hash=save(self.root,'frames/candidate_000.png',frame)
+        mask_hash=save(self.root,'masks/candidate_000.png',png('L',[255,0,0],size=(3,1)))
+        derived_hash=save(self.root,'sfm-images/candidate_000.png',
+                          png('RGB',[(10,20,30),(0,0,0),(0,0,0)],size=(3,1)))
+        self.update('frame-manifest.json',lambda m:m['frames'][0].update({
+            'frame_sha256':frame_hash,'mask_sha256':mask_hash}))
+        self.update('sfm-input-receipt.json',lambda m:(
+            m['inputs'][0].update({'sha256':derived_hash}),
+            m.update({'input_manifest_sha256':hashlib.sha256(
+                (self.root/'frame-manifest.json').read_bytes()).hexdigest()})))
+        self.denied('CAMERA_IMAGE_DIMENSIONS_MISMATCH')
+
     def test_duplicate_source_part_entries_are_denied(self):
         self.update('frame-manifest.json',lambda x:x['source_parts'].append({'name':'synthetic.mp4'}))
         self.update('sfm-input-receipt.json',lambda x:x.update({
