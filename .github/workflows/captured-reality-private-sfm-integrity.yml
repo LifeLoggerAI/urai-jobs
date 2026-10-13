@@ -8,6 +8,8 @@ on:
     paths:
       - scripts/captured-reality-sfm-integrity-audit.py
       - scripts/captured-reality-sfm-integrity-audit.test.py
+      - scripts/captured-reality-colmap-track-repair.py
+      - scripts/captured-reality-colmap-track-repair.test.py
       - .github/workflows/captured-reality-private-sfm-integrity.yml
 
 permissions:
@@ -27,3 +29,5 @@ jobs:
         run: python3 -m pip install --no-cache-dir 'Pillow==12.0.0'
       - name: Run synthetic real-handler audit regressions (no private bytes)
         run: python3 scripts/captured-reality-sfm-integrity-audit.test.py
+      - name: Test source-preserving COLMAP disambiguation and corruption refusal
+        run: python3 scripts/captured-reality-colmap-track-repair.test.py
