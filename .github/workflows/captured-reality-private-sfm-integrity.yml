@@ -20,6 +20,8 @@ on:
       - scripts/captured-reality-3dgs-training-job.test.py
       - scripts/world001-source-disjoint-geometry-guard.py
       - scripts/world001-source-disjoint-geometry-guard.test.py
+      - scripts/world001_train_cross_survey_consistency.py
+      - scripts/world001_train_cross_survey_consistency.test.py
       - .github/workflows/captured-reality-private-sfm-integrity.yml
 
 permissions:
@@ -51,3 +53,5 @@ jobs:
         run: python3 scripts/captured-reality-3dgs-training-job.test.py
       - name: Verify World001 source-disjoint holdout guard and refusal regressions
         run: python3 scripts/world001-source-disjoint-geometry-guard.test.py
+      - name: Verify train-only survey-out geometric track refusal
+        run: python3 scripts/world001_train_cross_survey_consistency.test.py
