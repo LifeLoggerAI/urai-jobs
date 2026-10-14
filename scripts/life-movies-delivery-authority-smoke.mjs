@@ -24,7 +24,7 @@ const prefix = `tenants/${tenantId}/life-movies/${projectId}`;
 
 export function harness() {
   const documents = new Map(), versions = new Map(), objects = new Map();
-  const state = { signs: [], metadataReads: [], downloads: 0, storageDeletes: 0, onObservation: null, onDownload: null, beforeTransaction: null, token: 'synthetic-token', now: Date.now() };
+  const state = { signs: [], metadataReads: [], downloads: 0, storageDeletes: 0, onObservation: null, onDownload: null, beforeTransaction: null, beforeCommit: null, token: 'synthetic-token', now: Date.now() };
   class FixtureDate extends Date {
     constructor(...args) { super(...(args.length ? args : [state.now])); }
     static now() { return state.now; }
@@ -62,6 +62,9 @@ export function harness() {
           create: (reference, value) => writes.push(() => { assert.equal(documents.has(reference.path), false); patch(reference, value, false); }),
         };
         const result = await callback(transaction);
+        const beforeCommit = state.beforeCommit;
+        state.beforeCommit = null;
+        await beforeCommit?.();
         if ([...reads].some(([name, version]) => versions.get(name) !== version && (versions.get(name) || 0) !== version)) continue;
         for (const write of writes) write(); return result;
       }
@@ -125,7 +128,7 @@ export function harness() {
     const source = fs.readFileSync(path.join(sourceDir, 'functions/src/jobs', filename), 'utf8');
     vm.runInNewContext(ts.transpileModule(source, { compilerOptions: {
       module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
-    } }).outputText, { exports, Buffer, console, Date: FixtureDate, setTimeout, clearTimeout, AbortController, process: { env: { GCS_BUCKET_NAME: bucket, URAI_ENV: 'test' } },
+    } }).outputText, { exports, Buffer, console, Date: FixtureDate, setTimeout, clearTimeout, AbortController, process: { env: { GCS_BUCKET_NAME: bucket, URAI_ENV: 'test', URAI_LIFE_MOVIE_LONGFORM_ENABLED: 'true' } },
       require(name) {
         if (name === 'firebase-admin/firestore') return { FieldValue, getFirestore: () => db };
         if (name === 'firebase-admin/storage') return { getStorage: () => storage };
@@ -137,10 +140,11 @@ export function harness() {
           isConsentContext: (value) => !!value && ['purpose', 'policyVersion', 'decisionReceiptId'].every((key) => typeof value[key] === 'string' && value[key].length > 0) };
         if (name.endsWith('/jobsReliability.js')) return { bindingMatches: () => false,
           buildIdempotencyBindingId: digest, buildRequestFingerprint: (_type, value) => digest(value) };
-        if (name.endsWith('/sceneTruthReceipt.js')) return { assertSceneTruthReceiptValue() {} };
-        if (name.endsWith('/studioLifeMovieLongformContract.js')) return { StudioLifeMovieLongformPayloadSchema: z.any(), LIFE_MOVIE_LONGFORM_BUDGET: { maxSegments: 180 } };
+        if (name.endsWith('/sceneTruthReceipt.js')) return { assertSceneTruthReceiptValue: () => ({ receiptId: 'synthetic-receipt', expiresAt: Date.now() + 600_000 }) };
+        if (name.endsWith('/studioLifeMovieLongformContract.js')) return { StudioLifeMovieLongformPayloadSchema: z.any(), LIFE_MOVIE_LONGFORM_BUDGET: { maxSegments: 180 }, assertLifeMovieLongformTenantPaths: value => value,
+          planLifeMovieLongformSegments: value => [{ index: 0, startMs: 0, endMs: 1000, childDigest: 'd'.repeat(64), payload: value }] };
         if (name.endsWith('/privateMediaDelivery.js')) return load('privateMediaDelivery.ts');
-        if (name.endsWith('/studioLifeMovieContract.js')) return { StudioLifeMovieRenderPayloadSchema: z.any() };
+        if (name.endsWith('/studioLifeMovieContract.js')) return { StudioLifeMovieRenderPayloadSchema: z.any(), assertLifeMovieTenantPaths: value => value };
         return require(name);
       },
     });
@@ -149,15 +153,15 @@ export function harness() {
   const bridges = { short: load('studioLifeMovieBridge.ts', 'studioLifeMovieBridge'),
     long: load('studioLifeMovieLongformBridge.ts', 'studioLifeMovieLongformBridge'),
     narrator: load('storytimeNarratorBridge.ts', 'storytimeNarratorBridge') };
-  async function invoke(form, action) {
+  async function invoke(form, action, overrides = {}) {
     const req = { method: 'POST', get: () => 'Bearer synthetic-token',
-      body: { action, tenantId, userId, ...(form === 'short' ? { jobId: childIds[0] } : { planId }) } };
+      body: { action, tenantId, userId, ...(action === 'create' ? {} : form === 'short' ? { jobId: childIds[0] } : { planId }), ...overrides } };
     const response = { statusCode: 200, body: null,
       set() { return this; }, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
     await bridges[form](req, response); return response;
   }
   function change(name, update) { const value = clone(documents.get(name)); update(value); set(name, value); }
-  return { state, invoke, change, set, bridges, objects, identities: { tenantId, userId, projectId, planId, childIds, assemblyId, narratorId, sessionId, narratorScriptId, narratorRef }, get: (name) => clone(documents.get(name)) };
+  return { state, invoke, change, set, keys: () => [...documents.keys()], bridges, objects, identities: { tenantId, userId, projectId, planId, childIds, assemblyId, narratorId, sessionId, narratorScriptId, narratorRef }, get: (name) => clone(documents.get(name)) };
 }
 
 let groups = 0, baselineLeaks = 0;
@@ -270,6 +274,64 @@ for (const form of ['short', 'long']) {
   denied(await h.invoke(form, 'download'), 'expired delivery must not return unusable credentials'); groups++;
 }
 console.log(baseline ? '[REPRODUCED] Slow signing can return expired predecessor URLs' : '[PASS] Slow metadata observation cannot return expired delivery descriptors');
+
+
+if (!baseline) {
+  // Both genuine HTTP bridges are exercised with a synthetic transactional
+  // adapter. Absent consent documents must count as conflict-bearing reads.
+  const payload = { schemaVersion: 'urai-life-movie-render-v1', projectId,
+    renderPlanDigest: 'b'.repeat(64), sceneTruthDigest: 'c'.repeat(64),
+    sceneTruthReceiptRef: 'str_syntheticreceipt000_abcdef12_' + 'A'.repeat(40),
+    outputPrefix: prefix + '/synthetic-output', sources: [], timeline: [],
+    spatialRequired: false, publicReleaseAuthorized: false, providerGenerationAuthorized: false };
+  for (const form of ['short', 'long']) {
+    const input = { consent, payload, idempotencyKey: 'synthetic-admission-001' };
+    const assertNoAdmission = h => {
+      assert.equal(h.keys().filter(key => key.includes('synthetic-unused-id')).length, 0);
+      assert.equal(h.keys().filter(key => key.startsWith('jobQueue/')).length, 0);
+    };
+    const blocked = harness();
+    blocked.set('jobConsentBlocks/synthetic', { active: true });
+    let result = await blocked.invoke(form, 'create', input);
+    assert.equal(result.statusCode, 409, form + ' must reject consent revoked before admission');
+    assertNoAdmission(blocked);
+    groups++;
+
+    const preflightRace = harness();
+    preflightRace.state.beforeTransaction = () => {
+      preflightRace.set('jobConsentBlocks/synthetic', { active: true });
+    };
+    result = await preflightRace.invoke(form, 'create', input);
+    assert.equal(result.statusCode, 409, form + ' must reject consent revoked after preflight');
+    assertNoAdmission(preflightRace);
+    groups++;
+
+    const commitRace = harness();
+    commitRace.state.beforeCommit = () => {
+      commitRace.set('jobConsentBlocks/synthetic', { active: true });
+    };
+    result = await commitRace.invoke(form, 'create', input);
+    assert.equal(result.statusCode, 409, form + ' must retry a conflicted consent transaction');
+    assertNoAdmission(commitRace);
+    groups++;
+
+    const allowed = harness();
+    result = await allowed.invoke(form, 'create', input);
+    assert.equal(result.statusCode, 202, form + ' consent-authorized job must be admitted');
+    assert.equal(result.body?.ok, true);
+    const createdId = form === 'short' ? result.body.jobId : result.body.planId;
+    assert.ok(createdId, 'the bridge must return a durable identity');
+    assert.ok(allowed.keys().some(key => key.startsWith('jobQueue/')), 'queue write must be durable');
+    const request = form === 'short' ? { jobId: createdId } : { planId: createdId };
+    const otherTenant = await allowed.invoke(form, 'status', { ...request, tenantId: 'foreign-tenant' });
+    assert.equal(otherTenant.statusCode, 403, form + ' cannot read another tenant');
+    allowed.set('jobConsentBlocks/synthetic', { active: true });
+    const repeat = await allowed.invoke(form, 'create', input);
+    assert.equal(repeat.statusCode, 409, form + ' must not revive a deduped job after revocation');
+    groups += 3;
+  }
+  console.log('[PASS] Studio short/long create: pre-revocation, preflight race, transaction-conflict retry, durable queue, cross-tenant denial, post-revocation replay denial');
+}
 
 if (baseline) {
   assert.ok(baselineLeaks >= 10, `expected concrete predecessor leaks, saw ${baselineLeaks}`);
