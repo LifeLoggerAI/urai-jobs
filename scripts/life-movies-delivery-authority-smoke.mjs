@@ -326,12 +326,32 @@ if (!baseline) {
     const request = form === 'short' ? { jobId: createdId } : { planId: createdId };
     const otherTenant = await allowed.invoke(form, 'status', { ...request, tenantId: 'foreign-tenant' });
     assert.equal(otherTenant.statusCode, 403, form + ' cannot read another tenant');
+    const stillAuthorized = await allowed.invoke(form, 'create', input);
+    assert.equal(stillAuthorized.statusCode, 202, form + ' must retain legitimate idempotent reuse');
+    assert.equal(form === 'short' ? stillAuthorized.body.jobId : stillAuthorized.body.planId, createdId);
+    groups++;
+
+    // Revoke only after the outer preflight, at transaction entry, on an
+    // already-bound idempotency key. This previously bypassed the transaction.
+    const existingRace = harness();
+    const original = await existingRace.invoke(form, 'create', input);
+    assert.equal(original.statusCode, 202);
+    const queueBefore = existingRace.keys().filter(key => key.startsWith('jobQueue/')).length;
+    existingRace.state.beforeTransaction = () => {
+      existingRace.set('jobConsentBlocks/synthetic', { active: true });
+    };
+    const racedReplay = await existingRace.invoke(form, 'create', input);
+    assert.equal(racedReplay.statusCode, 409, form + ' must reject revoked replay after preflight');
+    assert.equal(existingRace.keys().filter(key => key.startsWith('jobQueue/')).length, queueBefore,
+      'revoked idempotent replay must not write another queue entry');
+    groups++;
+
     allowed.set('jobConsentBlocks/synthetic', { active: true });
     const repeat = await allowed.invoke(form, 'create', input);
     assert.equal(repeat.statusCode, 409, form + ' must not revive a deduped job after revocation');
     groups += 3;
   }
-  console.log('[PASS] Studio short/long create: pre-revocation, preflight race, transaction-conflict retry, durable queue, cross-tenant denial, post-revocation replay denial');
+  console.log('[PASS] Studio short/long create: pre-revocation, preflight race, transaction-conflict retry, durable queue, cross-tenant denial, idempotent replay admission and post-preflight replay revocation');
 }
 
 if (baseline) {

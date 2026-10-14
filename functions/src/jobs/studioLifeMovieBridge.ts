@@ -164,15 +164,9 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   const sceneTruthBindingId = createHash('sha256').update(payload.sceneTruthReceiptRef).digest('hex');
   const sceneTruthBindingRef = db.collection(SCENE_TRUTH_RECEIPT_BINDING_COLLECTION).doc(sceneTruthBindingId);
 
-  const existing = await bindingRef.get();
-  if (existing.exists) {
-    const binding = existing.data() as Partial<IdempotencyBinding>;
-    if (!bindingMatches(binding, expectedBinding) || typeof binding.jobId !== 'string' || !binding.jobId) {
-      throw new Error('idempotency_conflict');
-    }
-    return { jobId: binding.jobId, deduplicated: true };
-  }
-
+  // Even idempotent replays must re-read current consent inside the same
+  // transaction; an early binding read would return stale authority if
+  // revocation landed between preflight and the idempotent lookup.
   const jobId = ulid();
   const now = FieldValue.serverTimestamp();
   const newJob: Job = {
