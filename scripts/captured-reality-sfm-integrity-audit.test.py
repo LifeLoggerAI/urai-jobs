@@ -76,7 +76,7 @@ def fixture(root, cameras=5):
         for px, py, point_id in observations:
             i += struct.pack('<ddq', px, py, point_id)
     save(root,'camera-solve-pycolmap-4.2.0/models/0/images.bin',i)
-    point = struct.pack('<Q',1) + struct.pack('<QdddBBBdQ',1,0.625,0,5,25,50,75,0.0,2)
+    point = struct.pack('<Q',1) + struct.pack('<QdddBBBdQ',1,-0.625,0,5,25,50,75,0.0,2)
     point += struct.pack('<ii', 1, 5) + struct.pack('<ii', 2, 9)
     save(root,'camera-solve-pycolmap-4.2.0/models/0/points3D.bin',point)
     write_json(root,'camera-solve-pycolmap-4.2.0/camera-solve-quality.json',{
@@ -186,7 +186,7 @@ class PrivateCameraSolveTests(unittest.TestCase):
         # its stored point error and quality JSON were forged to agree.
         point_path = self.root/'camera-solve-pycolmap-4.2.0/models/0/points3D.bin'
         raw = bytearray(point_path.read_bytes())
-        struct.pack_into('<d', raw, 16, 3.375)  # forged XYZ x, original 0.625
+        struct.pack_into('<d', raw, 16, 3.375)  # forged XYZ x, original -0.625
         struct.pack_into('<d', raw, 43, .001)   # forged stored per-point error
         point_path.write_bytes(raw)
         self.update('camera-solve-pycolmap-4.2.0/camera-solve-quality.json',
