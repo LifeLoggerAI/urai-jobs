@@ -163,15 +163,8 @@ async function createNarratorJob(input: z.infer<typeof CreateSchema>) {
   const db = getFirestore();
   const bindingRef = db.collection(IDEMPOTENCY_COLLECTION)
     .doc(buildIdempotencyBindingId(input.userId, jobType, input.idempotencyKey));
-  const existing = await bindingRef.get();
-  if (existing.exists) {
-    const binding = existing.data() as Partial<IdempotencyBinding>;
-    if (!bindingMatches(binding, expectedBinding) || typeof binding.jobId !== 'string' || !binding.jobId) {
-      throw new Error('idempotency_conflict');
-    }
-    return { jobId: binding.jobId, deduplicated: true };
-  }
-
+  // All idempotent replay decisions must participate in the same
+  // canonical revocation transaction as new queue admission.
   const jobId = ulid();
   const now = FieldValue.serverTimestamp();
   const newJob: BoundJob = {
@@ -191,7 +184,13 @@ async function createNarratorJob(input: z.infer<typeof CreateSchema>) {
   const queue: JobQueueEntry = { jobId, jobType, status: 'PENDING', attemptCount: 0 };
 
   return db.runTransaction(async (transaction) => {
-    const inside = await transaction.get(bindingRef);
+    const [inside, currentConsentBlock] = await Promise.all([
+      transaction.get(bindingRef),
+      transaction.get(consentBlockRef(input.userId, consent.purpose)),
+    ]);
+    if (currentConsentBlock.exists && currentConsentBlock.data()?.active === true) {
+      throw new Error('storytime_voiceover_consent_revoked');
+    }
     if (inside.exists) {
       const binding = inside.data() as Partial<IdempotencyBinding>;
       if (!bindingMatches(binding, expectedBinding) || typeof binding.jobId !== 'string' || !binding.jobId) {
