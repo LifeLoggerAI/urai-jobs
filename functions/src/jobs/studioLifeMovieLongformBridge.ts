@@ -252,10 +252,16 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
   const now = FieldValue.serverTimestamp();
 
   return db.runTransaction(async (transaction) => {
-    const [inside, receiptInside] = await Promise.all([
+    // Re-read the canonical block within the same transaction that creates
+    // the plan and children. Revocation during preflight must not enqueue work.
+    const [inside, receiptInside, currentConsentBlock] = await Promise.all([
       transaction.get(bindingRef),
       transaction.get(receiptBindingRef),
+      transaction.get(consentBlockRef(input.userId, input.consent.purpose)),
     ]);
+    if (currentConsentBlock.exists && currentConsentBlock.data()?.active === true) {
+      throw new Error('life_movie_longform_consent_revoked');
+    }
 
     if (receiptInside.exists) {
       const bound = receiptInside.data() as {

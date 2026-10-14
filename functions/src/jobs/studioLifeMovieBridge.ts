@@ -197,8 +197,16 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   };
 
   return db.runTransaction(async (transaction) => {
-    const inside = await transaction.get(bindingRef);
-    const sceneTruthInside = await transaction.get(sceneTruthBindingRef);
+    // Firestore commits must conflict with a concurrent consent revocation.
+    // A pre-transaction read cannot fence work queued after that read.
+    const [inside, sceneTruthInside, currentConsentBlock] = await Promise.all([
+      transaction.get(bindingRef),
+      transaction.get(sceneTruthBindingRef),
+      transaction.get(consentBlockRef(input.userId, consent.purpose)),
+    ]);
+    if (currentConsentBlock.exists && currentConsentBlock.data()?.active === true) {
+      throw new Error('life_movie_consent_revoked');
+    }
 
     if (sceneTruthInside.exists) {
       const bound = sceneTruthInside.data() as {

@@ -84,6 +84,15 @@ assert.doesNotMatch(bridge, /publicReleaseAuthorized:\s*true/)
 assert.ok(bridge.indexOf('assertSceneTruthReceiptValue(') < bridge.indexOf('planLifeMovieLongformSegments(payload)'), 'SceneTruth authority must be verified before child planning')
 assert.equal((bridge.match(/assertSceneTruthReceiptValue\(/g) ?? []).length, 1, 'SceneTruth receipt must be verified once at parent creation, not replayed per child')
 
+const creationStart = bridge.indexOf('async function createPlan(')
+const creationEnd = bridge.indexOf('async function loadPlan(', creationStart)
+assert.ok(creationStart >= 0 && creationEnd > creationStart, 'Long-form plan creation must retain its transaction')
+const creation = bridge.slice(creationStart, creationEnd)
+const txnConsent = creation.indexOf('transaction.get(consentBlockRef(input.userId, input.consent.purpose))')
+const firstChild = creation.indexOf('transaction.create(jobDoc(jobId)')
+assert.ok(txnConsent >= 0 && firstChild > txnConsent, 'The same transaction must check revoked consent before queuing long-form child jobs')
+assert.ok(creation.includes('currentConsentBlock.data()?.active === true'), 'Long-form admission must reject a transactionally observed revoked block')
+
 console.log('Life Movie durable long-form orchestrator contract passed')
 
 assert.ok(bridge.includes("status: 'CANCELLED'"), 'parent cancellation must retain explicit cancelled queue semantics')

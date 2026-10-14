@@ -57,6 +57,15 @@ assert.ok(bridge.includes("defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN')"), 'Stu
 assert.ok(bridge.includes("action: z.literal('create')"), 'Studio bridge must expose bounded create semantics');
 assert.ok(bridge.includes("purpose: z.literal('life-movie.render')"), 'Short Life Movie creation must require canonical render consent');
 assert.ok(bridge.includes("consentBlockRef(input.userId, consent.purpose)"), 'Short Life Movie creation must fail closed on revoked consent');
+const createStart = bridge.indexOf('async function createLifeMovieJob(');
+const createEnd = bridge.indexOf('async function loadBoundJob(', createStart);
+assert.ok(createStart >= 0 && createEnd > createStart, 'Studio short creation must retain its dedicated owner-bound transaction');
+const createSource = bridge.slice(createStart, createEnd);
+const transactionalConsent = createSource.indexOf('transaction.get(consentBlockRef(input.userId, consent.purpose))');
+const enqueueWrite = createSource.indexOf('transaction.create(queueRef');
+assert.ok(transactionalConsent >= 0 && enqueueWrite > transactionalConsent, 'The same Firestore transaction must reread revoked consent before creating or queuing a short Life Movie');
+assert.ok(createSource.includes('currentConsentBlock.data()?.active === true'), 'A revoked transactional block must reject short-form admission');
+
 assert.ok(bridge.includes("const consent: JobConsentContext = { purpose, policyVersion, decisionReceiptId }") && bridge.includes("    consent,"), 'Short Life Movie jobs must persist canonical consent context');
 assert.ok(bridge.includes("const fingerprintPayload = { tenantId: input.tenantId, userId: input.userId, consent, payload }"), 'Short Life Movie idempotency must bind consent identity');
 assert.ok(bridge.includes("action: z.enum(['status', 'cancel', 'playback', 'download', 'delete-output'])"), 'Studio bridge must expose bounded status/cancel/playback/download/delete semantics');
