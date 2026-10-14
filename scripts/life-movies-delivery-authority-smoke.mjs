@@ -134,7 +134,7 @@ export function harness() {
         if (name === 'firebase-admin/storage') return { getStorage: () => storage };
         if (name === 'firebase-functions/params') return { defineSecret: () => ({ value: () => state.token }) };
         if (name === 'firebase-functions/v2/https') return { onRequest: (_options, handler) => handler };
-        if (name === 'ulid') return { ulid: () => 'synthetic-unused-id' };
+        if (name === 'ulid') return { ulid: () => 'synthetic-unused-id-0000000000' };
         if (name.endsWith('/firestore-paths.js')) return { jobDoc: (id) => ref(`jobs/${id}`), jobQueueEntryDoc: (id) => ref(`jobQueue/${id}`) };
         if (name.endsWith('/consentBlocks.js')) return { consentBlockRef: () => ref('jobConsentBlocks/synthetic'),
           isConsentContext: (value) => !!value && ['purpose', 'policyVersion', 'decisionReceiptId'].every((key) => typeof value[key] === 'string' && value[key].length > 0) };
@@ -321,6 +321,7 @@ if (!baseline) {
     assert.equal(result.body?.ok, true);
     const createdId = form === 'short' ? result.body.jobId : result.body.planId;
     assert.ok(createdId, 'the bridge must return a durable identity');
+    if (form === 'long') assert.match(createdId, /^lmp_[A-Za-z0-9_-]{20,64}$/, 'long-form synthetic plan ID must satisfy the real HTTP request schema');
     assert.ok(allowed.keys().some(key => key.startsWith('jobQueue/')), 'queue write must be durable');
     const request = form === 'short' ? { jobId: createdId } : { planId: createdId };
     const otherTenant = await allowed.invoke(form, 'status', { ...request, tenantId: 'foreign-tenant' });
