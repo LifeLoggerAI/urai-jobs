@@ -69,19 +69,19 @@ def fixture(root, cameras=5):
          struct.pack('<QiiQQ4d',1,1,2,2,1,2,1,0.5,0.0))
     i = struct.pack('<Q', cameras)
     for x in range(cameras):
-        i += struct.pack('<i4d3di', x + 1, 1, 0, 0, 0, -x, 0, 0, 1)
+        i += struct.pack('<i4d3di', x + 1, 1, 0, 0, 0, x, 0, 0, 1)
         observations = [(0.25 + point * .1, 0.5, 1 if (x == 0 and point == 5) or (x == 1 and point == 9) else -1)
                         for point in range(10)]
         i += f'candidate_{x:03d}.png'.encode() + b'\x00' + struct.pack('<Q',len(observations))
         for px, py, point_id in observations:
             i += struct.pack('<ddq', px, py, point_id)
     save(root,'camera-solve-pycolmap-4.2.0/models/0/images.bin',i)
-    point = struct.pack('<Q',1) + struct.pack('<QdddBBBdQ',1,1,2,3,25,50,75,0.5,2)
+    point = struct.pack('<Q',1) + struct.pack('<QdddBBBdQ',1,-0.625,0,5,25,50,75,0.0,2)
     point += struct.pack('<ii', 1, 5) + struct.pack('<ii', 2, 9)
     save(root,'camera-solve-pycolmap-4.2.0/models/0/points3D.bin',point)
     write_json(root,'camera-solve-pycolmap-4.2.0/camera-solve-quality.json',{
         'registered_images':cameras,'points3d':1,
-        'reprojection_error_px':{'mean':0.5}, 'scale_note':'unscaled SfM coordinates'})
+        'reprojection_error_px':{'mean':0.0}, 'scale_note':'unscaled SfM coordinates'})
     write_json(root,'camera-solve-pycolmap-4.2.0/camera-solve-receipt.json',{
         'classification':'CAMERA_SOLVE_NOT_GAUSSIAN_RECONSTRUCTION',
         'models':[{'registered_images':cameras,'points3d':1}]})
@@ -113,6 +113,8 @@ class PrivateCameraSolveTests(unittest.TestCase):
         self.assertTrue(result['maskedSfmPixelDerivationVerified'])
         self.assertTrue(result['sourceManifestBindingVerified'])
         self.assertTrue(result['cameraIntrinsicsVerified'])
+        self.assertTrue(result['independentReprojectionGeometryVerified'])
+        self.assertAlmostEqual(result['recomputedReprojectionMeanPx'], 0.0, places=6)
         self.assertTrue(result['temporalHoldoutIsolationVerified'])
         self.assertEqual((result['candidateViews'],result['holdoutViews'],result['registeredViews']),(5,1,5))
         for item in ('gaussianAssetProduced','metricScaleVerified','privateRuntimeIntegrated',
@@ -178,6 +180,18 @@ class PrivateCameraSolveTests(unittest.TestCase):
             obj['reprojection_error_px']['mean']=0.02
         self.update('camera-solve-pycolmap-4.2.0/camera-solve-quality.json',alter)
         self.denied('CAMERA_REPROJECTION_INVALID')
+
+    def test_forged_point_and_quality_receipts_cannot_hide_bad_reprojection(self):
+        # The old receipt-only check passed when geometry changed but both
+        # its stored point error and quality JSON were forged to agree.
+        point_path = self.root/'camera-solve-pycolmap-4.2.0/models/0/points3D.bin'
+        raw = bytearray(point_path.read_bytes())
+        struct.pack_into('<d', raw, 16, 3.375)  # forged XYZ x, original -0.625
+        struct.pack_into('<d', raw, 43, .001)   # forged stored per-point error
+        point_path.write_bytes(raw)
+        self.update('camera-solve-pycolmap-4.2.0/camera-solve-quality.json',
+                    lambda obj: obj['reprojection_error_px'].update({'mean': .001}))
+        self.denied('CAMERA_REPROJECTION_GEOMETRY_INVALID')
 
     def test_low_registration_is_denied(self):
         fixture(self.root,cameras=3)

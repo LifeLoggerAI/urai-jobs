@@ -243,6 +243,60 @@ def model_points(p, observation_point_ids):
             "track_images": track_images, "validated_backrefs": validated_backrefs}
 
 
+def independently_verify_reprojection(root, model_base, claimed_mean):
+    """Reproject actual linked 3D points through parsed camera poses and pixels.
+
+    The current private 3DGS pipeline supports COLMAP SIMPLE_RADIAL (model 2).
+    Other models fail closed until their independent projections are verified;
+    no mutable quality receipt may substitute for geometric measurement.
+    """
+    path = Path(__file__).with_name("captured-reality-colmap-track-repair.py")
+    require(path.is_file(), "CAMERA_REPROJECTION_VALIDATOR_UNAVAILABLE")
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("urai_colmap_geometry_reader", path)
+    reader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reader)
+    model = root / model_base
+    try:
+        cameras = reader.cameras_from(private_file(root, model_base + "cameras.bin", MAX_BINARY).read_bytes())
+        images = reader.images_from(private_file(root, model_base + "images.bin", MAX_BINARY).read_bytes(), cameras)
+        points = reader.points_from(private_file(root, model_base + "points3D.bin", MAX_BINARY).read_bytes())
+    except (ValueError, KeyError, IndexError, struct.error, UnicodeError) as exc:
+        if str(exc) == "ONLY_COLMAP_SIMPLE_RADIAL_SUPPORTED":
+            raise AuditFailure("CAMERA_REPROJECTION_MODEL_UNSUPPORTED") from exc
+        raise AuditFailure("CAMERA_REPROJECTION_GEOMETRY_INVALID") from exc
+    require(points and images, "CAMERA_REPROJECTION_GEOMETRY_INVALID")
+    computed_means = []
+    for point in points:
+        xyz = point["xyz"]
+        require(all(math.isfinite(v) for v in xyz), "CAMERA_REPROJECTION_GEOMETRY_INVALID")
+        residuals = []
+        for image_id, index in point["track"]:
+            image = images.get(image_id)
+            require(image is not None and 0 <= index < len(image["obs"]),
+                    "CAMERA_REPROJECTION_TRACK_INVALID")
+            observation = image["obs"][index]
+            require(observation["pid"] == point["id"], "CAMERA_REPROJECTION_TRACK_INVALID")
+            try:
+                px, py = reader.reproject(image, xyz)
+            except (ValueError, ZeroDivisionError, OverflowError) as exc:
+                raise AuditFailure("CAMERA_REPROJECTION_GEOMETRY_INVALID") from exc
+            error = math.hypot(px - observation["xy"][0], py - observation["xy"][1])
+            require(math.isfinite(error), "CAMERA_REPROJECTION_GEOMETRY_INVALID")
+            residuals.append(error)
+        mean = sum(residuals) / len(residuals)
+        stored = struct.unpack_from("<d", point["head"], reader.POINT_PREFIX.size - 8)[0]
+        require(math.isfinite(stored) and abs(mean - stored) <= 0.001,
+                "CAMERA_REPROJECTION_GEOMETRY_INVALID")
+        computed_means.append(mean)
+    measured = sum(computed_means) / len(computed_means)
+    require(math.isfinite(measured) and measured <= 1.5
+            and abs(measured - claimed_mean) <= 0.001,
+            "CAMERA_REPROJECTION_GEOMETRY_INVALID")
+    return measured
+
+
+
 def audit(root):
     root = Path(root).resolve(strict=True)
     require(root.is_dir(), "SOURCE_ROOT_INVALID")
@@ -342,6 +396,7 @@ def audit(root):
     require(isinstance(mean, (int, float)) and math.isfinite(mean)
             and mean <= 1.5 and abs(mean - points["mean_error"]) <= 0.0001,
             "CAMERA_REPROJECTION_INVALID")
+    measured_reprojection = independently_verify_reprojection(root, model_base, mean)
     require(quality.get("scale_note") and "unscaled" in quality["scale_note"].lower(),
             "METRIC_SCALE_MISREPRESENTED")
     distances = [abs(candidate_t - holdout_t) for source_a,candidate_t in split_times["candidate"]
@@ -356,6 +411,8 @@ def audit(root):
             "candidateViews": candidates, "holdoutViews": holdouts,
             "registeredViews": images["count"], "sparsePoints": points["count"],
             "reprojectionMeanPx": round(points["mean_error"], 6),
+            "independentReprojectionGeometryVerified": True,
+            "recomputedReprojectionMeanPx": round(measured_reprojection, 6),
             "maskFileFixityVerified": True, "maskedSfmPixelDerivationVerified": True,
             "maskPixelsIndependentlyInspected": False, "cameraIntrinsicsVerified": True,
             "sourceManifestBindingVerified": True,
