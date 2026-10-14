@@ -119,6 +119,60 @@ def robust_training_track(rows, heldout_survey, min_views=3, min_surveys=2,
             'max_parallax_deg': angle, 'status': 'TRAIN_ONLY_GEOMETRY_SUPPORT'}
 
 
+def assess_whole_survey(per_view, expected_by_frame, excluded_survey, thresholds):
+    """Preserve historical aggregate math; independently VETO incomplete/poor views.
+
+    This is a new conservative safety gate, not a retroactive mutation of the
+    frozen historical aggregate threshold or any prior evaluation receipt.
+    It does not grant training or production even when every view is sound.
+    """
+    require(len(per_view) == len(expected_by_frame), 'HELDOUT_VIEW_COUNT_INVALID')
+    allowed_missing = {'NOT_LOCALIZED', 'INSUFFICIENT_CORRESPONDENCES',
+                       'PNP_FAILED_INLIERS', 'CHEIRALITY_FAILED'}
+    localized_statuses = {f'{excluded_survey}_LOCALIZED_FROZEN_TRAIN_BA',
+                          f'{excluded_survey.split("_")[0]}_LOCALIZED_FROZEN_TRAIN_BA'}
+    medians, p90s, rates, missing, unsafe = [], [], [], [], []
+    accounted = set()
+    for row in per_view:
+        name = row['frame']
+        require(name in expected_by_frame and name not in accounted and
+                row['image_sha256'] == expected_by_frame[name]['frame_sha256'],
+                'HELDOUT_PER_VIEW_IDENTITY_INVALID')
+        accounted.add(name)
+        if row['status'] not in localized_statuses:
+            require(row['status'] in allowed_missing, 'UNKNOWN_EVALUATION_STATUS')
+            missing.append(name)
+            continue
+        require(row['pose_inliers'] >= 30 and row['test_correspondences'] >= 15 and
+                row.get('fit_correspondences', row['pose_inliers']) >= row['pose_inliers'],
+                'HELDOUT_POSITIVE_RESULT_UNSUPPORTED')
+        metrics = [float(row[key]) for key in (
+            'unfitted_median_px', 'unfitted_p90_px', 'unfitted_inlier_rate_5px')]
+        require(all(math.isfinite(v) for v in metrics) and
+                metrics[0] >= 0 and metrics[1] >= metrics[0] and
+                0 <= metrics[2] <= 1, 'HELDOUT_METRICS_INVALID')
+        mm, p90, rate = metrics
+        medians.append(mm);p90s.append(p90);rates.append(rate)
+        if (mm > thresholds['heldout_median_unfitted_reproj_px'] or
+            p90 > thresholds['heldout_p90_unfitted_reproj_px'] or
+            rate < thresholds['heldout_unfitted_inlier_rate_at_5px']):
+            unsafe.append({'frame':name,'median_px':mm,'p90_px':p90,'fraction_under_5px':rate})
+    require(accounted == set(expected_by_frame), 'HELDOUT_VIEW_OMITTED')
+    lm = len(medians)
+    med, p90, rate = (median(medians), median(p90s), median(rates)) if lm else (None,None,None)
+    aggregate = bool(lm >= thresholds['heldout_registered_images'] and
+                     med <= thresholds['heldout_median_unfitted_reproj_px'] and
+                     p90 <= thresholds['heldout_p90_unfitted_reproj_px'] and
+                     rate >= thresholds['heldout_unfitted_inlier_rate_at_5px']) if lm else False
+    # Safety veto: independent full-survey evidence may not silently discard a
+    # failed camera and may not conceal wildly inaccurate individual views.
+    whole = aggregate and not missing and not unsafe and lm == len(expected_by_frame)
+    return {'localized_views':lm,'median_of_medians_px':med,'median_of_p90_px':p90,
+            'median_fraction_under_5px':rate,'legacy_aggregate_screen_pass':aggregate,
+            'whole_survey_integrity_pass':whole,'missing_or_failed_views':missing,
+            'views_above_original_limits':unsafe}
+
+
 def review(root, protocol_path, original_train_path, refined_train_path,
            ba_report_path, evaluation_path, check_frame_bytes=True):
     root = Path(root)
@@ -181,35 +235,26 @@ def review(root, protocol_path, original_train_path, refined_train_path,
             'EVALUATION_BINDINGS_INVALID')
     by_frame = {r['frame_file']: r for r in p['frames'] if r['split'] == 'holdout'}
     require(len(evaluation['per_view']) == len(by_frame), 'HELDOUT_VIEW_COUNT_INVALID')
-    medians, p90s, rates, localized = [], [], [], 0
-    accounted = set()
-    for r in evaluation['per_view']:
-        name = r['frame']
-        require(name in by_frame and name not in accounted and
-                r['image_sha256'] == by_frame[name]['frame_sha256'],
-                'HELDOUT_PER_VIEW_IDENTITY_INVALID')
-        accounted.add(name)
-        if r['status'] == 'S04_LOCALIZED_FROZEN_TRAIN_BA':
-            require(r['pose_inliers'] >= 30 and r['test_correspondences'] >= 15,
-                    'HELDOUT_POSITIVE_RESULT_UNSUPPORTED')
-            for key in ('unfitted_median_px', 'unfitted_p90_px', 'unfitted_inlier_rate_5px'):
-                require(math.isfinite(float(r[key])), 'HELDOUT_NAN')
-            medians.append(float(r['unfitted_median_px']))
-            p90s.append(float(r['unfitted_p90_px']))
-            rates.append(float(r['unfitted_inlier_rate_5px']))
-            localized += 1
-    mm, p90, rate = (median(medians), median(p90s), median(rates)) if medians else (None,None,None)
-    computed_pass = bool(localized >= THRESHOLDS['heldout_registered_images'] and
-                         mm <= THRESHOLDS['heldout_median_unfitted_reproj_px'] and
-                         p90 <= THRESHOLDS['heldout_p90_unfitted_reproj_px'] and
-                         rate >= THRESHOLDS['heldout_unfitted_inlier_rate_at_5px']) if medians else False
-    require(evaluation['heldout_views_localized'] == localized and
-            evaluation['geometric_screen_pass'] == computed_pass, 'RESULT_MISREPRESENTED')
-    require(all(abs(a-b) <= 1e-8 for a,b in [
-        (mm,evaluation['median_of_per_view_unfitted_medians_px']),
-        (p90,evaluation['median_of_per_view_unfitted_p90_px']),
-        (rate,evaluation['median_of_per_view_unfitted_rate_5px'])]) if medians else True,
-        'AGGREGATE_MISCOMPUTED')
+    measured = assess_whole_survey(
+        evaluation['per_view'], by_frame, excluded, THRESHOLDS)
+    require(evaluation['heldout_views_localized'] == measured['localized_views'] and
+            evaluation['geometric_screen_pass'] == measured['legacy_aggregate_screen_pass'],
+            'RESULT_MISREPRESENTED')
+    for expected, actual in (
+        ('median_of_per_view_unfitted_medians_px', measured['median_of_medians_px']),
+        ('median_of_per_view_unfitted_p90_px', measured['median_of_p90_px']),
+        ('median_of_per_view_unfitted_rate_5px', measured['median_fraction_under_5px']),
+    ):
+        recorded = evaluation.get(expected)
+        require((recorded is None and actual is None) or
+                (recorded is not None and actual is not None and
+                 math.isfinite(float(recorded)) and abs(float(recorded)-actual) <= 1e-8),
+                'AGGREGATE_MISCOMPUTED')
+    # The historical aggregate remains immutable. This separate fail-closed
+    # integrity veto prevents omitted views or a high-error tail from being
+    # hidden by a median of the surviving cameras. Neither condition grants
+    # source-frame training or final artistic acceptance.
+    whole_pass = measured['whole_survey_integrity_pass']
     # No in-band environment or software status promotes production. Separate
     # genuine human/privacy/art/legal and paid-compute permissions are required.
     return {'world': p['world'], 'classification': 'INTERPRETIVE_NOT_AUTOBIOGRAPHICAL',
@@ -219,14 +264,20 @@ def review(root, protocol_path, original_train_path, refined_train_path,
             'frozen_BA_sha256': refined_hash,
             'source_frames_verified': bool(check_frame_bytes),
             'training_frames': len(t), 'withheld_views': len(v),
-            'localized_views': localized, 'heldout_median_of_medians_px': mm,
-            'heldout_median_of_p90_px': p90,
-            'heldout_median_of_fraction_under_5px': rate,
-            'geometric_screen_pass': computed_pass,
+            'localized_views': measured['localized_views'],
+            'heldout_median_of_medians_px': measured['median_of_medians_px'],
+            'heldout_median_of_p90_px': measured['median_of_p90_px'],
+            'heldout_median_of_fraction_under_5px': measured['median_fraction_under_5px'],
+            'legacy_aggregate_screen_pass': measured['legacy_aggregate_screen_pass'],
+            'whole_survey_integrity_pass': whole_pass,
+            'missing_or_failed_views': measured['missing_or_failed_views'],
+            'views_above_original_limits': measured['views_above_original_limits'],
+            'geometric_screen_pass': whole_pass,
             'training_permitted': False, 'gpu_spend_permitted': False,
             'production_gaussian_trained': False, 'frames_admitted': 0,
             'photoreal_art_accepted': False,
-            'status': 'GEOMETRY_SCREEN_PASSED_BUT_NOT_ADMITTED' if computed_pass else 'GEOMETRY_SCREEN_FAILED_NO_TRAINING'}
+            'status': 'GEOMETRY_SCREEN_PASSED_BUT_NOT_ADMITTED' if whole_pass else 'GEOMETRY_SCREEN_FAILED_NO_TRAINING'}
+
 
 
 def main():
