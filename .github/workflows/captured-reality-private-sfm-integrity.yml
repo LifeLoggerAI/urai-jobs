@@ -22,6 +22,8 @@ on:
       - scripts/world001-source-disjoint-geometry-guard.test.py
       - scripts/world001_train_cross_survey_consistency.py
       - scripts/world001_train_cross_survey_consistency.test.py
+      - scripts/world001-source-correction-preflight.py
+      - scripts/world001-source-correction-preflight.test.py
       - .github/workflows/captured-reality-private-sfm-integrity.yml
 
 permissions:
@@ -55,3 +57,5 @@ jobs:
         run: python3 scripts/world001-source-disjoint-geometry-guard.test.py
       - name: Verify train-only survey-out geometric track refusal
         run: python3 scripts/world001_train_cross_survey_consistency.test.py
+      - name: Verify bound World001 coherent-source GLB and calibration receipt files
+        run: python3 scripts/world001-source-correction-preflight.test.py
