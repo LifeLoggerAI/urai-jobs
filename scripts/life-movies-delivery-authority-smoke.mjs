@@ -138,7 +138,9 @@ export function harness() {
         if (name.endsWith('/firestore-paths.js')) return { jobDoc: (id) => ref(`jobs/${id}`), jobQueueEntryDoc: (id) => ref(`jobQueue/${id}`) };
         if (name.endsWith('/consentBlocks.js')) return { consentBlockRef: () => ref('jobConsentBlocks/synthetic'),
           isConsentContext: (value) => !!value && ['purpose', 'policyVersion', 'decisionReceiptId'].every((key) => typeof value[key] === 'string' && value[key].length > 0) };
-        if (name.endsWith('/jobsReliability.js')) return { bindingMatches: () => false,
+        if (name.endsWith('/jobsReliability.js')) return {
+          bindingMatches: (binding, expected) => binding?.ownerUid === expected.ownerUid
+            && binding?.jobType === expected.jobType && binding?.requestFingerprint === expected.requestFingerprint,
           buildIdempotencyBindingId: digest, buildRequestFingerprint: (_type, value) => digest(value) };
         if (name.endsWith('/sceneTruthReceipt.js')) return { assertSceneTruthReceiptValue: () => ({ receiptId: 'synthetic-receipt', expiresAt: Date.now() + 600_000 }) };
         if (name.endsWith('/studioLifeMovieLongformContract.js')) return { StudioLifeMovieLongformPayloadSchema: z.any(), LIFE_MOVIE_LONGFORM_BUDGET: { maxSegments: 180 }, assertLifeMovieLongformTenantPaths: value => value,
@@ -326,6 +328,10 @@ if (!baseline) {
     const request = form === 'short' ? { jobId: createdId } : { planId: createdId };
     const otherTenant = await allowed.invoke(form, 'status', { ...request, tenantId: 'foreign-tenant' });
     assert.equal(otherTenant.statusCode, 403, form + ' cannot read another tenant');
+    const fingerprintConflict = await allowed.invoke(form, 'create', { ...input,
+      payload: { ...input.payload, renderPlanDigest: 'e'.repeat(64) } });
+    assert.equal(fingerprintConflict.statusCode, 409, form + ' must deny same-key different-payload replay');
+    groups++;
     const stillAuthorized = await allowed.invoke(form, 'create', input);
     assert.equal(stillAuthorized.statusCode, 202, form + ' must retain legitimate idempotent reuse');
     assert.equal(form === 'short' ? stillAuthorized.body.jobId : stillAuthorized.body.planId, createdId);
