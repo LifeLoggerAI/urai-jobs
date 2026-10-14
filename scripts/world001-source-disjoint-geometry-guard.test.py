@@ -81,6 +81,41 @@ class World001GeometryContracts(unittest.TestCase):
             (d/frame[44]['frame_file']).write_bytes(b'bad heldout mutation')
             with self.assertRaisesRegex(ValueError,'FRAME_SHA256_INVALID'):run()
 
+    def test_w4_missing_survey_view_cannot_hide_high_error_tail(self):
+        expected = {f'holdout/S07_ELEVATION/frame{i:03d}.jpg':
+                    {'frame_sha256': f'{i:064x}'} for i in range(6)}
+        medians = [0.822, 1.292, 2.461, 3.277, 17.976]
+        p90s = [1.665, 2.602, 7.225, 17.526, 180.792]
+        rows = []
+        for i in range(6):
+            name = f'holdout/S07_ELEVATION/frame{i:03d}.jpg'
+            row = {'frame':name,'image_sha256':expected[name]['frame_sha256'],
+                   'pose_inliers':60,'fit_correspondences':90,'test_correspondences':20}
+            if i<5:
+                row.update({'status':'S07_ELEVATION_LOCALIZED_FROZEN_TRAIN_BA',
+                            'unfitted_median_px':medians[i],
+                            'unfitted_p90_px':p90s[i],
+                            'unfitted_inlier_rate_5px':0.80})
+            else: row['status']='INSUFFICIENT_CORRESPONDENCES'
+            rows.append(row)
+        actual=mod.assess_whole_survey(rows,expected,'S07_ELEVATION',mod.THRESHOLDS)
+        self.assertTrue(actual['legacy_aggregate_screen_pass'])
+        self.assertFalse(actual['whole_survey_integrity_pass'])
+        self.assertEqual(len(actual['missing_or_failed_views']),1)
+        self.assertEqual(len(actual['views_above_original_limits']),2)
+        rows[-1].update({'status':'S07_ELEVATION_LOCALIZED_FROZEN_TRAIN_BA',
+                         'unfitted_median_px':2.0,'unfitted_p90_px':3.0,
+                         'unfitted_inlier_rate_5px':0.8})
+        self.assertFalse(mod.assess_whole_survey(rows,expected,'S07_ELEVATION',mod.THRESHOLDS)['whole_survey_integrity_pass'])
+        for row in rows:
+            row.update({'status':'S07_ELEVATION_LOCALIZED_FROZEN_TRAIN_BA',
+                        'unfitted_median_px':2.0,'unfitted_p90_px':3.0,
+                        'unfitted_inlier_rate_5px':0.8})
+        self.assertTrue(mod.assess_whole_survey(rows,expected,'S07_ELEVATION',mod.THRESHOLDS)['whole_survey_integrity_pass'])
+        rows[0]['status']='S04_RIGHT_LOCALIZED_FROZEN_TRAIN_BA'
+        with self.assertRaisesRegex(ValueError,'UNKNOWN_EVALUATION_STATUS'):
+            mod.assess_whole_survey(rows,expected,'S07_ELEVATION',mod.THRESHOLDS)
+
     def test_immutable_threshold_contract(self):
         self.assertEqual(mod.THRESHOLDS['heldout_median_unfitted_reproj_px'],4.0)
         self.assertEqual(mod.THRESHOLDS['heldout_p90_unfitted_reproj_px'],8.0)
