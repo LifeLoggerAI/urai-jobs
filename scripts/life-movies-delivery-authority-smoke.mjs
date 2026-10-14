@@ -333,7 +333,9 @@ if (!baseline) {
     assert.equal(fingerprintConflict.statusCode, 409, form + ' must deny same-key different-payload replay');
     groups++;
     const stillAuthorized = await allowed.invoke(form, 'create', input);
-    assert.equal(stillAuthorized.statusCode, 202, form + ' must retain legitimate idempotent reuse');
+    // Creation is 202; a valid idempotent replay returns the stored job as 200.
+    assert.equal(stillAuthorized.statusCode, 200, form + ' must retain legitimate idempotent reuse');
+    assert.equal(stillAuthorized.body?.deduplicated, true, form + ' must confirm no new job was queued');
     assert.equal(form === 'short' ? stillAuthorized.body.jobId : stillAuthorized.body.planId, createdId);
     groups++;
 
