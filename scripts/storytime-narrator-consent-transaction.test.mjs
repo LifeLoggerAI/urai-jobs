@@ -26,7 +26,7 @@ function harness() {
   const documents = new Map(), versions = new Map(), modules = new Map();
   let serial = 0;
   const state = { attempts: 0, conflicts: 0, commits: 0, privateMediaCalls: 0,
-    storageDeletes: [], failStorage: false, afterStorageDelete: null,
+    storageDeletes: [], failStorage: false, beforeStorageDelete: null, afterStorageDelete: null,
     beforeTransaction: null, beforeCommit: null };
   const clone = value => value === undefined ? undefined : structuredClone(value);
   function set(path, value) {
@@ -115,6 +115,9 @@ function harness() {
         if (name === 'firebase-admin/storage') return { getStorage: () => ({
           bucket: bucket => ({ file: objectPath => ({ async delete(options) {
             assert.equal(options.ignoreNotFound, true);
+            const before = state.beforeStorageDelete;
+            state.beforeStorageDelete = null;
+            await before?.();
             state.storageDeletes.push({ bucket, objectPath });
             if (state.failStorage) throw new Error('synthetic_storage_failure');
             const next = state.afterStorageDelete;
@@ -398,5 +401,42 @@ test('artifact identity change mid-deletion cannot falsely complete cleanup', as
   const secondAttempt = await h.invoke(jobAction('delete-output', id));
   assert.equal(secondAttempt.statusCode, 200);
   assert.equal(h.record('jobs/' + id).outputDeletionState, 'COMPLETE');
+  assert.equal(h.state.storageDeletes.length, 2);
+});
+
+test('in-flight delete fences both playback descriptors and audio delivery before GCS operation', async () => {
+  const h = harness(), first = await h.invoke(), id = first.body.jobId;
+  h.patchJob(id, { status: 'SUCCESS', output: { artifactPath: privateArtifact(), mimeType: 'audio/mpeg' } });
+  let checked = false;
+  h.state.beforeStorageDelete = async () => {
+    checked = true;
+    const fenced = h.record('jobs/' + id);
+    assert.equal(fenced.outputDeletionState, 'PENDING');
+    assert.equal(fenced.derivativeAccessState, 'REVOKED');
+    assert.equal(fenced.output.artifactPath, privateArtifact());
+    const playback = await h.invoke(jobAction('playback', id));
+    assert.equal(playback.statusCode, 409);
+    assert.equal(playback.body.error, 'job_not_ready_for_playback');
+    const delivery = await h.invoke({
+      ...jobAction('deliver', id), kind: 'audio',
+      authorityHash: 'a'.repeat(64), expiresAt: Date.now() + 60_000, generation: '1',
+    });
+    assert.equal(delivery.statusCode, 409);
+    assert.equal(delivery.body.error, 'job_not_ready_for_playback');
+    assert.equal(h.state.privateMediaCalls, 0);
+    assert.equal(h.state.storageDeletes.length, 0);
+  };
+  h.state.failStorage = true;
+  const interrupted = await h.invoke(jobAction('delete-output', id));
+  assert.equal(checked, true);
+  assert.notEqual(interrupted.statusCode, 200);
+  assert.equal(h.record('jobs/' + id).outputDeletionState, 'PENDING');
+  assert.equal(h.record('jobs/' + id).derivativeAccessState, 'REVOKED');
+  assert.equal(h.state.storageDeletes.length, 1);
+  h.state.failStorage = false;
+  const retried = await h.invoke(jobAction('delete-output', id));
+  assert.equal(retried.statusCode, 200);
+  assert.equal(h.record('jobs/' + id).outputDeletionState, 'COMPLETE');
+  assert.equal(h.record('jobs/' + id).output, undefined);
   assert.equal(h.state.storageDeletes.length, 2);
 });
