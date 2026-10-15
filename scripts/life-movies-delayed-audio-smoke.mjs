@@ -224,13 +224,13 @@ try {
     const streams = JSON.parse(probe.stdout).streams;
     assert.ok(streams.some(s=>s.codec_name==='h264'));
     assert.ok(streams.some(s=>s.codec_name==='aac' && s.sample_rate==='48000' && s.channels===2));
-    const pcm = spawnSync('ffmpeg',['-v','error','-xerror','-i',actualMovie,'-map','0:a:0',
+    const spokenPcm = spawnSync('ffmpeg',['-v','error','-xerror','-i',actualMovie,'-map','0:a:0',
       '-f','s16le','-ac','1','-ar','48000','-'],{maxBuffer:2*1024*1024,timeout:15000});
-    assert.equal(pcm.status,0,pcm.stderr.toString());
+    assert.equal(spokenPcm.status,0,spokenPcm.stderr.toString());
     const peak = (first,last) => {
       let maximum=0;
       for(let i=Math.trunc(first*48000);i<Math.trunc(last*48000);i++){
-        maximum=Math.max(maximum,Math.abs(pcm.stdout.readInt16LE(i*2)));
+        maximum=Math.max(maximum,Math.abs(spokenPcm.stdout.readInt16LE(i*2)));
       }
       return maximum;
     };
