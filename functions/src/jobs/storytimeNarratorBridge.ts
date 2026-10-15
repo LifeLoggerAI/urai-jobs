@@ -326,15 +326,65 @@ async function deliverNarrator(input: z.infer<typeof DeliverSchema>, request: an
 }
 
 async function deleteOutput(input: z.infer<typeof JobActionSchema>) {
-  const { location } = await artifactLocation(input);
-  await getStorage().bucket(location.bucket).file(location.objectPath).delete({ ignoreNotFound: true });
-  const now = FieldValue.serverTimestamp();
-  await jobDoc(input.jobId).update({
-    output: FieldValue.delete(),
-    result: FieldValue.delete(),
-    outputDeletedAt: now,
-    outputDeletedBy: input.userId,
-    updatedAt: now,
+  const db = getFirestore();
+  const ref = jobDoc(input.jobId);
+  // Revoke playback before a cross-service Storage deletion. A failed GCS
+  // request leaves a durable PENDING fence that cannot stream private audio.
+  const fenced = await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new Error('job_not_found');
+    const job = assertBoundJob(snapshot.data() as BoundJob, input);
+    if (!['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].includes(String(job.status))) {
+      throw new Error('job_not_ready_for_output_deletion');
+    }
+    const output = job.output && typeof job.output === 'object' && !Array.isArray(job.output)
+      ? job.output as Record<string, unknown> : undefined;
+    const deletedBefore = !!(job as BoundJob & { outputDeletedAt?: unknown }).outputDeletedAt
+      || (job as BoundJob & { outputDeletionState?: string }).outputDeletionState === 'COMPLETE';
+    if (!output && deletedBefore) return { alreadyDeleted: true, artifactPath: null as string | null, location: null };
+    if ((output && !output.artifactPath) || (!output && job.status === 'SUCCESS')) {
+      throw new Error('narrator_artifact_missing');
+    }
+    const location = output ? parseArtifactPath(output.artifactPath) : null;
+    if (location) {
+      const bucket = String(process.env.GCS_BUCKET_NAME || '').trim();
+      const requiredPrefix = `storytime/${input.userId}/${input.sessionId}/${input.narratorScriptId}/`;
+      if (!bucket || location.bucket !== bucket || !location.objectPath.startsWith(requiredPrefix)
+        || location.objectPath.includes('\\')) throw new Error('narrator_artifact_boundary_mismatch');
+    }
+    transaction.update(ref, {
+      derivativeAccessState: 'REVOKED',
+      outputDeletionState: 'PENDING',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { alreadyDeleted: false, artifactPath: output ? String(output.artifactPath) : null, location };
+  });
+  if (fenced.alreadyDeleted) return { deleted: true, alreadyDeleted: true };
+  if (fenced.location) {
+    await getStorage().bucket(fenced.location.bucket).file(fenced.location.objectPath)
+      .delete({ ignoreNotFound: true });
+  }
+  // Job output must still match the exact artifact we removed; otherwise fail
+  // closed and retain PENDING for a retry instead of falsely certifying deletion.
+  await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new Error('job_not_found');
+    const job = assertBoundJob(snapshot.data() as BoundJob, input);
+    const output = job.output && typeof job.output === 'object' && !Array.isArray(job.output)
+      ? job.output as Record<string, unknown> : undefined;
+    if (!['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].includes(String(job.status))
+      || (output ? output.artifactPath : null) !== fenced.artifactPath) {
+      throw new Error('narrator_output_changed_during_deletion');
+    }
+    transaction.update(ref, {
+      output: FieldValue.delete(),
+      result: FieldValue.delete(),
+      outputDeletedAt: FieldValue.serverTimestamp(),
+      outputDeletedBy: input.userId,
+      outputDeletionState: 'COMPLETE',
+      derivativeAccessState: 'REVOKED',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
   });
   return { deleted: true };
 }
@@ -399,6 +449,8 @@ export const storytimeNarratorBridge = onRequest({
       : code === 'job_not_ready_for_playback' ? 409
       : code === 'narrator_artifact_boundary_mismatch' ? 403
       : code === 'narrator_artifact_missing' ? 409
+      : code === 'job_not_ready_for_output_deletion' ? 409
+      : code === 'narrator_output_changed_during_deletion' ? 409
       : code === 'elevenlabs_voice_id_required' ? 400
       : 400;
     res.status(status).json({ ok: false, error: code });

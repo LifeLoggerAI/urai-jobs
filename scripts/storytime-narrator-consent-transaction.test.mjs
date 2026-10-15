@@ -26,17 +26,26 @@ function harness() {
   const documents = new Map(), versions = new Map(), modules = new Map();
   let serial = 0;
   const state = { attempts: 0, conflicts: 0, commits: 0, privateMediaCalls: 0,
+    storageDeletes: [], failStorage: false, afterStorageDelete: null,
     beforeTransaction: null, beforeCommit: null };
   const clone = value => value === undefined ? undefined : structuredClone(value);
   function set(path, value) {
     documents.set(path, clone(value));
     versions.set(path, (versions.get(path) || 0) + 1);
   }
+  function merge(current, patch) {
+    const result = clone(current || {});
+    for (const [path, value] of Object.entries(patch)) {
+      if (value === 'synthetic-delete-field') delete result[path];
+      else result[path] = clone(value);
+    }
+    return result;
+  }
   function reference(path) {
     return {
       path, get: async () => snapshot(path),
       collection: name => ({ doc: id => reference(path + '/' + name + '/' + id) }),
-      update: async value => set(path, { ...(documents.get(path) || {}), ...clone(value) }),
+      update: async value => set(path, merge(documents.get(path), value)),
     };
   }
   function snapshot(path) {
@@ -74,7 +83,7 @@ function harness() {
           if (write.create) assert.equal(documents.has(write.path), false, 'Duplicate document create');
         }
         for (const write of writes) {
-          const value = write.merge ? { ...(documents.get(write.path) || {}), ...write.value } : write.value;
+          const value = write.merge ? merge(documents.get(write.path), write.value) : write.value;
           set(write.path, value);
         }
         state.commits++;
@@ -93,7 +102,7 @@ function harness() {
       module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022
     }}).outputText;
     vm.runInNewContext(compiled, {
-      exports, Buffer, process: { env: { URAI_ENV: 'test' } }, console,
+      exports, Buffer, process: { env: { URAI_ENV: 'test', GCS_BUCKET_NAME: 'synthetic-private-bucket' } }, console,
       require(name) {
         if (name === 'node:crypto') return require('node:crypto');
         if (name === 'zod') return zod;
@@ -103,9 +112,16 @@ function harness() {
             delete: () => 'synthetic-delete-field',
           }
         };
-        if (name === 'firebase-admin/storage') return { getStorage: () => {
-          throw new Error('unexpected_private_storage_access');
-        }};
+        if (name === 'firebase-admin/storage') return { getStorage: () => ({
+          bucket: bucket => ({ file: objectPath => ({ async delete(options) {
+            assert.equal(options.ignoreNotFound, true);
+            state.storageDeletes.push({ bucket, objectPath });
+            if (state.failStorage) throw new Error('synthetic_storage_failure');
+            const next = state.afterStorageDelete;
+            state.afterStorageDelete = null;
+            await next?.();
+          }}) })
+        }) };
         if (name === 'firebase-functions/params') return {
           defineSecret: () => ({ value: () => 'synthetic-bridge-token' })
         };
@@ -153,6 +169,7 @@ function harness() {
     state, invoke, setBlock: active => set(consentPath, { ownerUid: owner, purpose, active }),
     count: prefix => [...documents.keys()].filter(k => k.startsWith(prefix)).length,
     record: path => clone(documents.get(path)),
+    patchJob: (id, patch) => set('jobs/' + id, merge(documents.get('jobs/' + id), patch)),
   };
 }
 
@@ -274,4 +291,112 @@ test('owner-bound cancellation prevents a pending narrator queue entry from runn
   assert.equal(h.record('jobs/' + first.body.jobId).status, 'CANCELLED');
   assert.equal(h.record('jobQueue/' + first.body.jobId).status, 'CANCELLED');
   assert.equal(h.state.privateMediaCalls, 0);
+});
+
+
+const jobAction = (action, id, overrides = {}) => ({
+  action, userId: owner, sessionId, narratorScriptId, jobId: id, ...overrides
+});
+const privateArtifact = () =>
+  'gs://synthetic-private-bucket/storytime/' + owner + '/' + sessionId + '/' + narratorScriptId + '/narration.mp3';
+
+test('revoke already-SUCCESS narration deletes the exact scoped object and fences playback', async () => {
+  const h = harness(), first = await h.invoke();
+  const id = first.body.jobId;
+  h.patchJob(id, { status: 'SUCCESS', output: { artifactPath: privateArtifact(), mimeType: 'audio/mpeg' } });
+  const deleted = await h.invoke(jobAction('delete-output', id));
+  assert.equal(deleted.statusCode, 200);
+  assert.equal(deleted.body.deletion.deleted, true);
+  assert.equal(h.state.storageDeletes.length, 1);
+  assert.equal(h.state.storageDeletes[0].bucket, 'synthetic-private-bucket');
+  const job = h.record('jobs/' + id);
+  assert.equal(job.output, undefined);
+  assert.equal(job.outputDeletionState, 'COMPLETE');
+  assert.equal(job.derivativeAccessState, 'REVOKED');
+  assert.equal((await h.invoke(jobAction('playback', id))).statusCode, 409);
+  const replay = await h.invoke(jobAction('delete-output', id));
+  assert.equal(replay.statusCode, 200);
+  assert.equal(replay.body.deletion.alreadyDeleted, true);
+  assert.equal(h.state.storageDeletes.length, 1);
+});
+
+test('CANCELLED and FAILED narrator jobs clean any surviving private artifacts', async () => {
+  for (const status of ['CANCELLED', 'FAILED', 'DEAD']) {
+    const h = harness(), first = await h.invoke(), id = first.body.jobId;
+    h.patchJob(id, { status, output: { artifactPath: privateArtifact() } });
+    const r = await h.invoke(jobAction('delete-output', id));
+    assert.equal(r.statusCode, 200, status);
+    assert.equal(r.body.deletion.deleted, true);
+    assert.equal(h.state.storageDeletes.length, 1);
+    assert.equal(h.record('jobs/' + id).outputDeletionState, 'COMPLETE');
+  }
+});
+
+test('CANCELLED without a persisted artifact is an idempotent confirmed absence', async () => {
+  const h = harness(), first = await h.invoke(), id = first.body.jobId;
+  await h.invoke(jobAction('cancel', id));
+  const r = await h.invoke(jobAction('delete-output', id));
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.body.deletion.deleted, true);
+  assert.equal(h.state.storageDeletes.length, 0);
+  assert.equal(h.record('jobs/' + id).outputDeletionState, 'COMPLETE');
+});
+
+test('active or mismatched tenants cannot authorize narrator deletion', async () => {
+  const h = harness(), first = await h.invoke(), id = first.body.jobId;
+  const active = await h.invoke(jobAction('delete-output', id));
+  assert.equal(active.statusCode, 409);
+  h.patchJob(id, { status: 'SUCCESS', output: { artifactPath: privateArtifact() } });
+  for (const mutation of [{ userId: 'foreign-user' }, { sessionId: 'other-session' },
+    { narratorScriptId: 'other-script' }]) {
+    const response = await h.invoke(jobAction('delete-output', id, mutation));
+    assert.equal(response.statusCode, 403);
+  }
+  assert.equal(h.state.storageDeletes.length, 0);
+});
+
+test('bucket and full user/session/script prefixes are checked before deletion', async () => {
+  for (const artifact of [
+    'gs://wrong-bucket/storytime/' + owner + '/' + sessionId + '/' + narratorScriptId + '/audio.mp3',
+    'gs://synthetic-private-bucket/storytime/' + owner + '/' + sessionId + '/foreign-script/audio.mp3',
+    'gs://synthetic-private-bucket/storytime/foreign-owner/' + sessionId + '/' + narratorScriptId + '/audio.mp3',
+    'gs://synthetic-private-bucket/storytime/' + owner + '/' + sessionId + '/' + narratorScriptId + '/../audio.mp3',
+  ]) {
+    const h = harness(), first = await h.invoke(), id = first.body.jobId;
+    h.patchJob(id, { status: 'SUCCESS', output: { artifactPath: artifact } });
+    const r = await h.invoke(jobAction('delete-output', id));
+    assert.notEqual(r.statusCode, 200);
+    assert.equal(h.state.storageDeletes.length, 0);
+    assert.notEqual(h.record('jobs/' + id).outputDeletionState, 'COMPLETE');
+  }
+});
+
+test('GCS failure retains revoked PENDING fence until deletion retry succeeds', async () => {
+  const h = harness(), first = await h.invoke(), id = first.body.jobId;
+  h.patchJob(id, { status: 'SUCCESS', output: { artifactPath: privateArtifact() } });
+  h.state.failStorage = true;
+  const r = await h.invoke(jobAction('delete-output', id));
+  assert.notEqual(r.statusCode, 200);
+  assert.equal(h.record('jobs/' + id).outputDeletionState, 'PENDING');
+  assert.equal(h.record('jobs/' + id).derivativeAccessState, 'REVOKED');
+  assert.equal((await h.invoke(jobAction('playback', id))).statusCode, 409);
+  h.state.failStorage = false;
+  assert.equal((await h.invoke(jobAction('delete-output', id))).statusCode, 200);
+  assert.equal(h.record('jobs/' + id).outputDeletionState, 'COMPLETE');
+});
+
+test('artifact identity change mid-deletion cannot falsely complete cleanup', async () => {
+  const h = harness(), first = await h.invoke(), id = first.body.jobId;
+  h.patchJob(id, { status: 'SUCCESS', output: { artifactPath: privateArtifact() } });
+  const second = 'gs://synthetic-private-bucket/storytime/' + owner + '/' + sessionId
+    + '/' + narratorScriptId + '/new-audio.mp3';
+  h.state.afterStorageDelete = () => h.patchJob(id, { output: { artifactPath: second } });
+  const initial = await h.invoke(jobAction('delete-output', id));
+  assert.equal(initial.statusCode, 409);
+  assert.equal(h.record('jobs/' + id).output.artifactPath, second);
+  assert.equal(h.record('jobs/' + id).outputDeletionState, 'PENDING');
+  const secondAttempt = await h.invoke(jobAction('delete-output', id));
+  assert.equal(secondAttempt.statusCode, 200);
+  assert.equal(h.record('jobs/' + id).outputDeletionState, 'COMPLETE');
+  assert.equal(h.state.storageDeletes.length, 2);
 });
