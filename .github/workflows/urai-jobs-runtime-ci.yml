@@ -75,6 +75,33 @@ jobs:
         shell: bash
         run: test -z "$(git status --porcelain --untracked-files=all)"
 
+      # Reuse current Jobs runtime CI to test its real contract against the
+      # independently owned Studio consumer. This does NOT change admission.
+      - name: Exercise pinned Studio consumer against exact Jobs candidate parser
+        shell: bash
+        env:
+          URAI_STUDIO_CONSUMER_SHA: 4d13b8b4f66768c69d9e828f503ec65de0c85a16
+        run: |
+          set -euo pipefail
+          candidate="$RUNNER_TEMP/urai-studio-consumer"
+          git clone -q --no-checkout --depth 1 --branch repair/studio-convergence-20261007 \
+            https://github.com/LifeLoggerAI/urai-studio.git "$candidate"
+          git -C "$candidate" checkout --detach "$URAI_STUDIO_CONSUMER_SHA"
+          test "$(git -C "$candidate" rev-parse HEAD)" = "$URAI_STUDIO_CONSUMER_SHA"
+          test -z "$(git -C "$candidate" status --porcelain --untracked-files=all)"
+          mkdir -p "$RUNNER_TEMP/studio-jobs-compat"
+          URAI_STUDIO_CONSUMER_ROOT="$candidate" node scripts/studio-jobs-candidate-compatibility.mjs \
+            > "$RUNNER_TEMP/studio-jobs-compat/contract-receipt.json"
+          test -z "$(git status --porcelain --untracked-files=all)"
+      - name: Retain candidate-only Studio Jobs compatibility receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: urai-studio-jobs-candidate-${{ env.TARGET_SHA }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/studio-jobs-compat/
+          if-no-files-found: warn
+          retention-days: 90
+
       - name: Verify actual Life Movies media timing
         shell: bash
         run: |
