@@ -204,6 +204,17 @@ async function assertPlanConsentActive(plan: StoredPlan) {
   }
 }
 
+/** Firestore transactions must re-read consent and owner deletion authority
+ * in the same snapshot as enqueue/resume writes. Preflight checks alone do
+ * not protect against a concurrent withdrawal or owner deletion. */
+async function assertTransactionalLifeMovieAuthority(transaction: any, db: any, plan: StoredPlan) {
+  const currentBlock = await transaction.get(consentBlockRef(plan.ownerUid, plan.consent.purpose));
+  if (currentBlock.exists && currentBlock.data()?.active === true) {
+    throw new Error('life_movie_longform_consent_revoked');
+  }
+  await assertPrivateMediaOwnerActive(transaction, db, plan.ownerUid);
+}
+
 async function createPlan(input: z.infer<typeof CreateSchema>) {
   if (!longformEnabled()) throw new Error('life_movie_longform_disabled');
 
@@ -496,6 +507,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
     if (!planSnapshot.exists) throw new Error('longform_plan_not_found');
     const currentPlan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
     if (currentPlan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
+    await assertTransactionalLifeMovieAuthority(transaction, db, currentPlan);
 
     if (existing.exists) {
       const current = existing.data() as Job;
@@ -754,6 +766,7 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
     const currentPlan = assertPlanOwner(currentPlanSnapshot.data() as StoredPlan, tenantId, userId);
     if (currentPlan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
     if (currentPlan.assemblyJobId !== plan.assemblyJobId) throw new Error('longform_plan_changed');
+    await assertTransactionalLifeMovieAuthority(transaction, db, currentPlan);
     const [snapshots, assemblySnapshot] = await Promise.all([
       childRefs.length ? transaction.getAll(...childRefs) : Promise.resolve([]),
       plan.assemblyJobId ? transaction.get(jobDoc(plan.assemblyJobId)) : Promise.resolve(null),

@@ -225,6 +225,34 @@ for (const action of ['resumePlan', 'assemblePlan']) {
 }
 console.log('[PASS] Resume/assembly that loaded an older parent cannot recreate jobs after deletion');
 
+// Revocation can land after the preflight consent read but immediately before
+// Firestore's write transaction. Both operations must re-read that authority
+// inside their transaction, not queue children or an assembly from stale data.
+for (const action of ['resumePlan', 'assemblePlan']) {
+  for (const scenario of ['consent', 'local-owner-deletion', 'central-owner-deletion']) {
+    const status = action === 'resumePlan' ? 'FAILED' : 'SUCCESS';
+    const h = harness(status);
+    const ownerHash = crypto.createHash('sha256').update(ownerUid).digest('hex');
+    h.state.beforeNextTransaction = async () => {
+      if (scenario === 'consent') h.set('jobConsentBlocks/fixture', { active: true });
+      if (scenario === 'local-owner-deletion') {
+        h.set(`uraiPrivateLifeModelOwnerFences/${ownerHash}`, { ownerHash, deleted: true });
+      }
+      if (scenario === 'central-owner-deletion') {
+        h.set(`privacyDeletionTombstones/${ownerUid}`, { uid: ownerUid, active: true });
+      }
+    };
+    await assert.rejects(h.long[action](planId, tenantId, ownerUid),
+      scenario === 'consent' ? /life_movie_longform_consent_revoked/ : /private_media_owner_deleted/,
+      `${action} must not requeue after ${scenario}`);
+    assert.equal(h.get(`jobs/${childId}`).status, status, 'child status stays unchanged');
+    assert.equal(h.get(`jobs/${assemblyId}`).status, status, 'assembly status stays unchanged');
+    assert.equal(h.state.storageCalls, 0, 'rejected resume/assemble must not touch storage');
+    assert.equal(h.get(`studioLifeMovieLongformPlans/${planId}`).status, 'PENDING');
+  }
+}
+console.log('[PASS] 6 post-preflight consent and deletion races deny long-form resume and assembly before queue writes');
+
 const pending = harness('SUCCESS'), stalled = gate(); pending.state.storageGate = stalled.wait;
 const deletion = pending.long.deletePlanOutputs(planId, tenantId, ownerUid);
 await stalled.started;
