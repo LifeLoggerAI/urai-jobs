@@ -86,18 +86,39 @@ for (const form of ['short', 'long', 'narrator']) {
   assert.equal(response.writableFinished, true); assert.deepEqual(Buffer.concat(response.chunks), p.bytes);
   assert.match(response.headers['Cache-Control'], /no-store/); assert.equal(h.state.signs.length, 0); cases++;
 }
-for (const form of ['short', 'long', 'narrator']) for (const reason of ['consent', 'local-delete', 'central-delete', 'output-change', 'generation', 'expired', 'no-token', 'foreign-token']) {
+// Explicit legitimate non-deleted fences must continue permitting current,
+// authenticated owner delivery on every existing media bridge.
+for (const form of ['short', 'long', 'narrator']) {
+  const h = harness(), p = await prepare(h, form), uid = h.identities.userId;
+  const ownerHash = crypto.createHash('sha256').update(uid).digest('hex');
+  h.set(`uraiPrivateLifeModelOwnerFences/${ownerHash}`, { ownerHash, deleted: false });
+  h.set(`privacyDeletionTombstones/${uid}`, { uid, active: false });
+  const response = await http(h, form, p.delivery);
+  assert.equal(response.writableFinished, true, `${form} valid owner fences`);
+  assert.deepEqual(Buffer.concat(response.chunks), p.bytes);
+  assert.equal(h.state.signs.length, 0); cases++;
+}
+for (const form of ['short', 'long', 'narrator']) for (const reason of ['consent', 'local-delete', 'central-delete', 'local-missing-deleted', 'local-string-deleted', 'central-missing-active', 'central-string-active', 'output-change', 'generation', 'expired', 'no-token', 'foreign-token']) {
   const h = harness(), p = await prepare(h, form), i = h.identities;
   if (reason === 'consent') h.set('jobConsentBlocks/synthetic', { active: true });
   if (reason === 'local-delete') { const hash = crypto.createHash('sha256').update(i.userId).digest('hex'); h.set(`uraiPrivateLifeModelOwnerFences/${hash}`, { ownerHash: hash, deleted: true }); }
   if (reason === 'central-delete') h.set(`privacyDeletionTombstones/${i.userId}`, { uid: i.userId, active: true });
+  if (reason === 'local-missing-deleted' || reason === 'local-string-deleted') {
+    const hash = crypto.createHash('sha256').update(i.userId).digest('hex');
+    h.set(`uraiPrivateLifeModelOwnerFences/${hash}`, reason === 'local-missing-deleted'
+      ? { ownerHash: hash } : { ownerHash: hash, deleted: 'false' });
+  }
+  if (reason === 'central-missing-active' || reason === 'central-string-active') {
+    h.set(`privacyDeletionTombstones/${i.userId}`, reason === 'central-missing-active'
+      ? { uid: i.userId } : { uid: i.userId, active: 'false' });
+  }
   if (reason === 'output-change') h.change(`jobs/${p.jobId}`, job => { job.output.correctedRevision = 'new-source'; });
   if (reason === 'generation') p.delivery.generation = '2';
   if (reason === 'expired') h.state.now = p.delivery.expiresAt;
   rejected(await http(h, form, p.delivery, { token: reason === 'no-token' ? '' : reason === 'foreign-token' ? 'foreign-token' : 'synthetic-token' }), `${form} ${reason}`);
   assert.equal(h.state.signs.length, 0); cases++;
 }
-for (const form of ['short', 'long', 'narrator']) for (const reason of ['consent', 'token-rotation', 'deadline', 'owner-delete']) {
+for (const form of ['short', 'long', 'narrator']) for (const reason of ['consent', 'token-rotation', 'deadline', 'owner-delete', 'local-fence-malformed', 'central-fence-malformed']) {
   const h = harness(), p = await prepare(h, form, true);
   const response = await http(h, form, p.delivery, { onChunk(count) {
     if (count !== 1) return;
@@ -105,6 +126,14 @@ for (const form of ['short', 'long', 'narrator']) for (const reason of ['consent
     if (reason === 'token-rotation') h.state.token = 'rotated-token';
     if (reason === 'deadline') h.state.now = p.delivery.expiresAt;
     if (reason === 'owner-delete') h.set(`privacyDeletionTombstones/${h.identities.userId}`, { uid: h.identities.userId, active: true });
+    if (reason === 'local-fence-malformed') {
+      const uid = h.identities.userId, hash = crypto.createHash('sha256').update(uid).digest('hex');
+      h.set(`uraiPrivateLifeModelOwnerFences/${hash}`, { ownerHash: hash, deleted: 'false' });
+    }
+    if (reason === 'central-fence-malformed') {
+      const uid = h.identities.userId;
+      h.set(`privacyDeletionTombstones/${uid}`, { uid, active: 'false' });
+    }
   } });
   assert.equal(response.writableFinished, false, `${form} ${reason} must close current stream`);
   assert.equal(Buffer.concat(response.chunks).length, 64 * 1024, `${form} ${reason} admits no later chunks`);

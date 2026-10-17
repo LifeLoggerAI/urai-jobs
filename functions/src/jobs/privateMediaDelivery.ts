@@ -19,8 +19,11 @@ export async function assertPrivateMediaOwnerActive(transaction: any, db: any, o
     transaction.get(db.collection('privacyDeletionTombstones').doc(ownerUid)),
   ]);
   const own = local.data(), canonical = central.data();
-  if ((local.exists && (own?.ownerHash !== ownerHash || own?.deleted === true))
-    || (central.exists && (canonical?.uid !== ownerUid || canonical?.active === true))) {
+  // Existing owner fences must have explicit, correctly scoped false state.
+  // Missing, non-Boolean or malformed fields are not affirmative permission
+  // to deliver private media, matching the life-movie rendering worker.
+  if ((local.exists && (own?.ownerHash !== ownerHash || own?.deleted !== false))
+    || (central.exists && (canonical?.uid !== ownerUid || canonical?.active !== false))) {
     throw new Error('private_media_owner_deleted');
   }
 }
