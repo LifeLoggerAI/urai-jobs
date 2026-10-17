@@ -1,5 +1,7 @@
 """World001 training-only feature-association regression tests (stdlib, no media)."""
 import importlib.util
+import sys
+sys.dont_write_bytecode = True
 from pathlib import Path
 import tempfile
 import unittest
