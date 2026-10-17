@@ -23,7 +23,10 @@ function fixtures(status = 'RUNNING') {
   const artifact = (kind, role) => ({ kind, ref: `gs://${bucket}/${prefix}/${role}/attempt-fixture/${kind}`, checksum: 'a'.repeat(64) });
   const child = { jobId: childId, type: 'studio.render.video', jobType: 'studio.render.video', status,
     sourceSystem: 'urai-studio', ownerUid, tenantId, consent, lease: { token: 'lease-fixture' },
-    payload: { projectId }, execution: { leaseToken: 'lease-fixture', parentJobId: planId, rootJobId: planId },
+    payload: { projectId, renderPlanDigest: 'c'.repeat(64),
+      sceneTruthDigest: 'b'.repeat(64),
+      sceneTruthReceiptRef: `str_fixturefixture1234_zzzzzzzz_${'A'.repeat(40)}` },
+    execution: { leaseToken: 'lease-fixture', parentJobId: planId, rootJobId: planId },
     output: { outputs: [artifact('mp4', 'segments'), artifact('srt', 'segments')] } };
   const assembly = { ...clone(child), jobId: assemblyId, type: 'studio.assemble.video', jobType: 'studio.assemble.video',
     output: { outputs: [artifact('mp4', 'final'), artifact('srt', 'final')] } };
@@ -39,7 +42,7 @@ function harness(status = 'RUNNING') {
   const f = fixtures(status), documents = new Map(), versions = new Map(), objects = new Map();
   const state = { documents, objects, storageCalls: 0, storageFailure: false, storageGate: null,
     metadataOverrides: new Map(), replaceBeforeStorageDelete: false, deletePreconditions: [],
-    beforeNextTransaction: null, storageObservations: [], signedUrls: 0 };
+    beforeNextTransaction: null, beforeTransactionCommit: null, storageObservations: [], signedUrls: 0 };
   const ref = (name) => ({ path: name, id: name.split('/').at(-1), get: async () => snapshot(ref(name)),
     collection: (name2) => ({ doc: (id) => ref(`${name}/${name2}/${id}`) }) });
   const snapshot = (reference) => ({ ref: reference, id: reference.id, exists: documents.has(reference.path),
@@ -68,6 +71,8 @@ function harness(status = 'RUNNING') {
           create: (reference, values) => writes.push(() => { assert.equal(documents.has(reference.path), false); patch(reference, values, false); }),
         };
         const result = await callback(transaction);
+        const beforeCommit = state.beforeTransactionCommit; state.beforeTransactionCommit = null;
+        await beforeCommit?.();
         if ([...reads].some(([name, version]) => (versions.get(name) || 0) !== version)) continue;
         for (const write of writes) write(); return result;
       }
@@ -252,6 +257,70 @@ for (const action of ['resumePlan', 'assemblePlan']) {
   }
 }
 console.log('[PASS] 6 post-preflight consent and deletion races deny long-form resume and assembly before queue writes');
+
+// The child-output preflight can race with a cancellation, deletion or a
+// replacement before the final Firestore transaction creates an assembly.
+function readyToAssemble() {
+  const h = harness('SUCCESS');
+  const plan = clone(h.get(`studioLifeMovieLongformPlans/${planId}`));
+  plan.assemblyJobId = null;
+  h.set(`studioLifeMovieLongformPlans/${planId}`, plan);
+  h.documents.delete(`jobs/${assemblyId}`);
+  return h;
+}
+const validAssembly = readyToAssemble();
+const createdAssembly = await validAssembly.long.assemblePlan(planId, tenantId, ownerUid);
+assert.equal(createdAssembly.status, 'PENDING');
+assert.equal(createdAssembly.deduplicated, false);
+assert.equal(validAssembly.get(`jobs/${createdAssembly.jobId}`).status, 'PENDING');
+assert.equal(validAssembly.get(`jobQueueEntries/${createdAssembly.jobId}`).status, 'PENDING');
+const repeatedAssembly = await validAssembly.long.assemblePlan(planId, tenantId, ownerUid);
+assert.equal(repeatedAssembly.deduplicated, true);
+assert.equal(repeatedAssembly.jobId, createdAssembly.jobId);
+console.log('[PASS] Current verified child creates assembly once and deduplicates exactly');
+
+for (const scenario of ['cancel', 'artifact-hash', 'foreign-owner', 'foreign-parent',
+  'source-digest', 'scene-truth', 'source-receipt', 'output-deletion', 'plan-child-set']) {
+  const h = readyToAssemble();
+  h.state.beforeNextTransaction = async () => {
+    const child = clone(h.get(`jobs/${childId}`));
+    if (scenario === 'cancel') child.status = 'CANCELLED';
+    if (scenario === 'artifact-hash') child.output.outputs[0].checksum = 'e'.repeat(64);
+    if (scenario === 'foreign-owner') child.ownerUid = 'unrelated-fixture-owner';
+    if (scenario === 'foreign-parent') child.execution.parentJobId = 'other-plan';
+    if (scenario === 'source-digest') child.payload.renderPlanDigest = 'f'.repeat(64);
+    if (scenario === 'scene-truth') child.payload.sceneTruthDigest = 'd'.repeat(64);
+    if (scenario === 'source-receipt') child.payload.sceneTruthReceiptRef =
+      `str_${'z'.repeat(20)}_${'a'.repeat(8)}_${'B'.repeat(43)}`;
+    if (scenario === 'output-deletion') child.outputDeletionState = 'PENDING';
+    if (scenario === 'plan-child-set') {
+      const changed = clone(h.get(`studioLifeMovieLongformPlans/${planId}`));
+      changed.segments[0].childDigest = 'f'.repeat(64);
+      h.set(`studioLifeMovieLongformPlans/${planId}`, changed);
+    } else h.set(`jobs/${childId}`, child);
+  };
+  await assert.rejects(h.long.assemblePlan(planId, tenantId, ownerUid),
+    /longform_segment_binding_mismatch|longform_plan_not_ready_for_assembly/,
+    `late ${scenario} cannot enqueue stale assembly`);
+  assert.equal(h.get(`studioLifeMovieLongformPlans/${planId}`).assemblyJobId, null);
+  assert.equal(h.state.storageCalls, 0);
+  assert.ok(![...h.documents].some(([key, value]) =>
+    key.startsWith('jobQueueEntries/') && value.jobType === 'studio.assemble.video'));
+}
+console.log('[PASS] 9 child status, source, SceneTruth, owner and output changes block stale assembly');
+
+const retriedTransaction = readyToAssemble();
+retriedTransaction.state.beforeTransactionCommit = async () => {
+  const child = clone(retriedTransaction.get(`jobs/${childId}`));
+  child.status = 'CANCELLED';
+  retriedTransaction.set(`jobs/${childId}`, child);
+};
+await assert.rejects(retriedTransaction.long.assemblePlan(planId, tenantId, ownerUid),
+  /longform_plan_not_ready_for_assembly/);
+assert.ok(![...retriedTransaction.documents].some(([key, value]) =>
+  key.startsWith('jobQueueEntries/') && value.jobType === 'studio.assemble.video'));
+console.log('[PASS] Conflicting Firestore child update retries the transaction and blocks queue insertion');
+
 
 const pending = harness('SUCCESS'), stalled = gate(); pending.state.storageGate = stalled.wait;
 const deletion = pending.long.deletePlanOutputs(planId, tenantId, ownerUid);

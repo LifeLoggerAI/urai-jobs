@@ -509,6 +509,57 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
     if (currentPlan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
     await assertTransactionalLifeMovieAuthority(transaction, db, currentPlan);
 
+    // Bind the child completion and source/output identity in the same
+    // Firestore transaction that will create the assembly queue entry.
+    if (currentPlan.projectId !== plan.projectId ||
+        currentPlan.renderPlanDigest !== plan.renderPlanDigest ||
+        currentPlan.sceneTruthDigest !== plan.sceneTruthDigest ||
+        currentPlan.sceneTruthReceiptRef !== plan.sceneTruthReceiptRef ||
+        currentPlan.width !== plan.width || currentPlan.height !== plan.height ||
+        currentPlan.fps !== plan.fps ||
+        currentPlan.childJobIds.length !== plan.childJobIds.length ||
+        currentPlan.childJobIds.some((id, index) => id !== plan.childJobIds[index]) ||
+        currentPlan.segments.length !== plan.segments.length ||
+        currentPlan.segments.some((s, index) => {
+          const previous = plan.segments[index];
+          return !previous || s.jobId !== previous.jobId ||
+            s.childDigest !== previous.childDigest || s.index !== previous.index ||
+            s.startMs !== previous.startMs || s.endMs !== previous.endMs;
+        })) throw new Error('longform_segment_binding_mismatch');
+
+    const freshChildren = await transaction.getAll(
+      ...currentPlan.childJobIds.map((id) => jobDoc(id)));
+    for (const [index, snapshot] of freshChildren.entries()) {
+      const child = snapshot.exists ? snapshot.data() as Job : undefined;
+      if (!child || child.status !== 'SUCCESS' ||
+          (child as Job & {outputDeletionState?: string}).outputDeletionState === 'PENDING' ||
+          (child as Job & {outputDeletionState?: string}).outputDeletionState === 'COMPLETE') {
+        throw new Error('longform_plan_not_ready_for_assembly');
+      }
+      const childPayload = child.payload && typeof child.payload === 'object' &&
+        !Array.isArray(child.payload) ? child.payload as Record<string, unknown> : null;
+      if (child.jobId !== currentPlan.childJobIds[index] ||
+          child.ownerUid !== userId || child.tenantId !== tenantId ||
+          (child.jobType || child.type) !== 'studio.render.video' ||
+          child.execution?.rootJobId !== planId ||
+          child.execution?.parentJobId !== planId ||
+          childPayload?.projectId !== currentPlan.projectId ||
+          childPayload?.renderPlanDigest !== currentPlan.segments[index].childDigest ||
+          childPayload?.sceneTruthDigest !== currentPlan.sceneTruthDigest ||
+          childPayload?.sceneTruthReceiptRef !== currentPlan.sceneTruthReceiptRef) {
+        throw new Error('longform_segment_binding_mismatch');
+      }
+      const video = boundedArtifact(child.output, 'mp4');
+      const subtitle = boundedArtifact(child.output, 'srt');
+      const expected = segments[index];
+      if (!expected || video.ref !== expected.videoRef ||
+          video.checksum !== expected.videoChecksum ||
+          subtitle.ref !== expected.subtitleRef ||
+          subtitle.checksum !== expected.subtitleChecksum) {
+        throw new Error('longform_segment_binding_mismatch');
+      }
+    }
+
     if (existing.exists) {
       const current = existing.data() as Job;
       if (current.ownerUid !== userId || current.tenantId !== tenantId
