@@ -86,6 +86,7 @@ jobs:
           candidate="$RUNNER_TEMP/urai-studio-consumer"
           git clone -q --no-checkout --depth 1 --branch repair/studio-convergence-20261007 \
             https://github.com/LifeLoggerAI/urai-studio.git "$candidate"
+          git -C "$candidate" fetch --no-tags --depth=1 origin "$URAI_STUDIO_CONSUMER_SHA"
           git -C "$candidate" checkout --detach "$URAI_STUDIO_CONSUMER_SHA"
           test "$(git -C "$candidate" rev-parse HEAD)" = "$URAI_STUDIO_CONSUMER_SHA"
           test -z "$(git -C "$candidate" status --porcelain --untracked-files=all)"
