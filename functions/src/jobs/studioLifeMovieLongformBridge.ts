@@ -403,18 +403,41 @@ async function loadPlan(planId: string, tenantId: string, userId: string) {
 async function readPlanStatus(planId: string, tenantId: string, userId: string) {
   const plan = await loadPlan(planId, tenantId, userId);
   const consentSnapshot = await consentBlockRef(plan.ownerUid, plan.consent.purpose).get();
-  const revoked = consentSnapshot.exists && consentSnapshot.data()?.active === true;
+  const revoked = (consentSnapshot.exists && consentSnapshot.data()?.active === true)
+    || ['REVOKED', 'DELETED'].includes(String(plan.derivativeAccessState))
+    || ['PENDING', 'COMPLETE'].includes(String(plan.outputDeletionState));
+  if (plan.sourceSystem !== 'urai-studio' || plan.planId !== planId
+    || plan.consent?.purpose !== 'life-movie.render'
+    || !Array.isArray(plan.childJobIds) || plan.childJobIds.length < 1
+    || new Set(plan.childJobIds).size !== plan.childJobIds.length
+    || !Array.isArray(plan.segments) || plan.segments.length !== plan.childJobIds.length) {
+    throw new Error('longform_plan_boundary_mismatch');
+  }
   const db = getFirestore();
   const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
   const assemblySnapshot = plan.assemblyJobId ? await jobDoc(plan.assemblyJobId).get() : null;
+  const validJob = (value: Job | undefined, expectedId: string, expectedType: string) =>
+    value?.jobId === expectedId && value?.tenantId === tenantId
+    && value?.ownerUid === userId && value?.sourceSystem === 'urai-studio'
+    && (value?.jobType || value?.type) === expectedType
+    && value?.execution?.rootJobId === planId
+    && (value?.payload as { projectId?: unknown } | undefined)?.projectId === plan.projectId
+    && value?.consent?.purpose === plan.consent.purpose
+    && value?.consent?.decisionReceiptId === plan.consent.decisionReceiptId;
   const children = snapshots.map((snapshot, index) => {
-    const data = snapshot.exists ? snapshot.data() : undefined;
+    const data = snapshot.exists ? snapshot.data() as Job : undefined;
+    if (data && !validJob(data, plan.childJobIds[index], 'studio.render.video')) {
+      throw new Error('longform_plan_boundary_mismatch');
+    }
     return {
       jobId: plan.childJobIds[index],
       status: (data?.status ?? 'DEAD') as JobStatus,
       index: plan.segments[index]?.index ?? index,
     };
   });
+  if (assemblySnapshot?.exists && !validJob(
+    assemblySnapshot.data() as Job, plan.assemblyJobId!, 'studio.assemble.video',
+  )) throw new Error('longform_plan_boundary_mismatch');
   const statuses = children.map((child) => child.status);
   const counts = statuses.reduce<Record<string, number>>((result, status) => {
     result[status] = (result[status] ?? 0) + 1;
@@ -422,6 +445,17 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
   }, {});
   return {
     planId,
+    // Owner-scoped attestation from the stored Jobs plan, never request JSON.
+    sourceBinding: {
+      sourceSystem: plan.sourceSystem,
+      ownerUid: plan.ownerUid,
+      tenantId: plan.tenantId,
+      projectId: plan.projectId,
+      processingPurpose: plan.consent.purpose,
+      sceneTruthReceiptRef: plan.sceneTruthReceiptRef,
+      sceneTruthDigest: plan.sceneTruthDigest,
+      renderPlanDigest: plan.renderPlanDigest,
+    },
     status: revoked ? 'REVOKED' : deriveStatus(plan, statuses),
     consentRevoked: revoked,
     segmentCount: children.length,
