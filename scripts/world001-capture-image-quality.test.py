@@ -135,6 +135,29 @@ class CameraControlTests(unittest.TestCase):
         m=physical_packet();m['evaluation_plan']['holdout_images_materialized']=True
         with self.assertRaisesRegex(ValueError,'CAPTURE_HOLDOUT_NOT_FROZEN'):
             q.verify_locked_capture_metadata(m)
+    def test_blank_or_path_like_future_holdout_id_never_reserves_a_disjoint_session(self):
+        for invalid in ('', '  ', '.', '..', '../future', 'future/next', 'future\\\\next',
+                        ' future', 'future '):
+            m=physical_packet()
+            m['evaluation_plan']['reserved_future_session_id']=invalid
+            with self.subTest(value=invalid), self.assertRaisesRegex(
+                    ValueError, 'CAPTURE_HOLDOUT_NOT_FROZEN'):
+                q.verify_locked_capture_metadata(m)
+
+    def test_current_train_session_cannot_be_renamed_as_future_holdout(self):
+        m=physical_packet()
+        m['evaluation_plan']['reserved_future_session_id']='train_capture_a'
+        with self.assertRaisesRegex(ValueError, 'CAPTURE_HOLDOUT_NOT_FROZEN'):
+            q.verify_locked_capture_metadata(m)
+
+    def test_blank_or_whitespace_padded_training_view_id_is_rejected(self):
+        for invalid in ('', '  ', ' view001', 'view001 '):
+            m=physical_packet()
+            m['views'][0]['id']=invalid
+            with self.subTest(value=invalid), self.assertRaisesRegex(
+                    ValueError, 'CAPTURE_VIEW_ID_INVALID'):
+                q.verify_locked_capture_metadata(m)
+
 
     def test_different_camera_identity_rejected(self):
         m=physical_packet();m['calibrations']['cal_001']['camera_id']='foreign'

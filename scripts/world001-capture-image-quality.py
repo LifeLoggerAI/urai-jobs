@@ -120,8 +120,9 @@ def verify_locked_capture_metadata(manifest):
         require(isinstance(v, dict) and v.get('split') == 'train',
                 'CAPTURE_HOLDOUT_OR_UNKNOWN_VIEW_REFUSED')
         identifier = v.get('id')
-        require(isinstance(identifier, str) and identifier not in seen,
-                'CAPTURE_DUPLICATE_VIEW_ID')
+        require(isinstance(identifier, str) and bool(identifier.strip()) and
+                identifier == identifier.strip(), 'CAPTURE_VIEW_ID_INVALID')
+        require(identifier not in seen, 'CAPTURE_DUPLICATE_VIEW_ID')
         seen.add(identifier)
         controls = by_session.get(v.get('session_id'))
         calib = calibrations.get(v.get('calibration_id'))
@@ -131,10 +132,13 @@ def verify_locked_capture_metadata(manifest):
                 calib.get('distortion_status') == 'CALIBRATED_ZERO_OR_RECTIFIED',
                 'CAPTURE_LENS_OR_CALIBRATION_DRIFT')
     ep = manifest.get('evaluation_plan', {})
+    reserved = ep.get('reserved_future_session_id')
     require(ep.get('source_disjoint_holdout') is True and
             ep.get('holdout_images_materialized') is False and
-            isinstance(ep.get('reserved_future_session_id'), str) and
-            ep['reserved_future_session_id'] not in by_session,
+            isinstance(reserved, str) and bool(reserved.strip()) and
+            reserved == reserved.strip() and reserved not in ('.', '..') and
+            '/' not in reserved and '\\' not in reserved and
+            reserved not in by_session,
             'CAPTURE_HOLDOUT_NOT_FROZEN')
     return {'train_views': len(views), 'locked_sessions': len(sessions),
             'distinct_calibrations': len({v['calibration_id'] for v in views})}
