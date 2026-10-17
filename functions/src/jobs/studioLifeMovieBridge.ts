@@ -16,7 +16,7 @@ import {
 import { StudioLifeMovieRenderPayloadSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
 import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
-import { assertPrivateMediaOwnerActive, inspectPrivateMedia, privateMediaDescriptor, streamPrivateMedia } from './privateMediaDelivery.js';
+import { assertPrivateMediaOwnerActive, inspectPrivateMedia, privateMediaDescriptor, streamPrivateMedia, deleteOwnedLifeMovieArtifact } from './privateMediaDelivery.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
 const sceneTruthReceiptSecret = defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC');
@@ -436,7 +436,7 @@ async function deleteBoundMovieOutput(tenantId: string, userId: string, jobId: s
       throw new Error('job_boundary_mismatch');
     }
     const expectedPrefix = `tenants/${tenantId}/life-movies/${projectId}/`;
-    const locations = new Map<string, { bucket: string; objectPath: string }>();
+    const locations = new Map<string, { bucket: string; objectPath: string; ownerUid: string; jobId: string }>();
     for (const value of [job.output, job.result]) {
       const output = value as WorkerOutput | undefined;
       for (const artifact of Array.isArray(output?.outputs) ? output!.outputs! : []) {
@@ -446,7 +446,7 @@ async function deleteBoundMovieOutput(tenantId: string, userId: string, jobId: s
           || location.objectPath.includes('..') || location.objectPath.includes('\\')) {
           throw new Error('output_delete_boundary_mismatch');
         }
-        locations.set(`${location.bucket}/${location.objectPath}`, location);
+        locations.set(`${location.bucket}/${location.objectPath}`, { ...location, ownerUid: userId, jobId });
       }
     }
     const now = FieldValue.serverTimestamp();
@@ -464,8 +464,7 @@ async function deleteBoundMovieOutput(tenantId: string, userId: string, jobId: s
     return [...locations.values()];
   });
 
-  await Promise.all(locations.map(({ bucket, objectPath }) =>
-    getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true })));
+  await Promise.all(locations.map(deleteOwnedLifeMovieArtifact));
 
   const now = FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {

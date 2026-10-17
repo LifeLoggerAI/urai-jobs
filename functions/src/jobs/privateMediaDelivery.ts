@@ -28,6 +28,34 @@ export async function assertPrivateMediaOwnerActive(transaction: any, db: any, o
   }
 }
 
+
+/** Remove only an owned immutable worker-generated object generation.
+ * Missing provenance must remain pending for explicit reconciliation rather
+ * than deleting a later replacement or someone else's media. */
+export async function deleteOwnedLifeMovieArtifact(location: Location & { ownerUid: string; jobId: string }) {
+  const file = getStorage().bucket(location.bucket).file(location.objectPath);
+  let metadata;
+  try {
+    [metadata] = await file.getMetadata();
+  } catch (error) {
+    if ((error as { code?: unknown })?.code === 404) return;
+    throw error;
+  }
+  const generation = String(metadata?.generation || '');
+  const markers = metadata?.metadata;
+  const ownerHash = createHash('sha256').update(location.ownerUid).digest('hex');
+  if (!/^[1-9][0-9]*$/.test(generation)
+    || markers?.uraiLifeMovieJobId !== location.jobId
+    || markers?.uraiLifeMovieOwnerSha256 !== ownerHash
+    || !/^[a-f0-9]{64}$/.test(String(markers?.uraiLifeMovieLeaseSha256 || ''))
+    || !/^[a-f0-9]{64}$/.test(String(markers?.uraiLifeMovieAttemptSha256 || ''))) {
+    throw new Error('private_media_deletion_binding_mismatch');
+  }
+  // A 412 must remain an error: retain permanent access fences and cleanup
+  // references until the changed generation is independently reconciled.
+  await file.delete({ ignoreNotFound: true, ifGenerationMatch: generation });
+}
+
 export async function inspectPrivateMedia(location: Location) {
   const [metadata] = await getStorage().bucket(location.bucket).file(location.objectPath).getMetadata();
   const generation = String(metadata.generation || ''), bytes = Number(metadata.size);

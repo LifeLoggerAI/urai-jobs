@@ -8,7 +8,7 @@ import { z } from 'zod';
 import type { Job, JobQueueEntry, JobStatus } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
-import { assertPrivateMediaOwnerActive, inspectPrivateMedia, privateMediaDescriptor, streamPrivateMedia } from './privateMediaDelivery.js';
+import { assertPrivateMediaOwnerActive, inspectPrivateMedia, privateMediaDescriptor, streamPrivateMedia, deleteOwnedLifeMovieArtifact } from './privateMediaDelivery.js';
 import {
   bindingMatches,
   buildIdempotencyBindingId,
@@ -850,7 +850,7 @@ async function deletePlanOutputs(planId: string, tenantId: string, userId: strin
     const ids = [...plan.childJobIds, ...(plan.assemblyJobId ? [plan.assemblyJobId] : [])];
     const refs = ids.map((id) => jobDoc(id));
     const snapshots = refs.length ? await transaction.getAll(...refs) : [];
-    const locations = new Map<string, { bucket: string; objectPath: string }>();
+    const locations = new Map<string, { bucket: string; objectPath: string; ownerUid: string; jobId: string }>();
     const jobs: Array<{ id: string; ref: ReturnType<typeof jobDoc>; type: string; previousStatus: JobStatus; completedAt: unknown }> = [];
 
     for (const [index, snapshot] of snapshots.entries()) {
@@ -873,7 +873,11 @@ async function deletePlanOutputs(planId: string, tenantId: string, userId: strin
             || location.objectPath.includes('..') || location.objectPath.includes('\\')) {
             throw new Error('longform_output_boundary_mismatch');
           }
-          locations.set(`${location.bucket}/${location.objectPath}`, location);
+          const key = `${location.bucket}/${location.objectPath}`;
+          if (locations.has(key) && locations.get(key)!.jobId !== ids[index]) {
+            throw new Error('longform_segment_binding_mismatch');
+          }
+          locations.set(key, { ...location, ownerUid: userId, jobId: ids[index] });
         }
       }
       jobs.push({ id: ids[index], ref: refs[index], type,
@@ -900,8 +904,7 @@ async function deletePlanOutputs(planId: string, tenantId: string, userId: strin
     return { jobs: jobs.map((job) => job.id), deletions: [...locations.values()] };
   });
 
-  await Promise.all(fenced.deletions.map(({ bucket, objectPath }) =>
-    getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true })));
+  await Promise.all(fenced.deletions.map(deleteOwnedLifeMovieArtifact));
 
   const now = FieldValue.serverTimestamp();
   const batch = db.batch();

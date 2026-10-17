@@ -38,6 +38,7 @@ function fixtures(status = 'RUNNING') {
 function harness(status = 'RUNNING') {
   const f = fixtures(status), documents = new Map(), versions = new Map(), objects = new Map();
   const state = { documents, objects, storageCalls: 0, storageFailure: false, storageGate: null,
+    metadataOverrides: new Map(), replaceBeforeStorageDelete: false, deletePreconditions: [],
     beforeNextTransaction: null, storageObservations: [], signedUrls: 0 };
   const ref = (name) => ({ path: name, id: name.split('/').at(-1), get: async () => snapshot(ref(name)),
     collection: (name2) => ({ doc: (id) => ref(`${name}/${name2}/${id}`) }) });
@@ -82,13 +83,36 @@ function harness(status = 'RUNNING') {
     [`studioLifeMovieLongformPlans/${planId}`, f.plan]]) patch(ref(name), value, false);
   for (const job of [f.child, f.assembly]) for (const artifact of job.output.outputs) objects.set(artifact.ref, Buffer.from('synthetic-derivative'));
   const storage = { bucket: (bucketName) => ({ file: (objectPath) => ({
-    async delete() {
+    async getMetadata() {
+      const ref = `gs://${bucketName}/${objectPath}`;
+      if (!objects.has(ref)) throw Object.assign(new Error('fixture_storage_not_found'), { code: 404 });
+      const jobId = objectPath.includes('/segments/') ? childId : assemblyId;
+      return [clone(state.metadataOverrides.get(ref) || { generation: '1', metadata: {
+        uraiLifeMovieJobId: jobId,
+        uraiLifeMovieOwnerSha256: crypto.createHash('sha256').update(ownerUid).digest('hex'),
+        uraiLifeMovieLeaseSha256: 'a'.repeat(64),
+        uraiLifeMovieAttemptSha256: 'b'.repeat(64),
+      } })];
+    },
+    async delete(options) {
       state.storageCalls++;
       state.storageObservations.push({ child: clone(documents.get(`jobs/${childId}`)),
         assembly: clone(documents.get(`jobs/${assemblyId}`)), plan: clone(documents.get(`studioLifeMovieLongformPlans/${planId}`)) });
       await state.storageGate?.();
       if (state.storageFailure) throw new Error('fixture_storage_failure');
-      objects.delete(`gs://${bucketName}/${objectPath}`);
+      const ref = `gs://${bucketName}/${objectPath}`;
+      if (state.replaceBeforeStorageDelete) {
+        state.replaceBeforeStorageDelete = false;
+        objects.set(ref, Buffer.from('replacement from different attempt'));
+        state.metadataOverrides.set(ref, { generation: '2', metadata: {
+          uraiLifeMovieJobId: 'other-job', uraiLifeMovieOwnerSha256: 'f'.repeat(64),
+          uraiLifeMovieLeaseSha256: 'c'.repeat(64), uraiLifeMovieAttemptSha256: 'd'.repeat(64),
+        } });
+      }
+      state.deletePreconditions.push(options?.ifGenerationMatch);
+      const currentGeneration = state.metadataOverrides.get(ref)?.generation || '1';
+      if (options?.ifGenerationMatch !== currentGeneration) throw new Error('fixture_storage_generation_mismatch');
+      objects.delete(ref); state.metadataOverrides.delete(ref);
     },
     getSignedUrl: async () => { state.signedUrls++; return ['https://fixture.invalid/private']; },
     download: async () => [Buffer.from('')],
@@ -116,7 +140,7 @@ function harness(status = 'RUNNING') {
           buildIdempotencyBindingId: digest, buildRequestFingerprint: (_type, value) => digest(value) };
         if (name.endsWith('/sceneTruthReceipt.js')) return { assertSceneTruthReceiptValue() {} };
         if (name.endsWith('/studioLifeMovieLongformContract.js')) return { StudioLifeMovieLongformPayloadSchema: z.any() };
-        if (name.endsWith('/privateMediaDelivery.js')) return loadBridge('privateMediaDelivery.ts', ['assertPrivateMediaOwnerActive', 'inspectPrivateMedia', 'privateMediaDescriptor', 'streamPrivateMedia']);
+        if (name.endsWith('/privateMediaDelivery.js')) return loadBridge('privateMediaDelivery.ts', ['assertPrivateMediaOwnerActive', 'inspectPrivateMedia', 'privateMediaDescriptor', 'streamPrivateMedia', 'deleteOwnedLifeMovieArtifact']);
         if (name.endsWith('/studioLifeMovieContract.js')) return { StudioLifeMovieRenderPayloadSchema: z.any() };
         return require(name);
       },
@@ -257,5 +281,30 @@ foreignProject.set(`jobs/${childId}`, wrong);
 await assert.rejects(foreignProject.short.deleteBoundMovieOutput(tenantId, ownerUid, childId), /output_delete_boundary_mismatch/);
 assert.equal(foreignProject.state.storageCalls, 0);
 console.log('[PASS] Short deletion rejects another project inside the same tenant');
+
+const mismatch = harness();
+const mismatchRef = mismatch.f.child.output.outputs[0].ref;
+mismatch.state.metadataOverrides.set(mismatchRef, { generation: '1', metadata: {
+  uraiLifeMovieJobId: 'foreign-job', uraiLifeMovieOwnerSha256: 'f'.repeat(64),
+  uraiLifeMovieLeaseSha256: 'c'.repeat(64), uraiLifeMovieAttemptSha256: 'd'.repeat(64),
+} });
+await assert.rejects(mismatch.short.deleteBoundMovieOutput(tenantId, ownerUid, childId), /private_media_deletion_binding_mismatch/);
+assert.equal(mismatch.objects.has(mismatchRef), true);
+assert.equal(mismatch.get(`jobs/${childId}`).outputDeletionState, 'PENDING');
+console.log('[PASS] Private Life Movie deletion denies unowned generation markers');
+
+const raced = harness(); raced.state.replaceBeforeStorageDelete = true;
+await assert.rejects(raced.long.deletePlanOutputs(planId, tenantId, ownerUid), /fixture_storage_generation_mismatch/);
+assertFence(raced);
+const replaced = [...raced.objects].find(([, value]) => value.toString() === 'replacement from different attempt')?.[0];
+assert.ok(replaced, 'newer private object must survive generation race');
+assert.equal(raced.state.metadataOverrides.get(replaced)?.generation, '2');
+await assert.rejects(raced.long.deletePlanOutputs(planId, tenantId, ownerUid), /private_media_deletion_binding_mismatch/);
+assert.ok(raced.objects.has(replaced), 'retry must preserve another attempt');
+console.log('[PASS] Replacement generation survives deletion and subsequent retry');
+
+assert.ok(live.state.deletePreconditions.length > 0);
+assert.ok(live.state.deletePreconditions.every(value => value === '1'));
+console.log('[PASS] Successful deletion pins each Storage object generation');
 
 console.log('Life Movie deletion behavior passed with explicit in-memory Firestore/private-storage adapters; no deployed runtime, provider or private-media acceptance claimed');
