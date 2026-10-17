@@ -124,6 +124,11 @@ def score_training_only(model, features, calibration, policy=None):
     counts = [0] * len(landmarks)
     pixel_counts = [0] * len(landmarks)
     extra_surveys = [set() for _ in landmarks]
+    # Never borrow a 2D keypoint that already belongs to another 3D track.
+    # Such reuse creates false independent multi-view corroboration.
+    foreign_owned_candidates = 0
+    foreign_owned_descriptor_matches = 0
+    foreign_owned_landmarks = set()
     pxlimit = REPROJECTION_RADIUS_PX ** 2
     dlimit = DESCRIPTOR_MAX_L2 ** 2
     for f in frames:
@@ -144,6 +149,13 @@ def score_training_only(model, features, calibration, policy=None):
                     for index in grids[f].get((x, y), ()):
                         p = pts[index]
                         if (float(p[0]) - u)**2 + (float(p[1]) - v)**2 <= pxlimit:
+                            owner = assignments[f].get(index)
+                            if owner is not None and owner != i:
+                                foreign_owned_candidates += 1
+                                if squared_distance(desc[index], prototypes[i], dlimit) <= dlimit:
+                                    foreign_owned_descriptor_matches += 1
+                                    foreign_owned_landmarks.add(i)
+                                continue
                             neighbors.append(index)
             if not neighbors:
                 continue
@@ -152,12 +164,15 @@ def score_training_only(model, features, calibration, policy=None):
                 counts[i] += 1
                 extra_surveys[i].add(survey_id(f))
     retained = [i for i, value in enumerate(counts) if value >= MIN_OTHER_TRAIN_FRAMES]
-    return {'schema': 'URAI_WORLD001_TRAIN_ONLY_CONSENSUS_V2',
+    return {'schema': 'URAI_WORLD001_TRAIN_ONLY_CONSENSUS_V3',
             'classification': 'RESEARCH_TRAIN_ONLY_NOT_ACCEPTED',
             'candidate_landmarks': len(landmarks),
             'training_frames': len(frames),
             'supported_in_two_other_training_frames': len(retained),
             'pixels_supported_in_two_other_training_frames': sum(v >= 2 for v in pixel_counts),
+            'foreign_owned_keypoint_candidates_excluded': foreign_owned_candidates,
+            'foreign_owned_descriptor_matches_excluded': foreign_owned_descriptor_matches,
+            'landmarks_with_foreign_owned_descriptor_matches': len(foreign_owned_landmarks),
             'retained_landmark_indices': retained,
             'retained_multiple_extra_surveys': sum(len(extra_surveys[i]) >= 2 for i in retained),
             'support_histogram': {str(i): sum(v == i for v in counts) for i in range(0, 5)},

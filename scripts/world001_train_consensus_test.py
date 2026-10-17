@@ -36,6 +36,46 @@ class Tests(unittest.TestCase):
         self.assertFalse(r['gaussian_training_permitted'])
         self.assertFalse(r['independent_holdout_passed'])
         self.assertFalse(r['release_permitted'])
+    def test_foreign_owned_keypoint_cannot_fake_multiview_support(self):
+        model,features=source()
+        model['landmarks'].append([0.,0.,8.])
+        for frame in list(features)[:2]:
+            features[frame]['pts'].append(list(features[frame]['pts'][0]))
+            features[frame]['des'].append([20.]*128)
+            model['assign'][frame][1]=1
+        result=consensus.score_training_only(model,features,CAL)
+        self.assertEqual(result['retained_landmark_indices'],[0])
+        self.assertGreaterEqual(result['foreign_owned_descriptor_matches_excluded'],3)
+        self.assertEqual(result['landmarks_with_foreign_owned_descriptor_matches'],1)
+        self.assertFalse(result['source_quality_threshold_passed'])
+
+    def test_unclaimed_independent_keypoints_may_support_track(self):
+        model,features=source()
+        model['landmarks'].append([0.,0.,8.])
+        for frame in list(features)[:2]:
+            features[frame]['pts'].append(list(features[frame]['pts'][0]))
+            features[frame]['des'].append([20.]*128)
+            model['assign'][frame][1]=1
+        for frame in list(features)[2:4]:
+            features[frame]['pts'].append(list(features[frame]['pts'][0]))
+            features[frame]['des'].append([20.]*128)
+        result=consensus.score_training_only(model,features,CAL)
+        self.assertEqual(result['retained_landmark_indices'],[0,1])
+        self.assertEqual(result['foreign_owned_descriptor_matches_excluded'],3)
+
+    def test_conflicting_keypoint_owner_is_rejected_with_other_survey(self):
+        model,features=source()
+        model['landmarks'].append([0.,0.,8.])
+        for frame in list(features)[:2]:
+            features[frame]['pts'].append(list(features[frame]['pts'][0]))
+            features[frame]['des'].append([20.]*128)
+            model['assign'][frame][1]=1
+        for frame in list(features)[2:]:
+            self.assertEqual(model['assign'][frame][0],0)
+        score=consensus.score_training_only(model,features,CAL)
+        self.assertEqual(score['schema'],'URAI_WORLD001_TRAIN_ONLY_CONSENSUS_V3')
+        self.assertNotIn(1,score['retained_landmark_indices'])
+
     def test_feature_descriptor_outliers_rejected(self):
         model,features=source()
         for k in list(features)[2:]:features[k]['des'][0]=[250.]*128
