@@ -46,13 +46,16 @@ check('transcription provider URL is resolved only on transcription path', worke
 check('worker returns correlation refs without raw memory content', worker.includes('memoryIndexRef') && worker.includes('entityGraphRef') && worker.includes('temporalIndexRef') && worker.includes('placeIndexRef') && worker.includes('conflictSetRef') && worker.includes('sceneTruthRef'));
 check('memory index admits opaque incremental re-correlation context', createJob.includes('priorMemoryIndexRef') && createJob.includes('correlationTrigger') && worker.includes('priorMemoryIndexRef') && worker.includes("'stronger-source'"));
 check('memory index success requires source fixity and dependency lineage', worker.includes('sourceFixityRef') && worker.includes('dependencyGraphRef'));
-check('memory index success requires machine-readable terminal backlog state', worker.includes("new Set(['INDEXED', 'DUPLICATE', 'CONFLICTED'])") && worker.includes('non-terminal backlog state as success'));
+check('memory index success requires machine-readable terminal backlog state', worker.includes("new Set(['QUARANTINED_OWNER_REVIEW', 'QUARANTINED_CONFLICTED'])") && worker.includes('non-terminal backlog state as success'));
 check('memory index success carries monotonic correlation revision', worker.includes('correlationRevision') && worker.includes('valid correlation revision'));
 check('memory index returns correlation trigger used for this revision', worker.includes('correlationTrigger') && worker.includes('valid correlation trigger'));
 check('memory index receipt is bound to the requested recorrelation cause', worker.includes('correlation trigger does not match the requested recorrelation cause'));
 
 check('worker refuses synthetic success when unconfigured', worker.includes('PRIVATE_SOURCE_WORKER_NOT_READY') && worker.includes('refusing synthetic success'));
 check('worker never returns transcript text', !/transcript(Text|\s*:\s*provider\.data)/.test(worker));
+check('worker propagates trusted job authority to providers', worker.includes('ownerUid: job.ownerUid, jobId: job.jobId, leaseToken: job.leaseToken') && worker.includes('sourceReceiptRef: job.payload.sourceReceiptRef'));
+check('worker rejects missing ownership/purpose proof and unreviewed historical authority', worker.includes('proof.ownerUid !== job.ownerUid') && worker.includes('proof.requestedPurpose !== job.payload.requestedPurpose') && worker.includes('provider.data.historicalSourceAuthority !== false'));
+check('worker rechecks correction/revocation before returning', worker.includes('await recheckAuthorization(job, sourceProof)'));
 check('worker returns private refs and checksum', worker.includes('transcriptRef') && worker.includes('provenanceRef') && worker.includes('checksum'));
 check('root verify includes private source contract', String(pkg.scripts?.['urai-jobs:verify'] || '').includes('private-source-worker-contract.mjs'));
 check('private source worker build is in root build', String(pkg.scripts?.build || '').includes('private-source-worker:build'));

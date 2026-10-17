@@ -3,6 +3,7 @@ import type { CallableContext } from 'firebase-functions/v1/https';
 import { User } from '@urai-jobs/shared-types';
 import { httpsError } from './errors.js';
 import { userDoc } from './firestore-paths.js';
+import { currentJobActor } from './currentJobActor.js';
 
 export type AuthenticatedUser = User;
 
@@ -34,9 +35,11 @@ export const withAuthenticatedRole =
       throw httpsError('unauthenticated', 'The function must be called while authenticated.');
     }
 
-    const user = await getAuthenticatedUser(context.auth.uid);
+    const actor = await currentJobActor(context);
+    const user = actor.profile;
 
-    const hasPermission = allowedRoles.some((role) => user.role === role);
+    const hasPermission = allowedRoles.some((role) => user.role === role)
+      && (user.role === 'user' || actor.operator);
 
     if (!hasPermission) {
       throw httpsError('permission-denied', 'You do not have permission to perform this action.');

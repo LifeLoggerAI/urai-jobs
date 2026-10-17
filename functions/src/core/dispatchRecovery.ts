@@ -24,10 +24,9 @@ export async function returnLeaseAfterPublishFailure(
   const availableAt = Timestamp.fromMillis(Date.now() + Math.max(1_000, retryDelayMs));
 
   return db.runTransaction(async (transaction) => {
-    const [queueDoc, masterJobDoc] = await Promise.all([
-      transaction.get(queueRef),
-      transaction.get(masterJobRef),
-    ]);
+    // Acquire shared document locks in the same order as every queue transaction.
+    const masterJobDoc = await transaction.get(masterJobRef);
+    const queueDoc = await transaction.get(queueRef);
     if (!queueDoc.exists) return false;
 
     const queue = queueDoc.data() as JobQueueEntry;

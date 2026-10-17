@@ -2,14 +2,16 @@ name: URAI Jobs Visual Proof
 
 on:
   pull_request:
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: urai-jobs-visual-proof-${{ github.event.pull_request.number || github.ref }}
+  group: urai-jobs-visual-proof-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
+
+env:
+  TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   visual-proof:
@@ -17,17 +19,32 @@ jobs:
     timeout-minutes: 25
     env:
       EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      URAI_JOBS_VISUAL_DIR: artifacts/jobs-visual
       VITE_FIREBASE_API_KEY: visual-proof-not-production
       VITE_FIREBASE_AUTH_DOMAIN: visual-proof.invalid
       VITE_FIREBASE_PROJECT_ID: urai-jobs-visual-proof
       VITE_FIREBASE_APP_ID: visual-proof
     steps:
-      - name: Checkout exact head
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          ref: ${{ env.EXACT_HEAD }}
-          persist-credentials: false
+      - name: Checkout exact reviewed head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          checkout_home="$RUNNER_TEMP/urai-jobs-checkout-home"
+          rm -rf -- "$checkout_home"
+          mkdir -m 700 -- "$checkout_home"
+          export HOME="$checkout_home"
+          gh auth setup-git >/dev/null
+          find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+          git init .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY"
+          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin "$TARGET_SHA"
+          git checkout --detach --force "$TARGET_SHA"
+          git remote set-url origin "https://github.com/$GITHUB_REPOSITORY"
+          rm -rf -- "$checkout_home"
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          printf 'URAI_JOBS_VISUAL_DIR=%s/urai-jobs-visual\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Prove exact head
         run: test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
       - name: Setup pnpm
@@ -38,14 +55,24 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
       - name: Install workspace
         run: pnpm install --frozen-lockfile
+      - name: Prove install preserved exact source
+        shell: bash
+        run: test -z "$(git status --porcelain --untracked-files=all)"
       - name: Install proof-only Playwright
-        run: pnpm --dir web add --save-dev --lockfile=false @playwright/test@1.57.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          proof_dir="$RUNNER_TEMP/urai-jobs-playwright"
+          npm install --prefix "$proof_dir" --no-audit --no-fund --ignore-scripts --package-lock=false @playwright/test@1.57.0
+          mkdir -p web/node_modules/@playwright
+          test ! -e web/node_modules/@playwright/test
+          ln -s "$proof_dir/node_modules/@playwright/test" web/node_modules/@playwright/test
+          test "$("$proof_dir/node_modules/.bin/playwright" --version)" = "Version 1.57.0"
+          test -z "$(git status --porcelain --untracked-files=all)"
       - name: Install Chromium
-        run: pnpm --dir web exec playwright install --with-deps chromium
+        run: '"$RUNNER_TEMP/urai-jobs-playwright/node_modules/.bin/playwright" install --with-deps chromium'
       - name: Build exact-head web
         run: pnpm --dir web run build
       - name: Start Vite preview
@@ -59,24 +86,33 @@ jobs:
           done
           cat jobs-visual-server.log
           exit 1
-      - name: Capture desktop and mobile career pixels
+      - name: Verify runtime, access boundaries, keyboard, touch and accessible pixels
         working-directory: web
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
         run: |
-          pnpm exec playwright test e2e/visual-proof.spec.mjs
+          "$RUNNER_TEMP/urai-jobs-playwright/node_modules/.bin/playwright" test e2e/visual-proof.spec.mjs --output "$RUNNER_TEMP/urai-jobs-browser-results"
+      - name: Prove browser preserved exact source
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=all)"
       - name: Write exact-head receipt
         if: always()
         shell: bash
         run: |
-          mkdir -p web/artifacts/jobs-visual
-          printf '{"exactHead":"%s","proof":"jobs-career-responsive-pixels","providerData":"none"}\n' "$EXACT_HEAD" > web/artifacts/jobs-visual/receipt.json
+          mkdir -p "$URAI_JOBS_VISUAL_DIR"
+          printf '{"exactHead":"%s","proof":"jobs-runtime-responsive-pixels-with-career-containment","providerData":"none","independentApproval":false}\n' "$EXACT_HEAD" > "$URAI_JOBS_VISUAL_DIR/receipt.json"
       - name: Upload exact-head visual proof
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: urai-jobs-visual-${{ env.EXACT_HEAD }}
           path: |
-            web/artifacts/jobs-visual
+            ${{ env.URAI_JOBS_VISUAL_DIR }}
             jobs-visual-server.log
           if-no-files-found: error
+          retention-days: 90

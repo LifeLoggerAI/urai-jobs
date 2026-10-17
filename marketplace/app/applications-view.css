@@ -1,0 +1,9 @@
+.career-applications { box-sizing:border-box; color:#162437; background:white; max-width:46rem; margin:0 auto; padding:clamp(1rem,4vw,2.5rem); font:1rem/1.5 system-ui,sans-serif; }
+.career-applications h1,.career-applications h2,.career-applications p { overflow-wrap:anywhere; }
+.career-applications h1,.career-applications h2 { line-height:1.25; }
+.career-applications ul { list-style:none; padding:0; display:grid; gap:1rem; }
+.career-applications li { border:1px solid #52647a; border-radius:.4rem; padding:1rem; }
+.career-applications button { font:inherit; min-height:48px; margin:.3rem .5rem .3rem 0; padding:.65rem 1rem; border:1px solid #52647a; border-radius:.4rem; color:white; background:#153e68; cursor:pointer; max-width:100%; white-space:normal; }
+.career-applications button[aria-disabled="true"] { color:#435367; background:#e7ecf2; cursor:default; }
+.career-applications :focus-visible { outline:3px solid #8d4200; outline-offset:3px; }
+@media(prefers-reduced-motion:reduce) { .career-applications * { scroll-behavior:auto; } }

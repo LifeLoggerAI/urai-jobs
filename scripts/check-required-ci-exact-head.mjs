@@ -11,6 +11,7 @@ const requiredWorkflows = [
   '.github/workflows/urai-jobs-final-ci.yml',
   '.github/workflows/production-verification.yml',
   '.github/workflows/firebase-cli-pin-guard.yml',
+  '.github/workflows/urai-jobs-visual-proof.yml',
 ];
 
 const failures = [];
@@ -74,6 +75,7 @@ const pullRequestCodeExecutionWorkflows = [
   '.github/workflows/urai-jobs-runtime-ci.yml',
   '.github/workflows/urai-jobs-typecheck-diagnostics.yml',
   '.github/workflows/urai-production-verify.yml',
+  '.github/workflows/urai-jobs-visual-proof.yml',
 ];
 for (const path of pullRequestCodeExecutionWorkflows) {
   const source = fs.readFileSync(path, 'utf8');

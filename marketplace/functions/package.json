@@ -3,22 +3,24 @@
   "private": true,
   "version": "0.0.0-launch-gated",
   "type": "module",
-  "main": "lib/firebase-functions-entry.js",
+  "main": "lib/functions/firebase-functions-entry.js",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node ../tests/lifecycle-scenarios.mjs",
     "preflight": "node ../tests/preflight.mjs",
     "routes:smoke": "node ../tests/routes-smoke.mjs",
     "integration:scaffold": "node ../tests/integration-runtime.mjs"
   },
   "dependencies": {
-    "firebase-admin": "^12.7.0",
-    "firebase-functions": "^6.1.0"
+    "firebase-admin": "^13.8.0",
+    "firebase-functions": "^7.2.5"
   },
   "devDependencies": {
-    "typescript": "^5.4.0"
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
   }
 }

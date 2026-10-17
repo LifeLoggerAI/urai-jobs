@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "urai-model-forge-plan-v1",
+  "dryRun": true,
+  "spendAuthorized": false,
+  "assetId": "kit-gw-backyard-garage-workshop-ground-shell-v1-a884a94dbd53f9ed",
+  "providers": [
+    {
+      "provider": "meshy",
+      "requiredEnv": "MESHY_API_KEY",
+      "configured": false
+    }
+  ],
+  "target": {
+    "meters": 20,
+    "hero": true,
+    "maxTriangles": 120000,
+    "textureResolution": "4k",
+    "pbr": true
+  },
+  "generationPolicy": {
+    "maxProviderAttempts": 1,
+    "seed": 2827266381
+  },
+  "referenceCount": 0,
+  "next": "Provider execution remains blocked until URAI_MODEL_FORGE_SPEND_AUTHORIZED=1 and credentials are available."
+}

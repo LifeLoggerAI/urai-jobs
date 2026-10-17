@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-grocery-store-shell:v1",
+    "sourceKitSha256": "0f6d5f00dd591333d93be103ce095384c446327e24f0afcb45630042f24ecba3",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-grocery-store",
+        "specSha256": "a8a7382bde860263e0a7e8e86cc86f0345a5000adc50f549cdb45bf3a6231510",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 258825984
+  },
+  "id": "kit-gw-grocery-store-shell-v1-0f6d5f00dd591333",
+  "prompt": "Original generic modular architecture-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Wide central aisle and shelf cross aisles; checkout accessible-height variant included as a future module. Product dressing is instanced within shelf envelopes. Target bounding dimensions 18m wide x 3.6m high x 16m deep. Materials: vinyl-tile-muted. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 18,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

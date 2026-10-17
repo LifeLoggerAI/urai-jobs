@@ -1,0 +1,969 @@
+{
+  "schemaVersion": "urai-generic-world-model-forge-compatibility-receipt-v1",
+  "executedAt": "2026-10-07T00:25:03.955086+00:00",
+  "packageId": "gwq-07728fb3b8542d2e59f0f321c78c93deaa0ce4e892d62e73c2653c8f2963da88",
+  "providerSpecsValidated": 136,
+  "existingModelForgeEntryPoint": "LifeLoggerAI/asset-factory:model_forge/forge.mjs",
+  "modelForgeImplementationSha256": "26eb157e681e4a0faf9187ff1ebdcbaeb18216c2e300c40d3b16501c957360b5",
+  "executionMode": "--dry-run; credential-free environment containing PATH only",
+  "credentialsAvailableToExecution": false,
+  "providerCalls": 0,
+  "totalSpent": 0,
+  "candidateOutputsGenerated": 0,
+  "runtimeIntegrated": false,
+  "validationScope": "Existing Model Forge parser accepts exact per-kit prompts/target/generation settings; not generated assets or visual acceptance",
+  "jobPlans": [
+    {
+      "jobId": "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+      "providerSpecSha256": "a1101ca47975803f465d02a931a2b000a1c4427d08f2c4d68da73ada6fa0287e",
+      "planReceiptPath": "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33.json",
+      "planReceiptSha256": "d4cf6d66090c0c6c2708631a72d96b84592d3397d385e0e1c0be60656d6b8e4e",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+      "providerSpecSha256": "949866d6bba398f0e49caac5f4ce549c061b54fb04ea2b92b401d813ac60329c",
+      "planReceiptPath": "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30.json",
+      "planReceiptSha256": "2ba80d096113f984134fd4163a6f8f94f5619f404b5fdc9c3f628bf7c4cd4238",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-583b9a5d141af85c3ba845457d31ad5002b5e7dafed4019d93b15c8e963532b0",
+      "providerSpecSha256": "f8c73bcf1e187c2450d8d18c1a184b2b936b26c51daa9e11e8d2d640447c62c6",
+      "planReceiptPath": "gwjob-583b9a5d141af85c3ba845457d31ad5002b5e7dafed4019d93b15c8e963532b0.json",
+      "planReceiptSha256": "ccd301b98f708cfdd9c9023454e2c14bece8b0fa792c9bbe5d32bf2f3dfb8bd5",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-3fb72e3368d9f2e63502e60e8a72de7f017ebd7c249fe37c47625b5aee114a3d",
+      "providerSpecSha256": "b0a7debdc20b1cc1b0db8eb0be1a76deea9756f6d5bc02e7bc973b621c94c70a",
+      "planReceiptPath": "gwjob-3fb72e3368d9f2e63502e60e8a72de7f017ebd7c249fe37c47625b5aee114a3d.json",
+      "planReceiptSha256": "d875b9fe75faf792cc84bfaac9405e08be7fb9963be8d9b8c19adb94931e3f95",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-01e3d5b03406cb5d6535391b20af6767a8938cab0c120ba9f00a9f409d6bb659",
+      "providerSpecSha256": "0d29a3ba7810ec367f083daad176cc1b4f5b93721a289571d9b10e3b6c0e358f",
+      "planReceiptPath": "gwjob-01e3d5b03406cb5d6535391b20af6767a8938cab0c120ba9f00a9f409d6bb659.json",
+      "planReceiptSha256": "aa526c85eb5a8f100c22eee72fd9a2e98a7f38ef3f03768492f234226cd60a3e",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-a20deb8f4128f4df74c82ba19f9e140a1fc24665ccb42b8d6d1aa9b4f008aebb",
+      "providerSpecSha256": "d27d4c19b2996280126ec6b82cdfeb5b4247ebff8f458d466a0e207b310a4b3a",
+      "planReceiptPath": "gwjob-a20deb8f4128f4df74c82ba19f9e140a1fc24665ccb42b8d6d1aa9b4f008aebb.json",
+      "planReceiptSha256": "c62f74ae0a3c00a95a321f715330d1fa9bfa3c78ac8fe9a7cdb8104ef9990ba2",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-e976ef1e5b4b83b93859143e51e51b129e869f9493cc0817cf14c2a922050f75",
+      "providerSpecSha256": "abcad4b211ed8393639f7e01a1df053f594d18b0a08759a9628712c5773eee16",
+      "planReceiptPath": "gwjob-e976ef1e5b4b83b93859143e51e51b129e869f9493cc0817cf14c2a922050f75.json",
+      "planReceiptSha256": "ce6f9856062d8f9a16963deda7c4064b1ae8c84da06fc94d2e20ef9041b4816d",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-d2d3cfc09dfa7546e07a40a3c11203e3340700ddf8f7a2b4cf03292afd998d51",
+      "providerSpecSha256": "c27bbfe4805f796c69ec131904be45579ef1d8bbc1b508208fd9a59ef05cf22b",
+      "planReceiptPath": "gwjob-d2d3cfc09dfa7546e07a40a3c11203e3340700ddf8f7a2b4cf03292afd998d51.json",
+      "planReceiptSha256": "9b1b116a4af273f64f4c2a58ed4215bdf9bbbcfc38e08023e6de229e765407d1",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-4c3bec9cca8da43df0afd9c12c4a0a2d7bd62207be64f58bb2d641c209b81583",
+      "providerSpecSha256": "4e1d4bb4a3984ed095200db230c00523debd9c20ae248cfcd7faae6147cdbe9c",
+      "planReceiptPath": "gwjob-4c3bec9cca8da43df0afd9c12c4a0a2d7bd62207be64f58bb2d641c209b81583.json",
+      "planReceiptSha256": "61dc43fea63b6483553f1b543b1ba389e0a31509db12119788dfe3d0c7f118aa",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-c28771fc4175f72491b63aeb8920039c89718e3abe98fb052a21dfb6079e9be4",
+      "providerSpecSha256": "36651c762570c4b5eb775976aa37d1246288396b223d52d4bc4105c27e22c57a",
+      "planReceiptPath": "gwjob-c28771fc4175f72491b63aeb8920039c89718e3abe98fb052a21dfb6079e9be4.json",
+      "planReceiptSha256": "fcf6834bc264ea93afe51f699eb4a8fd242bc3649b282d31542f20671210a8e8",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-e3d815ae00f9c4fdb4c95e9ed8dd276db1609a0063dc582dea5964e28ffb1c66",
+      "providerSpecSha256": "02c5e53a84820e2c19b349414232bf4491344e1feba9131707c04b058e14c8d8",
+      "planReceiptPath": "gwjob-e3d815ae00f9c4fdb4c95e9ed8dd276db1609a0063dc582dea5964e28ffb1c66.json",
+      "planReceiptSha256": "f94cf22d406f0d75e8daeb7fdebea87127ce25d7a764fa054791871a173fdd6e",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-e4e2288a590cc0260066bb99b72cd3582e8572e3a319e9cd07ef52d3739f6531",
+      "providerSpecSha256": "4deb5769ebd11a82d13664fe48955f4891aaac43e502a337e6753b48a0228942",
+      "planReceiptPath": "gwjob-e4e2288a590cc0260066bb99b72cd3582e8572e3a319e9cd07ef52d3739f6531.json",
+      "planReceiptSha256": "fb87125cc1451192c81a9a48bed0ebfd7e0bd4d8352f0ce9121a14c33cfa9540",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-830e1267631440ed1fa659015fc85a37b0f44fb005c292ca5d97baf0bced01ed",
+      "providerSpecSha256": "bd53a4c9c344dce3e1f3134f4d0e410b0de5874889ebd6c590702f65c67f9ee3",
+      "planReceiptPath": "gwjob-830e1267631440ed1fa659015fc85a37b0f44fb005c292ca5d97baf0bced01ed.json",
+      "planReceiptSha256": "fc49bfd94f8b1ebc4d5f302020daf6f634dbedad2f4b1dba78555ecbdb2d09b7",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-7f7d54d23241962e09d9758f3cc0e4cc86edbe0bcdeb8b3914ebf20ca619b4a9",
+      "providerSpecSha256": "056868f90164f263bc2f1bf6db3de22ace50060ba245e81c8faac291c28b17ea",
+      "planReceiptPath": "gwjob-7f7d54d23241962e09d9758f3cc0e4cc86edbe0bcdeb8b3914ebf20ca619b4a9.json",
+      "planReceiptSha256": "584975d4cff94738b5a4a7278c4cf97afbcea902b81ca7a95806f1a1609f5e67",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-2ec9e9f4cc7e9e0730ec935eba95d5ca45cb7035ecd96580d5f38369955ce8ef",
+      "providerSpecSha256": "b2bd809f94223381230d913df2ef9f88533f4be79db16284ad82e976c35dfcc9",
+      "planReceiptPath": "gwjob-2ec9e9f4cc7e9e0730ec935eba95d5ca45cb7035ecd96580d5f38369955ce8ef.json",
+      "planReceiptSha256": "e3cd0afc63626a8add7dac87221db1d09d38c58cedd3039845336f4ee2bcd145",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-3c10fec75dac3137d1c0313447012fd98482d9a5d0c8cf77ea0511faf1343a58",
+      "providerSpecSha256": "2cc2d808e4a718d981f1cf1fcbbf22458a69bae2cfb3a5987c90697f3782a297",
+      "planReceiptPath": "gwjob-3c10fec75dac3137d1c0313447012fd98482d9a5d0c8cf77ea0511faf1343a58.json",
+      "planReceiptSha256": "c2207f089b27d9727a75ff48ed027389d996f6cae5491b02cf3c28f5a5b99b00",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-aae2af189963c828d6692d58ac4205992323ad1d9be136e5d1e26a88b6b54948",
+      "providerSpecSha256": "3e625905967fec294a23e47235e14c2823eeb05f0c33cebdbba8772c3ecf0b17",
+      "planReceiptPath": "gwjob-aae2af189963c828d6692d58ac4205992323ad1d9be136e5d1e26a88b6b54948.json",
+      "planReceiptSha256": "4b317b5d6dcce05a1f49874df9df157d6631a741e40175faafb445ff8dd878f1",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-79ac39c1d4b81a461e3f1848db811e09410ff580d15ae42b2f4437b54c305bbd",
+      "providerSpecSha256": "2f06d44583cb01d4dbf17aa8298e0f53c29e8ce88b446464d7c6e84cf10021db",
+      "planReceiptPath": "gwjob-79ac39c1d4b81a461e3f1848db811e09410ff580d15ae42b2f4437b54c305bbd.json",
+      "planReceiptSha256": "2a2f3f54d16a389d6732789f1fc85e8df5d1ede262e813c2194ea9e507cc972f",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-32fbcd6301d3c91b5306c4470e2314bc006a95440bcc21b3c6167839b8371832",
+      "providerSpecSha256": "807c9c322269a1075c1a6605a4d4138a480e7ef8a53aad1b355e34b2b8b82ed5",
+      "planReceiptPath": "gwjob-32fbcd6301d3c91b5306c4470e2314bc006a95440bcc21b3c6167839b8371832.json",
+      "planReceiptSha256": "9f0e89f3fce4dee675093c51fbbd7629e98484de2b3c862d36813f8cb5f5a297",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-d9d9816ad3e3ac86a7ccf36d8e8f8a58bd8bcb99cd20e86995555e2e0b44f65e",
+      "providerSpecSha256": "08ad0fe6e0ac018f3617470ada84455f0d163e58e844e0f00e3b164b574f97f2",
+      "planReceiptPath": "gwjob-d9d9816ad3e3ac86a7ccf36d8e8f8a58bd8bcb99cd20e86995555e2e0b44f65e.json",
+      "planReceiptSha256": "7fb4bd17a31270b2dca6f3f55f41633d155e06026b0aadb28d456e380d5f27d1",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-a8cf590b9fad6ce1d71e96b2bd7b7185bb9a3a39362b044cef40ce0e8024568d",
+      "providerSpecSha256": "fb1e952db402a1cbfcf4676eb73c79bdaee31728e66f3c80da5b45d8e152dbbe",
+      "planReceiptPath": "gwjob-a8cf590b9fad6ce1d71e96b2bd7b7185bb9a3a39362b044cef40ce0e8024568d.json",
+      "planReceiptSha256": "64eaf3c3097f4fb293437358dfef45a8a3b3dcf732595bbb42b7d78a50dde655",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-0268c1b676a7670227cc83c12223f1a77dec809948cccd134070293bfaf77b4e",
+      "providerSpecSha256": "b83782d9000d85798475007ac50ca110978e3a5019e7be35485c454ed0f3fd58",
+      "planReceiptPath": "gwjob-0268c1b676a7670227cc83c12223f1a77dec809948cccd134070293bfaf77b4e.json",
+      "planReceiptSha256": "b7c91249871bf1bda3548b86d983226d9ddd05a4ddc9e372239ca14e577d40cc",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-5df636da5ec5779475f26e55b398a05fe3aeb275491df5230d4265c7a3642ea0",
+      "providerSpecSha256": "a9cda0179f2dcce6156dd3add3f1acfd34edad3a5c774b6051ac6a78ec6e6c0d",
+      "planReceiptPath": "gwjob-5df636da5ec5779475f26e55b398a05fe3aeb275491df5230d4265c7a3642ea0.json",
+      "planReceiptSha256": "d274a56f239497816fca71c9f037fa109c709c9c097172f9ff5a1421c5897df8",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-d40d168abec0bccbf5397c258f477149870df295f4b93064292b34e95c20fb2d",
+      "providerSpecSha256": "92f8219bff5b94a74ad4c6f09572a9664ccfada1163c57bd4372d91bf5d2fa5d",
+      "planReceiptPath": "gwjob-d40d168abec0bccbf5397c258f477149870df295f4b93064292b34e95c20fb2d.json",
+      "planReceiptSha256": "5fb7190a2a43e57232214fac59ab5c68846d77dc008041d1b7ae6c619cdf7039",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-989b63e79c4fd454af65957e7e2ea2039773694283f44bded4aee6be6b6fe99b",
+      "providerSpecSha256": "323437e332bbcb1c7b036fe85e3d0ec0744fcb0b1e347bbf939089be5268b7db",
+      "planReceiptPath": "gwjob-989b63e79c4fd454af65957e7e2ea2039773694283f44bded4aee6be6b6fe99b.json",
+      "planReceiptSha256": "c3d5900fec8ae5cb61bca1d033214167346fcd633ace81a1a142099fdf4bce3d",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-dcef97129d5a786dad646bc94767197cf8a3c1eb50885d80f24e46c4d0dee8ad",
+      "providerSpecSha256": "293403c5aa940e39a59ab9daa48bab5068baf4da51ab4a98a78934615c3c6876",
+      "planReceiptPath": "gwjob-dcef97129d5a786dad646bc94767197cf8a3c1eb50885d80f24e46c4d0dee8ad.json",
+      "planReceiptSha256": "32360f4aed6d39e0a2ab13776cebadf0f1262b8e54641150c98e5d67a4679ff9",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-7329a1c4a136d79b073da666e6b006c477f1c445b2a7266d9fa54367ffb664d0",
+      "providerSpecSha256": "0066514756a545551db82d003c2409f103990881d978ed52c228c414421092bb",
+      "planReceiptPath": "gwjob-7329a1c4a136d79b073da666e6b006c477f1c445b2a7266d9fa54367ffb664d0.json",
+      "planReceiptSha256": "6e7b7162cbea9f3e7d6dba21df5d52a31930658068257669dd5b27c654b19bbd",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-b3809102d1f5e3716e19921cfd1456dfb022912c74d8736833573bfc8c6a2116",
+      "providerSpecSha256": "ca5746b0876f6d68969440240c03194536ccf07eda360e118848545c2be7929a",
+      "planReceiptPath": "gwjob-b3809102d1f5e3716e19921cfd1456dfb022912c74d8736833573bfc8c6a2116.json",
+      "planReceiptSha256": "54b1654d0d1101bb277ef5738c0f24fd48ab4e269b7e36cc42024d2675184df3",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-c0e4cf2fd5393d6d0ca31e2cddd870bcb7810681df89922321c3f015acd19a4f",
+      "providerSpecSha256": "0b14689d74e51d8ec3d854a48935fd2b8d3e85db22494412ffb3d8ddf719f0dd",
+      "planReceiptPath": "gwjob-c0e4cf2fd5393d6d0ca31e2cddd870bcb7810681df89922321c3f015acd19a4f.json",
+      "planReceiptSha256": "427e528692b512c3f7a75c500fed42949a9d24a18b35ccddfbfac09a3831f33a",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-19ceea34eaf8d6a434a05b93bb9082df7bf8acfadee29676b66c77e01e168de4",
+      "providerSpecSha256": "621b60c7d3d03a6df3c194180e8f54b3ef33d44086766323307e45f5b415fda3",
+      "planReceiptPath": "gwjob-19ceea34eaf8d6a434a05b93bb9082df7bf8acfadee29676b66c77e01e168de4.json",
+      "planReceiptSha256": "9689198375e0fd932380020cd0588b0c4f6b0f8e95dbf907d9592fa3a18dde17",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-ca0d8281ff4616b4d155aa5fadc84babfb5376ba611c8867e672e0537315927a",
+      "providerSpecSha256": "2520bc7b32961cdb40a77c843d7db4ca6a97acc28be048176ee652e637b9fa9f",
+      "planReceiptPath": "gwjob-ca0d8281ff4616b4d155aa5fadc84babfb5376ba611c8867e672e0537315927a.json",
+      "planReceiptSha256": "dcd21786a52745555d3a3bd6e3d81edae2957427e3127e1f63c1a24881bd8637",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-9df7c5c7769c0332b1474fe2a50ebdc125b0804071d19714f7d8b5817063569c",
+      "providerSpecSha256": "36f7d321af57899f62d51773ce21a0a852c11f3ff433871a37e1e64f6c4f538e",
+      "planReceiptPath": "gwjob-9df7c5c7769c0332b1474fe2a50ebdc125b0804071d19714f7d8b5817063569c.json",
+      "planReceiptSha256": "b45b8e943113c28f8d7be5f1fb8b7ada594a9799bb90cc297177f9c7e61452b2",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-d5f31c6fee2be5d0f635981be3832a890a07eb87271f7118b623bb44d2ca0574",
+      "providerSpecSha256": "e1986e702ce36e05f2e442014e573b46374b795704c2f0861aa4b6432c8b8836",
+      "planReceiptPath": "gwjob-d5f31c6fee2be5d0f635981be3832a890a07eb87271f7118b623bb44d2ca0574.json",
+      "planReceiptSha256": "78253172e167d6f91b95182645af897c69e206940bcccfefb15608682809c64b",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-85c73cee7d043073804494570b4b9cc0d73a253541e642c62a86a8db482c6920",
+      "providerSpecSha256": "ef3614024a1eb4455a3ec736700a7d732e4729af61a68f661f67f635447499f3",
+      "planReceiptPath": "gwjob-85c73cee7d043073804494570b4b9cc0d73a253541e642c62a86a8db482c6920.json",
+      "planReceiptSha256": "50fd5d06b79da290d8a830d7d2c894d256908049cd04063924ab4c1c671f894e",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-44456e50ce8a1d220cda804d3e4ccec0187b4a1a136ae41fd0ce136cbbfb7573",
+      "providerSpecSha256": "f5c4f8689c97d2f999aed419d93e85e6485a5ff5a7817708dee6dce82912bb7a",
+      "planReceiptPath": "gwjob-44456e50ce8a1d220cda804d3e4ccec0187b4a1a136ae41fd0ce136cbbfb7573.json",
+      "planReceiptSha256": "c2d910dbda00b437b7946032978940357e1ffd29c55d9fad66d2c445a053b409",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-66729ef0c3cc4416ff75772805e5f85bd264826b8bdc5808df5aecccd428c182",
+      "providerSpecSha256": "0f1a1387914b01a14fca13c449b2dffc436badbfd79506fcc17dfbd387a824df",
+      "planReceiptPath": "gwjob-66729ef0c3cc4416ff75772805e5f85bd264826b8bdc5808df5aecccd428c182.json",
+      "planReceiptSha256": "b2fa9e7be8fc16171075b7b937ba7f1fcb7bd618b03472d3c8cc8628d6a99bef",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-a84f0b4cd62d55927cf31e49deab9e39c29b6b6cf1e91e384c2eae46bb302299",
+      "providerSpecSha256": "a105a718f24e526e373485180ffa915e9eaa4187b3d483c3aacf5e7aaae2bfc3",
+      "planReceiptPath": "gwjob-a84f0b4cd62d55927cf31e49deab9e39c29b6b6cf1e91e384c2eae46bb302299.json",
+      "planReceiptSha256": "7b1106c21a3863edf3c497b318b86fd407612170ad53ee93d207c689a6ed0aaf",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-e428141a86d47e3ca48d197137ccf098322f01d89a103f05eceb39cbcab130f8",
+      "providerSpecSha256": "41e100d03dc40db783eabaeca9e10b3b89590e2904b6381fbdfa5b176413038c",
+      "planReceiptPath": "gwjob-e428141a86d47e3ca48d197137ccf098322f01d89a103f05eceb39cbcab130f8.json",
+      "planReceiptSha256": "b39fbacefd1e4c30e8c16e5fdb7913e6a1a912f73a4ba13c14da43cb8e8f287e",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-f8c9a63d2375abda5910477f61e6e2d7ddf389c46265f49bef27ec4c9fbecdba",
+      "providerSpecSha256": "e8542bf4de74cd904d0c2a952cf07bd2ad61df945e315d057266e583a1619ed5",
+      "planReceiptPath": "gwjob-f8c9a63d2375abda5910477f61e6e2d7ddf389c46265f49bef27ec4c9fbecdba.json",
+      "planReceiptSha256": "4c28ab6f1542ba93af6f0d65aaaed3f77ece486f71e841e6b9a44d064796bbe1",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-df2e8ed015374e8dcaf48119398c4ce96cbb945714bef51f53faaeb2f00903a5",
+      "providerSpecSha256": "0ab319d6c7b028e81a3c8872e5b7b7f55f802d9cfeb2f3dabd7f2bef3c952810",
+      "planReceiptPath": "gwjob-df2e8ed015374e8dcaf48119398c4ce96cbb945714bef51f53faaeb2f00903a5.json",
+      "planReceiptSha256": "e75a175165973fbc84d088dc48f65656287bdad50c407ec903eee21f65a974cd",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-45322c3b8d376dbd190fd7154ef3bcd3b8f562e988413914908fad313e66013e",
+      "providerSpecSha256": "128c1fe2f16973add884b51e8199210f68b09a381c6d91837f03e03dc3c0298e",
+      "planReceiptPath": "gwjob-45322c3b8d376dbd190fd7154ef3bcd3b8f562e988413914908fad313e66013e.json",
+      "planReceiptSha256": "afadb3d4486dace85d435973c2b6be6a58783738edc9f805733a87e963809997",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-a7af4d83d6849bfc729cf83f44d8ec482170b7203e277bed65a0a461f116e680",
+      "providerSpecSha256": "9f63d298006bff9734aff27c3c992c36748ff3de284f68e546855e0d8c0f0d4c",
+      "planReceiptPath": "gwjob-a7af4d83d6849bfc729cf83f44d8ec482170b7203e277bed65a0a461f116e680.json",
+      "planReceiptSha256": "95ddbccffe8c45c1b01a6e3b07fc0eaf045f9eb8e8f1bc18afb21210284d518b",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-9d5d0368ac3b3d630e81c306cdc0f9042f6ac2d9054684760af06dcb2fb08e2d",
+      "providerSpecSha256": "c267143a603c34e540276824fef0fa340ed9ead9cec881660380fcf5ef488e88",
+      "planReceiptPath": "gwjob-9d5d0368ac3b3d630e81c306cdc0f9042f6ac2d9054684760af06dcb2fb08e2d.json",
+      "planReceiptSha256": "398b65f37983a9b5fe8edbccf331dc1235b3f16d3ad711352f14496aeec36af1",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-2370db7f808a53448006375886d62b8b999f6f6d64282a1b7b6aa02d44802282",
+      "providerSpecSha256": "c2ccefea05d19a73834c61d1583da63235177ac5fba097030ea1f4ab7f8cfd3c",
+      "planReceiptPath": "gwjob-2370db7f808a53448006375886d62b8b999f6f6d64282a1b7b6aa02d44802282.json",
+      "planReceiptSha256": "46bd893f01ba23cd917e6f75c68f082bdadfc28653c5f9a649512a0fbd04d05d",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-5ffd896935cb27100df7373cd41cc6b7c5b3b6ba54bc7e1f05592d8b52d4ad21",
+      "providerSpecSha256": "00e499606bf59c83ba913988b8fd07622e776574d98852d22734a85fe3b484c1",
+      "planReceiptPath": "gwjob-5ffd896935cb27100df7373cd41cc6b7c5b3b6ba54bc7e1f05592d8b52d4ad21.json",
+      "planReceiptSha256": "b2bb154afb1d1703d7f00f2c0eba909b5cb953d0c9ebf5b037dc38b741ba3ed4",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-729d066704430fa7fb7bbd2907088cda82996242aa5916e277f0bdd16915300e",
+      "providerSpecSha256": "52292b15c3b19d62951db545f1756cd01f74f57501fd3a8fd5642d42b5c1a93a",
+      "planReceiptPath": "gwjob-729d066704430fa7fb7bbd2907088cda82996242aa5916e277f0bdd16915300e.json",
+      "planReceiptSha256": "245fd59c2d91d67578c6ff53a8f4125ec00fd324f3d0746604e8ff33ff357ccc",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-ce4cdd43cc9cc71e4958f35f26b6aeb87014efd41c74e5d6af674d17760561fc",
+      "providerSpecSha256": "9f641c49822a56a8e2d06fd0a6301c5e6149925ff2378b7aff958f8bca873e23",
+      "planReceiptPath": "gwjob-ce4cdd43cc9cc71e4958f35f26b6aeb87014efd41c74e5d6af674d17760561fc.json",
+      "planReceiptSha256": "ecd91fe7716905e3353290b2bf3f03d4eef2e4d82127ee0cedc21b712ebecc26",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-283cd6e06ece1cbc2a3a18fde24905e16ed745482f7749ced9058b92466cb764",
+      "providerSpecSha256": "1dc5db4d54b31bd16616d5daa40f85f653beff16c80d6124e96e9791e5b5e3cd",
+      "planReceiptPath": "gwjob-283cd6e06ece1cbc2a3a18fde24905e16ed745482f7749ced9058b92466cb764.json",
+      "planReceiptSha256": "c1df8f93d5f1aac47d3c2fcb727614223c9c6e8f4dc8ae2ece04845d0dc28d35",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-3e9ca601cce7121dad7984c1927277826310d83878d9b40ce233286fc9a0906a",
+      "providerSpecSha256": "a51f8a2ea8913ebfbac184bf7834d2c285c092a5e8aaaede97fecf96910960e1",
+      "planReceiptPath": "gwjob-3e9ca601cce7121dad7984c1927277826310d83878d9b40ce233286fc9a0906a.json",
+      "planReceiptSha256": "20012dfc1ccebcdeb53431de55e4bbc8f3bcdf51e7dc0f2d17b44ad409277d3d",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-d4b1baadc9ccdf359368d3857aa25f6acdf1f9fa7ea64c1970c98e9b44c6a88e",
+      "providerSpecSha256": "52ab12527dc72ae39e87d9e886232229bda64e904d23227f9a847a94d84e4724",
+      "planReceiptPath": "gwjob-d4b1baadc9ccdf359368d3857aa25f6acdf1f9fa7ea64c1970c98e9b44c6a88e.json",
+      "planReceiptSha256": "28a5dacad24051f52aa1e540e03baa46d7bffacecdf8c6315f78e5bf5c8770e7",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-db47bf3d8d07bdff177aaa6ccd8e4f6cf35c4b52cfd7c72f75e55a75b7c9b09b",
+      "providerSpecSha256": "6721b6235830b08e5cddcc7ff586af78cd28761d14c8da5c8724bb52b259f745",
+      "planReceiptPath": "gwjob-db47bf3d8d07bdff177aaa6ccd8e4f6cf35c4b52cfd7c72f75e55a75b7c9b09b.json",
+      "planReceiptSha256": "358abb8e73a3cf32bffa7ae78e5e7e4332d2302659768f8949c6f9c2eec4e257",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-a43fcb74fde742e98d36d481b97472991e8f507cf277055be85c323ae1fbf004",
+      "providerSpecSha256": "ad672e36a2875f77dc12f8fe10e2fc2a9df6c897c738db786ee047f07f8aed18",
+      "planReceiptPath": "gwjob-a43fcb74fde742e98d36d481b97472991e8f507cf277055be85c323ae1fbf004.json",
+      "planReceiptSha256": "4634fc518f8e984a9f527b5e59fb93453d098a356780cc7f403fe9f7b25a6fd1",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-ee33e46d3b4889817e05a8f9e0f793fece2581768748d4627c14ca4b08710565",
+      "providerSpecSha256": "dedd845a3c0191a8cdeab716d646dd1a9d8773d2ef2aa20d3407c74a2d24d6d8",
+      "planReceiptPath": "gwjob-ee33e46d3b4889817e05a8f9e0f793fece2581768748d4627c14ca4b08710565.json",
+      "planReceiptSha256": "8b1e41907f9e7a820302afa6e2edb5d76b24cb2b7597b79069353176d426c3cb",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-a304b02dd4b169e8ca7ceac919e6fe0933eb9534ef70743bf32d10c4ccc1b6b1",
+      "providerSpecSha256": "d596067723b33ac0482dd13377b5a169ac90b765f172351c37e191a15304b77f",
+      "planReceiptPath": "gwjob-a304b02dd4b169e8ca7ceac919e6fe0933eb9534ef70743bf32d10c4ccc1b6b1.json",
+      "planReceiptSha256": "b401efdf564fbc8d804df9e920e903e4cdd65b6e51ded5434ac39f4179bebec8",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-8cf4116508387d860e8b90ad63eaa05164298fe1d4f0760f099b59305feaa6dc",
+      "providerSpecSha256": "4b7105e6c0ec186a060019262545a36f106cb06ae61d80d78ed780c5897af728",
+      "planReceiptPath": "gwjob-8cf4116508387d860e8b90ad63eaa05164298fe1d4f0760f099b59305feaa6dc.json",
+      "planReceiptSha256": "33a0bfbfba27b2e7511d7fd8828fbfdf0c4dcb566e2117e7f9295ff9e30d4e03",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-c545b1af20389bb4fb339942e8225fab31d22a0ff5f807b75d434d8a5cddb5d2",
+      "providerSpecSha256": "0fd196997b0008a39ca204d0465182f527e0379514bec028fa3e2cd364de1ac7",
+      "planReceiptPath": "gwjob-c545b1af20389bb4fb339942e8225fab31d22a0ff5f807b75d434d8a5cddb5d2.json",
+      "planReceiptSha256": "f82b3f4aa5470022312375f0f80ee26f36fe9da71004252a382a3f478b17102f",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-8fe7d7b1e671bd4bdbda6db24f7ef41cdf27e659a002d3687e670b3d0e2fde34",
+      "providerSpecSha256": "fa03c814b51585c1323d9db1f268da6a843783409595c8172f86d99e48bce763",
+      "planReceiptPath": "gwjob-8fe7d7b1e671bd4bdbda6db24f7ef41cdf27e659a002d3687e670b3d0e2fde34.json",
+      "planReceiptSha256": "a086c4fc87930fc650e3b1f69f2900cf782043b0bbc994fbab4db4807ccb5fbe",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-20181c0fe8d8300b7c477710b932d7132ef2397e2f8241ce073c2ea6c8f1567c",
+      "providerSpecSha256": "090637fd695970636487a937459d3dd9aaeb2ec4394ba83bc4ba3428a9ee350e",
+      "planReceiptPath": "gwjob-20181c0fe8d8300b7c477710b932d7132ef2397e2f8241ce073c2ea6c8f1567c.json",
+      "planReceiptSha256": "34298e8f7e9090ae735bff94eca80a9510bd8fc6c3c029bc20c8d76792219ef0",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-73a70f1d88b3abc4f63ffa8d67c1b501fc5a83da3084a23e5a9d9740838de2ca",
+      "providerSpecSha256": "1794eeac6009fb2539eb019855b2a2ff3a82f6c9ad81e7f6b33105bd1b8d4a7b",
+      "planReceiptPath": "gwjob-73a70f1d88b3abc4f63ffa8d67c1b501fc5a83da3084a23e5a9d9740838de2ca.json",
+      "planReceiptSha256": "46792b6708ae1adb4fe709c52deaac3d74f419e091836ed9681c1ab7b5fa9e70",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-fce03879e3645aee609dfddf80a0bd6e98b0da88a39cdd79db1d2490f6466761",
+      "providerSpecSha256": "68c7936f0200dc097bd7343ab4a7dc169fff06a9bec77891ca35df6a88c11664",
+      "planReceiptPath": "gwjob-fce03879e3645aee609dfddf80a0bd6e98b0da88a39cdd79db1d2490f6466761.json",
+      "planReceiptSha256": "4d72e16f810dc63b5dde865c341ff4d976d7b4ee79808846203bf973b9d0dbc0",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-26d80dc18bcd08e1aeebbba91a82669884fe72d7f3a85c80b8ac662313aa33f7",
+      "providerSpecSha256": "8bb3d59295e63734c55233c7943c6163ed338046ac680f497f50618a86e783d2",
+      "planReceiptPath": "gwjob-26d80dc18bcd08e1aeebbba91a82669884fe72d7f3a85c80b8ac662313aa33f7.json",
+      "planReceiptSha256": "997c44deda2fafde516d9bba65a3e7091c6d4697ff8e7c86c5b36e6ee063a118",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-faf769c2de8c989a9ce2764e555bf5c935fd0faf68484b698dda170ad829124a",
+      "providerSpecSha256": "708227ce113df11602a696c18e6b53809bdff3d59f3a99a552bac2c6e709082c",
+      "planReceiptPath": "gwjob-faf769c2de8c989a9ce2764e555bf5c935fd0faf68484b698dda170ad829124a.json",
+      "planReceiptSha256": "7272e8136b772afe66e2d48785b50af957583946bfcacea74e9004968671af1d",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-7233faa9f6dac9f205fed4b39b818db07e9af95a26aed052176ce24a8a108507",
+      "providerSpecSha256": "a80c4e4600a166503b17f7f626fed22a1f35e48f8b15dc3a3cd1daf30c913596",
+      "planReceiptPath": "gwjob-7233faa9f6dac9f205fed4b39b818db07e9af95a26aed052176ce24a8a108507.json",
+      "planReceiptSha256": "b8c4bcc8cc0fc444da5395a020e918bffcca84309ab4bbd7caae69835022dd07",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-f9693ad20c2373121a2bf37430d80e674e484786599665e9a2a06b52a88c35de",
+      "providerSpecSha256": "7c26eaa1232f3743bed3a9605bd186b9af975583d88b9ae20be1cff4cdf44881",
+      "planReceiptPath": "gwjob-f9693ad20c2373121a2bf37430d80e674e484786599665e9a2a06b52a88c35de.json",
+      "planReceiptSha256": "5a6b93328f0d366a78788c28f7bd7332ce206850387a10b6646680da433a33b3",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-c5f3d95a1edd8c05066ad015abd221facf418e72bdb4aae63dab4bcbb90fe266",
+      "providerSpecSha256": "9f768fd78d5e637805e0a2b09bffdf311aada481ac4ab2220bd30ca8b90168c7",
+      "planReceiptPath": "gwjob-c5f3d95a1edd8c05066ad015abd221facf418e72bdb4aae63dab4bcbb90fe266.json",
+      "planReceiptSha256": "a5f41a5773df5498ef40c6bc72d982a3603c973daeb5d9027dedc9279bf4cea0",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-80091b311cfa581de3f0cf0379a20c311f9fda9cf89b4219a0d0de151ebd6218",
+      "providerSpecSha256": "65d056d387cb8552bd71c3a07c6b43a8749657e23db6535f208fe860b7ea447e",
+      "planReceiptPath": "gwjob-80091b311cfa581de3f0cf0379a20c311f9fda9cf89b4219a0d0de151ebd6218.json",
+      "planReceiptSha256": "9d0efaefcdb4f740503259be67a3d124e266d537b4c2de3364e7a2c4c18d8336",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-8d5d2b8977053cf7fd5568fea22531836b06a9c80028ad822528260030aec2ff",
+      "providerSpecSha256": "a173cfe09206223a94ad5e281d8a66ca9fe27e24ddc63be27fbcea812694b2bc",
+      "planReceiptPath": "gwjob-8d5d2b8977053cf7fd5568fea22531836b06a9c80028ad822528260030aec2ff.json",
+      "planReceiptSha256": "cae4e36f08cf3021ea81b7778587ab8b674d0451a3453cc3f5581d1d9a04df84",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-4e4d4e07a4da55313666154a8d639198722f69ca4f72ccbb930b4e69c2cd4e51",
+      "providerSpecSha256": "b1fdc5427cddff8afaa33ed61123711fe84babcc7b2658028a311994a1923e3c",
+      "planReceiptPath": "gwjob-4e4d4e07a4da55313666154a8d639198722f69ca4f72ccbb930b4e69c2cd4e51.json",
+      "planReceiptSha256": "f44a3954fb3ae3826d1e50555c15795dc9468daf5f87ce4823957c5cec50b134",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-796be5b3fe3f320eec4d60b15c168be8181e603e08cd4c3d90ba6e331127bff8",
+      "providerSpecSha256": "bc2744754b480917bd2cf3b7ce4d81d6c64daf114e25e4162e829d58a03bebd6",
+      "planReceiptPath": "gwjob-796be5b3fe3f320eec4d60b15c168be8181e603e08cd4c3d90ba6e331127bff8.json",
+      "planReceiptSha256": "5a1a2ee48f8fe779f3fc7ac4f8eb59b5bf483a14434a08547e21385f81782a5a",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-438451245102c0618ad6ba2a7dd5f449eaff50bc2ecb9c618b678559fab0eb44",
+      "providerSpecSha256": "5cb466a2c373fd9da2639bbda9f1bd31d352f8bf78095fd13f4835bae47f5d70",
+      "planReceiptPath": "gwjob-438451245102c0618ad6ba2a7dd5f449eaff50bc2ecb9c618b678559fab0eb44.json",
+      "planReceiptSha256": "9964f5c1370d20aa0329dbacdf3c940a0077668bcf0571d01ef2828f0539b40f",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-ebbd95311a6187b518206e0369420d3fc63fe82faae4fa77a1157659c62cd3d7",
+      "providerSpecSha256": "fa6fef6c38cf685fd45c73548d15df75204fff70927d69f13b008f66c081d1f0",
+      "planReceiptPath": "gwjob-ebbd95311a6187b518206e0369420d3fc63fe82faae4fa77a1157659c62cd3d7.json",
+      "planReceiptSha256": "7fca05d6f896a6e7fd13f37f85f86009b9463fcb6c05ecd4b548d0a29125f070",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-984a9ac4446ad51ec3162ad16c0c6957ada89fd2721d19e6b824ee85e1d12ee5",
+      "providerSpecSha256": "a6bec2f24f6ec8353252886a16249d5f78fc7f581f25423a8a3d3fcf24529654",
+      "planReceiptPath": "gwjob-984a9ac4446ad51ec3162ad16c0c6957ada89fd2721d19e6b824ee85e1d12ee5.json",
+      "planReceiptSha256": "873b944198dc92e35cdbbb9fe92deaa21ee5d4b0c45ca4fd914a92d708d99f74",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-58574bf80de0ea002c00062561c942500d033fe8b28f838010ac418bd2779eee",
+      "providerSpecSha256": "79342fc90e974e4d21f9d8cadefe8ed1979a836442f7c48a84a26bde3ad9ce0c",
+      "planReceiptPath": "gwjob-58574bf80de0ea002c00062561c942500d033fe8b28f838010ac418bd2779eee.json",
+      "planReceiptSha256": "07dedbf0c73ebff56abc346d53c622580b444f924f7263643cbe75977d39a319",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-b2b431f86ce3863b0c87971d51f41256d43011e92f5e7aec9decfb3c09b39b12",
+      "providerSpecSha256": "65acaf88ec3bb5f69dd188e19c4c839afb86292d2a76a8279965e933f6c83dcb",
+      "planReceiptPath": "gwjob-b2b431f86ce3863b0c87971d51f41256d43011e92f5e7aec9decfb3c09b39b12.json",
+      "planReceiptSha256": "8f28799d250f1f8037b4919fc125d6e407b98d1b1773e3aa7a09b499c26ba222",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-a5568627292ba8f81e5f49cb67cabe0cd9d78843c6eedf3bff0e4c72fee5a377",
+      "providerSpecSha256": "ec35d7e26c272869945b450e4e817a8ac186137b3b7877ae24324fee5e500257",
+      "planReceiptPath": "gwjob-a5568627292ba8f81e5f49cb67cabe0cd9d78843c6eedf3bff0e4c72fee5a377.json",
+      "planReceiptSha256": "649661f92a6518ede4361abd58c28d34b3f068a3671991701357e4e897961559",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-48b813b90658bb2c5679615e6e6ca5e8971818f0236fac7e80864484e10de47d",
+      "providerSpecSha256": "54580d4c16a6ac5870df48614a400bab83fc626b65ab10b5919200fc0dd211a1",
+      "planReceiptPath": "gwjob-48b813b90658bb2c5679615e6e6ca5e8971818f0236fac7e80864484e10de47d.json",
+      "planReceiptSha256": "8e6b375f77b3cbeba235309b80955312d379ddcaa8962665c15dc5f5f5073293",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-476bb12da12c53cb907b80cb16ce9ee46b263e92f544f6020deb41ae4a5bcd93",
+      "providerSpecSha256": "f4f00c82e249e889e5969dd0f4d875b8a6a8397f715de0ad55378433dc0e9933",
+      "planReceiptPath": "gwjob-476bb12da12c53cb907b80cb16ce9ee46b263e92f544f6020deb41ae4a5bcd93.json",
+      "planReceiptSha256": "8f8d2aba31fbb6adec29ffb2295e3c2e2f3b901deaa538fdf4f97751fe97796a",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-884bb7cbe075b3d02aaa3fd83930e3c23e4c9902562baf37b7bda305075a0d61",
+      "providerSpecSha256": "592831d32f087df5ba643faf6ee93b36e5bc9136e775d1f937ff121d15ad5ff4",
+      "planReceiptPath": "gwjob-884bb7cbe075b3d02aaa3fd83930e3c23e4c9902562baf37b7bda305075a0d61.json",
+      "planReceiptSha256": "6a4620934891c7aace495b0524d67e2231c78e983df67b25ced32a06e58c0257",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-8e416cf7cdf80ad06ce6004258f1a2edb365062bf265fc35b079a1e762c9c30e",
+      "providerSpecSha256": "566f70af4dcbda279378051c2ed2749a0b3c0d635cd3be75f6803d8c2b1e0d1f",
+      "planReceiptPath": "gwjob-8e416cf7cdf80ad06ce6004258f1a2edb365062bf265fc35b079a1e762c9c30e.json",
+      "planReceiptSha256": "5560996eacbe6f552565553c00b230a3779c313bd155da85e5636ff033e4a49a",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-62b75998c78a1c9bd16f6ce83e737435355224780be7f29b4d79ee5a547e689c",
+      "providerSpecSha256": "3d3a8076e77de2b7d64391292a37ac59b7b096d669c83873fbbf7d62db23b66c",
+      "planReceiptPath": "gwjob-62b75998c78a1c9bd16f6ce83e737435355224780be7f29b4d79ee5a547e689c.json",
+      "planReceiptSha256": "ccb2a13e2f120cdd5bdf5c2c52069c2930712d3292dc1cbeae4f66a484dc9f83",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-28b3d0be183c53cdd877c9332f1e804b3ea9758aed73a4748a96c01b07f2d755",
+      "providerSpecSha256": "50ad14fff368bf51a108956acc125d58489b9e9da27b338d3b3e0e3555d90c96",
+      "planReceiptPath": "gwjob-28b3d0be183c53cdd877c9332f1e804b3ea9758aed73a4748a96c01b07f2d755.json",
+      "planReceiptSha256": "31bcc73e73cb30077ee8564f1b874313c1e0fbdc0226e74a0766d863bcfe33c5",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-2c573d334eeda160c37c13df17db5a81b06d489ae246e1fbd531b8533dd3d6ef",
+      "providerSpecSha256": "d571f7e3f45ab44ae511ab70404abc7fd7a42d42cc918c3c0af43bc85e6eb23c",
+      "planReceiptPath": "gwjob-2c573d334eeda160c37c13df17db5a81b06d489ae246e1fbd531b8533dd3d6ef.json",
+      "planReceiptSha256": "1cf45163fb74ad52c55058f477c797f5dabce3c301b034db126339beffff1a2c",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-10c5f7a76bf90c002f114519882b80e9a4b9ce0d1a5af79b34c4a17befbc38bb",
+      "providerSpecSha256": "fbe8481b889a3fc47f41cc5792238d9b956cc5d5e4bbc3f33b2c89855ed931e9",
+      "planReceiptPath": "gwjob-10c5f7a76bf90c002f114519882b80e9a4b9ce0d1a5af79b34c4a17befbc38bb.json",
+      "planReceiptSha256": "9fef1a657b5de03eba553757e62276eeb4f7cfc0971ade50af109085e6e5040a",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-8e0cace67a707a087bbad196ed03a5510b28a786aeb0d7bf57b1548bff22c2a1",
+      "providerSpecSha256": "dbc36ecd2f51f48797a25e45d1006cb00a4549db26845fc1048f01a85dcdd9ae",
+      "planReceiptPath": "gwjob-8e0cace67a707a087bbad196ed03a5510b28a786aeb0d7bf57b1548bff22c2a1.json",
+      "planReceiptSha256": "f10043760dce780d93fc810da5d5c10bd300a8696181370c8ab392552cdc744f",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-514dbb9ca328585e68f5478ae569e1c01fafdeec0c73bcf974cd57f52b8bb86c",
+      "providerSpecSha256": "3a8e507d4d5c81a75200e104a7ac7adf0bd9b407b76f482fbb77d66ebb9f945e",
+      "planReceiptPath": "gwjob-514dbb9ca328585e68f5478ae569e1c01fafdeec0c73bcf974cd57f52b8bb86c.json",
+      "planReceiptSha256": "3fbf07167a64f5888317bd751965d4fbc1626900eaa123a68f3340827626ae3e",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-7c18686f3a7fbc1cca5aaf2c8872454a8fced8ad5b104e869bbe1e0ad5939bd6",
+      "providerSpecSha256": "db8ccbcade18c2cd12bc86023476e9965054a64aba6d08fdf5e51a694d975798",
+      "planReceiptPath": "gwjob-7c18686f3a7fbc1cca5aaf2c8872454a8fced8ad5b104e869bbe1e0ad5939bd6.json",
+      "planReceiptSha256": "6602062cfafe15852553c26b85f85b5d97e3666b586ce1f7fb9f6f5ff9934c16",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-1a4c70cf509ac5d4cadfc9c578677296622c4bad16448663ba79c7a23099fafb",
+      "providerSpecSha256": "4cf6b605badc53abdcbd062e47318c3296502c4b17e15d33865e61efe141071d",
+      "planReceiptPath": "gwjob-1a4c70cf509ac5d4cadfc9c578677296622c4bad16448663ba79c7a23099fafb.json",
+      "planReceiptSha256": "674de5b8e007c9c84a2347760f66cef7bbeec8871764ad5568f74c26c5c0dbf2",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-aac97dbaa8702e27ba4a8b72ee04273f3fe3eef6601a2dd14f841cb5f314ae30",
+      "providerSpecSha256": "22637c0204d1feece304099c082de0a65273505227d623907b446ac8a61c618f",
+      "planReceiptPath": "gwjob-aac97dbaa8702e27ba4a8b72ee04273f3fe3eef6601a2dd14f841cb5f314ae30.json",
+      "planReceiptSha256": "131ab7f50486e082bdd41c6a5fcdd17e33f558afb7f4175b9d10c790dd4b6c48",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-ea9a5f72cc7a9900f195519089370e4b19e222254a9c4867221950d9f552ad5a",
+      "providerSpecSha256": "846d1afdfcfa14a719c07493194870038e14004c646180c84a0c07058f4fa49a",
+      "planReceiptPath": "gwjob-ea9a5f72cc7a9900f195519089370e4b19e222254a9c4867221950d9f552ad5a.json",
+      "planReceiptSha256": "d0bd6347cc82df03eac08b34d96d94221a1bc6e616461305728d0330841c6e58",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-7f969162d685de6ed811e5bb818139cba031f180c82db0747c04535ebf14055f",
+      "providerSpecSha256": "a31c957a6cb6bf3e65151c2e44485af3f2ac3f244fab82c314522d3ebe858ff7",
+      "planReceiptPath": "gwjob-7f969162d685de6ed811e5bb818139cba031f180c82db0747c04535ebf14055f.json",
+      "planReceiptSha256": "1931afafcb072cdbe2cb6663ff96489f2b6bc9a13d90f68a8e67db74daee1279",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-af86298c578ea85d473e7df5d139cfb0f11e2da0041306a181e81faada13e448",
+      "providerSpecSha256": "29557722bdac0f88e6ef41706d3f773b91e8847e3cf9398cee5dc05bfb4cee75",
+      "planReceiptPath": "gwjob-af86298c578ea85d473e7df5d139cfb0f11e2da0041306a181e81faada13e448.json",
+      "planReceiptSha256": "69ac00970894b130d426a09100e76d05d0b7b5c8537f0471f7f5873b733b0c7f",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-7f40d80b757b101c561dfcfd559ea448b8d5dbd8cc9414d5fee1e3bc361d8a2e",
+      "providerSpecSha256": "a34401a30595a880734ca75c6b03590d917ed20dd08c8f4fb9954a8062436af9",
+      "planReceiptPath": "gwjob-7f40d80b757b101c561dfcfd559ea448b8d5dbd8cc9414d5fee1e3bc361d8a2e.json",
+      "planReceiptSha256": "f7140977649b1f2168572cd98e265d5316a0f41fef3acf59ceb6372d138b636e",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-c26690cb6d24984f6f82836f210e459f99d4f2f3339ebd589a92f2a35a138225",
+      "providerSpecSha256": "b0b72b18408a4af146bf43bfc8e18886f682e6ffb30032bfb356f58984bb68b8",
+      "planReceiptPath": "gwjob-c26690cb6d24984f6f82836f210e459f99d4f2f3339ebd589a92f2a35a138225.json",
+      "planReceiptSha256": "66c9756f6d4de7dcb52159b97ddc68a9d71f21c2c10cc1ca9fead9472c7dc5a7",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-53dbfc37a4c3cd117147c531383adc4a1892275fc377eefb4dc7c565d4b1723d",
+      "providerSpecSha256": "d2ff75135cc6405ac83b4a4a6e1578a69dd1e335b81b83b00f646a1fbe43cd05",
+      "planReceiptPath": "gwjob-53dbfc37a4c3cd117147c531383adc4a1892275fc377eefb4dc7c565d4b1723d.json",
+      "planReceiptSha256": "3698672c102be67cdca7e2ae34b571f6eff799bd82343b928c2d77343a9a6f78",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-b989bf2b8619ff29975730d0904763980d5b3ef8f2d348ce86a9ad10fb95198d",
+      "providerSpecSha256": "c1b9f87c93886f20a75d050e7fd4eea69888601915cdc31d41c9c2c3239a1e74",
+      "planReceiptPath": "gwjob-b989bf2b8619ff29975730d0904763980d5b3ef8f2d348ce86a9ad10fb95198d.json",
+      "planReceiptSha256": "d6fe809fcf472b8c986ab69bca32ac3e1c060e68a0d0ea90038cfec668a09306",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-561fa6b4ff96e87512df784f0578bab328bf9e8f29ee95d6b1973467e26ab8b4",
+      "providerSpecSha256": "ba28ca05a6e3e8d4fe6b7c93789c690c8c76b28d0fd1e9f0f6287aa3f79e3d23",
+      "planReceiptPath": "gwjob-561fa6b4ff96e87512df784f0578bab328bf9e8f29ee95d6b1973467e26ab8b4.json",
+      "planReceiptSha256": "0b3661e67778940920c1adb44f6e88a240048c30efa2f493779e2ec519619559",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-9c93e0de155fce3fc753f775c968a933af661319fea4d91a24fc0a08df384a85",
+      "providerSpecSha256": "5c9c75aeb1ae964dc9e92d649b698b2d49b8abf8a781875e5557f3858fe16c9c",
+      "planReceiptPath": "gwjob-9c93e0de155fce3fc753f775c968a933af661319fea4d91a24fc0a08df384a85.json",
+      "planReceiptSha256": "57969c7c9ff79269642e208c946c91379ea48d3ad63bc102d9c43322bc19803c",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-95178c066c7a6219325a0d18b8c6595dc96442406c54fc9e06f537155107c698",
+      "providerSpecSha256": "197a9739be7415a1fa1e770512862515e8e5c436394e77febaff460efe19b89e",
+      "planReceiptPath": "gwjob-95178c066c7a6219325a0d18b8c6595dc96442406c54fc9e06f537155107c698.json",
+      "planReceiptSha256": "07b3444d9d0625c510e58cd5257f3f795c177aba2290f6ba12e4760c79ac41c8",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-8488981fb707013bc13d986fcd0bcdfda5fe99b759fcb60a22b0b32bc3377470",
+      "providerSpecSha256": "933d4f9e2c1b6a6effbc5630f700fa51a543cac277602f7eb0aac123d58d80d2",
+      "planReceiptPath": "gwjob-8488981fb707013bc13d986fcd0bcdfda5fe99b759fcb60a22b0b32bc3377470.json",
+      "planReceiptSha256": "a6d82ff37d6e6f8167280c3ec61d07a29d21a22a25b29fe062435bb52e6fed20",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-6921d3807b4742ef5b074bf5c6a5a270506549f6f00ff86d0f8ce17b725fcd8d",
+      "providerSpecSha256": "5655349c0f5dc14038fe1ad99f79ce537320cf4ed2af9b386221341cb641438e",
+      "planReceiptPath": "gwjob-6921d3807b4742ef5b074bf5c6a5a270506549f6f00ff86d0f8ce17b725fcd8d.json",
+      "planReceiptSha256": "0abbb058b38de387a746f06059e7ff1d2981a2029772ad7d025560ee7dc155b0",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-e7e345ac15f149ab64399aa1b91d3a2ef201dc9c696af40bd203c6504f65297e",
+      "providerSpecSha256": "acd00c6973afe804407409983a16a960dad61542a4cd0abb09f18f75c1f98d95",
+      "planReceiptPath": "gwjob-e7e345ac15f149ab64399aa1b91d3a2ef201dc9c696af40bd203c6504f65297e.json",
+      "planReceiptSha256": "4ea6cfe9955fa942203641bb8c05868e9d70dc1c4fe3b52adb1da3f5ae17e417",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-a860d0207f7fe0cdf4eff31453aa3e3e9181a9eaab912b2ca600e1ff231d5901",
+      "providerSpecSha256": "f20ada6dd96c30c1786fce1a10602640fa67b2ff12e50def7d6e3aff9e3af567",
+      "planReceiptPath": "gwjob-a860d0207f7fe0cdf4eff31453aa3e3e9181a9eaab912b2ca600e1ff231d5901.json",
+      "planReceiptSha256": "efda7daeefe878bf9de6009e6718934fd24b25e5f9ebb3edce2301fbb07ce7c1",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-722989097b5b4f125a081c22b5d62247c3732f496de910044bc25cf92514a283",
+      "providerSpecSha256": "c0b32ccfbcb63977fb8792ebe5a7bae7f3e1a6644220aa15b561f68e89975b8c",
+      "planReceiptPath": "gwjob-722989097b5b4f125a081c22b5d62247c3732f496de910044bc25cf92514a283.json",
+      "planReceiptSha256": "99838bd8201866c1ce3d002242d633898f89a6000957e1997ec0443a626e5a27",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-86b19e5115840411788af103f91d13696b2cc04b1e25930d779d1784d92abbb4",
+      "providerSpecSha256": "81e594a10c38759a19bd3e8a50ecfb462805b9c763eab5883d508f90f81072dc",
+      "planReceiptPath": "gwjob-86b19e5115840411788af103f91d13696b2cc04b1e25930d779d1784d92abbb4.json",
+      "planReceiptSha256": "4a47c4ea3685bbe0916ed5745e6c17501b52e3bb688eb2db78036a775d0ece7f",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-8b9cfebec82d1a9ac6d6c0320f8a6b928ed5a22f45961f49d433972f49f4c47a",
+      "providerSpecSha256": "5bf5d5e5ad86e76814480eb3989cbcc49f802de8d487d9428327dcdfe40f6c71",
+      "planReceiptPath": "gwjob-8b9cfebec82d1a9ac6d6c0320f8a6b928ed5a22f45961f49d433972f49f4c47a.json",
+      "planReceiptSha256": "0d04f402e3011ef311ebf1d091437891df80debabb5b2f22cf81d165125611fe",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-ab33a852297488176a5028cb14a19c9c2db5b3aef6bd266c3b8efa59ece97d85",
+      "providerSpecSha256": "918c5e358964bc198685074aa7690ea05bec4a01ba5446c44ea92828ed844cd5",
+      "planReceiptPath": "gwjob-ab33a852297488176a5028cb14a19c9c2db5b3aef6bd266c3b8efa59ece97d85.json",
+      "planReceiptSha256": "a0d40168eebdd7ca6bb4d76e4055894e80d663555d7eaed0a61c203dfeeda1f4",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-b4f4f5d0a161ed2f2a1de0776560878aa3381e74d03457ad3d682ed0d3df04a9",
+      "providerSpecSha256": "ba742c2ce29f9b72d5c8c4d34a114ef64fa790006e9cda81294d8e8904ac7486",
+      "planReceiptPath": "gwjob-b4f4f5d0a161ed2f2a1de0776560878aa3381e74d03457ad3d682ed0d3df04a9.json",
+      "planReceiptSha256": "ce7c0bb647ac75248db0b5c8904e45d2ca39161e22698d541e3b989aefac4acb",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-b5f72f363a214af1e2ac97f9433b9e0d4b74255bbb081bdd9364f449c37a58e0",
+      "providerSpecSha256": "8b433712540364e19159b05ae36f1a4d0f932aa642a52ac117da8e8f9b38a711",
+      "planReceiptPath": "gwjob-b5f72f363a214af1e2ac97f9433b9e0d4b74255bbb081bdd9364f449c37a58e0.json",
+      "planReceiptSha256": "e0a6eb8cd583d1c84a22d838223ea8ecdc19df8e1865b711b1d78701060d3bbe",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-3585694922c4a0200f48b631f976b1763d40fca0d566594da1036ee0cbe8b7a1",
+      "providerSpecSha256": "856106f23f65462fb014652cf9132eed2516bd7f091f6025fb2a584d2ce2ff15",
+      "planReceiptPath": "gwjob-3585694922c4a0200f48b631f976b1763d40fca0d566594da1036ee0cbe8b7a1.json",
+      "planReceiptSha256": "a3e38d852395fdac78f1481ffd2642d69c99eeabcdfb870c4a6859224784b41d",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-b1c6a0f6c6ae4f17e689bca19f9ccd1c354e615298e4812f1e94567e97b81804",
+      "providerSpecSha256": "673989f822ca464a8c6c92acf899d5aab92108fc512f6ab5f48c77e8bf667f1c",
+      "planReceiptPath": "gwjob-b1c6a0f6c6ae4f17e689bca19f9ccd1c354e615298e4812f1e94567e97b81804.json",
+      "planReceiptSha256": "6ca2e2d3c6ba3d5a02314d5afa9dff789fcb33255ce0331f8a3d6e0f65232716",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-4ba3c8c32fe81e19ec8da0f04f24d67780372f5c34524b0dadd4fbe271d0585b",
+      "providerSpecSha256": "e7e01bef7def4889037798c27a8d2cd70ae751597686ed45417a0977721c01bc",
+      "planReceiptPath": "gwjob-4ba3c8c32fe81e19ec8da0f04f24d67780372f5c34524b0dadd4fbe271d0585b.json",
+      "planReceiptSha256": "0e33e151e4d763657ed7d7f9f2e484c9bd1be3d6a0a241f1514e8030805c063d",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-1060d301732c41eb743b6a67d05f4fa21779085f2bf21b63458a423c1fea5252",
+      "providerSpecSha256": "ead59d5c71a430e3a785c1c7624ab73d40ca48c662ebf3b4699aaf45328421f2",
+      "planReceiptPath": "gwjob-1060d301732c41eb743b6a67d05f4fa21779085f2bf21b63458a423c1fea5252.json",
+      "planReceiptSha256": "2a264bc3011bc17ad271c2cc2ddcb14618edd1bf8834fb11006216601cd85b4c",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-7135227328974450820f21f9f102dc2761ef9a1d0e5cbe0f06dcacef4d09572d",
+      "providerSpecSha256": "c3005c4459d86186b45fd8e8421ef42b5232527fe96cfce07efd22aa76dcb027",
+      "planReceiptPath": "gwjob-7135227328974450820f21f9f102dc2761ef9a1d0e5cbe0f06dcacef4d09572d.json",
+      "planReceiptSha256": "cc8c290d98540f536450aa0bcb949c404783ddf31bb8001a649e2d2966997550",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-88bb5b683540aa270c5a757b248a71d839c4eb7c9a2456179675c9bb815ae80a",
+      "providerSpecSha256": "e65e82e8f819d658ab0bdc424f4dca8e4c6004818526fd43cf34cb2a4fb64f1e",
+      "planReceiptPath": "gwjob-88bb5b683540aa270c5a757b248a71d839c4eb7c9a2456179675c9bb815ae80a.json",
+      "planReceiptSha256": "ede162fef0d230af0cf1d850ab2b925fec8ccb2b535cba5a79cf874e98fa53dd",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-9ae4a36f23de51824540994704e1a44d6cd3dd0b8163f1b11e58a8bfc251d9ca",
+      "providerSpecSha256": "f63e5e19cd3d4cd086341291ec12dfa3c270e80bf56835fe54a2d5832f199f6a",
+      "planReceiptPath": "gwjob-9ae4a36f23de51824540994704e1a44d6cd3dd0b8163f1b11e58a8bfc251d9ca.json",
+      "planReceiptSha256": "b37250ec27e985a9b3bca9c6ef5bd698dff31356d55223efed182987ca30caae",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-a914a75f798f2b412ebd64f565212e9996c4575872927bf4e0bad931b723ad3a",
+      "providerSpecSha256": "b265c6302a9dff13279e794185475daf2f6cf5cd173cd6fca0bebceafe62b847",
+      "planReceiptPath": "gwjob-a914a75f798f2b412ebd64f565212e9996c4575872927bf4e0bad931b723ad3a.json",
+      "planReceiptSha256": "2eba4f385a1f283f6738a01a682bb32c325260f168f2f70a7d3a829551cfda8a",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-7de0e5646880defb493c871f67fd1d39a59e5697f3b2f34b48200610806967d4",
+      "providerSpecSha256": "eabaceb2e40d171c1f65e729f6607b57cb896de6bfb4042264e7b0af0e917cb2",
+      "planReceiptPath": "gwjob-7de0e5646880defb493c871f67fd1d39a59e5697f3b2f34b48200610806967d4.json",
+      "planReceiptSha256": "5e81218748906a9e814d6e4a5a60c14cdff0fbb8553ff21ae9e747296c925481",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-5990bcbaa1f66161921cc066a617703074c6233ae3c7e3336504ad1ba16770d2",
+      "providerSpecSha256": "3c18efab9e85342c4599e48e74ec5717c69e1c9da9d02f4b8a8a12e9e4ae2f43",
+      "planReceiptPath": "gwjob-5990bcbaa1f66161921cc066a617703074c6233ae3c7e3336504ad1ba16770d2.json",
+      "planReceiptSha256": "7c63c685b213c7fa164ddfb84d2ff42ca7e0a81d8113e890f5ad23b6e9543202",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-e3eb945af0a2c30349d4b3c12be4a6e54bde7e44fdfe6e7e523cd4e01fa67719",
+      "providerSpecSha256": "1eb8a04d70dd427bd3f83757a3ed126d3acbfb332edee4d8d059584ad4cc76fb",
+      "planReceiptPath": "gwjob-e3eb945af0a2c30349d4b3c12be4a6e54bde7e44fdfe6e7e523cd4e01fa67719.json",
+      "planReceiptSha256": "0f1051d6cf51bce1fee67c320f9f82c5755793c419c9a1d064660968362130a1",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-f61171dcbee3d6117d8cbbdcab1bb17bf00796fee5cd865b0f2f6330f25eb748",
+      "providerSpecSha256": "ee2af88737eee0ebb1a531e1f163c2c4e4df4e45a291147dc08b4429a0edee6c",
+      "planReceiptPath": "gwjob-f61171dcbee3d6117d8cbbdcab1bb17bf00796fee5cd865b0f2f6330f25eb748.json",
+      "planReceiptSha256": "1c7ca9040d8fd870e4a30d793b04c17863d433dcc4a388854b1caf368346a02c",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-a4db85b51923bbe3e6655a52e86328aad60213ce976725b91bf3fb07ca674c51",
+      "providerSpecSha256": "25df7684ea759ad47874acb3ced88e143710d0b4398ce19eafd16b8626a0f05e",
+      "planReceiptPath": "gwjob-a4db85b51923bbe3e6655a52e86328aad60213ce976725b91bf3fb07ca674c51.json",
+      "planReceiptSha256": "fa0d4fbf2b3fc3efd34b156a8d8ba2c63ed38c7f05f905e331f6d018645a0594",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-167da513777125f9f5b6205dfa344916df375e1116d71ecf3de2aaa80ae2144a",
+      "providerSpecSha256": "2b667f0f06753a2bf94ede83c5b7eaabbaad78671d7e86c914021311893f3adb",
+      "planReceiptPath": "gwjob-167da513777125f9f5b6205dfa344916df375e1116d71ecf3de2aaa80ae2144a.json",
+      "planReceiptSha256": "833b9c461bb2f9a9c16d070c4e318d457adac26ab4cc03487869676f592f0f1c",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-886f1d747f14999c944ac4b0c84fd86b09d6eb7cc2aac9e8050647ce96033106",
+      "providerSpecSha256": "033bb262000932a91095aa16b936e5017a23ea995755da882610faf2e9219633",
+      "planReceiptPath": "gwjob-886f1d747f14999c944ac4b0c84fd86b09d6eb7cc2aac9e8050647ce96033106.json",
+      "planReceiptSha256": "379ae54b8eb2e4ab96f0311df1adddb09b9e1dfced3702fefeed78f9053f1df1",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-4276ae19b457ab35aa6af4ac7fcb4b8a3a68906b7b81c1b4d7e9758f9d419f8a",
+      "providerSpecSha256": "800625075be67100315b8882da9c0da20cf92f0199a1cfbc6a735573134b4bd6",
+      "planReceiptPath": "gwjob-4276ae19b457ab35aa6af4ac7fcb4b8a3a68906b7b81c1b4d7e9758f9d419f8a.json",
+      "planReceiptSha256": "df4f3ffc83a25511f2997560e810df37d3d5ed42c71cbc5c68861b35fb7860ab",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-4d98b9e31d106328c3f635d74907788cba980371837f494a1e8f2598a4870ad5",
+      "providerSpecSha256": "280a92eae2a45a6501e4e1db2b18709e5c686293ca675af0f7937f78df827ed3",
+      "planReceiptPath": "gwjob-4d98b9e31d106328c3f635d74907788cba980371837f494a1e8f2598a4870ad5.json",
+      "planReceiptSha256": "d3db307dc6d271b3e4f0845b9a24a7bd69d14e8fc9df7d5f487eb0bfec21cd62",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-3e3e90e67b92e9c0ab43c16fdd7a7ae0cce2aca0d5242193bba97c5c8e3e5f36",
+      "providerSpecSha256": "24e8c61e5de790a4548c674978d21b155bcb6b2167bde1372e2a77faf4ef27a3",
+      "planReceiptPath": "gwjob-3e3e90e67b92e9c0ab43c16fdd7a7ae0cce2aca0d5242193bba97c5c8e3e5f36.json",
+      "planReceiptSha256": "7deb9422675fc27a414e0119fcd66df3bc7723e845b70e1980ad84ecb4fafecb",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-96b5e331bb58ce4ba27cdc625fd3b5a1b3bd1554062bf74677954881181977ee",
+      "providerSpecSha256": "6598459201da71a73822ff09d61eb4a481bc0c4d61c75c60d0f4aa8ea04447a3",
+      "planReceiptPath": "gwjob-96b5e331bb58ce4ba27cdc625fd3b5a1b3bd1554062bf74677954881181977ee.json",
+      "planReceiptSha256": "daccfe68ad1f1e4e949b10c1c8a4f9647ff04415661f2160e2792d3596091d55",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-042d85b22b7cd78acc4b9896f61e6f12fc98073b2a46611f3a73580e08fba70b",
+      "providerSpecSha256": "1b142957110174493119fa51c913ec678480d4f9a7f19c05a9c8c465d6a56fab",
+      "planReceiptPath": "gwjob-042d85b22b7cd78acc4b9896f61e6f12fc98073b2a46611f3a73580e08fba70b.json",
+      "planReceiptSha256": "c8bf271a6f4168ed2b4194ebaa388b8677e74919858fc2103b5f0ee009a4b46a",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-605169c401785f6af09d2085701f3af2235d491bb3e4706228d13ef9081d6da9",
+      "providerSpecSha256": "3b822b4f8010aa14155d8878dac40acf96ba3e2f97cf67f85cb6c7840f112c8b",
+      "planReceiptPath": "gwjob-605169c401785f6af09d2085701f3af2235d491bb3e4706228d13ef9081d6da9.json",
+      "planReceiptSha256": "efa4a58a6386135eebfe5629a1a633a9e66e0c99aa3f3f742f5d2d52662a832b",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-920ae01dce4f8339ddde6e48edfe61e4d2ada2c26fd1c523324fa7c7b6eeae37",
+      "providerSpecSha256": "91698bd30158cd450d723ec93a6d924000aa4faaaf835bae64d6145b645d6562",
+      "planReceiptPath": "gwjob-920ae01dce4f8339ddde6e48edfe61e4d2ada2c26fd1c523324fa7c7b6eeae37.json",
+      "planReceiptSha256": "8b69fb8ec99de89461302d6d0b2d920bb6a3a39d54eed9d510eed93a06deac2f",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-da5c0abb59c24229791e93b23aca7c0a31cf016ec831a054dded0a3674a19276",
+      "providerSpecSha256": "ffd5dd7ada52242565a793b7ac645e0b72bf19446b37cac3aca6b295a6bc0953",
+      "planReceiptPath": "gwjob-da5c0abb59c24229791e93b23aca7c0a31cf016ec831a054dded0a3674a19276.json",
+      "planReceiptSha256": "80f821c7b144409481fe074298d6e7e0c960e3b96b3378ac3d471c28863274f1",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-51aa8a726c99e7d6c9d56fc7d8198acf46b648d8abe35519bb2a8cca9cdef5ca",
+      "providerSpecSha256": "abbb5ca807119e1d4e2290c0347ba399b6c79712029da37f9003c6ae851d4d8b",
+      "planReceiptPath": "gwjob-51aa8a726c99e7d6c9d56fc7d8198acf46b648d8abe35519bb2a8cca9cdef5ca.json",
+      "planReceiptSha256": "5c94e1ccba9a3170c103ebe90712869ae76bbdd62454d63ecfdebe15ab1d9aef",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-ea592c0e385a55a6e0a84f680a822f15be8382ddaa26f20f35bda28342a2154e",
+      "providerSpecSha256": "da0f75ee0d0ecfb7763fb9fe7fa34a51967d4b2785a741f7508117b4f84800ee",
+      "planReceiptPath": "gwjob-ea592c0e385a55a6e0a84f680a822f15be8382ddaa26f20f35bda28342a2154e.json",
+      "planReceiptSha256": "3ec4ac953b1b2dc5574c3ad4188b138e31871e3803d07d4b634020593fa21d28",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-be7a4d529c16767f98d4225019119d059fcae45aaee98c0bc93a1ffb92d10748",
+      "providerSpecSha256": "b3d69a734d50bbe5500c656b9633d6bddbd6f1c0079ad172dd31806562497c55",
+      "planReceiptPath": "gwjob-be7a4d529c16767f98d4225019119d059fcae45aaee98c0bc93a1ffb92d10748.json",
+      "planReceiptSha256": "a1dcfbc4179218ffc5173e6c2930c79752a82459f2ddfa1b5ac61375405bc34c",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-204f563b79f875ec60277045e53fcf09670c5c0b5a8e19b31919b7ea4a32d8fc",
+      "providerSpecSha256": "94c73045d244fbd2d76c1fbb7db3893630123a6582a277500c6443ff64a543ce",
+      "planReceiptPath": "gwjob-204f563b79f875ec60277045e53fcf09670c5c0b5a8e19b31919b7ea4a32d8fc.json",
+      "planReceiptSha256": "b3b8da5425b718999ce671744d1f21050f00dbce7ba3552661ef24b241508b52",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    },
+    {
+      "jobId": "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b",
+      "providerSpecSha256": "1500cf06d14d64bb0c199cb76f0453b5ffc7698bc073e3375b7b8db14c5e9b19",
+      "planReceiptPath": "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b.json",
+      "planReceiptSha256": "a6315cb581be23049f2f6d891174008dccda758f039bcf4d6447bf1f0c14c735",
+      "verdict": "MODEL_FORGE_DRY_RUN_INPUT_ACCEPTED"
+    }
+  ]
+}

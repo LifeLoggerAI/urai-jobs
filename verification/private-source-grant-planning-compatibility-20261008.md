@@ -1,0 +1,11 @@
+# Current private source grant planning-marker compatibility — 2026-10-08
+
+Owner parent: Jobs PR170 `80a8c56cdc839728b9f10bbf072b9af28646b623`, tree `72521eda21d85141fabd1ebc66ce4b34f361b929`. The previous retained-write correction and its22/32-case proof remain dated predecessor evidence; they do not automatically approve this successor.
+
+The canonical Privacy planning controller creates a legitimate marker with uid and updatedAt Timestamp, acquires deletionPlanningLease fields, and removes those fields when releasing the planning lease. This released marker can lack active. Its exact shape must remain compatible. Conversely a still-present planning lease must block retention even beside active:false. Canonical completed/verification_required deletion retains active:true and remains blocking.
+
+Fresh source authority: Privacy PR164 `b93dcf72b783d17356c343c87d2c95f3c5fe5d3d`, deletion-mutation-guard.ts blob `de9622bf80bf29ce6634f9010950c51b80d5c529`. This correction admits only the exact released uid+Timestamp updatedAt shape without active, lease fields or unknown fields; it does not treat generic missing-active compatibility records as current consent. Foreign, malformed, active, permanent and ambiguous records remain denied.
+
+Against the actual predecessor CLI main and37 unchanged synthetic transaction-adapter cases, baseline at02:37:17.923–02:37:18.191Z produced35PASS/2FAIL: released planning incorrectly denied and explicit inactive-with-live-planning incorrectly admitted. The corrected existing native entrypoint passed all22 unchanged validator cases and all37 admission/withdrawal/replay/project/compatibility cases on Node22.23.3 at02:34:46.180–02:34:46.495Z. Current raw log SHA256 `a908624d627011f188f80b4e7bd06ade12297deaa58633dd7c7863fe468f52df`; baseline log SHA256 `3d177426ac169172267677a8a14d1480136ae170b7be0107d0e30fc9d4936a5f`.
+
+Proof uses actual CLI source with explicit synthetic Firebase adapters. Functions not loaded, provider calls/cloud writes/credential lookups/family-media processing zero. Real transaction retry, native declared graph, authenticated private grant application, deployed account/IAM/project, provider canaries and independent release acceptance remain separate gates. No main merge, deployment, paid execution or Golden Master authority is granted.

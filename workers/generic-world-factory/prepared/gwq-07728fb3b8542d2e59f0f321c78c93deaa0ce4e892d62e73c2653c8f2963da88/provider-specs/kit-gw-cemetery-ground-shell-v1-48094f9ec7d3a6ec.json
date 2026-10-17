@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-cemetery-ground-shell:v1",
+    "sourceKitSha256": "48094f9ec7d3a6ecdc5d7b9e48a7edc05224aa6d7b262eac383fa9277397251f",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-cemetery",
+        "specSha256": "411ac6db194fce1f7476d53ef9bfa27ffe33e1d057b82c1394988e320912705c",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 1208569758
+  },
+  "id": "kit-gw-cemetery-ground-shell-v1-48094f9ec7d3a6ec",
+  "prompt": "Original generic modular ground-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Level central path and accessible resting area; shallow non-navigable planting borders protect marker placement. No open graves or unexpected imagery. Target bounding dimensions 26m wide x 0.3m high x 24m deep. Materials: stone-muted. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 26,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

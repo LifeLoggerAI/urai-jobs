@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "urai-generic-world-factory-authority-v1",
+  "observedAt": "2026-10-07T00:22:37.379652+00:00",
+  "repositories": {
+    "studio": {
+      "repository": "LifeLoggerAI/urai-studio",
+      "head": "854477d80b1a7aa718edb60d1ed4c1cf22dbed9d",
+      "issue": 153
+    },
+    "jobs": {
+      "repository": "LifeLoggerAI/urai-jobs",
+      "head": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+      "issue": 152
+    },
+    "assetFactory": {
+      "repository": "LifeLoggerAI/asset-factory",
+      "head": "39645de4f5427ad9f4f5ed709e0f0706ff7d64e0"
+    }
+  },
+  "spendAuthorized": false,
+  "integrationAuthorized": false
+}

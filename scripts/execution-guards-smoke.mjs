@@ -25,7 +25,7 @@ assert.deepEqual(
   { action: 'ignore', reason: 'terminal' },
 );
 assert.equal(
-  canFinalizeExecution({ status: 'RUNNING', execution: { leaseToken: token } }, token),
+  canFinalizeExecution({ status: 'RUNNING', lease: { leaseToken: token }, execution: { leaseToken: token } }, token),
   true,
 );
 assert.equal(

@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-military-barracks-shell:v1",
+    "sourceKitSha256": "292275ec5534e51b58afa039936801cf3b67f6b4b8c100ec87dfd134a0025897",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-military-barracks",
+        "specSha256": "04ac8f734291497b091cd67d07ad02d93728af396e3bdf73b7f092db7c9ec48e",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 690124268
+  },
+  "id": "kit-gw-military-barracks-shell-v1-292275ec5534e51b",
+  "prompt": "Original generic modular architecture-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Single-height beds by default, 2 m central aisle and clear exterior door. Bunk variant requires safe non-climbing camera behavior and separately reviewed scale. Target bounding dimensions 10m wide x 3m high x 8m deep. Materials: paint-institutional-soft. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 10,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}
