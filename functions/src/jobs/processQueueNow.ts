@@ -5,7 +5,7 @@ import { ulid } from 'ulid';
 import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/shared-types';
 import { returnLeaseAfterPublishFailure } from '../core/dispatchRecovery.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
-import { isTerminalJobStatus } from './executionGuards.js';
+import { isCurrentDueQueueEntry, isTerminalJobStatus } from './executionGuards.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { currentJobActor, requireJobOperator } from '../core/currentJobActor.js';
 
@@ -82,7 +82,11 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
 
   for (const doc of pendingJobsSnapshot.docs) {
     const { jobId } = doc.data() as JobQueueEntry;
-    if (!jobId) continue;
+    if (!jobId || doc.id !== jobId) {
+      // Never dispatch another job through a stale or aliased query result.
+      skipped.push(doc.id);
+      continue;
+    }
 
     const result = await db.runTransaction(async (transaction) => {
       requireJobOperator(await currentJobActor(request, transaction));
@@ -93,7 +97,7 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
       const queueDoc = await transaction.get(queueRef);
       requireJobOperator(await currentJobActor(request, transaction));
 
-      if (!queueDoc.exists || queueDoc.data()?.status !== 'PENDING') {
+      if (!queueDoc.exists || !isCurrentDueQueueEntry(queueDoc.data() as JobQueueEntry, jobId)) {
         return { lease: null, outcome: 'queue-not-pending' as const };
       }
 

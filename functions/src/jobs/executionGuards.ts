@@ -105,6 +105,29 @@ export function canRequeueUnstartedLease(
     && job.execution?.leaseToken !== leaseToken;
 }
 
+
+/** Resolve a due queue row from the current transaction snapshot, never only
+ * from the earlier indexed query. Reject foreign aliases, missing timestamps
+ * and malformed Firestore data before granting a lease or publishing work. */
+export function isCurrentDueQueueEntry(
+  queue: { jobId?: unknown; status?: unknown; availableAt?: unknown } | null | undefined,
+  expectedJobId: string,
+  nowMs = Date.now(),
+): boolean {
+  if (!queue || typeof expectedJobId !== 'string' || !expectedJobId
+    || queue.jobId !== expectedJobId || queue.status !== 'PENDING'
+    || !Number.isSafeInteger(nowMs)) return false;
+  try {
+    const due = queue.availableAt;
+    const dueMs = due instanceof Date ? due.getTime()
+      : due && typeof due === 'object' && 'toMillis' in due
+        && typeof due.toMillis === 'function' ? due.toMillis() : Number.NaN;
+    return Number.isSafeInteger(dueMs) && dueMs <= nowMs;
+  } catch {
+    return false;
+  }
+}
+
 export function isTerminalJobStatus(status: unknown): boolean {
   return TERMINAL_JOB_STATUSES.has(String(status || ''));
 }
