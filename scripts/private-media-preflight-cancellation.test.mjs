@@ -9,7 +9,7 @@ import { EventEmitter } from 'node:events'
 import { PassThrough, Readable } from 'node:stream'
 
 // Real original Jobs transport code, synthetic metadata and media only.
-const require = createRequire(import.meta.url)
+const require = createRequire(new URL('../functions/package.json', import.meta.url))
 const ts = require('typescript')
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url))
 const source = fs.readFileSync(path.join(sourceRoot, 'functions/src/jobs/privateMediaDelivery.ts'), 'utf8')
