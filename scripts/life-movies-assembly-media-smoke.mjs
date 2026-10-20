@@ -38,7 +38,7 @@ function videoPackets(filePath) {
 }
 function decodedAudioClock(filePath, durationMs) {
   const result = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'a:0', '-show_frames',
-    '-show_entries', 'frame=pts,pkt_duration,nb_samples', '-of', 'json', filePath],
+    '-show_entries', 'frame=pts,duration,pkt_duration,nb_samples', '-of', 'json', filePath],
   { encoding: 'utf8', timeout: 5000, maxBuffer: 2 * 1024 * 1024 });
   assert.equal(result.status, 0, result.stderr);
   const frames = JSON.parse(result.stdout).frames;
@@ -50,8 +50,12 @@ function decodedAudioClock(filePath, durationMs) {
     samples += frame.nb_samples;
   }
   const last = frames.at(-1);
+  const finalDuration = Number.isInteger(last.duration)
+    ? last.duration : last.pkt_duration;
+  assert.ok(Number.isInteger(finalDuration) && finalDuration > 0,
+    'ffprobe must provide a positive final audio frame duration');
   return { sampleRate: 48000, frames: frames.length, decodedSamples: samples, maxClockErrorSamples,
-    declaredSamples: durationMs * 48, packetEndSamples: last.pts + last.pkt_duration,
+    declaredSamples: durationMs * 48, packetEndSamples: last.pts + finalDuration,
     terminalPaddingSamples: samples - durationMs * 48 };
 }
 function copiedVideoReference(entries, durationSeconds, name) {
