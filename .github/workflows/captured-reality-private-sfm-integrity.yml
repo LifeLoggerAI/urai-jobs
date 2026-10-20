@@ -1,0 +1,65 @@
+name: Captured Reality Private SfM Source Integrity
+
+on:
+  pull_request:
+    branches:
+      - repair/life-movie-convergence-20261007
+      - main
+    paths:
+      - scripts/captured-reality-sfm-integrity-audit.py
+      - scripts/captured-reality-sfm-integrity-audit.test.py
+      - scripts/captured-reality-colmap-track-repair.py
+      - scripts/captured-reality-colmap-track-repair.test.py
+      - scripts/captured-reality-colmap-match-consistency.py
+      - scripts/captured-reality-colmap-match-consistency.test.py
+      - scripts/captured-reality-colmap-geometric-triage.py
+      - scripts/captured-reality-colmap-geometric-triage.test.py
+      - scripts/captured-reality-colmap-geometric-successor.py
+      - scripts/captured-reality-colmap-geometric-successor.test.py
+      - scripts/captured-reality-3dgs-training-job.py
+      - scripts/captured-reality-3dgs-training-job.test.py
+      - scripts/world001-source-disjoint-geometry-guard.py
+      - scripts/world001-source-disjoint-geometry-guard.test.py
+      - scripts/world001_train_cross_survey_consistency.py
+      - scripts/world001_train_cross_survey_consistency.test.py
+      - scripts/world001-source-correction-preflight.py
+      - scripts/world001-source-correction-preflight.test.py
+      - scripts/world001_train_descriptor_consensus.py
+      - scripts/world001_train_descriptor_consensus.test.py
+      - .github/workflows/captured-reality-private-sfm-integrity.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verified-source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact proposed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Provision isolated image decoder
+        run: python3 -m pip install --no-cache-dir 'Pillow==12.0.0'
+      - name: Run synthetic real-handler audit regressions (no private bytes)
+        run: python3 scripts/captured-reality-sfm-integrity-audit.test.py
+      - name: Test source-preserving COLMAP disambiguation and corruption refusal
+        run: python3 scripts/captured-reality-colmap-track-repair.test.py
+      - name: Verify original SIFT inlier evidence and derivative admission boundaries
+        run: python3 scripts/captured-reality-colmap-match-consistency.test.py
+      - name: Verify independent triangulation does not promote ambiguous camera tracks
+        run: python3 scripts/captured-reality-colmap-geometric-triage.test.py
+      - name: Run source-preserving v3 geometric successor regressions
+        run: python3 scripts/captured-reality-colmap-geometric-successor.test.py
+      - name: Verify private 3DGS training preflight and no-spend refusal
+        run: python3 scripts/captured-reality-3dgs-training-job.test.py
+      - name: Verify World001 source-disjoint holdout guard and refusal regressions
+        run: python3 scripts/world001-source-disjoint-geometry-guard.test.py
+      - name: Verify train-only survey-out geometric track refusal
+        run: python3 scripts/world001_train_cross_survey_consistency.test.py
+      - name: Verify bound World001 coherent-source GLB and calibration receipt files
+        run: python3 scripts/world001-source-correction-preflight.test.py
+      - name: Verify train-only descriptor alias and multiview support refusal
+        run: python3 scripts/world001_train_descriptor_consensus.test.py

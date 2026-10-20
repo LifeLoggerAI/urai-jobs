@@ -15,6 +15,9 @@ set -euo pipefail
 : "${PRIVATE_SOURCE_TRANSCRIBE_TOKEN_SECRET:=urai-private-source-transcribe-token}"
 : "${PRIVATE_SOURCE_INDEX_TOKEN_SECRET:=urai-private-source-index-token}"
 : "${CAPTURED_REALITY_ENGINE_TOKEN_SECRET:=urai-captured-reality-engine-token}"
+URAI_PRIVATE_SOURCE_CONTRACT="${URAI_PRIVATE_SOURCE_CONTRACT:-urai-private-source-receipt-v2}"
+URAI_PRIVATE_SOURCE_EXECUTION_ENABLED="${URAI_PRIVATE_SOURCE_EXECUTION_ENABLED:-false}"
+URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF="${URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF:-}"
 : "${ELEVENLABS_MODEL_ID:=eleven_multilingual_v2}"
 : "${ELEVENLABS_OUTPUT_FORMAT:=mp3_44100_128}"
 : "${ELEVENLABS_MAX_CHARACTERS_PER_REQUEST:=1200}"
@@ -91,6 +94,23 @@ if [[ ",$WORKERS_CSV," == *",private-source-worker,"* ]]; then
   : "${PRIVATE_SOURCE_AUTHORITY_URL:?PRIVATE_SOURCE_AUTHORITY_URL is required when deploying private-source-worker}"
   : "${PRIVATE_SOURCE_TRANSCRIBE_URL:?PRIVATE_SOURCE_TRANSCRIBE_URL is required when deploying private-source-worker}"
   : "${PRIVATE_SOURCE_INDEX_URL:?PRIVATE_SOURCE_INDEX_URL is required when deploying private-source-worker}"
+  [ "$URAI_PRIVATE_SOURCE_CONTRACT" = "urai-private-source-receipt-v2" ] || {
+    echo "[FAIL] URAI_PRIVATE_SOURCE_CONTRACT must equal urai-private-source-receipt-v2" >&2
+    exit 1
+  }
+  case "$URAI_PRIVATE_SOURCE_EXECUTION_ENABLED" in
+    true|false) ;;
+    *) echo "[FAIL] URAI_PRIVATE_SOURCE_EXECUTION_ENABLED must be true or false" >&2; exit 1 ;;
+  esac
+  if [ "$URAI_PRIVATE_SOURCE_EXECUTION_ENABLED" = "true" ]; then
+    [[ "$URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF" =~ ^private:[A-Za-z0-9_./:-]{8,512}$ ]] || {
+      echo "[FAIL] enabled private-source execution requires an opaque private authority ref" >&2
+      exit 1
+    }
+  elif [ -n "$URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF" ]; then
+    echo "[FAIL] private-source execution authority ref must be empty while execution is disabled" >&2
+    exit 1
+  fi
 fi
 
 if [[ ",$WORKERS_CSV," == *",captured-reality-worker,"* ]]; then
@@ -307,10 +327,17 @@ verify_revision_configuration() {
   local revision_json="$1"
   local expected_secret_versions_json="$2"
   local expected_image_digest="$3"
+  local expected_worker="$4"
   REVISION_JSON="$revision_json" EXPECTED_SECRET_VERSIONS_JSON="$expected_secret_versions_json" \
   EXPECTED_SOURCE_SHA="$GITHUB_SHA" EXPECTED_ROLLBACK_SHA="$DEPLOY_ROLLBACK_SHA" \
   EXPECTED_ENVIRONMENT="$URAI_ENV" EXPECTED_BUCKET="$GCS_BUCKET_NAME" \
-  EXPECTED_SERVICE_ACCOUNT="$WORKER_RUNTIME_SERVICE_ACCOUNT" EXPECTED_IMAGE_DIGEST="$expected_image_digest" node <<'NODE'
+  EXPECTED_SERVICE_ACCOUNT="$WORKER_RUNTIME_SERVICE_ACCOUNT" EXPECTED_IMAGE_DIGEST="$expected_image_digest" \
+  EXPECTED_WORKER="$expected_worker" EXPECTED_PRIVATE_SOURCE_CONTRACT="$URAI_PRIVATE_SOURCE_CONTRACT" \
+  EXPECTED_PRIVATE_SOURCE_EXECUTION_ENABLED="$URAI_PRIVATE_SOURCE_EXECUTION_ENABLED" \
+  EXPECTED_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF="$URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF" \
+  EXPECTED_PRIVATE_SOURCE_AUTHORITY_URL="${PRIVATE_SOURCE_AUTHORITY_URL:-}" \
+  EXPECTED_PRIVATE_SOURCE_TRANSCRIBE_URL="${PRIVATE_SOURCE_TRANSCRIBE_URL:-}" \
+  EXPECTED_PRIVATE_SOURCE_INDEX_URL="${PRIVATE_SOURCE_INDEX_URL:-}" node <<'NODE'
 const revision = JSON.parse(process.env.REVISION_JSON || '{}');
 const expectedSecrets = JSON.parse(process.env.EXPECTED_SECRET_VERSIONS_JSON || '{}');
 const container = revision?.spec?.containers?.[0] || {};
@@ -336,7 +363,16 @@ if (String(labels['urai-environment'] || '') !== process.env.EXPECTED_ENVIRONMEN
 if (String(revision?.spec?.serviceAccountName || '') !== process.env.EXPECTED_SERVICE_ACCOUNT) failures.push('revision service account mismatch');
 if (observedValues.URAI_ENV !== process.env.EXPECTED_ENVIRONMENT) failures.push('revision URAI_ENV mismatch');
 if (observedValues.GCS_BUCKET_NAME !== process.env.EXPECTED_BUCKET) failures.push('revision GCS_BUCKET_NAME mismatch');
+if (process.env.EXPECTED_CANONICAL_JOBS_PROJECT && observedValues.FIREBASE_PROJECT_ID !== process.env.EXPECTED_CANONICAL_JOBS_PROJECT) failures.push('revision canonical Jobs project mismatch');
 if (process.env.EXPECTED_STUDIO_SOURCE_BUCKETS && observedValues.URAI_STUDIO_SOURCE_BUCKETS !== process.env.EXPECTED_STUDIO_SOURCE_BUCKETS) failures.push('revision URAI_STUDIO_SOURCE_BUCKETS mismatch');
+if (process.env.EXPECTED_WORKER === 'private-source-worker') {
+  if (observedValues.URAI_PRIVATE_SOURCE_CONTRACT !== process.env.EXPECTED_PRIVATE_SOURCE_CONTRACT) failures.push('private-source contract mismatch');
+  if (observedValues.URAI_PRIVATE_SOURCE_EXECUTION_ENABLED !== process.env.EXPECTED_PRIVATE_SOURCE_EXECUTION_ENABLED) failures.push('private-source execution enabled mismatch');
+  if ((observedValues.URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF || '') !== process.env.EXPECTED_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF) failures.push('private-source execution authority mismatch');
+  if (observedValues.PRIVATE_SOURCE_AUTHORITY_URL !== process.env.EXPECTED_PRIVATE_SOURCE_AUTHORITY_URL) failures.push('private-source authority URL mismatch');
+  if (observedValues.PRIVATE_SOURCE_TRANSCRIBE_URL !== process.env.EXPECTED_PRIVATE_SOURCE_TRANSCRIBE_URL) failures.push('private-source transcribe URL mismatch');
+  if (observedValues.PRIVATE_SOURCE_INDEX_URL !== process.env.EXPECTED_PRIVATE_SOURCE_INDEX_URL) failures.push('private-source index URL mismatch');
+}
 if (normalizeDigest(revision?.status?.imageDigest) !== normalizeDigest(process.env.EXPECTED_IMAGE_DIGEST)) failures.push('revision image digest mismatch');
 if (failures.length) {
   console.error(`[FAIL] Deployed revision configuration mismatch:\n- ${failures.join('\n- ')}`);
@@ -366,6 +402,9 @@ append_receipt() {
   ROLLBACK_IMAGE_DIGEST="$rollback_image_digest" REVISION_LABELS_JSON="$revision_labels" \
   SECRET_VERSIONS_JSON="$secret_versions_json" URAI_ENV="$URAI_ENV" GCP_REGION="$GCP_REGION" \
   GCS_BUCKET_NAME="$GCS_BUCKET_NAME" URAI_STUDIO_SOURCE_BUCKETS="${URAI_STUDIO_SOURCE_BUCKETS:-}" WORKER_RUNTIME_SERVICE_ACCOUNT="$WORKER_RUNTIME_SERVICE_ACCOUNT" \
+  PRIVATE_SOURCE_AUTHORITY_URL="${PRIVATE_SOURCE_AUTHORITY_URL:-}" PRIVATE_SOURCE_TRANSCRIBE_URL="${PRIVATE_SOURCE_TRANSCRIBE_URL:-}" PRIVATE_SOURCE_INDEX_URL="${PRIVATE_SOURCE_INDEX_URL:-}" \
+  URAI_PRIVATE_SOURCE_CONTRACT="$URAI_PRIVATE_SOURCE_CONTRACT" URAI_PRIVATE_SOURCE_EXECUTION_ENABLED="$URAI_PRIVATE_SOURCE_EXECUTION_ENABLED" \
+  URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF="$URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF" \
   DEPLOY_ROLLBACK_SHA="$DEPLOY_ROLLBACK_SHA" RECEIPT_TMP="$receipt_tmp" node <<'NODE'
 const crypto = require('node:crypto');
 const fs = require('fs');
@@ -388,6 +427,14 @@ const configuration = {
   revisionLabels,
   secretVersions,
   ...(process.env.WORKER === 'studio-worker' ? { sourceBuckets: String(process.env.URAI_STUDIO_SOURCE_BUCKETS || '') } : {}),
+  ...(process.env.WORKER === 'private-source-worker' ? {
+    privateSourceAuthorityUrl: String(process.env.PRIVATE_SOURCE_AUTHORITY_URL || ''),
+    privateSourceTranscribeUrl: String(process.env.PRIVATE_SOURCE_TRANSCRIBE_URL || ''),
+    privateSourceIndexUrl: String(process.env.PRIVATE_SOURCE_INDEX_URL || ''),
+    privateSourceContract: String(process.env.URAI_PRIVATE_SOURCE_CONTRACT || ''),
+    privateSourceExecutionEnabled: process.env.URAI_PRIVATE_SOURCE_EXECUTION_ENABLED === 'true',
+    privateSourceExecutionAuthorityRef: String(process.env.URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF || ''),
+  } : {}),
 };
 const configFingerprint = crypto.createHash('sha256').update(JSON.stringify(stable(configuration))).digest('hex');
 const path = process.env.RECEIPT_TMP;
@@ -512,7 +559,7 @@ deploy_worker() {
     env_vars="$env_vars,URAI_STUDIO_SOURCE_BUCKETS=$URAI_STUDIO_SOURCE_BUCKETS"
   fi
   if [ "$worker" = "narrator-worker" ]; then
-    env_vars="$env_vars,URAI_NARRATOR_ELEVENLABS_ENABLED=$URAI_NARRATOR_ELEVENLABS_ENABLED"
+    env_vars="$env_vars,FIREBASE_PROJECT_ID=$GCLOUD_PROJECT,URAI_NARRATOR_ELEVENLABS_ENABLED=$URAI_NARRATOR_ELEVENLABS_ENABLED"
     if [ "$URAI_NARRATOR_ELEVENLABS_ENABLED" = "true" ]; then
       env_vars="$env_vars,ELEVENLABS_ALLOWED_VOICE_IDS=$ELEVENLABS_ALLOWED_VOICE_IDS,ELEVENLABS_MODEL_ID=$ELEVENLABS_MODEL_ID,ELEVENLABS_OUTPUT_FORMAT=$ELEVENLABS_OUTPUT_FORMAT,ELEVENLABS_MAX_CHARACTERS_PER_REQUEST=$ELEVENLABS_MAX_CHARACTERS_PER_REQUEST"
       secret_vars="$secret_vars,ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY_SECRET}:${SECRET_VERSION_IDS[$ELEVENLABS_API_KEY_SECRET]}"
@@ -523,7 +570,7 @@ deploy_worker() {
     secret_vars="$secret_vars,URAI_WHEEL_GITHUB_TOKEN=${URAI_WHEEL_GITHUB_TOKEN_SECRET}:${SECRET_VERSION_IDS[$URAI_WHEEL_GITHUB_TOKEN_SECRET]},URAI_JOBS_CALLBACK_SECRET=${URAI_JOBS_CALLBACK_SECRET_NAME}:${SECRET_VERSION_IDS[$URAI_JOBS_CALLBACK_SECRET_NAME]}"
   fi
   if [ "$worker" = "private-source-worker" ]; then
-    env_vars="$env_vars,PRIVATE_SOURCE_AUTHORITY_URL=$PRIVATE_SOURCE_AUTHORITY_URL,PRIVATE_SOURCE_TRANSCRIBE_URL=$PRIVATE_SOURCE_TRANSCRIBE_URL,PRIVATE_SOURCE_INDEX_URL=$PRIVATE_SOURCE_INDEX_URL"
+    env_vars="$env_vars,PRIVATE_SOURCE_AUTHORITY_URL=$PRIVATE_SOURCE_AUTHORITY_URL,PRIVATE_SOURCE_TRANSCRIBE_URL=$PRIVATE_SOURCE_TRANSCRIBE_URL,PRIVATE_SOURCE_INDEX_URL=$PRIVATE_SOURCE_INDEX_URL,URAI_PRIVATE_SOURCE_CONTRACT=$URAI_PRIVATE_SOURCE_CONTRACT,URAI_PRIVATE_SOURCE_EXECUTION_ENABLED=$URAI_PRIVATE_SOURCE_EXECUTION_ENABLED,URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF=$URAI_PRIVATE_SOURCE_EXECUTION_AUTHORITY_REF"
     secret_vars="$secret_vars,PRIVATE_SOURCE_AUTHORITY_TOKEN=${PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET}:${SECRET_VERSION_IDS[$PRIVATE_SOURCE_AUTHORITY_TOKEN_SECRET]},PRIVATE_SOURCE_TRANSCRIBE_TOKEN=${PRIVATE_SOURCE_TRANSCRIBE_TOKEN_SECRET}:${SECRET_VERSION_IDS[$PRIVATE_SOURCE_TRANSCRIBE_TOKEN_SECRET]},PRIVATE_SOURCE_INDEX_TOKEN=${PRIVATE_SOURCE_INDEX_TOKEN_SECRET}:${SECRET_VERSION_IDS[$PRIVATE_SOURCE_INDEX_TOKEN_SECRET]}"
   fi
   if [ "$worker" = "captured-reality-worker" ]; then
@@ -587,8 +634,9 @@ deploy_worker() {
 
   secret_versions_json="$(build_secret_versions_json "$worker")"
   revision_json="$(gcloud run revisions describe "$revision" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format=json)"
+  EXPECTED_CANONICAL_JOBS_PROJECT="$([ "$worker" = "narrator-worker" ] && printf '%s' "$GCLOUD_PROJECT" || true)" \
   EXPECTED_STUDIO_SOURCE_BUCKETS="$([ "$worker" = "studio-worker" ] && printf '%s' "$URAI_STUDIO_SOURCE_BUCKETS" || true)" \
-  verify_revision_configuration "$revision_json" "$secret_versions_json" "$build_image_digest"
+  verify_revision_configuration "$revision_json" "$secret_versions_json" "$build_image_digest" "$worker"
   labels_json="$(revision_labels_json "$revision_json")"
   worker_token="$(gcloud secrets versions access "$worker_token_version" --secret "$URAI_JOBS_WORKER_TOKEN_SECRET" --project "$GCLOUD_PROJECT")"
 
@@ -603,6 +651,15 @@ deploy_worker() {
     echo "[FAIL] [$worker] authorized auth probe returned $authorized_code, expected 200" >&2
     exit 1
   }
+  if [ "$worker" = "private-source-worker" ]; then
+    private_ready_code="$(curl -sS -o /tmp/private-source-ready.json -w '%{http_code}' "$url/readyz")"
+    expected_private_ready_code="$([ "$URAI_PRIVATE_SOURCE_EXECUTION_ENABLED" = "true" ] && printf '200' || printf '503')"
+    [ "$private_ready_code" = "$expected_private_ready_code" ] || {
+      echo "[FAIL] [$worker] readiness probe returned $private_ready_code, expected $expected_private_ready_code for execution=$URAI_PRIVATE_SOURCE_EXECUTION_ENABLED" >&2
+      cat /tmp/private-source-ready.json >&2 || true
+      exit 1
+    }
+  fi
 
   append_receipt "$worker" "$build_id" "$image_tag" "$immutable_image" "$url" "$revision" "$rollback_revision" \
     "$image_digest" "$rollback_image_digest" "$rollback_source_sha" "$secret_versions_json" "$labels_json"

@@ -4,7 +4,7 @@ import { PubSub } from '@google-cloud/pubsub';
 import { ulid } from 'ulid';
 import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
-import { canRequeueUnstartedLease, isTerminalJobStatus } from './executionGuards.js';
+import { canRequeueUnstartedLease, isCurrentDueQueueEntry, isTerminalJobStatus } from './executionGuards.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
@@ -62,10 +62,9 @@ async function compensatePublishFailure(
   return db.runTransaction(async (transaction) => {
     const queueRef = jobQueueEntryDoc(jobId);
     const jobRef = jobDoc(jobId);
-    const [queueSnapshot, jobSnapshot] = await Promise.all([
-      transaction.get(queueRef),
-      transaction.get(jobRef),
-    ]);
+    // Acquire shared document locks in the same order as every queue transaction.
+    const jobSnapshot = await transaction.get(jobRef);
+    const queueSnapshot = await transaction.get(queueRef);
 
     if (!queueSnapshot.exists) return 'missing-queue';
 
@@ -175,10 +174,9 @@ async function recordDispatchPublished(
   return db.runTransaction(async (transaction) => {
     const queueRef = jobQueueEntryDoc(jobId);
     const jobRef = jobDoc(jobId);
-    const [queueSnapshot, jobSnapshot] = await Promise.all([
-      transaction.get(queueRef),
-      transaction.get(jobRef),
-    ]);
+    // Acquire shared document locks in the same order as every queue transaction.
+    const jobSnapshot = await transaction.get(jobRef);
+    const queueSnapshot = await transaction.get(queueRef);
 
     if (!queueSnapshot.exists || !jobSnapshot.exists) return 'missing-state';
 
@@ -234,16 +232,19 @@ export const processQueueTick = onSchedule('every 1 minutes', async () => {
   await Promise.all(pendingJobsSnapshot.docs.map(async (candidate) => {
     const candidateData = candidate.data() as JobQueueEntry;
     const jobId = String(candidateData.jobId || candidate.id);
+    if (candidateData.jobId !== candidate.id) {
+      console.warn(`[${tickWorkerId}] Skipped mismatched queue candidate ${candidate.id}.`);
+      return;
+    }
 
     const lease = await db.runTransaction(async (transaction) => {
       const queueRef = jobQueueEntryDoc(jobId);
       const masterJobRef = jobDoc(jobId);
-      const [queueSnapshot, jobSnapshot] = await Promise.all([
-        transaction.get(queueRef),
-        transaction.get(masterJobRef),
-      ]);
+      // Acquire shared document locks in the same order as every queue transaction.
+      const jobSnapshot = await transaction.get(masterJobRef);
+      const queueSnapshot = await transaction.get(queueRef);
 
-      if (!queueSnapshot.exists || queueSnapshot.data()?.status !== 'PENDING') {
+      if (!queueSnapshot.exists || !isCurrentDueQueueEntry(queueSnapshot.data() as JobQueueEntry, jobId)) {
         return null;
       }
 

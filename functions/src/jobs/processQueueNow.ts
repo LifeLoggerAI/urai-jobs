@@ -1,12 +1,13 @@
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall } from 'firebase-functions/v2/https';
 import { PubSub } from '@google-cloud/pubsub';
 import { ulid } from 'ulid';
 import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/shared-types';
 import { returnLeaseAfterPublishFailure } from '../core/dispatchRecovery.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
-import { isTerminalJobStatus } from './executionGuards.js';
+import { isCurrentDueQueueEntry, isTerminalJobStatus } from './executionGuards.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { currentJobActor, requireJobOperator } from '../core/currentJobActor.js';
 
 const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
 const LEASE_DURATION_MS = 60 * 1000;
@@ -19,30 +20,6 @@ const callableOptions = {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
-
-function rolesToStrings(values: unknown[]): string[] {
-  return values.map((value) => String(value));
-}
-
-function hasOperatorAccess(auth: unknown): boolean {
-  const authRecord = asRecord(auth);
-  const token = asRecord(authRecord.token);
-  const role = token.role;
-  const roles = Array.isArray(token.roles) ? rolesToStrings(token.roles) : [];
-
-  return (
-    role === 'admin' ||
-    role === 'operator' ||
-    token.uraiJobsAdmin === true ||
-    roles.includes('admin') ||
-    roles.includes('operator')
-  );
-}
-
-function requireOperator(auth: unknown): void {
-  if (!auth) throw new HttpsError('unauthenticated', 'Authentication is required.');
-  if (!hasOperatorAccess(auth)) throw new HttpsError('permission-denied', 'Admin/operator access is required.');
 }
 
 function normalizeLimit(value: unknown, fallback = 10): number {
@@ -83,7 +60,7 @@ function jobConsentContexts(job: Job) {
 }
 
 export const processQueueNow = onCall(callableOptions, async (request) => {
-  requireOperator(request.auth);
+  requireJobOperator(await currentJobActor(request));
 
   const input = asRecord(request.data);
   const limit = normalizeLimit(input.limit, 10);
@@ -105,17 +82,22 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
 
   for (const doc of pendingJobsSnapshot.docs) {
     const { jobId } = doc.data() as JobQueueEntry;
-    if (!jobId) continue;
+    if (!jobId || doc.id !== jobId) {
+      // Never dispatch another job through a stale or aliased query result.
+      skipped.push(doc.id);
+      continue;
+    }
 
     const result = await db.runTransaction(async (transaction) => {
+      requireJobOperator(await currentJobActor(request, transaction));
       const queueRef = jobQueueEntryDoc(jobId);
       const masterJobRef = jobDoc(jobId);
-      const [queueDoc, masterJobDoc] = await Promise.all([
-        transaction.get(queueRef),
-        transaction.get(masterJobRef),
-      ]);
+      // Acquire shared document locks in the same order as every queue transaction.
+      const masterJobDoc = await transaction.get(masterJobRef);
+      const queueDoc = await transaction.get(queueRef);
+      requireJobOperator(await currentJobActor(request, transaction));
 
-      if (!queueDoc.exists || queueDoc.data()?.status !== 'PENDING') {
+      if (!queueDoc.exists || !isCurrentDueQueueEntry(queueDoc.data() as JobQueueEntry, jobId)) {
         return { lease: null, outcome: 'queue-not-pending' as const };
       }
 
@@ -153,6 +135,7 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
           .map((snapshot, index) => ({ snapshot, purpose: consentContexts[index].purpose }))
           .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
         if (blockedPurpose) {
+          requireJobOperator(await currentJobActor(request, transaction));
           transaction.update(masterJobRef, {
             status: 'CANCELLED',
             lease: FieldValue.delete(),
@@ -170,6 +153,7 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
         }
       }
 
+      requireJobOperator(await currentJobActor(request, transaction));
       const newLease = createLease(workerId);
       const leaseUpdate = {
         status: 'LEASED' as const,
@@ -190,6 +174,7 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
 
     leased.push(jobId);
     try {
+      requireJobOperator(await currentJobActor(request));
       await pubsub.topic(JOB_EXECUTION_TOPIC).publishMessage({
         json: { jobId, leaseToken: result.lease.leaseToken },
       });
@@ -201,6 +186,7 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
     }
   }
 
+  requireJobOperator(await currentJobActor(request));
   return {
     workerId,
     requested: limit,

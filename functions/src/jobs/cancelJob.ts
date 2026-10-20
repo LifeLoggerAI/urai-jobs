@@ -1,6 +1,7 @@
 import { getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { currentJobActor } from "../core/currentJobActor.js";
 
 if (getApps().length === 0) initializeApp();
 
@@ -8,29 +9,8 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
-function hasOperatorAccess(auth: unknown): boolean {
-  const authRecord = asRecord(auth);
-  const token = asRecord(authRecord.token);
-  const role = token.role;
-  const roles = Array.isArray(token.roles) ? token.roles : [];
-
-  return (
-    role === "admin" ||
-    role === "operator" ||
-    token.uraiJobsAdmin === true ||
-    roles.includes("admin") ||
-    roles.includes("operator")
-  );
-}
-
-function authUid(auth: unknown): string {
-  return String(asRecord(auth).uid || "");
-}
-
 export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Authentication is required.");
-  }
+  await currentJobActor(request);
 
   const jobId = String(asRecord(request.data).jobId || "").trim();
   if (!jobId) {
@@ -42,6 +22,7 @@ export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
   const queueRef = db.collection("jobQueue").doc(jobId);
 
   await db.runTransaction(async (transaction) => {
+    const actor = await currentJobActor(request, transaction);
     const jobSnap = await transaction.get(jobRef);
 
     if (!jobSnap.exists) {
@@ -52,12 +33,16 @@ export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
     const status = String(job.status || "");
     const ownerUid = String(job.ownerUid || job.createdBy || "");
 
-    if (!hasOperatorAccess(request.auth) && ownerUid !== authUid(request.auth)) {
+    if (!actor.operator && ownerUid !== actor.uid) {
       throw new HttpsError("permission-denied", "You do not have access to cancel this job.");
     }
 
     if (!["PENDING", "LEASED", "RUNNING"].includes(status)) {
       throw new HttpsError("failed-precondition", `Job ${jobId} cannot be cancelled from status ${status}.`);
+    }
+    const current = await currentJobActor(request, transaction);
+    if (!current.operator && ownerUid !== current.uid) {
+      throw new HttpsError("permission-denied", "You do not have current access to cancel this job.");
     }
 
     transaction.set(

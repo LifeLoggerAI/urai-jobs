@@ -1,6 +1,6 @@
-import { createResumeUploadIntent } from './resume-intent';
-import type { MarketplaceAuthContext } from './auth';
-import { requireSignedIn } from './auth';
+import { createResumeUploadIntent } from './resume-intent.js';
+import type { MarketplaceAuthContext } from './auth.js';
+import { requireSignedIn } from './auth.js';
 
 export const createSignedResumeUpload = (
   auth: MarketplaceAuthContext,

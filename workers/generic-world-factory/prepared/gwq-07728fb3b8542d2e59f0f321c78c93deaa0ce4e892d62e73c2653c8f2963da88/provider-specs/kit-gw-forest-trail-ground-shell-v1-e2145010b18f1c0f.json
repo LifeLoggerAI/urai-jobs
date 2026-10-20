@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-forest-trail-ground-shell:v1",
+    "sourceKitSha256": "e2145010b18f1c0f08edf20a3d1a2c900c5c201f2701907cd5bc5116eb0e02b7",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-forest-trail",
+        "specSha256": "631cf458f8e06f074f29d46e1fd19a0144f2ac9c1b0bbe9ae7edc1d6c46ec4b0",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 3792982032
+  },
+  "id": "kit-gw-forest-trail-ground-shell-v1-e2145010b18f1c0f",
+  "prompt": "Original generic modular ground-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Level 1.8 m trail with turn landmarks and constrained vegetation envelope; no steep drops or obscured exits. Roots and stones do not obstruct accessible default. Target bounding dimensions 32m wide x 0.3m high x 28m deep. Materials: soil-muted. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 32,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

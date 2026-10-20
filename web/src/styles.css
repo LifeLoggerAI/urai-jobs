@@ -442,7 +442,22 @@ body {
   backdrop-filter: none;
 }
 
-.top-nav a { color: #b8c0c9; }
+.top-nav > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+}
+
+.top-nav a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  min-height: 48px;
+  padding-inline: .5rem;
+  margin: 0;
+  color: #b8c0c9;
+}
 .top-nav .brand { color: #f3f1ea; }
 
 .hero,

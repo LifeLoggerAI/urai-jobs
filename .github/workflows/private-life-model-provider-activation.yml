@@ -1,0 +1,366 @@
+name: Private Life Model Provider Activation
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact main SHA already deployed to the staging provider
+        required: true
+        type: string
+      enable_transcription:
+        description: Enable governed private-source transcription
+        required: true
+        default: false
+        type: boolean
+      enable_life_model:
+        description: Enable governed private Life Model extraction
+        required: true
+        default: false
+        type: boolean
+      spending_authority_ref:
+        description: Opaque private spending-authority receipt required when any paid path is enabled
+        required: false
+        default: ''
+        type: string
+      transcription_authority_ref:
+        description: Opaque private transcription execution authority
+        required: false
+        default: ''
+        type: string
+      life_model_authority_ref:
+        description: Opaque private Life Model execution authority
+        required: false
+        default: ''
+        type: string
+      transcribe_token_version:
+        description: Exact Secret Manager version for urai-private-source-transcribe-token
+        required: false
+        default: ''
+        type: string
+      index_token_version:
+        description: Exact Secret Manager version for urai-private-source-index-token
+        required: false
+        default: ''
+        type: string
+      openai_secret_name:
+        description: Existing Secret Manager secret name for OPENAI_API_KEY
+        required: false
+        default: ''
+        type: string
+      openai_secret_version:
+        description: Exact Secret Manager version for the OpenAI API key
+        required: false
+        default: ''
+        type: string
+      private_source_allowed_bucket:
+        description: Existing governed private-source bucket; required for transcription
+        required: false
+        default: ''
+        type: string
+      life_model_extractor_model:
+        description: Explicit configured Life Model extraction model
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: private-life-model-provider-activation-staging
+  cancel-in-progress: false
+
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 30
+    env:
+      TARGET_SHA: ${{ inputs.source_sha }}
+      ENABLE_TRANSCRIPTION: ${{ inputs.enable_transcription }}
+      ENABLE_LIFE_MODEL: ${{ inputs.enable_life_model }}
+      SPENDING_AUTHORITY_REF: ${{ inputs.spending_authority_ref }}
+      TRANSCRIPTION_AUTHORITY_REF: ${{ inputs.transcription_authority_ref }}
+      LIFE_MODEL_AUTHORITY_REF: ${{ inputs.life_model_authority_ref }}
+      TRANSCRIBE_TOKEN_VERSION: ${{ inputs.transcribe_token_version }}
+      INDEX_TOKEN_VERSION: ${{ inputs.index_token_version }}
+      OPENAI_SECRET_NAME: ${{ inputs.openai_secret_name }}
+      OPENAI_SECRET_VERSION: ${{ inputs.openai_secret_version }}
+      PRIVATE_SOURCE_ALLOWED_BUCKET: ${{ inputs.private_source_allowed_bucket }}
+      LIFE_MODEL_EXTRACTOR_MODEL: ${{ inputs.life_model_extractor_model }}
+      DIARIZATION_MODEL: gpt-4o-transcribe-diarize
+      GCLOUD_PROJECT: ${{ vars.URAI_JOBS_GCP_PROJECT }}
+      GCP_REGION: ${{ vars.URAI_JOBS_GCP_REGION || 'us-central1' }}
+      PROVIDER_SERVICE: private-life-model-index-provider
+      TRANSCRIBE_SECRET: urai-private-source-transcribe-token
+      INDEX_SECRET: urai-private-source-index-token
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify bounded activation authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$TARGET_SHA" = "$GITHUB_SHA"
+          test "$TARGET_SHA" = "$(git rev-parse HEAD)"
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          case "$ENABLE_TRANSCRIPTION" in true|false) ;; *) exit 1 ;; esac
+          case "$ENABLE_LIFE_MODEL" in true|false) ;; *) exit 1 ;; esac
+          if [ "$ENABLE_TRANSCRIPTION" = true ] || [ "$ENABLE_LIFE_MODEL" = true ]; then
+            [[ "$SPENDING_AUTHORITY_REF" =~ ^private:[A-Za-z0-9_./:-]{8,512}$ ]] || { echo '[FAIL] private spending authority is required' >&2; exit 1; }
+            [[ "$OPENAI_SECRET_NAME" =~ ^[A-Za-z0-9_-]{1,255}$ ]] || { echo '[FAIL] OpenAI secret name is invalid' >&2; exit 1; }
+            [[ "$OPENAI_SECRET_VERSION" =~ ^[1-9][0-9]*$ ]]
+          else
+            test -z "$SPENDING_AUTHORITY_REF"
+            test -z "$TRANSCRIPTION_AUTHORITY_REF"
+            test -z "$LIFE_MODEL_AUTHORITY_REF"
+            test -z "$OPENAI_SECRET_NAME"
+            test -z "$OPENAI_SECRET_VERSION"
+          fi
+          if [ "$ENABLE_TRANSCRIPTION" = true ]; then
+            [[ "$TRANSCRIPTION_AUTHORITY_REF" =~ ^private:[A-Za-z0-9_./:-]{8,512}$ ]] || exit 1
+            [[ "$TRANSCRIBE_TOKEN_VERSION" =~ ^[1-9][0-9]*$ ]]
+            [[ "$PRIVATE_SOURCE_ALLOWED_BUCKET" =~ ^[a-z0-9][a-z0-9._-]{2,221}$ ]] || exit 1
+          else
+            test -z "$TRANSCRIPTION_AUTHORITY_REF"
+            test -z "$TRANSCRIBE_TOKEN_VERSION"
+            test -z "$PRIVATE_SOURCE_ALLOWED_BUCKET"
+          fi
+          if [ "$ENABLE_LIFE_MODEL" = true ]; then
+            [[ "$LIFE_MODEL_AUTHORITY_REF" =~ ^private:[A-Za-z0-9_./:-]{8,512}$ ]] || exit 1
+            [[ "$INDEX_TOKEN_VERSION" =~ ^[1-9][0-9]*$ ]]
+            [[ "$LIFE_MODEL_EXTRACTOR_MODEL" =~ ^[A-Za-z0-9._:-]{8,100}$ ]] || exit 1
+          else
+            test -z "$LIFE_MODEL_AUTHORITY_REF"
+            test -z "$INDEX_TOKEN_VERSION"
+            test -z "$LIFE_MODEL_EXTRACTOR_MODEL"
+          fi
+
+      - name: Setup declared Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Setup declared pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: '8.15.9'
+
+      - name: Verify exact source before cloud authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          npm test
+          test "$TARGET_SHA" = "$(git rev-parse HEAD)"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Authenticate with Google Workload Identity Federation
+        uses: google-github-actions/auth@ba79af03959ebeac9769e648f473a284504d9193
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          create_credentials_file: true
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a
+
+      - name: Verify existing provider and requested secrets
+        id: provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="$(gcloud run services describe "$PROVIDER_SERVICE" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.url)')"
+          REVISION="$(gcloud run services describe "$PROVIDER_SERVICE" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.latestReadyRevisionName)')"
+          test -n "$URL"
+          test -n "$REVISION"
+          REVISION_JSON="$(gcloud run revisions describe "$REVISION" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format=json)"
+          BASELINE="$(REVISION_JSON="$REVISION_JSON" TARGET_SHA="$TARGET_SHA" node <<'NODE'
+          const r=JSON.parse(process.env.REVISION_JSON);
+          const env=Object.fromEntries((r.spec?.containers?.[0]?.env||[]).filter(v=>Object.prototype.hasOwnProperty.call(v,'value')).map(v=>[v.name,String(v.value)]));
+          const labels=r.metadata?.labels||{};
+          const sha=String(env.URAI_SOURCE_SHA||'');
+          const digest=String(r.status?.imageDigest||'').replace(/^@/,'');
+          const serviceAccount=String(r.spec?.serviceAccountName||'');
+          if(sha!==process.env.TARGET_SHA) throw new Error('provider source SHA mismatch before activation');
+          if(labels['urai-source-sha']!==process.env.TARGET_SHA) throw new Error('provider source label mismatch before activation');
+          if(labels['urai-environment']!=='staging') throw new Error('provider environment label is not staging');
+          if(!digest) throw new Error('provider image digest missing');
+          if(!serviceAccount) throw new Error('provider runtime service account missing');
+          process.stdout.write(JSON.stringify({digest,serviceAccount}));
+          NODE
+          )"
+          IMAGE_DIGEST="$(BASELINE="$BASELINE" node -e "process.stdout.write(JSON.parse(process.env.BASELINE).digest)")"
+          SERVICE_ACCOUNT="$(BASELINE="$BASELINE" node -e "process.stdout.write(JSON.parse(process.env.BASELINE).serviceAccount)")"
+          if [ "$ENABLE_TRANSCRIPTION" = true ]; then
+            gcloud secrets versions describe "$TRANSCRIBE_TOKEN_VERSION" --secret "$TRANSCRIBE_SECRET" --project "$GCLOUD_PROJECT" --format='value(state)' | grep -qx ENABLED
+          fi
+          if [ "$ENABLE_LIFE_MODEL" = true ]; then
+            gcloud secrets versions describe "$INDEX_TOKEN_VERSION" --secret "$INDEX_SECRET" --project "$GCLOUD_PROJECT" --format='value(state)' | grep -qx ENABLED
+          fi
+          if [ "$ENABLE_TRANSCRIPTION" = true ] || [ "$ENABLE_LIFE_MODEL" = true ]; then
+            gcloud secrets versions describe "$OPENAI_SECRET_VERSION" --secret "$OPENAI_SECRET_NAME" --project "$GCLOUD_PROJECT" --format='value(state)' | grep -qx ENABLED
+          fi
+          {
+            echo "url=$URL"
+            echo "revision=$REVISION"
+            echo "image_digest=$IMAGE_DIGEST"
+            echo "service_account=$SERVICE_ACCOUNT"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Apply exact activation state
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="${{ steps.provider.outputs.url }}"
+          PAID_LABEL="$([ "$ENABLE_TRANSCRIPTION" = true ] || [ "$ENABLE_LIFE_MODEL" = true ] && printf enabled || printf disabled)"
+          ENV_VARS="URAI_PRIVATE_SOURCE_TRANSCRIPTION_ENABLED=$ENABLE_TRANSCRIPTION,URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED=$ENABLE_LIFE_MODEL,URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF=$SPENDING_AUTHORITY_REF,URAI_PRIVATE_SOURCE_TRANSCRIPTION_AUTHORITY_REF=$TRANSCRIPTION_AUTHORITY_REF,URAI_PRIVATE_LIFE_MODEL_EXECUTION_AUTHORITY_REF=$LIFE_MODEL_AUTHORITY_REF,PRIVATE_SOURCE_REF_RESOLVER_URL=$URL,PRIVATE_SOURCE_ALLOWED_BUCKET=$PRIVATE_SOURCE_ALLOWED_BUCKET,URAI_PRIVATE_SOURCE_DIARIZATION_MODEL=$DIARIZATION_MODEL,URAI_LIFE_MODEL_EXTRACTOR_MODEL=$LIFE_MODEL_EXTRACTOR_MODEL"
+          SECRETS=()
+          REMOVE=()
+          if [ "$ENABLE_TRANSCRIPTION" = true ]; then
+            SECRETS+=("PRIVATE_SOURCE_TRANSCRIBE_TOKEN=$TRANSCRIBE_SECRET:$TRANSCRIBE_TOKEN_VERSION")
+          else
+            REMOVE+=("PRIVATE_SOURCE_TRANSCRIBE_TOKEN")
+          fi
+          if [ "$ENABLE_LIFE_MODEL" = true ]; then
+            SECRETS+=("PRIVATE_SOURCE_INDEX_TOKEN=$INDEX_SECRET:$INDEX_TOKEN_VERSION")
+          else
+            REMOVE+=("PRIVATE_SOURCE_INDEX_TOKEN")
+          fi
+          if [ "$ENABLE_TRANSCRIPTION" = true ] || [ "$ENABLE_LIFE_MODEL" = true ]; then
+            SECRETS+=("OPENAI_API_KEY=$OPENAI_SECRET_NAME:$OPENAI_SECRET_VERSION")
+          else
+            REMOVE+=("OPENAI_API_KEY")
+          fi
+
+          args=(gcloud run services update "$PROVIDER_SERVICE" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --update-env-vars "$ENV_VARS" --update-labels "urai-paid-execution=$PAID_LABEL" --quiet)
+          if [ "${#SECRETS[@]}" -gt 0 ]; then args+=(--update-secrets "$(IFS=,; echo "${SECRETS[*]}")"); fi
+          if [ "${#REMOVE[@]}" -gt 0 ]; then args+=(--remove-secrets "$(IFS=,; echo "${REMOVE[*]}")"); fi
+          "${args[@]}"
+
+      - name: Verify exact activation state
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="$(gcloud run services describe "$PROVIDER_SERVICE" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.url)')"
+          REVISION="$(gcloud run services describe "$PROVIDER_SERVICE" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.latestReadyRevisionName)')"
+          REVISION_JSON="$(gcloud run revisions describe "$REVISION" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format=json)"
+          REVISION_JSON="$REVISION_JSON" TARGET_SHA="$TARGET_SHA" ENABLE_TRANSCRIPTION="$ENABLE_TRANSCRIPTION" ENABLE_LIFE_MODEL="$ENABLE_LIFE_MODEL" SPENDING_AUTHORITY_REF="$SPENDING_AUTHORITY_REF" TRANSCRIPTION_AUTHORITY_REF="$TRANSCRIPTION_AUTHORITY_REF" LIFE_MODEL_AUTHORITY_REF="$LIFE_MODEL_AUTHORITY_REF" PRIVATE_SOURCE_ALLOWED_BUCKET="$PRIVATE_SOURCE_ALLOWED_BUCKET" LIFE_MODEL_EXTRACTOR_MODEL="$LIFE_MODEL_EXTRACTOR_MODEL" DIARIZATION_MODEL="$DIARIZATION_MODEL" URL="$URL" EXPECTED_IMAGE_DIGEST="${{ steps.provider.outputs.image_digest }}" EXPECTED_SERVICE_ACCOUNT="${{ steps.provider.outputs.service_account }}" node <<'NODE'
+          const r=JSON.parse(process.env.REVISION_JSON);
+          const entries=r.spec?.containers?.[0]?.env||[];
+          const env=Object.fromEntries(entries.filter(v=>Object.prototype.hasOwnProperty.call(v,'value')).map(v=>[v.name,String(v.value)]));
+          const secret=Object.fromEntries(entries.filter(v=>v.valueSource?.secretKeyRef||v.valueFrom?.secretKeyRef).map(v=>{
+            const ref=v.valueSource?.secretKeyRef||v.valueFrom.secretKeyRef;
+            return [v.name,{name:String(ref.name||ref.secret||''),version:String(ref.key||ref.version||'')}];
+          }));
+          const labels=r.metadata?.labels||{};
+          const fail=[];
+          const digest=String(r.status?.imageDigest||'').replace(/^@/,'');
+          if(env.URAI_SOURCE_SHA!==process.env.TARGET_SHA) fail.push('source SHA');
+          if(labels['urai-source-sha']!==process.env.TARGET_SHA) fail.push('source label');
+          if(labels['urai-environment']!=='staging') fail.push('environment label');
+          if(digest!==process.env.EXPECTED_IMAGE_DIGEST) fail.push('image digest drift');
+          if(String(r.spec?.serviceAccountName||'')!==process.env.EXPECTED_SERVICE_ACCOUNT) fail.push('runtime service account drift');
+          if(env.URAI_PRIVATE_SOURCE_TRANSCRIPTION_ENABLED!==process.env.ENABLE_TRANSCRIPTION) fail.push('transcription state');
+          if(env.URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED!==process.env.ENABLE_LIFE_MODEL) fail.push('Life Model state');
+          if((env.URAI_PRIVATE_PROVIDER_SPENDING_AUTHORITY_REF||'')!==process.env.SPENDING_AUTHORITY_REF) fail.push('spending authority');
+          if((env.URAI_PRIVATE_SOURCE_TRANSCRIPTION_AUTHORITY_REF||'')!==process.env.TRANSCRIPTION_AUTHORITY_REF) fail.push('transcription authority');
+          if((env.URAI_PRIVATE_LIFE_MODEL_EXECUTION_AUTHORITY_REF||'')!==process.env.LIFE_MODEL_AUTHORITY_REF) fail.push('Life Model authority');
+          if(env.PRIVATE_SOURCE_REF_RESOLVER_URL!==process.env.URL) fail.push('resolver self URL');
+          if((env.PRIVATE_SOURCE_ALLOWED_BUCKET||'')!==process.env.PRIVATE_SOURCE_ALLOWED_BUCKET) fail.push('private bucket');
+          if((env.URAI_LIFE_MODEL_EXTRACTOR_MODEL||'')!==process.env.LIFE_MODEL_EXTRACTOR_MODEL) fail.push('extractor model');
+          if(env.URAI_PRIVATE_SOURCE_DIARIZATION_MODEL!==process.env.DIARIZATION_MODEL) fail.push('diarization model');
+          const expectedPaid=(process.env.ENABLE_TRANSCRIPTION==='true'||process.env.ENABLE_LIFE_MODEL==='true')?'enabled':'disabled';
+          if(labels['urai-paid-execution']!==expectedPaid) fail.push('paid execution label');
+          const matches=(name,expectedName,expectedVersion)=>secret[name]?.name===expectedName&&secret[name]?.version===expectedVersion;
+          if(process.env.ENABLE_TRANSCRIPTION==='true' && !matches('PRIVATE_SOURCE_TRANSCRIBE_TOKEN',process.env.TRANSCRIBE_SECRET,process.env.TRANSCRIBE_TOKEN_VERSION)) fail.push('transcribe secret binding');
+          if(process.env.ENABLE_TRANSCRIPTION!=='true' && secret.PRIVATE_SOURCE_TRANSCRIBE_TOKEN) fail.push('transcribe secret not removed');
+          if(process.env.ENABLE_LIFE_MODEL==='true' && !matches('PRIVATE_SOURCE_INDEX_TOKEN',process.env.INDEX_SECRET,process.env.INDEX_TOKEN_VERSION)) fail.push('index secret binding');
+          if(process.env.ENABLE_LIFE_MODEL!=='true' && secret.PRIVATE_SOURCE_INDEX_TOKEN) fail.push('index secret not removed');
+          if((process.env.ENABLE_TRANSCRIPTION==='true'||process.env.ENABLE_LIFE_MODEL==='true') && !matches('OPENAI_API_KEY',process.env.OPENAI_SECRET_NAME,process.env.OPENAI_SECRET_VERSION)) fail.push('OpenAI secret binding');
+          if(process.env.ENABLE_TRANSCRIPTION!=='true' && process.env.ENABLE_LIFE_MODEL!=='true' && secret.OPENAI_API_KEY) fail.push('OpenAI secret not removed');
+          if(fail.length) throw new Error('activation readback mismatch: '+fail.join(', '));
+          NODE
+
+          curl --fail-with-body "$URL/healthz" >/dev/null
+          PRIVATE_CODE="$(curl -sS -o /tmp/private-ready.json -w '%{http_code}' "$URL/private-source-readyz")"
+          LIFE_CODE="$(curl -sS -o /tmp/life-ready.json -w '%{http_code}' "$URL/readyz")"
+          EXPECT_PRIVATE="$([ "$ENABLE_TRANSCRIPTION" = true ] && printf 200 || printf 503)"
+          EXPECT_LIFE="$([ "$ENABLE_LIFE_MODEL" = true ] && printf 200 || printf 503)"
+          test "$PRIVATE_CODE" = "$EXPECT_PRIVATE"
+          test "$LIFE_CODE" = "$EXPECT_LIFE"
+          {
+            echo "verified=true"
+            echo "url=$URL"
+            echo "revision=$REVISION"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Write bounded activation receipt
+        if: always()
+        shell: bash
+        env:
+          ACTIVATION_VERIFY_SUCCEEDED: ${{ steps.verify.outputs.verified || 'false' }}
+          VERIFIED_URL: ${{ steps.verify.outputs.url }}
+          VERIFIED_REVISION: ${{ steps.verify.outputs.revision }}
+        run: |
+          set -euo pipefail
+          mkdir -p docs/release-evidence
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const verified=process.env.ACTIVATION_VERIFY_SUCCEEDED==='true';
+          const receipt={
+            schemaVersion:'urai-private-provider-activation-1',
+            repository:process.env.GITHUB_REPOSITORY,
+            workflowRunId:process.env.GITHUB_RUN_ID,
+            sourceSha:process.env.TARGET_SHA,
+            environment:'staging',
+            service:'private-life-model-index-provider',
+            verificationStatus:verified?'VERIFIED_CONFIGURED_STATE':'UNVERIFIED_DO_NOT_ACCEPT',
+            activationVerified:verified,
+            serviceUrl:verified?process.env.VERIFIED_URL:null,
+            revision:verified?process.env.VERIFIED_REVISION:null,
+            workerBindings:verified?{
+              authorityUrl:process.env.VERIFIED_URL,
+              resolverUrl:process.env.VERIFIED_URL,
+              transcribeUrl:process.env.VERIFIED_URL+'/transcribe',
+              indexUrl:process.env.VERIFIED_URL
+            }:null,
+            privateSourceTranscriptionEnabled:verified&&process.env.ENABLE_TRANSCRIPTION==='true',
+            privateLifeModelExecutionEnabled:verified&&process.env.ENABLE_LIFE_MODEL==='true',
+            spendingAuthorityBound:verified&&(process.env.ENABLE_TRANSCRIPTION==='true'||process.env.ENABLE_LIFE_MODEL==='true'),
+            providerCallExecuted:false,
+            paidProviderCallExecuted:false,
+            familyMediaProcessed:false,
+            publicReleaseAuthorized:false
+          };
+          fs.writeFileSync('docs/release-evidence/private-provider-activation.json',JSON.stringify(receipt,null,2)+'\n');
+          NODE
+
+      - name: Destroy cloud credentials
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          gcloud auth revoke --all --quiet >/dev/null 2>&1
+          for file in "${GOOGLE_GHA_CREDS_PATH:-}" "${GOOGLE_APPLICATION_CREDENTIALS:-}" "${CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE:-}"; do
+            [ -z "$file" ] || [ ! -f "$file" ] || rm -f "$file"
+          done
+          rm -rf "$HOME/.config/gcloud"
+
+      - name: Upload activation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: private-provider-activation-${{ inputs.source_sha }}
+          path: docs/release-evidence/private-provider-activation.json
+          if-no-files-found: error
+          retention-days: 90

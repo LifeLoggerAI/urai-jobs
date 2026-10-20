@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-east-texas-residential-street-ground-shell:v1",
+    "sourceKitSha256": "b459108d2d8aa6020086c8012e257e8e45ad1fc8974ced808116a9221b628d9e",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 1,
+        "id": "gw-east-texas-residential-street",
+        "specSha256": "19b70ac77b1c62b6bc5efbcf0f775a465796174e6e9856f08d7576ba23591815",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 3025735821
+  },
+  "id": "kit-gw-east-texas-residential-street-ground-shell-v1-b459108d2d8aa602",
+  "prompt": "Original generic modular ground-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Road strip 7 m wide through the center, sidewalk bands 1.5 m wide beyond curbs, driveways placed outside reserved pedestrian corridor. Porch shown at sidewalk level by default; any steps need an alternate accessible path. Target bounding dimensions 40m wide x 0.3m high x 32m deep. Materials: asphalt-worn. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 40,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

@@ -1,0 +1,1158 @@
+{
+  "schemaVersion": "urai-generic-world-existing-lane-additive-binding-v1",
+  "recordedAt": "2026-10-07T00:39:02.838059+00:00",
+  "purpose": "Adopt existing Jobs draft PR #153 and Studio draft PR #154 as governance lineage; map additive detailed source specs and offline modular packets without changing canonical scene IDs, stages, receipts or runtime dispatch",
+  "truthClassification": "GENERIC",
+  "paidExecutionAuthorized": false,
+  "promotionAuthority": false,
+  "spatialMutationAllowed": false,
+  "existingGovernance": {
+    "jobs": {
+      "repository": "LifeLoggerAI/urai-jobs",
+      "issue": 152,
+      "pullRequest": 153,
+      "head": "f189404f39beaccd299fe9e0838f474e5e46a4d8",
+      "queuePath": "evidence/generic-world-factory/batch-01/queue.v1.json",
+      "queueSha256": "8fff51193cba146afdd21b7683451f387a6eea90248bb6b1400fce959e5a0cab",
+      "queueBytes": 9214,
+      "rawBytesPreservation": "Keep existing queue file byte-identical in the adopted draft PR"
+    },
+    "studio": {
+      "repository": "LifeLoggerAI/urai-studio",
+      "issue": 153,
+      "pullRequest": 154,
+      "head": "38a07269009fc5a8b34946ecc0fa2a9566c4727a",
+      "familyPath": "world-library/batch-01/generic-world-families.v1.json",
+      "familyManifestSha256": "a903eba314185da2985242248f3c81abd1c70b5a682740b1c8d9916afbe7699a",
+      "familyManifestBytes": 8273
+    },
+    "existingAssetFactoryObservation": "080a457d1b61250ec163b3eb80c3aaf2e82fdb51",
+    "assetFactoryObservationMeaning": "Historical exact SHA recorded in existing queue; do not replace or relabel it as fresh runtime/proof authority"
+  },
+  "offlinePreparation": {
+    "packageId": "gwq-07728fb3b8542d2e59f0f321c78c93deaa0ce4e892d62e73c2653c8f2963da88",
+    "packagePath": "prepared/gwq-07728fb3b8542d2e59f0f321c78c93deaa0ce4e892d62e73c2653c8f2963da88",
+    "preparedWorlds": 29,
+    "uniqueKitPackets": 136,
+    "packageManifestSha256": "4f7c3c8108d4097df1b7c5520650a6d7de9aa873f1b5af400987764d0242ae68",
+    "packageReceiptSha256": "6c0ed6c018a08382619ed2e2cff4a9ea8499cf4da61929bc64a0a7ff50f73f56",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "authorityMeaning": "Historical initial preparation observation, preserved unchanged; this additive binding records newly discovered valid draft governance",
+    "originalPriceRecord": "UNKNOWN retained unchanged; later verified price estimate must be a separate additive bounded-spend document"
+  },
+  "batch1CanonicalSceneBindings": [
+    {
+      "canonicalSceneId": "gw-etx-living-room-1960s-1970s-v1",
+      "existingQueueIndex": 1,
+      "existingRequiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "detailedSpecId": "gw-east-texas-living-room",
+      "version": "1.0.0",
+      "batch": 1,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-east-texas-living-room.json",
+      "sourceSpecSha256": "faa57ef86a9d1d5629aacf1ee6ad03280546a73e60d9b760f33ca726122b0857",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-db47bf3d8d07bdff177aaa6ccd8e4f6cf35c4b52cfd7c72f75e55a75b7c9b09b",
+        "gwjob-a43fcb74fde742e98d36d481b97472991e8f507cf277055be85c323ae1fbf004",
+        "gwjob-ee33e46d3b4889817e05a8f9e0f793fece2581768748d4627c14ca4b08710565",
+        "gwjob-a304b02dd4b169e8ca7ceac919e6fe0933eb9534ef70743bf32d10c4ccc1b6b1",
+        "gwjob-8cf4116508387d860e8b90ad63eaa05164298fe1d4f0760f099b59305feaa6dc",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-east-texas-living-room-armchair:v1",
+        "kit:gw-east-texas-living-room-shell:v1",
+        "kit:gw-east-texas-living-room-side-table:v1",
+        "kit:gw-east-texas-living-room-sideboard:v1",
+        "kit:gw-east-texas-living-room-sofa:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": "gw-etx-kitchen-dining-1970s-1980s-v1",
+      "existingQueueIndex": 2,
+      "existingRequiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "detailedSpecId": "gw-family-kitchen-dining",
+      "version": "1.0.0",
+      "batch": 1,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-family-kitchen-dining.json",
+      "sourceSpecSha256": "14dd8392b2b9589f4d6d6145ff065e160003df31bd4e27cbde48cf7ad46a3037",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-c5f3d95a1edd8c05066ad015abd221facf418e72bdb4aae63dab4bcbb90fe266",
+        "gwjob-80091b311cfa581de3f0cf0379a20c311f9fda9cf89b4219a0d0de151ebd6218",
+        "gwjob-8d5d2b8977053cf7fd5568fea22531836b06a9c80028ad822528260030aec2ff",
+        "gwjob-4e4d4e07a4da55313666154a8d639198722f69ca4f72ccbb930b4e69c2cd4e51",
+        "gwjob-796be5b3fe3f320eec4d60b15c168be8181e603e08cd4c3d90ba6e331127bff8",
+        "gwjob-438451245102c0618ad6ba2a7dd5f449eaff50bc2ecb9c618b678559fab0eb44",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-family-kitchen-dining-cabinet-run:v1",
+        "kit:gw-family-kitchen-dining-china-cabinet:v1",
+        "kit:gw-family-kitchen-dining-dining-table:v1",
+        "kit:gw-family-kitchen-dining-range:v1",
+        "kit:gw-family-kitchen-dining-refrigerator:v1",
+        "kit:gw-family-kitchen-dining-shell:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": "gw-etx-small-town-street-v1",
+      "existingQueueIndex": 3,
+      "existingRequiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "detailedSpecId": "gw-east-texas-residential-street",
+      "version": "1.0.0",
+      "batch": 1,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-east-texas-residential-street.json",
+      "sourceSpecSha256": "19b70ac77b1c62b6bc5efbcf0f775a465796174e6e9856f08d7576ba23591815",
+      "kitPacketIds": [
+        "gwjob-c545b1af20389bb4fb339942e8225fab31d22a0ff5f807b75d434d8a5cddb5d2",
+        "gwjob-8fe7d7b1e671bd4bdbda6db24f7ef41cdf27e659a002d3687e670b3d0e2fde34",
+        "gwjob-20181c0fe8d8300b7c477710b932d7132ef2397e2f8241ce073c2ea6c8f1567c",
+        "gwjob-73a70f1d88b3abc4f63ffa8d67c1b501fc5a83da3084a23e5a9d9740838de2ca",
+        "gwjob-fce03879e3645aee609dfddf80a0bd6e98b0da88a39cdd79db1d2490f6466761",
+        "gwjob-26d80dc18bcd08e1aeebbba91a82669884fe72d7f3a85c80b8ac662313aa33f7",
+        "gwjob-204f563b79f875ec60277045e53fcf09670c5c0b5a8e19b31919b7ea4a32d8fc"
+      ],
+      "kitIds": [
+        "kit:gw-east-texas-residential-street-ground-shell:v1",
+        "kit:gw-east-texas-residential-street-house-shell:v1",
+        "kit:gw-east-texas-residential-street-mailbox:v1",
+        "kit:gw-east-texas-residential-street-vegetation-1:v1",
+        "kit:gw-east-texas-residential-street-vegetation-2:v1",
+        "kit:gw-east-texas-residential-street-vegetation-3:v1",
+        "kit:sidewalk-concrete-one-meter:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": "gw-school-classroom-hall-v1",
+      "existingQueueIndex": 4,
+      "existingRequiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "detailedSpecId": "gw-school-classroom-hallway",
+      "version": "1.0.0",
+      "batch": 1,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-school-classroom-hallway.json",
+      "sourceSpecSha256": "1ca5e0ac9db50cce43872e1debaac1a66c3197baa1538f7d51a24ef0e10c3e11",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-96b5e331bb58ce4ba27cdc625fd3b5a1b3bd1554062bf74677954881181977ee",
+        "gwjob-042d85b22b7cd78acc4b9896f61e6f12fc98073b2a46611f3a73580e08fba70b",
+        "gwjob-605169c401785f6af09d2085701f3af2235d491bb3e4706228d13ef9081d6da9",
+        "gwjob-920ae01dce4f8339ddde6e48edfe61e4d2ada2c26fd1c523324fa7c7b6eeae37",
+        "gwjob-da5c0abb59c24229791e93b23aca7c0a31cf016ec831a054dded0a3674a19276",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-school-classroom-hallway-desk-left:v1",
+        "kit:gw-school-classroom-hallway-desk-right:v1",
+        "kit:gw-school-classroom-hallway-shell:v1",
+        "kit:gw-school-classroom-hallway-storage:v1",
+        "kit:gw-school-classroom-hallway-teacher-desk:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": "gw-church-sanctuary-fellowship-v1",
+      "existingQueueIndex": 5,
+      "existingRequiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "detailedSpecId": "gw-church-sanctuary-fellowship",
+      "version": "1.0.0",
+      "batch": 1,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-church-sanctuary-fellowship.json",
+      "sourceSpecSha256": "3f00153258a34f902d5237b9dc5917bf79081596ae0ff5c8c3ab1fc4260a0b48",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-c0e4cf2fd5393d6d0ca31e2cddd870bcb7810681df89922321c3f015acd19a4f",
+        "gwjob-19ceea34eaf8d6a434a05b93bb9082df7bf8acfadee29676b66c77e01e168de4",
+        "gwjob-ca0d8281ff4616b4d155aa5fadc84babfb5376ba611c8867e672e0537315927a",
+        "gwjob-9df7c5c7769c0332b1474fe2a50ebdc125b0804071d19714f7d8b5817063569c",
+        "gwjob-d5f31c6fee2be5d0f635981be3832a890a07eb87271f7118b623bb44d2ca0574",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-church-sanctuary-fellowship-fellowship-tables:v1",
+        "kit:gw-church-sanctuary-fellowship-lectern:v1",
+        "kit:gw-church-sanctuary-fellowship-pews-left:v1",
+        "kit:gw-church-sanctuary-fellowship-pews-right:v1",
+        "kit:gw-church-sanctuary-fellowship-shell:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": "gw-hospital-room-corridor-v1",
+      "existingQueueIndex": 6,
+      "existingRequiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "detailedSpecId": "gw-hospital-room-corridor",
+      "version": "1.0.0",
+      "batch": 1,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-hospital-room-corridor.json",
+      "sourceSpecSha256": "882565ad9641d9df900d64a86ee685e13bf5c5b5fbafb7df386c1580db1bf3fa",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-8e0cace67a707a087bbad196ed03a5510b28a786aeb0d7bf57b1548bff22c2a1",
+        "gwjob-514dbb9ca328585e68f5478ae569e1c01fafdeec0c73bcf974cd57f52b8bb86c",
+        "gwjob-7c18686f3a7fbc1cca5aaf2c8872454a8fced8ad5b104e869bbe1e0ad5939bd6",
+        "gwjob-1a4c70cf509ac5d4cadfc9c578677296622c4bad16448663ba79c7a23099fafb",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-hospital-room-corridor-bed:v1",
+        "kit:gw-hospital-room-corridor-cabinet:v1",
+        "kit:gw-hospital-room-corridor-shell:v1",
+        "kit:gw-hospital-room-corridor-visitor-chair:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": "gw-college-dorm-campus-v1",
+      "existingQueueIndex": 7,
+      "existingRequiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "detailedSpecId": "gw-college-dorm-campus",
+      "version": "1.0.0",
+      "batch": 1,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-college-dorm-campus.json",
+      "sourceSpecSha256": "3f8b52efe5f435f688c0ce29111fb6f1c3686d9ef67e8f161723c34875ea531a",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-e428141a86d47e3ca48d197137ccf098322f01d89a103f05eceb39cbcab130f8",
+        "gwjob-f8c9a63d2375abda5910477f61e6e2d7ddf389c46265f49bef27ec4c9fbecdba",
+        "gwjob-df2e8ed015374e8dcaf48119398c4ce96cbb945714bef51f53faaeb2f00903a5",
+        "gwjob-45322c3b8d376dbd190fd7154ef3bcd3b8f562e988413914908fad313e66013e",
+        "gwjob-a7af4d83d6849bfc729cf83f44d8ec482170b7203e277bed65a0a461f116e680",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-college-dorm-campus-bed-left:v1",
+        "kit:gw-college-dorm-campus-bed-right:v1",
+        "kit:gw-college-dorm-campus-desk-left:v1",
+        "kit:gw-college-dorm-campus-shell:v1",
+        "kit:gw-college-dorm-campus-wardrobe:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": "gw-military-admin-ops-v1",
+      "existingQueueIndex": 8,
+      "existingRequiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "detailedSpecId": "gw-military-admin-operations",
+      "version": "1.0.0",
+      "batch": 1,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-military-admin-operations.json",
+      "sourceSpecSha256": "64754f87113e68c7b2b4ee729b8ea4e1161963f070efd181428d55561466c992",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-53dbfc37a4c3cd117147c531383adc4a1892275fc377eefb4dc7c565d4b1723d",
+        "gwjob-b989bf2b8619ff29975730d0904763980d5b3ef8f2d348ce86a9ad10fb95198d",
+        "gwjob-561fa6b4ff96e87512df784f0578bab328bf9e8f29ee95d6b1973467e26ab8b4",
+        "gwjob-9c93e0de155fce3fc753f775c968a933af661319fea4d91a24fc0a08df384a85",
+        "gwjob-95178c066c7a6219325a0d18b8c6595dc96442406c54fc9e06f537155107c698",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-military-admin-operations-cabinets:v1",
+        "kit:gw-military-admin-operations-console-bank:v1",
+        "kit:gw-military-admin-operations-desks-left:v1",
+        "kit:gw-military-admin-operations-operations-table:v1",
+        "kit:gw-military-admin-operations-shell:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": "gw-lake-dock-shoreline-v1",
+      "existingQueueIndex": 9,
+      "existingRequiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "detailedSpecId": "gw-lake-dock-shoreline",
+      "version": "1.0.0",
+      "batch": 1,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-lake-dock-shoreline.json",
+      "sourceSpecSha256": "436f75fa4b110036b0e82708d8a6e79bf019c0c3de6280b5f8e50fedebd481ce",
+      "kitPacketIds": [
+        "gwjob-aac97dbaa8702e27ba4a8b72ee04273f3fe3eef6601a2dd14f841cb5f314ae30",
+        "gwjob-ea9a5f72cc7a9900f195519089370e4b19e222254a9c4867221950d9f552ad5a",
+        "gwjob-7f969162d685de6ed811e5bb818139cba031f180c82db0747c04535ebf14055f",
+        "gwjob-af86298c578ea85d473e7df5d139cfb0f11e2da0041306a181e81faada13e448",
+        "gwjob-7f40d80b757b101c561dfcfd559ea448b8d5dbd8cc9414d5fee1e3bc361d8a2e",
+        "gwjob-c26690cb6d24984f6f82836f210e459f99d4f2f3339ebd589a92f2a35a138225",
+        "gwjob-204f563b79f875ec60277045e53fcf09670c5c0b5a8e19b31919b7ea4a32d8fc"
+      ],
+      "kitIds": [
+        "kit:gw-lake-dock-shoreline-bench:v1",
+        "kit:gw-lake-dock-shoreline-ground-shell:v1",
+        "kit:gw-lake-dock-shoreline-storage:v1",
+        "kit:gw-lake-dock-shoreline-vegetation-1:v1",
+        "kit:gw-lake-dock-shoreline-vegetation-2:v1",
+        "kit:gw-lake-dock-shoreline-vegetation-3:v1",
+        "kit:sidewalk-concrete-one-meter:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": "gw-backyard-workshop-v1",
+      "existingQueueIndex": 10,
+      "existingRequiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "detailedSpecId": "gw-backyard-garage-workshop",
+      "version": "1.0.0",
+      "batch": 1,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-backyard-garage-workshop.json",
+      "sourceSpecSha256": "e1447787a6305e9f5351fd893026a7fb6954dedefcc59742e7d23b619fdae34d",
+      "kitPacketIds": [
+        "gwjob-e3d815ae00f9c4fdb4c95e9ed8dd276db1609a0063dc582dea5964e28ffb1c66",
+        "gwjob-e4e2288a590cc0260066bb99b72cd3582e8572e3a319e9cd07ef52d3739f6531",
+        "gwjob-830e1267631440ed1fa659015fc85a37b0f44fb005c292ca5d97baf0bced01ed",
+        "gwjob-7f7d54d23241962e09d9758f3cc0e4cc86edbe0bcdeb8b3914ebf20ca619b4a9",
+        "gwjob-2ec9e9f4cc7e9e0730ec935eba95d5ca45cb7035ecd96580d5f38369955ce8ef",
+        "gwjob-3c10fec75dac3137d1c0313447012fd98482d9a5d0c8cf77ea0511faf1343a58",
+        "gwjob-aae2af189963c828d6692d58ac4205992323ad1d9be136e5d1e26a88b6b54948",
+        "gwjob-204f563b79f875ec60277045e53fcf09670c5c0b5a8e19b31919b7ea4a32d8fc"
+      ],
+      "kitIds": [
+        "kit:gw-backyard-garage-workshop-bench:v1",
+        "kit:gw-backyard-garage-workshop-ground-shell:v1",
+        "kit:gw-backyard-garage-workshop-patio-table:v1",
+        "kit:gw-backyard-garage-workshop-shelf:v1",
+        "kit:gw-backyard-garage-workshop-vegetation-1:v1",
+        "kit:gw-backyard-garage-workshop-vegetation-2:v1",
+        "kit:gw-backyard-garage-workshop-vegetation-3:v1",
+        "kit:sidewalk-concrete-one-meter:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": "gw-diner-cafe-v1",
+      "existingQueueIndex": 11,
+      "existingRequiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "detailedSpecId": "gw-diner-cafe",
+      "version": "1.0.0",
+      "batch": 1,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-diner-cafe.json",
+      "sourceSpecSha256": "974021af1b7d57ea01219027abf813b576d6ef094b02538dd36c01c43e507f15",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-ce4cdd43cc9cc71e4958f35f26b6aeb87014efd41c74e5d6af674d17760561fc",
+        "gwjob-283cd6e06ece1cbc2a3a18fde24905e16ed745482f7749ced9058b92466cb764",
+        "gwjob-3e9ca601cce7121dad7984c1927277826310d83878d9b40ce233286fc9a0906a",
+        "gwjob-d4b1baadc9ccdf359368d3857aa25f6acdf1f9fa7ea64c1970c98e9b44c6a88e",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-diner-cafe-booths-left:v1",
+        "kit:gw-diner-cafe-counter:v1",
+        "kit:gw-diner-cafe-shell:v1",
+        "kit:gw-diner-cafe-table:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": "gw-motel-walkway-v1",
+      "existingQueueIndex": 12,
+      "existingRequiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "detailedSpecId": "gw-motel-room-walkway",
+      "version": "1.0.0",
+      "batch": 1,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-motel-room-walkway.json",
+      "sourceSpecSha256": "ba6c87fbf8bfc9421428699852d759e4a49c79203c9b18819c9982ee12b57ab8",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-722989097b5b4f125a081c22b5d62247c3732f496de910044bc25cf92514a283",
+        "gwjob-86b19e5115840411788af103f91d13696b2cc04b1e25930d779d1784d92abbb4",
+        "gwjob-8b9cfebec82d1a9ac6d6c0320f8a6b928ed5a22f45961f49d433972f49f4c47a",
+        "gwjob-ab33a852297488176a5028cb14a19c9c2db5b3aef6bd266c3b8efa59ece97d85",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-motel-room-walkway-bed:v1",
+        "kit:gw-motel-room-walkway-desk:v1",
+        "kit:gw-motel-room-walkway-shell:v1",
+        "kit:gw-motel-room-walkway-wardrobe:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    }
+  ],
+  "batch2AdditiveSourceExtensions": [
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-airport-concourse",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-airport-concourse.json",
+      "sourceSpecSha256": "594fdc25053fca03788e5bd09f18711fcbdc5dd75e9672a3715d6c2f19d9ddcb",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-583b9a5d141af85c3ba845457d31ad5002b5e7dafed4019d93b15c8e963532b0",
+        "gwjob-3fb72e3368d9f2e63502e60e8a72de7f017ebd7c249fe37c47625b5aee114a3d",
+        "gwjob-01e3d5b03406cb5d6535391b20af6767a8938cab0c120ba9f00a9f409d6bb659",
+        "gwjob-a20deb8f4128f4df74c82ba19f9e140a1fc24665ccb42b8d6d1aa9b4f008aebb",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-airport-concourse-counter:v1",
+        "kit:gw-airport-concourse-seats-left:v1",
+        "kit:gw-airport-concourse-seats-right:v1",
+        "kit:gw-airport-concourse-shell:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-apartment-living",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-apartment-living.json",
+      "sourceSpecSha256": "be1d87488467924f4a870d71df43c1d78f2b701d780327d184b102cf89320f0a",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-e976ef1e5b4b83b93859143e51e51b129e869f9493cc0817cf14c2a922050f75",
+        "gwjob-d2d3cfc09dfa7546e07a40a3c11203e3340700ddf8f7a2b4cf03292afd998d51",
+        "gwjob-4c3bec9cca8da43df0afd9c12c4a0a2d7bd62207be64f58bb2d641c209b81583",
+        "gwjob-c28771fc4175f72491b63aeb8920039c89718e3abe98fb052a21dfb6079e9be4",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-apartment-living-shell:v1",
+        "kit:gw-apartment-living-sofa:v1",
+        "kit:gw-apartment-living-storage:v1",
+        "kit:gw-apartment-living-table:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-beach-boardwalk",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-beach-boardwalk.json",
+      "sourceSpecSha256": "c427c724409d1346c7bd521cb6a26e260824e2ab2ae8de152a0f843475a77e48",
+      "kitPacketIds": [
+        "gwjob-79ac39c1d4b81a461e3f1848db811e09410ff580d15ae42b2f4437b54c305bbd",
+        "gwjob-32fbcd6301d3c91b5306c4470e2314bc006a95440bcc21b3c6167839b8371832",
+        "gwjob-d9d9816ad3e3ac86a7ccf36d8e8f8a58bd8bcb99cd20e86995555e2e0b44f65e",
+        "gwjob-204f563b79f875ec60277045e53fcf09670c5c0b5a8e19b31919b7ea4a32d8fc"
+      ],
+      "kitIds": [
+        "kit:gw-beach-boardwalk-bench:v1",
+        "kit:gw-beach-boardwalk-ground-shell:v1",
+        "kit:gw-beach-boardwalk-vegetation-1:v1",
+        "kit:sidewalk-concrete-one-meter:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-bedroom-era",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-bedroom-era.json",
+      "sourceSpecSha256": "5e1cc357f63a41d719e5f1e982d4ba8e57beabd5346d9bf1b2c741e77fb6c496",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-a8cf590b9fad6ce1d71e96b2bd7b7185bb9a3a39362b044cef40ce0e8024568d",
+        "gwjob-0268c1b676a7670227cc83c12223f1a77dec809948cccd134070293bfaf77b4e",
+        "gwjob-5df636da5ec5779475f26e55b398a05fe3aeb275491df5230d4265c7a3642ea0",
+        "gwjob-d40d168abec0bccbf5397c258f477149870df295f4b93064292b34e95c20fb2d",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-bedroom-era-bed:v1",
+        "kit:gw-bedroom-era-chair:v1",
+        "kit:gw-bedroom-era-dresser:v1",
+        "kit:gw-bedroom-era-shell:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-cemetery",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-cemetery.json",
+      "sourceSpecSha256": "411ac6db194fce1f7476d53ef9bfa27ffe33e1d057b82c1394988e320912705c",
+      "kitPacketIds": [
+        "gwjob-989b63e79c4fd454af65957e7e2ea2039773694283f44bded4aee6be6b6fe99b",
+        "gwjob-dcef97129d5a786dad646bc94767197cf8a3c1eb50885d80f24e46c4d0dee8ad",
+        "gwjob-7329a1c4a136d79b073da666e6b006c477f1c445b2a7266d9fa54367ffb664d0",
+        "gwjob-b3809102d1f5e3716e19921cfd1456dfb022912c74d8736833573bfc8c6a2116",
+        "gwjob-204f563b79f875ec60277045e53fcf09670c5c0b5a8e19b31919b7ea4a32d8fc"
+      ],
+      "kitIds": [
+        "kit:gw-cemetery-bench:v1",
+        "kit:gw-cemetery-ground-shell:v1",
+        "kit:gw-cemetery-vegetation-1:v1",
+        "kit:gw-cemetery-vegetation-2:v1",
+        "kit:sidewalk-concrete-one-meter:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-clinic-waiting-room",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-clinic-waiting-room.json",
+      "sourceSpecSha256": "306dfda86046a954415a5936a4a8d6913c45b7e4a064fcb14717c6f0804dbab0",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-85c73cee7d043073804494570b4b9cc0d73a253541e642c62a86a8db482c6920",
+        "gwjob-44456e50ce8a1d220cda804d3e4ccec0187b4a1a136ae41fd0ce136cbbfb7573",
+        "gwjob-66729ef0c3cc4416ff75772805e5f85bd264826b8bdc5808df5aecccd428c182",
+        "gwjob-a84f0b4cd62d55927cf31e49deab9e39c29b6b6cf1e91e384c2eae46bb302299",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-clinic-waiting-room-exam-bench:v1",
+        "kit:gw-clinic-waiting-room-reception:v1",
+        "kit:gw-clinic-waiting-room-seats-left:v1",
+        "kit:gw-clinic-waiting-room-shell:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-courthouse-public-hall",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-courthouse-public-hall.json",
+      "sourceSpecSha256": "604cc513d720caa358a55e78a378d993838cd80e885a08b9ce9b95932c19d962",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-9d5d0368ac3b3d630e81c306cdc0f9042f6ac2d9054684760af06dcb2fb08e2d",
+        "gwjob-2370db7f808a53448006375886d62b8b999f6f6d64282a1b7b6aa02d44802282",
+        "gwjob-5ffd896935cb27100df7373cd41cc6b7c5b3b6ba54bc7e1f05592d8b52d4ad21",
+        "gwjob-729d066704430fa7fb7bbd2907088cda82996242aa5916e277f0bdd16915300e",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-courthouse-public-hall-bench-left:v1",
+        "kit:gw-courthouse-public-hall-bench-right:v1",
+        "kit:gw-courthouse-public-hall-service-desk:v1",
+        "kit:gw-courthouse-public-hall-shell:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-factory-floor",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-factory-floor.json",
+      "sourceSpecSha256": "9b2feb2aafbe95d7bdf6ebe1018581316a7f3daf3b2e6f1fe046719babdbd431",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-faf769c2de8c989a9ce2764e555bf5c935fd0faf68484b698dda170ad829124a",
+        "gwjob-7233faa9f6dac9f205fed4b39b818db07e9af95a26aed052176ce24a8a108507",
+        "gwjob-f9693ad20c2373121a2bf37430d80e674e484786599665e9a2a06b52a88c35de",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-factory-floor-machine-left:v1",
+        "kit:gw-factory-floor-machine-right:v1",
+        "kit:gw-factory-floor-shell:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-forest-trail",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-forest-trail.json",
+      "sourceSpecSha256": "631cf458f8e06f074f29d46e1fd19a0144f2ac9c1b0bbe9ae7edc1d6c46ec4b0",
+      "kitPacketIds": [
+        "gwjob-ebbd95311a6187b518206e0369420d3fc63fe82faae4fa77a1157659c62cd3d7",
+        "gwjob-984a9ac4446ad51ec3162ad16c0c6957ada89fd2721d19e6b824ee85e1d12ee5",
+        "gwjob-58574bf80de0ea002c00062561c942500d033fe8b28f838010ac418bd2779eee",
+        "gwjob-b2b431f86ce3863b0c87971d51f41256d43011e92f5e7aec9decfb3c09b39b12",
+        "gwjob-a5568627292ba8f81e5f49cb67cabe0cd9d78843c6eedf3bff0e4c72fee5a377",
+        "gwjob-204f563b79f875ec60277045e53fcf09670c5c0b5a8e19b31919b7ea4a32d8fc"
+      ],
+      "kitIds": [
+        "kit:gw-forest-trail-bench:v1",
+        "kit:gw-forest-trail-ground-shell:v1",
+        "kit:gw-forest-trail-vegetation-1:v1",
+        "kit:gw-forest-trail-vegetation-2:v1",
+        "kit:gw-forest-trail-vegetation-3:v1",
+        "kit:sidewalk-concrete-one-meter:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-gas-station",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-gas-station.json",
+      "sourceSpecSha256": "fdac334d879acdf17fd7c541ac77e1c14dbe9a3e24e9debfd978b4a3e31e3a16",
+      "kitPacketIds": [
+        "gwjob-48b813b90658bb2c5679615e6e6ca5e8971818f0236fac7e80864484e10de47d",
+        "gwjob-476bb12da12c53cb907b80cb16ce9ee46b263e92f544f6020deb41ae4a5bcd93",
+        "gwjob-884bb7cbe075b3d02aaa3fd83930e3c23e4c9902562baf37b7bda305075a0d61",
+        "gwjob-8e416cf7cdf80ad06ce6004258f1a2edb365062bf265fc35b079a1e762c9c30e",
+        "gwjob-204f563b79f875ec60277045e53fcf09670c5c0b5a8e19b31919b7ea4a32d8fc"
+      ],
+      "kitIds": [
+        "kit:gw-gas-station-counter:v1",
+        "kit:gw-gas-station-ground-shell:v1",
+        "kit:gw-gas-station-pump-left:v1",
+        "kit:gw-gas-station-pump-right:v1",
+        "kit:sidewalk-concrete-one-meter:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-grocery-store",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-grocery-store.json",
+      "sourceSpecSha256": "a8a7382bde860263e0a7e8e86cc86f0345a5000adc50f549cdb45bf3a6231510",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-62b75998c78a1c9bd16f6ce83e737435355224780be7f29b4d79ee5a547e689c",
+        "gwjob-28b3d0be183c53cdd877c9332f1e804b3ea9758aed73a4748a96c01b07f2d755",
+        "gwjob-2c573d334eeda160c37c13df17db5a81b06d489ae246e1fbd531b8533dd3d6ef",
+        "gwjob-10c5f7a76bf90c002f114519882b80e9a4b9ce0d1a5af79b34c4a17befbc38bb",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-grocery-store-checkout:v1",
+        "kit:gw-grocery-store-shell:v1",
+        "kit:gw-grocery-store-shelves-left:v1",
+        "kit:gw-grocery-store-shelves-right:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-military-barracks",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-military-barracks.json",
+      "sourceSpecSha256": "04ac8f734291497b091cd67d07ad02d93728af396e3bdf73b7f092db7c9ec48e",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-8488981fb707013bc13d986fcd0bcdfda5fe99b759fcb60a22b0b32bc3377470",
+        "gwjob-6921d3807b4742ef5b074bf5c6a5a270506549f6f00ff86d0f8ce17b725fcd8d",
+        "gwjob-e7e345ac15f149ab64399aa1b91d3a2ef201dc9c696af40bd203c6504f65297e",
+        "gwjob-a860d0207f7fe0cdf4eff31453aa3e3e9181a9eaab912b2ca600e1ff231d5901",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-military-barracks-beds-left:v1",
+        "kit:gw-military-barracks-beds-right:v1",
+        "kit:gw-military-barracks-lockers:v1",
+        "kit:gw-military-barracks-shell:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-office-workplace",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-office-workplace.json",
+      "sourceSpecSha256": "73e6887aac79b33f9e0df93cb701985fcaac9d62f86720e78c9688022dd30688",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-b4f4f5d0a161ed2f2a1de0776560878aa3381e74d03457ad3d682ed0d3df04a9",
+        "gwjob-b5f72f363a214af1e2ac97f9433b9e0d4b74255bbb081bdd9364f449c37a58e0",
+        "gwjob-3585694922c4a0200f48b631f976b1763d40fca0d566594da1036ee0cbe8b7a1",
+        "gwjob-b1c6a0f6c6ae4f17e689bca19f9ccd1c354e615298e4812f1e94567e97b81804",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-office-workplace-desks-left:v1",
+        "kit:gw-office-workplace-desks-right:v1",
+        "kit:gw-office-workplace-shell:v1",
+        "kit:gw-office-workplace-storage:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-park-playground",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-park-playground.json",
+      "sourceSpecSha256": "e3708cd946acc6f4cdbfd14f9435d49f679c19224265d79f8ef7fb97b3843a40",
+      "kitPacketIds": [
+        "gwjob-4ba3c8c32fe81e19ec8da0f04f24d67780372f5c34524b0dadd4fbe271d0585b",
+        "gwjob-1060d301732c41eb743b6a67d05f4fa21779085f2bf21b63458a423c1fea5252",
+        "gwjob-7135227328974450820f21f9f102dc2761ef9a1d0e5cbe0f06dcacef4d09572d",
+        "gwjob-88bb5b683540aa270c5a757b248a71d839c4eb7c9a2456179675c9bb815ae80a",
+        "gwjob-9ae4a36f23de51824540994704e1a44d6cd3dd0b8163f1b11e58a8bfc251d9ca",
+        "gwjob-204f563b79f875ec60277045e53fcf09670c5c0b5a8e19b31919b7ea4a32d8fc"
+      ],
+      "kitIds": [
+        "kit:gw-park-playground-bench:v1",
+        "kit:gw-park-playground-ground-shell:v1",
+        "kit:gw-park-playground-vegetation-1:v1",
+        "kit:gw-park-playground-vegetation-2:v1",
+        "kit:gw-park-playground-vegetation-3:v1",
+        "kit:sidewalk-concrete-one-meter:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-rural-house-porch",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-rural-house-porch.json",
+      "sourceSpecSha256": "a120bd15740676e7ff286bed1efdf88936bd4382b1d6638f859b5a1c8ea466d8",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-a914a75f798f2b412ebd64f565212e9996c4575872927bf4e0bad931b723ad3a",
+        "gwjob-7de0e5646880defb493c871f67fd1d39a59e5697f3b2f34b48200610806967d4",
+        "gwjob-5990bcbaa1f66161921cc066a617703074c6233ae3c7e3336504ad1ba16770d2",
+        "gwjob-e3eb945af0a2c30349d4b3c12be4a6e54bde7e44fdfe6e7e523cd4e01fa67719",
+        "gwjob-f61171dcbee3d6117d8cbbdcab1bb17bf00796fee5cd865b0f2f6330f25eb748",
+        "gwjob-a4db85b51923bbe3e6655a52e86328aad60213ce976725b91bf3fb07ca674c51",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-rural-house-porch-cabinet:v1",
+        "kit:gw-rural-house-porch-porch-bench:v1",
+        "kit:gw-rural-house-porch-shell:v1",
+        "kit:gw-rural-house-porch-sofa:v1",
+        "kit:gw-rural-house-porch-vegetation-1:v1",
+        "kit:gw-rural-house-porch-vegetation-2:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-rural-road",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-rural-road.json",
+      "sourceSpecSha256": "23c7e89379a543794b73a82faca52756b9380b3da5088d56b6ce45b6a4849297",
+      "kitPacketIds": [
+        "gwjob-167da513777125f9f5b6205dfa344916df375e1116d71ecf3de2aaa80ae2144a",
+        "gwjob-886f1d747f14999c944ac4b0c84fd86b09d6eb7cc2aac9e8050647ce96033106",
+        "gwjob-4276ae19b457ab35aa6af4ac7fcb4b8a3a68906b7b81c1b4d7e9758f9d419f8a",
+        "gwjob-4d98b9e31d106328c3f635d74907788cba980371837f494a1e8f2598a4870ad5",
+        "gwjob-3e3e90e67b92e9c0ab43c16fdd7a7ae0cce2aca0d5242193bba97c5c8e3e5f36",
+        "gwjob-204f563b79f875ec60277045e53fcf09670c5c0b5a8e19b31919b7ea4a32d8fc"
+      ],
+      "kitIds": [
+        "kit:gw-rural-road-bench:v1",
+        "kit:gw-rural-road-fence-left:v1",
+        "kit:gw-rural-road-ground-shell:v1",
+        "kit:gw-rural-road-vegetation-1:v1",
+        "kit:gw-rural-road-vegetation-2:v1",
+        "kit:sidewalk-concrete-one-meter:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    },
+    {
+      "canonicalSceneId": null,
+      "governanceStatus": "ADDITIVE_BATCH_2_SPEC_EXTENSION; no existing scene-queue identity assigned",
+      "detailedSpecId": "gw-warehouse",
+      "version": "1.0.0",
+      "batch": 2,
+      "sourceSpecPath": "productions/generic-world-library/v1/specs/gw-warehouse.json",
+      "sourceSpecSha256": "25dce089395052787b26dccbddff761fa6bc3118e0b84fe365f54436ae874bb6",
+      "kitPacketIds": [
+        "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+        "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+        "gwjob-51aa8a726c99e7d6c9d56fc7d8198acf46b648d8abe35519bb2a8cca9cdef5ca",
+        "gwjob-ea592c0e385a55a6e0a84f680a822f15be8382ddaa26f20f35bda28342a2154e",
+        "gwjob-be7a4d529c16767f98d4225019119d059fcae45aaee98c0bc93a1ffb92d10748",
+        "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b"
+      ],
+      "kitIds": [
+        "kit:baseboard-painted-neutral:v1",
+        "kit:door-interior-accessible-neutral:v1",
+        "kit:gw-warehouse-rack-left:v1",
+        "kit:gw-warehouse-rack-right:v1",
+        "kit:gw-warehouse-shell:v1",
+        "kit:window-residential-neutral:v1"
+      ],
+      "specificationStatus": "SPECIFIED",
+      "offlinePacketStatus": "READY_FOR_PROVIDER",
+      "bindingMeaning": "Identity/dependency mapping only; per-kit packets do not satisfy complete-scene deliverables or authorize execution"
+    }
+  ],
+  "stageBindings": [
+    {
+      "existingStage": "SPEC_VALIDATE",
+      "additiveEvidence": "29 exact GENERIC source specifications and 136 packet inputs validated; all 12 canonical family identities preserved",
+      "currentScopeStatus": "OFFLINE_SPEC_AND_PACKET_INPUTS_VALIDATED",
+      "sceneAcceptanceGranted": false
+    },
+    {
+      "existingStage": "SOURCE_PROVENANCE",
+      "additiveEvidence": "Exact source specs, source-kit SHA256, authority snapshot, original specification provenance and output templates are bound",
+      "currentScopeStatus": "SOURCE_SPEC_RECORDED; actual provider output/license evidence absent from queue",
+      "sceneAcceptanceGranted": false
+    },
+    {
+      "existingStage": "GEOMETRY_BUILD",
+      "additiveEvidence": "136 separable modular Model Forge manufacturing specs; zero outputs produced by this Jobs queue",
+      "currentScopeStatus": "READY_FOR_PROVIDER; no paid execution or full-scene artifact claim",
+      "sceneAcceptanceGranted": false
+    },
+    {
+      "existingStage": "MATERIALS_LIGHTING",
+      "additiveEvidence": "Source specifications define physical material and lighting targets; provider packets request embedded PBR textures",
+      "currentScopeStatus": "SPECIFIED; generated texture or rendered lighting acceptance is separate",
+      "sceneAcceptanceGranted": false
+    },
+    {
+      "existingStage": "OPTIMIZE_LOD",
+      "additiveEvidence": "Provider job expectedOutputs retains lod0/lod1/lod2; source scene profiles define tier targets",
+      "currentScopeStatus": "SPECIFIED; generated model optimization and LOD switching remain separate",
+      "sceneAcceptanceGranted": false
+    },
+    {
+      "existingStage": "COLLISION_NAV",
+      "additiveEvidence": "Source design defines clear route, turning space, navigation/collision requirements; output importer stays in quarantine",
+      "currentScopeStatus": "SPECIFIED; not a collision/nav baking or connected-route proof",
+      "sceneAcceptanceGranted": false
+    },
+    {
+      "existingStage": "BUDGET_VALIDATE",
+      "additiveEvidence": "Kit triangle target bounded at preparation; source specifications define conservative aggregate budgets",
+      "currentScopeStatus": "TARGETS_AND_PACKET_INPUTS_CHECKED; no GPU/device timing or aggregate runtime-budget measurements",
+      "sceneAcceptanceGranted": false
+    },
+    {
+      "existingStage": "VISUAL_QA",
+      "additiveEvidence": "Required preview/visual stages remain intact; machine input validation explicitly separated from literal visual acceptance",
+      "currentScopeStatus": "NO_VISUAL_ACCEPTANCE_BY_JOBS_QUEUE",
+      "sceneAcceptanceGranted": false
+    },
+    {
+      "existingStage": "PACKAGE_HASH_RECEIPT",
+      "additiveEvidence": "136 exact modular packets, source inputs, implementation snapshots and preparation receipt bound by content manifest and SHA256 inventory",
+      "currentScopeStatus": "OFFLINE_QUEUE_PACKAGE_HASHED; does not satisfy complete scene.glb/collision/nav/previews package acceptance",
+      "sceneAcceptanceGranted": false
+    }
+  ],
+  "compatibility": {
+    "result": "COMPATIBLE_AS_ADDITIVE_OFFLINE_PREPARATION; no runtime contract or resolver replacement",
+    "units": "meters in both contracts",
+    "upAxis": "+Y in both contracts",
+    "forwardConvention": "Existing -Z forward aligns with detailed cameraForward -Z; detailed assetFront +Z is a distinct asset convention. Apply and receipt mesh-specific transforms once; no automatic axis conversion.",
+    "eyeHeight": "Existing nominal1.69m and detailed default1.65m remain explicit camera parameter variants; seated1.2m is separate. Camera clearance QA is still required; neither value is a device certificate.",
+    "navigation": "Detailed source targets >=1.0m doorway and >=1.2m route are stricter design targets than existing0.9m minimum; existing1.5m turning diameter retained. No accessibility certification inferred.",
+    "budgets": "Detailed desktop750000/mobile120000/XR180000 visible triangle targets do not exceed existing desktop750000/mobile250000/XR350000 limits. Detailed memory budgets are stricter targets; no measured runtime result inferred.",
+    "eraVariants": "Detailed specs add optional eras/variants; existing era identity and scene ID remain canonical for Batch1. Out-of-original-range variants are additive specification intent requiring separate content review.",
+    "deliverables": "Existing complete-scene deliverables remain required. Modular candidate.glb and provenance readiness templates cannot substitute for collision/nav, scene package, LODs, preview pixels or explicit acceptance.",
+    "liveRuntimeAdmission": false,
+    "runtimeDispatchChanged": false,
+    "governedAssetResolverChanged": false
+  },
+  "verification": {
+    "existingScenesMapped": 12,
+    "additiveBatch2Sources": 17,
+    "uniquePacketIdsBound": 136,
+    "allOfflinePacketsAccountedFor": true,
+    "existingStageOrderPreserved": true,
+    "existingQueueChanged": false,
+    "immutablePreparedPackageChanged": false,
+    "priorReceiptsChanged": false,
+    "providerCalls": 0,
+    "totalSpent": 0
+  },
+  "integrationBoundary": {
+    "assetComplete": false,
+    "runtimeIntegrated": false,
+    "productionDeployed": false,
+    "independentlyApproved": false,
+    "xrCertified": false
+  }
+}

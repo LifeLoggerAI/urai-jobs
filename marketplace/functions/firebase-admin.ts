@@ -1,4 +1,4 @@
-import { readMarketplaceEnv } from './env';
+import { readMarketplaceEnv } from './env.js';
 
 let initialized = false;
 

@@ -1,4 +1,4 @@
-import type { MarketplaceAuthContext } from './auth';
+import type { MarketplaceAuthContext } from './auth.js';
 
 export const verifyMarketplaceToken = async (
   authorizationHeader?: string,

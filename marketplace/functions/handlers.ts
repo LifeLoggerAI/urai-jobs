@@ -1,4 +1,4 @@
-import type { CandidateProfile } from '../shared/types';
+import type { CandidateProfile } from '../shared/types.js';
 import {
   createApplication,
   getCandidateProfile,
@@ -6,7 +6,7 @@ import {
   listCandidateApplications,
   listPublishedJobs,
   upsertCandidateProfile,
-} from './services';
+} from './services.js';
 
 export const healthHandler = async () => {
   return {

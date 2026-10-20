@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "urai-life-movie-source-repair-evidence-v1",
+  "recordedAt": "2026-10-08T19:44:29Z",
+  "ownerPullRequest": "LifeLoggerAI/urai-jobs#170",
+  "baseSourceSha": "2a8f0a3e5f16b4e970fabffa8afc1479b2eb7ea5",
+  "baseTreeSha": "6a3327e76107f0911298dea0efc0cbf2c9bd13cd",
+  "sourceBindings": [
+    {
+      "path": "workers/studio-worker/index.js",
+      "baseBlobSha": "38eae990c08ff71be3788c6702e70f415ea848bc",
+      "executedBlobSha": "02c80732342783c0761989522c7bf94cb0a4b5ee",
+      "executedSha256": "f5b6ae9f683f728dde704a3a72e4c6d4d9bbd2918e7bd875657bf25334c2b6e6"
+    },
+    {
+      "path": "scripts/life-movies-delayed-audio-smoke.mjs",
+      "baseBlobSha": "14ae2280b1dba4233fcccc3d9dfce21a0f59796c",
+      "executedBlobSha": "249a67c04a2c76d2e192597714f04eb87785c64a",
+      "executedSha256": "1d5d1b2307424b16f08eaff8bb22b810c80bb82f696e1660a75aab2d87ea3ea7"
+    }
+  ],
+  "defect": "Full ordinary renders reset the camera audio cue PTS before normalizing its delayed source-track start, advancing dialogue into the source's initial silence.",
+  "baseline": {
+    "command": "node scripts/life-movies-delayed-audio-smoke.mjs",
+    "source": "Exact owner worker plus new initial-camera-silence assertion",
+    "exitCode": 1,
+    "error": "camera audio cue must preserve initial track silence rather than advance dialogue ahead of its source clock",
+    "existingDurationAndHashChecks": "passed"
+  },
+  "repair": "Normalize camera cue track at 48 kHz with first_pts=0 before source-interval trim and timestamp reset.",
+  "environment": {
+    "node": "24.19.0",
+    "ffmpeg": "6.1.1",
+    "dependencies": "Node built-ins; explicit in-memory Firebase/Storage interfaces",
+    "declaredFrozenGraphInstalled": false,
+    "loadedFirebaseRuntime": false
+  },
+  "checks": [
+    {
+      "command": "node scripts/life-movies-delayed-audio-smoke.mjs",
+      "exitCode": 0,
+      "outcome": "Actual delayed AAC input and five full ordinary renders pass 5-second/150-frame duration, exact hash and PCM checks. Camera source offsets 0/100 ms retain leading silence; 400 ms selects audible dialogue; 44.1 kHz mono MP3 remains audible through its final packet."
+    },
+    {
+      "command": "node scripts/life-movies-worker-authority-smoke.mjs",
+      "exitCode": 0,
+      "cases": 102
+    },
+    {
+      "command": "node scripts/life-movies-output-generation-smoke.mjs",
+      "exitCode": 0,
+      "cases": 12
+    },
+    {
+      "command": "npm run build --prefix workers/studio-worker",
+      "exitCode": 0,
+      "outcome": "Declared Studio node --check build passes."
+    },
+    {
+      "command": "node scripts/life-movies-assembly-media-smoke.mjs --evidence-dir proof/media",
+      "exitCode": 0,
+      "cases": 35,
+      "outcome": "Actual 61-second H264/AAC output fully decodes with 1,830 frames, private output hashes, caption/gap alignment and retained corruption/cancellation/withdrawal/deletion/cleanup controls.",
+      "diagnosticMp4Sha256": "5d095ee80405ebd2c5e642a7f53db18b1e1ef96b3b8250d64ba9f1a3994f4de9"
+    },
+    {
+      "command": "node --test scripts/captured-reality-evidence.test.mjs scripts/captured-reality-resolver-authority.test.mjs",
+      "exitCode": 0,
+      "cases": 31,
+      "source": "Unchanged exact owner blobs"
+    },
+    {
+      "command": "node scripts/captured-reality-engine-contract.mjs",
+      "exitCode": 0,
+      "outcome": "Synthetic local resolver transport and reconstruction command adapters only; unchanged exact owner blobs."
+    },
+    {
+      "command": "node scripts/captured-reality-holdout-contract.mjs",
+      "exitCode": 0
+    },
+    {
+      "command": "node scripts/captured-reality-mask-contract.mjs",
+      "exitCode": 0
+    }
+  ],
+  "scope": {
+    "sourceClass": "OWNED_SYNTHETIC_MEDIA_FIXTURE",
+    "providerCalled": false,
+    "paidExecution": false,
+    "privateFamilySourceProcessed": false,
+    "cudaTrainingExecuted": false,
+    "cloudStorageUsed": false,
+    "privateRuntimeAccepted": false,
+    "fullCollectionAccepted": false,
+    "completeEpisodeAccepted": false,
+    "mainMerged": false,
+    "deployed": false,
+    "independentReleaseApproval": false,
+    "fullLaunchAccepted": false
+  },
+  "integration": "Bounded donor into existing PR #170 component-owner branch only. Exact-head native checks and deliberate owner admission remain required; no owner/main/deployment mutation by this worker.",
+  "remainingPrivateExecutionDependencies": [
+    "Documented provider/purpose/private data audience/maximum total cost/stop authorization and protected reservation",
+    "Current consented source manifest/receipts and authorized private provider/runtime bindings",
+    "Actual source-bound GPU reconstruction and private navigable-world acceptance",
+    "Actual complete Life Movie production, rights review, literal visual/audio acceptance and private playback"
+  ]
+}
