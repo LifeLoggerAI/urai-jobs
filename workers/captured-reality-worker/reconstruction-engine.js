@@ -25,10 +25,20 @@ function validateRequest(body, callbackOrigin, local = false) {
     || !/^[0-9a-f]{64}$/.test(callback.searchParams.get('callbackToken') || '')) throw new Error('CALLBACK_AUTHORITY_INVALID');
   return JSON.parse(JSON.stringify(body));
 }
+function validatedMaskWrapperPath(wrapper) {
+  // The COLMAP adapter receives a command fragment: do not admit quoting,
+  // whitespace, shells, UNC roots, or traversal. Normalize only the separators
+  // of the module-owned, absolute wrapper path for native Windows execution.
+  const normalized = String(wrapper).replace(/\\/g, '/');
+  if (normalized.startsWith('//')
+    || !/^(?:\/[A-Za-z0-9_./-]+|[A-Za-z]:\/[A-Za-z0-9_./-]+)$/.test(normalized)
+    || /(?:^|\/)\.\.(?:\/|$)/.test(normalized)) throw new Error('MASK_SFM_WRAPPER_PATH_INVALID');
+  return normalized;
+}
+
 function commandPlan(workspace, iterations = 30000, masked = false, maskManifestSha256) {
   if (!Number.isSafeInteger(iterations) || iterations < 1 || iterations > 30000) throw new Error('TRAINING_BUDGET_INVALID');
-  const wrapper = path.join(__dirname, 'masked-colmap.py');
-  if (masked && !/^\/[A-Za-z0-9_./-]+$/.test(wrapper)) throw new Error('MASK_SFM_WRAPPER_PATH_INVALID');
+  const wrapper = masked ? validatedMaskWrapperPath(path.join(__dirname, 'masked-colmap.py')) : null;
   if (masked && !SHA256.test(String(maskManifestSha256 || ''))) throw new Error('MASK_SFM_AUTHORITY_REQUIRED');
   return [
     ...(masked ? [['python3', [wrapper, '--authority-sha256', maskManifestSha256, '--validate-source']]] : []),
@@ -525,4 +535,4 @@ if (require.main === module) {
   const engine = createEngine(config); engine.initialize().then(() => engine.server.listen(Number(process.env.PORT || 8082), process.env.HOST || '127.0.0.1'))
     .catch(() => { process.stderr.write('PRIVATE_ENGINE_START_FAILED\n'); process.exitCode = 1; });
 }
-module.exports = { createEngine, validateRequest, commandPlan, runtimeReadiness, computeBudget, acceptedSourceManifestSha256, command };
+module.exports = { createEngine, validateRequest, commandPlan, validatedMaskWrapperPath, runtimeReadiness, computeBudget, acceptedSourceManifestSha256, command };

@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { packageGaussian, conservativeCollisionGlb } = require('../workers/captured-reality-worker/gaussian-package.js');
 const { createResolver, firestoreReconstructionAuthority, sha } = require('../workers/captured-reality-worker/private-media-resolver.js');
-const { createEngine, validateRequest, commandPlan, runtimeReadiness, computeBudget, acceptedSourceManifestSha256, command } = require('../workers/captured-reality-worker/reconstruction-engine.js');
+const { createEngine, validateRequest, commandPlan, validatedMaskWrapperPath, runtimeReadiness, computeBudget, acceptedSourceManifestSha256, command } = require('../workers/captured-reality-worker/reconstruction-engine.js');
 const { validateMaskMetadata } = require('../workers/captured-reality-worker/reconstruction-masks.js');
 
 function fixturePly({ value = 1, count = 2 } = {}) {
@@ -36,6 +36,16 @@ assert.throws(() => commandPlan('/tmp/private', 30001), /BUDGET/);
 assert.deepEqual(commandPlan('/tmp/private').map(([binary]) => binary), ['ns-process-data', 'ns-train']);
 assert.deepEqual(commandPlan('/tmp/private', 30000, true, 'a'.repeat(64)).map(([binary]) => binary), ['python3', 'ns-process-data', 'ns-train']);
 assert.ok(commandPlan('/tmp/private', 30000, true, 'a'.repeat(64))[1][1].includes('--colmap-cmd'), 'native camera extraction must receive source-bound masks');
+
+assert.equal(validatedMaskWrapperPath(String.raw`C:\Users\adam\UrAi-RFINISH-ExactSources\urai-jobs\workers\captured-reality-worker\masked-colmap.py`),
+  'C:/Users/adam/UrAi-RFINISH-ExactSources/urai-jobs/workers/captured-reality-worker/masked-colmap.py');
+assert.equal(validatedMaskWrapperPath('/opt/private/worker/masked-colmap.py'), '/opt/private/worker/masked-colmap.py');
+for (const candidate of [
+  'C:/unsafe folder/masked-colmap.py',
+  'C:/unsafe&calc/masked-colmap.py',
+  '//server/share/masked-colmap.py',
+  'C:/private/../masked-colmap.py',
+]) assert.throws(() => validatedMaskWrapperPath(candidate), /MASK_SFM_WRAPPER_PATH_INVALID/);
 assert.throws(() => commandPlan('/tmp/private', 30000, true), /MASK_SFM_AUTHORITY_REQUIRED/);
 const unavailable = await runtimeReadiness({}, async () => { throw new Error('unavailable'); });
 assert.equal(unavailable.ok, false); assert.equal(unavailable.checks.cuda, false); assert.equal(unavailable.checks.computeAuthorized, false);
