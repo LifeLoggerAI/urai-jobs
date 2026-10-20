@@ -88,15 +88,8 @@ export async function streamPrivateMedia(args: {
   if (!allowedMime.has(args.mimeType) || (args.checksum && !/^[a-f0-9]{64}$/.test(args.checksum))) {
     throw new Error('private_media_object_invalid');
   }
-  const file = getStorage().bucket(location.bucket).file(location.objectPath, { generation: descriptor.generation });
-  const [metadata] = await file.getMetadata();
-  const size = Number(metadata.size);
-  if (String(metadata.generation) !== descriptor.generation || !Number.isSafeInteger(size)
-    || size < 1 || size > PRIVATE_MEDIA_MAX_BYTES) throw new Error('private_media_object_invalid');
-  await args.revalidate();
-  if (Date.now() >= descriptor.expiresAt) throw new Error('private_media_delivery_expired');
-  // Keep the controller's original 60-second native timeout; rendering remains
-  // queued and one private byte request has a shorter cleanup deadline.
+  // Register cancellation before all provider and authority preflight work.
+  // A caller can disconnect before the metadata promise or owner check resolves.
   const deliveryDeadline = Math.min(descriptor.expiresAt, Date.now() + 55_000);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(1, deliveryDeadline - Date.now()));
@@ -104,13 +97,37 @@ export async function streamPrivateMedia(args: {
   const abort = () => controller.abort();
   const close = () => { if (!response.writableFinished) abort(); };
   request.once?.('aborted', abort); response.once?.('close', close);
-  let bytes = 0;
-  const hash = createHash('sha256');
-  const check = async () => {
-    if (controller.signal.aborted || Date.now() >= deliveryDeadline) throw new Error('private_media_delivery_expired');
-    await args.revalidate();
+  if (request.aborted === true) abort();
+  const alive = () => {
     if (controller.signal.aborted || Date.now() >= deliveryDeadline) throw new Error('private_media_delivery_expired');
   };
+  const guardedWait = async <T>(work: () => Promise<T>): Promise<T> => {
+    alive();
+    let detach = () => {};
+    try {
+      const stopped = new Promise<never>((_resolve, reject) => {
+        const refuse = () => reject(new Error('private_media_delivery_expired'));
+        controller.signal.addEventListener('abort', refuse, { once: true });
+        detach = () => controller.signal.removeEventListener('abort', refuse);
+        if (controller.signal.aborted) refuse();
+      });
+      return await Promise.race([
+        Promise.resolve().then(() => { alive(); return work(); }),
+        stopped,
+      ]);
+    } finally { detach(); }
+  };
+  try {
+  alive();
+  const file = getStorage().bucket(location.bucket).file(location.objectPath, { generation: descriptor.generation });
+  const [metadata] = await guardedWait(() => file.getMetadata());
+  const size = Number(metadata.size);
+  if (String(metadata.generation) !== descriptor.generation || !Number.isSafeInteger(size)
+    || size < 1 || size > PRIVATE_MEDIA_MAX_BYTES) throw new Error('private_media_object_invalid');
+  await guardedWait(args.revalidate);
+  let bytes = 0;
+  const hash = createHash('sha256');
+  const check = async () => { await guardedWait(args.revalidate); };
   const guard = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       (async () => {
@@ -133,6 +150,10 @@ export async function streamPrivateMedia(args: {
   response.set({ 'Cache-Control': 'private, no-store, max-age=0', 'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer', 'Content-Type': args.mimeType,
     'Content-Disposition': `${args.disposition}; filename="urai-private-media"` });
-  try { await pipeline(file.createReadStream({ validation: 'crc32c' }), guard, response, { signal: controller.signal }); }
-  finally { clearTimeout(timer); request.removeListener?.('aborted', abort); response.removeListener?.('close', close); }
+  await pipeline(file.createReadStream({ validation: 'crc32c' }), guard, response, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+    request.removeListener?.('aborted', abort);
+    response.removeListener?.('close', close);
+  }
 }
