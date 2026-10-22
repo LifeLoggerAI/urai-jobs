@@ -11,7 +11,10 @@ const dirty=git(['status','--porcelain','--untracked-files=all']);if(dirty.statu
 const project='demo-urai-jobs',spatial='demo-urai-auth-journey';
 if(process.env.GOOGLE_APPLICATION_CREDENTIALS||process.env.FIREBASE_AUTH_EMULATOR_HOST||process.env.FIRESTORE_EMULATOR_HOST)die('UNTRUSTED_ENVIRONMENT');
 const java=spawnSync('java',['-version'],{timeout:10000});if(java.status!==0)die('JAVA21_REQUIRED');
-const npm=process.platform==='win32'?'npx.cmd':'npx';
+// Node 22 on Windows cannot spawn .cmd shims with shell:false.
+const windows=process.platform==='win32';
+const command=windows?(process.env.ComSpec||'cmd.exe'):null;
+const windowsArgs=(commandLine)=>['/d','/s','/c',commandLine];
 const proofEnv={...process.env,CHALK_EMULATOR_PROOF:'1',CHALK_NONPRODUCTION_INTAKE:'true',
  CHALK_PINNED_SPATIAL_SHA:argv[3],FUNCTIONS_EMULATOR:'true',GOOGLE_CLOUD_PROJECT:project,
  GCLOUD_PROJECT:project,FIREBASE_AUTH_EMULATOR_HOST:'127.0.0.1:9099',
@@ -19,8 +22,13 @@ const proofEnv={...process.env,CHALK_EMULATOR_PROOF:'1',CHALK_NONPRODUCTION_INTA
  NODE_ENV:'test'};
 for(const key of Object.keys(proofEnv))if(/(?:CREDENTIAL|TOKEN|SECRET|PRIVATE_KEY|SERVICE_ACCOUNT)/i.test(key)&&!['CHALK_NONPRODUCTION_INTAKE'].includes(key))delete proofEnv[key];
 const checks=spawnSync(process.execPath,['--test','scripts/chalk-dual-emulator-contract.test.mjs'],{stdio:'inherit',env:proofEnv,timeout:30000});if(checks.status!==0)die('CONTRACT_TEST_FAILED');
-const build=spawnSync(process.platform==='win32'?'npm.cmd':'npm',['run','build','--prefix','functions'],{stdio:'inherit',env:proofEnv,timeout:180000});if(build.status!==0)die('FUNCTIONS_BUILD_FAILED');
-const run=spawnSync(npm,['--yes','firebase-tools@15.24.0','emulators:exec','--project',project,'--only','auth,firestore,functions','node scripts/chalk-dual-emulator-proof.mjs'],{stdio:'inherit',env:proofEnv,timeout:600000,shell:false});
+const build=spawnSync(windows?command:'npm',
+ windows?windowsArgs('npm run build --prefix functions'):['run','build','--prefix','functions'],
+ {stdio:'inherit',env:proofEnv,timeout:180000,shell:false});if(build.status!==0)die('FUNCTIONS_BUILD_FAILED');
+const firebaseArgs=['--yes','firebase-tools@15.24.0','emulators:exec','--project',project,'--only','auth,firestore,functions','node scripts/chalk-dual-emulator-proof.mjs'];
+const run=spawnSync(windows?command:'npx',
+ windows?windowsArgs('npx '+firebaseArgs.join(' ')):firebaseArgs,
+ {stdio:'inherit',env:proofEnv,timeout:600000,shell:false});
 if(run.error)console.error('CHALK_LOCAL_EMULATOR_ERROR',run.error.message);
 if(run.status!==0)die('EMULATOR_INTEGRATION_FAILED');
 console.log('CHALK_REAL_DUAL_PROJECT_EMULATOR_PROOF_PASSED '+argv[1]+' '+argv[3]);
