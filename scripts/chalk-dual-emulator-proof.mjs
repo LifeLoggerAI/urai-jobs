@@ -4,6 +4,7 @@
 // FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 // CHALK_PINNED_SPATIAL_SHA=<exact-spatial-commit-sha> node scripts/chalk-dual-emulator-proof.mjs
 import {randomBytes} from 'node:crypto';
+import {spawn} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {requireChalkDualEmulators,checkChalkHeldProof} from './chalk-dual-emulator-contract.mjs';
 const gate=requireChalkDualEmulators(process.env);
@@ -50,6 +51,21 @@ async function evidence(id){
  checkChalkHeldProof(master.data(),queue.exists,log.exists,quota.data()?.count,gate.sourceSha,id);
 }
 async function guardedCall(x,operation){return (await x.call({...operation,spatialIdToken:x.spatialToken})).data}
+async function verifyRealRestart(input){
+ return new Promise((resolve,reject)=>{
+  const child=spawn(process.execPath,[new URL('./chalk-dual-emulator-restart.mjs',import.meta.url).pathname],{
+   stdio:['pipe','pipe','pipe'],shell:false,env:{...process.env},windowsHide:true});
+  let stdout='',stderr='';
+  const timeout=setTimeout(()=>child.kill(),35000);
+  child.stdout.on('data',x=>{stdout+=(String(x)).slice(0,2048)});
+  child.stderr.on('data',x=>{stderr+=(String(x)).slice(0,2048)});
+  child.on('error',reject);
+  child.on('close',code=>{clearTimeout(timeout);if(code===0&&stdout.includes('CHALK_RESTART_CHILD_VERIFIED'))resolve(true);
+   else reject(Error('CHALK_REAL_RESTART_FAILED '+String(code)+' '+stderr.slice(-300)))});
+  child.stdin.end(JSON.stringify(input));
+ });
+}
+
 const jobsEmail='jobs-'+marker+'@synthetic.test',spatialEmail='spatial-'+marker+'@synthetic.test';
 const jobsPassword=randomBytes(18).toString('base64url'),spatialPassword=randomBytes(18).toString('base64url');
 try{
@@ -75,18 +91,16 @@ try{
  const first=await guardedCall(x,request);
  if(first.queued!==false||first.deduplicated!==false||first.admission!=='HELD_UNQUEUED')throw Error('CHALK_BAD_INTAKE_RECEIPT');
  await evidence(first.jobId);await close(x);
- // Restart of client identity and transport: new Auth clients, same canonical Firestore job.
- x=await freshLogin();
- const second=await guardedCall(x,request);
- if(second.deduplicated!==true||second.jobId!==first.jobId||second.queued!==false)throw Error('CHALK_RESTART_REPLAY_FAILED');
- const read=await guardedCall(x,{operation:'read',limit:40});
- if(!read.jobs?.some(j=>j.jobId===first.jobId&&j.admission==='HELD_UNQUEUED'&&j.queued===false))throw Error('CHALK_RESTART_READBACK_FAILED');
+ // Re-authenticate and prove durability from a genuinely new Node process.
+ await verifyRealRestart({jobsEmail,jobsPassword,spatialEmail,spatialPassword,
+  sourceSha:gate.sourceSha,request,jobId:first.jobId});
  await evidence(first.jobId);
+ x=await freshLogin();
  await binding.update({revoked:true});
  blocked=false;try{await guardedCall(x,{operation:'read',limit:40})}catch{blocked=true}
  if(!blocked)throw Error('CHALK_REVOKED_BINDING_ACCEPTED');
  await close(x);
  console.log(JSON.stringify({kind:'chalk-dual-emulator-receipt-v1',sourceSha:gate.sourceSha,jobId:first.jobId,
-  held:true,queued:false,duplicatePrevented:true,reconnected:true,revocationDenied:true,
+  held:true,queued:false,duplicatePrevented:true,reconnected:true,processRestartProof:true,revocationDenied:true,
   actualEmulator:true,paidCalls:0},null,2));
 }catch(e){console.error('CHALK_DUAL_EMULATOR_PROOF_BLOCKED_OR_FAILED:',e instanceof Error?e.message:String(e));process.exitCode=1}
