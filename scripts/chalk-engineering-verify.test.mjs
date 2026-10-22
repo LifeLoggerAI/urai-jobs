@@ -52,7 +52,6 @@ test('refuses traversal and non-test executable paths',()=>fixture(async({create
   await assert.rejects(verify({testFile:'../outside.test.mjs'}),/VERIFY_PATH/);
   await assert.rejects(verify({testFile:'scripts/deploy.sh'}),/VERIFY_PATH/);
 }));
-
 test('rejects Git-ignored executable files that are absent from pinned source',()=>fixture(async({workspace,create,verify})=>{
   await writeFile(join(workspace,'.gitignore'),'test/ignored-module.mjs\n');
   execFileSync('git',['add','.gitignore'],{cwd:workspace});
