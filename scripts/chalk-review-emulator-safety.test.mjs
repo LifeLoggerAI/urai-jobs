@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {requireLocalChalkEmulators} from './chalk-review-emulator-e2e.mjs';
+const env=()=>({CHALK_INTAKE_E2E:'1',URAI_CHALK_INTAKE_ENABLED:'true',URAI_ENV:'development',GCLOUD_PROJECT:'demo-urai-auth-journey',FIREBASE_AUTH_EMULATOR_HOST:'127.0.0.1:9099',FIRESTORE_EMULATOR_HOST:'127.0.0.1:8080',URAI_CHALK_SPATIAL_SOURCE_SHA:'a'.repeat(40)});
+test('requires isolated synthetic project',()=>assert.equal(requireLocalChalkEmulators(env()).projectId,'demo-urai-auth-journey'));
+const cases=[['missing optin',{CHALK_INTAKE_E2E:undefined}],['intake disabled',{URAI_CHALK_INTAKE_ENABLED:undefined}],['real project',{GCLOUD_PROJECT:'urai-4dc1d'}],['conflicting project',{GCP_PROJECT:'urai-4dc1d'}],['missing Auth',{FIREBASE_AUTH_EMULATOR_HOST:undefined}],['remote Auth',{FIREBASE_AUTH_EMULATOR_HOST:'example.com:9099'}],['missing Firestore',{FIRESTORE_EMULATOR_HOST:undefined}],['remote Firestore',{FIRESTORE_EMULATOR_HOST:'127.0.0.2:8080'}],['production',{URAI_ENV:'production'}],['staging',{URAI_ENV:'staging'}],['missing SHA',{URAI_CHALK_SPATIAL_SOURCE_SHA:undefined}],['invalid SHA',{URAI_CHALK_SPATIAL_SOURCE_SHA:'main'}]];
+for(const [label,patch] of cases)test('reject '+label,()=>assert.throws(()=>requireLocalChalkEmulators({...env(),...patch}),/CHALK_E2E_ISOLATION_REQUIRED/));
+test('allow matching Firebase configuration',()=>assert.equal(requireLocalChalkEmulators({...env(),FIREBASE_CONFIG:JSON.stringify({projectId:'demo-urai-auth-journey'})}).sourceSha,'a'.repeat(40)));
+test('reject malformed Firebase configuration',()=>assert.throws(()=>requireLocalChalkEmulators({...env(),FIREBASE_CONFIG:'not-json'}),/CHALK_E2E_CONFIG_INVALID/));
+test('reject production Firebase configuration',()=>assert.throws(()=>requireLocalChalkEmulators({...env(),FIREBASE_CONFIG:JSON.stringify({projectId:'urai-4dc1d'})}),/CHALK_E2E_CONFIG_PROJECT/));
