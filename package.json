@@ -98,7 +98,7 @@
     "chalk:firestore:local": "node scripts/chalk-firestore-local.mjs",
     "chalk:readback:test": "npm run build --prefix functions && node --test scripts/chalk-readback-authority.test.mjs",
     "chalk:intake:test": "npm run build --prefix functions && node --test scripts/chalk-diagnostic-intake-authority.test.mjs",
-    "chalk:bridge:test": "npm run build --prefix functions && node --test scripts/chalk-readback-authority.test.mjs scripts/chalk-diagnostic-intake-authority.test.mjs scripts/chalk-held-intake-transaction.test.mjs scripts/chalk-cross-project-lease.test.mjs scripts/chalk-dual-emulator-contract.test.mjs"
+    "chalk:bridge:test": "npm run build --prefix functions && node --test scripts/chalk-readback-authority.test.mjs scripts/chalk-diagnostic-intake-authority.test.mjs scripts/chalk-held-intake-transaction.test.mjs scripts/chalk-cross-project-lease.test.mjs scripts/chalk-dual-emulator-contract.test.mjs scripts/chalk-cross-project-authority.test.mjs"
   },
   "devDependencies": {
     "@types/uuid": "^10.0.0",
