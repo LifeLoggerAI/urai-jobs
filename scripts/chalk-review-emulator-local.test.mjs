@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {validateChalkLaunch} from './chalk-review-emulator-local.mjs';
+import {validateChalkLaunch,pinnedChalkFirebaseCliArgs} from './chalk-review-emulator-local.mjs';
 const cfg=()=>({CHALK_INTAKE_E2E:'1',URAI_CHALK_INTAKE_ENABLED:'true',CHALK_JOBS_SOURCE_SHA:'a'.repeat(40),URAI_CHALK_SPATIAL_SOURCE_SHA:'b'.repeat(40)});
 test('isolated project explicit exact-source allow',()=>assert.equal(validateChalkLaunch(cfg()).projectId,'demo-urai-auth-journey'));
 const blocks=[
@@ -14,3 +14,11 @@ const blocks=[
 ];
 for(const [name,change] of blocks)test('refuse '+name,()=>assert.throws(()=>validateChalkLaunch({...cfg(),...change}),/CHALK_LOCAL_/));
 test('matching emulator config allowed',()=>assert.equal(validateChalkLaunch({...cfg(),FIREBASE_CONFIG:JSON.stringify({projectId:'demo-urai-auth-journey'})}).projectId,'demo-urai-auth-journey'));
+
+test('pinned Firebase CLI invokes only isolated three-emulator acceptance',()=>{
+ const args=pinnedChalkFirebaseCliArgs();
+ assert.deepEqual([...args],['--yes','firebase-tools@15.24.0','--project','demo-urai-auth-journey',
+   'emulators:exec','--only','auth,firestore,functions','node scripts/chalk-review-emulator-e2e.mjs']);
+ assert.equal(Object.isFrozen(args),true);
+ assert.equal(args.includes('deploy'),false);
+});
