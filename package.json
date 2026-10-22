@@ -96,8 +96,9 @@
     "chalk:verify": "node --test scripts/chalk-engineering-continuity.test.mjs scripts/chalk-engineering-verify.test.mjs scripts/chalk-firestore-checkpoint.test.mjs scripts/chalk-checkpoint-binding.test.mjs scripts/chalk-repository-identity.test.mjs scripts/chalk-firestore-canonical.test.mjs scripts/chalk-firestore-local.test.mjs scripts/chalk-pinned-source-completion.test.mjs scripts/chalk-engineering-policy.test.mjs",
     "chalk:firestore:verify": "node scripts/chalk-firestore-emulator-run.mjs",
     "chalk:firestore:local": "node scripts/chalk-firestore-local.mjs",
-    "chalk:readback:test": "node --experimental-strip-types --test scripts/chalk-readback-authority.test.mjs",
-    "chalk:intake:test": "node --experimental-strip-types --test scripts/chalk-diagnostic-intake-authority.test.mjs"
+    "chalk:readback:test": "npm run build --prefix functions && node --test scripts/chalk-readback-authority.test.mjs",
+    "chalk:intake:test": "npm run build --prefix functions && node --test scripts/chalk-diagnostic-intake-authority.test.mjs",
+    "chalk:bridge:test": "npm run build --prefix functions && node --test scripts/chalk-readback-authority.test.mjs scripts/chalk-diagnostic-intake-authority.test.mjs scripts/chalk-held-intake-transaction.test.mjs scripts/chalk-cross-project-lease.test.mjs scripts/chalk-dual-emulator-contract.test.mjs"
   },
   "devDependencies": {
     "@types/uuid": "^10.0.0",
