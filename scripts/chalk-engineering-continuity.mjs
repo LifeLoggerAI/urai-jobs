@@ -3,6 +3,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
+import { isChalkRepositoryIdentity } from './chalk-repository-identity.mjs';
 import { join } from 'node:path';
 
 const VERSION = 'urai-engineering-continuity-v1';
@@ -79,7 +80,7 @@ export class EngineeringContinuityStore {
   }
   async create({ jobId, ownerUid, repository, baseSha, requestDigest }) {
     if (!valid(ID, ownerUid) ||
-      typeof repository !== 'string' || !/^LifeLoggerAI\/[A-Za-z0-9_.-]{2,90}$/.test(repository) ||
+      !isChalkRepositoryIdentity(repository) ||
       !valid(SHA, baseSha) || !valid(DIGEST, requestDigest)) fail('INPUT');
     return this.withLock(jobId, async path => {
       const existing = await this.load(path);
