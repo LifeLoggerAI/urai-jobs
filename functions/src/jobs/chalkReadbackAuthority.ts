@@ -28,3 +28,17 @@ export function redactChalkJobDocuments(
   }
   return visible;
 }
+
+// A master admission flag does not prove absence from the actual job queue.
+// Only represent a job as HELD_UNQUEUED after a server-side queue-document read.
+export function projectChalkHeldReadback(
+  status: unknown, admission: unknown, queueExists: unknown,
+): Readonly<{admission: 'HELD_UNQUEUED' | 'UNVERIFIED'; queued: false | null}> {
+  if (queueExists !== true && queueExists !== false) throw Error('CHALK_READBACK_QUEUE_NOT_OBSERVED');
+  const a = admission !== null && typeof admission === 'object' && !Array.isArray(admission)
+    ? admission as Record<string, unknown> : {};
+  const held = status === 'PENDING' && a.state === 'HELD_UNQUEUED' &&
+    a.environment === 'firestore-emulator-only' && a.workerAdmitted === false &&
+    a.providerSpendUsd === 0 && a.humanApprovalRequired === true && queueExists === false;
+  return Object.freeze({admission: held ? 'HELD_UNQUEUED' : 'UNVERIFIED', queued: held ? false : null});
+}

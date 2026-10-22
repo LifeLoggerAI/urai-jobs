@@ -6,7 +6,7 @@ import {currentJobActor,requireJobOperator} from '../core/currentJobActor.js';
 import {assertChalkLocalEmulatorGate,buildChalkDiagnosticIntake} from './chalkDiagnosticIntakeAuthority.js';
 import {authorizeChalkCrossProject,assertChalkBridgeLeaseUnchanged,type ChalkBridgeAction} from './chalkCrossProjectAuthority.js';
 import {persistChalkHeldIntake,type MinimalTransaction} from './chalkHeldIntakeTransaction.js';
-import {redactChalkJobDocuments} from './chalkReadbackAuthority.js';
+import {redactChalkJobDocuments,projectChalkHeldReadback} from './chalkReadbackAuthority.js';
 
 // Requires TWO independently authenticated emulator project identities.
 // Never mints or exchanges tokens. No production admission.
@@ -50,8 +50,15 @@ export const chalkSpatialJobsBridge=onCall({region:'us-central1',cors:true,timeo
   const limit=d.limit??20;
   if(!Number.isSafeInteger(limit)||Number(limit)<1||Number(limit)>40)
    throw new HttpsError('invalid-argument','Limit out of bounds.');
-  const snap=await getFirestore().collection('jobs').where('ownerUid','==',actor.jobsUid).limit(Number(limit))
-   .select('ownerUid','type','jobType','status','admission.state','admission.workerAdmitted','payload.repository','payload.baseSha').get();
+  const db=getFirestore();
+  const snap=await db.collection('jobs').where('ownerUid','==',actor.jobsUid).limit(Number(limit))
+   .select('ownerUid','type','jobType','status','admission.state','admission.workerAdmitted',
+    'admission.environment','admission.providerSpendUsd','admission.humanApprovalRequired',
+    'payload.repository','payload.baseSha').get();
+  // A held master is not proof of an absent queue. Read the real queue entries;
+  // never report queued:false from admission flags alone.
+  const queueExistsById=new Map(await Promise.all(snap.docs.map(async doc=>
+   [doc.id,(await db.collection('jobQueue').doc(doc.id).get()).exists] as const)));
   const after=await authorize(request,d.spatialIdToken,scope);
   try{assertChalkBridgeLeaseUnchanged(actor,after,Date.now());}
   catch{throw new HttpsError('permission-denied','Engineering approval expired or changed during read.');}
@@ -60,9 +67,9 @@ export const chalkSpatialJobsBridge=onCall({region:'us-central1',cors:true,timeo
   return {jobs:validated.map(job=>{
    const raw=byId.get(job.jobId),record=plain(raw)?raw:{},admission=plain(record.admission)?record.admission:{};
    const payload=plain(record.payload)?record.payload:{};
-   const held=admission.state==='HELD_UNQUEUED'&&admission.workerAdmitted===false;
-   return {jobId:job.jobId,status:job.status,admission:held?'HELD_UNQUEUED':'UNVERIFIED',
-    queued:held?false:null,repository:payload.repository==='LifeLoggerAI/urai-spatial'?payload.repository:null,
+   const projection=projectChalkHeldReadback(job.status,admission,queueExistsById.get(job.jobId));
+   return {jobId:job.jobId,status:job.status,...projection,
+    repository:payload.repository==='LifeLoggerAI/urai-spatial'?payload.repository:null,
     sourceSha:typeof payload.baseSha==='string'&&/^[a-f0-9]{40}$/.test(payload.baseSha)?payload.baseSha:null};
   }),windowLimited:snap.size>=Number(limit)};
  }
