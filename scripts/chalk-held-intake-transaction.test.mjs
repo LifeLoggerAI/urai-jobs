@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {persistChalkHeldIntake} from '../functions/src/jobs/chalkHeldIntakeTransaction.ts';
-import {buildChalkDiagnosticIntake} from '../functions/src/jobs/chalkDiagnosticIntakeAuthority.ts';
+import {persistChalkHeldIntake} from '../functions/lib/functions/jobs/chalkHeldIntakeTransaction.js';
+import {buildChalkDiagnosticIntake} from '../functions/lib/functions/jobs/chalkDiagnosticIntakeAuthority.js';
 const sha='a'.repeat(40),owner='founder_1234';
 const input=(id='diagnostic_123456')=>buildChalkDiagnosticIntake({requestId:id,problem:'The Focus transition stutters badly.',
  diagnostic:{kind:'chalk-spatial-diagnostic-v1',repository:'LifeLoggerAI/urai-spatial',
