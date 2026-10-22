@@ -14,8 +14,8 @@ export function requireChalkDualEmulators(env, nodeVersion = process.versions.no
   if (Number(String(nodeVersion).split('.')[0]) !== 22) deny('NODE22_ONLY');
   if (!env || env.CHALK_EMULATOR_PROOF !== '1' || env.CHALK_NONPRODUCTION_INTAKE !== 'true' ||
       env.NODE_ENV === 'production') deny('EXPLICIT_OPT_IN');
-  if (env.GOOGLE_CLOUD_PROJECT !== undefined && env.GOOGLE_CLOUD_PROJECT !== CHALK_DEMO_JOBS) deny('WRONG_PROJECT');
-  if (env.GCLOUD_PROJECT !== undefined && env.GCLOUD_PROJECT !== CHALK_DEMO_JOBS) deny('WRONG_PROJECT');
+  if (env.GOOGLE_CLOUD_PROJECT !== CHALK_DEMO_JOBS) deny('WRONG_PROJECT');
+  if (env.GCLOUD_PROJECT !== CHALK_DEMO_JOBS) deny('WRONG_PROJECT');
   if (env.GOOGLE_APPLICATION_CREDENTIALS || env.FIREBASE_CONFIG?.includes('urai-4dc1d')) deny('CLOUD_CREDENTIALS');
   if (!SHA.test(env.CHALK_PINNED_SPATIAL_SHA ?? '')) deny('SOURCE_SHA');
   const firestore = localPort(env.FIRESTORE_EMULATOR_HOST);
