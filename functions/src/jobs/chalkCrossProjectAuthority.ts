@@ -44,3 +44,21 @@ export function authorizeChalkCrossProject(input: {jobs: JobsActor; spatial: Pri
     bindingRevision: Number(binding.revision), expiresAtMs: Number(binding.expiresAtMs),
     tenantId: tenant as string | null, orgId: org as string | null});
 }
+
+
+// Revalidation is not a second, independent authorization. It must preserve
+// the same owner, purpose, grant generation, expiry and tenant/org boundary.
+// Otherwise a grant replacement could silently authorize data already read
+// under a previous approval.
+export type ChalkAuthorizedLease = ReturnType<typeof authorizeChalkCrossProject>;
+export function assertChalkBridgeLeaseUnchanged(
+  original: ChalkAuthorizedLease, renewed: ChalkAuthorizedLease, nowMs: number,
+): void {
+  if (!original || !renewed || !Number.isSafeInteger(nowMs) || nowMs < 0) denied('LEASE_INVALID');
+  if (!Number.isSafeInteger(original.expiresAtMs) || original.expiresAtMs <= nowMs ||
+      !Number.isSafeInteger(renewed.expiresAtMs) || renewed.expiresAtMs <= nowMs) denied('LEASE_EXPIRED');
+  const fields: (keyof ChalkAuthorizedLease)[] = [
+    'jobsUid','spatialUid','action','bindingRevision','expiresAtMs','tenantId','orgId',
+  ];
+  if (fields.some(field => original[field] !== renewed[field])) denied('LEASE_CHANGED');
+}
