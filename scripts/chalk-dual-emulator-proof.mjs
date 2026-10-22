@@ -7,7 +7,7 @@ import {randomBytes} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {createRequire} from 'node:module';
-import {requireChalkDualEmulators,checkChalkHeldProof} from './chalk-dual-emulator-contract.mjs';
+import {requireChalkDualEmulators,checkChalkHeldProof,checkChalkDualIdentityReceipt} from './chalk-dual-emulator-contract.mjs';
 const gate=requireChalkDualEmulators(process.env);
 const load=createRequire(new URL('../functions/package.json',import.meta.url));
 const web=createRequire(new URL('../web/package.json',import.meta.url));
@@ -50,6 +50,7 @@ async function evidence(id){
  if(!master.exists)throw Error('CHALK_MISSING_JOB_MASTER');
  const quota=await db.collection('chalkIntakeQuota').doc(jobsUid).get();
  checkChalkHeldProof(master.data(),queue.exists,log.exists,quota.data()?.count,gate.sourceSha,id);
+ checkChalkDualIdentityReceipt(master.data(),log.data(),jobsUid,spatialUid,1);
 }
 async function guardedCall(x,operation){return (await x.call({...operation,spatialIdToken:x.spatialToken})).data}
 async function verifyRealRestart(input){
