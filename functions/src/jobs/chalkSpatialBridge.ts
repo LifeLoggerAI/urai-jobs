@@ -4,7 +4,7 @@ import {getFirestore,FieldValue} from 'firebase-admin/firestore';
 import {HttpsError,onCall} from 'firebase-functions/v2/https';
 import {currentJobActor,requireJobOperator} from '../core/currentJobActor.js';
 import {assertChalkLocalEmulatorGate,buildChalkDiagnosticIntake} from './chalkDiagnosticIntakeAuthority.js';
-import {authorizeChalkCrossProject,type ChalkBridgeAction} from './chalkCrossProjectAuthority.js';
+import {authorizeChalkCrossProject,assertChalkBridgeLeaseUnchanged,type ChalkBridgeAction} from './chalkCrossProjectAuthority.js';
 import {persistChalkHeldIntake,type MinimalTransaction} from './chalkHeldIntakeTransaction.js';
 import {redactChalkJobDocuments} from './chalkReadbackAuthority.js';
 
@@ -53,10 +53,8 @@ export const chalkSpatialJobsBridge=onCall({region:'us-central1',cors:true,timeo
   const snap=await getFirestore().collection('jobs').where('ownerUid','==',actor.jobsUid).limit(Number(limit))
    .select('ownerUid','type','jobType','status','admission.state','admission.workerAdmitted','payload.repository','payload.baseSha').get();
   const after=await authorize(request,d.spatialIdToken,scope);
-  if(after.jobsUid!==actor.jobsUid||after.spatialUid!==actor.spatialUid||
-     after.bindingRevision!==actor.bindingRevision||after.expiresAtMs!==actor.expiresAtMs||
-     after.tenantId!==actor.tenantId||after.orgId!==actor.orgId)
-   throw new HttpsError('permission-denied','Identity changed during read.');
+  try{assertChalkBridgeLeaseUnchanged(actor,after,Date.now());}
+  catch{throw new HttpsError('permission-denied','Engineering approval expired or changed during read.');}
   const validated=redactChalkJobDocuments(snap.docs,actor.jobsUid);
   const byId=new Map(snap.docs.map(doc=>[doc.id,doc.data()]));
   return {jobs:validated.map(job=>{
@@ -76,8 +74,8 @@ export const chalkSpatialJobsBridge=onCall({region:'us-central1',cors:true,timeo
  const logRef=masterRef.collection('logs').doc('chalk-intake-created'),quotaRef=db.collection('chalkIntakeQuota').doc(record.ownerUid);
  try{return await db.runTransaction(async tx=>{
   const current=await authorize(request,d.spatialIdToken,scope,tx);
-  if(current.jobsUid!==actor.jobsUid||current.spatialUid!==actor.spatialUid||current.bindingRevision!==actor.bindingRevision)
-   throw new HttpsError('permission-denied','Identity changed during intake.');
+  try{assertChalkBridgeLeaseUnchanged(actor,current,Date.now());}
+  catch{throw new HttpsError('permission-denied','Engineering approval expired or changed during intake.');}
   return persistChalkHeldIntake({transaction:tx as unknown as MinimalTransaction,
    masterRef,queueRef,logRef,quotaRef,record,nowMs:Date.now(),timestamp:FieldValue.serverTimestamp(),
    originSpatialUid:current.spatialUid,bindingRevision:current.bindingRevision});
