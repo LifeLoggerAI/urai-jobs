@@ -7,11 +7,23 @@ import { createHash } from 'node:crypto';
 const SHA40 = /^[a-f0-9]{40}$/;
 const SHA64 = /^[a-f0-9]{64}$/;
 const ID = /^[a-zA-Z0-9_-]{8,64}$/;
-const PHASES = new Set(['SOURCE_PINNED', 'TESTS_VERIFIED', 'PR_DRAFTED']);
+const PHASE_SEQUENCE = ['SOURCE_PINNED', 'TESTS_VERIFIED', 'PR_DRAFTED'];
+const PHASES = new Set(PHASE_SEQUENCE);
 const digest = value => createHash('sha256').update(value).digest('hex');
 const deny = reason => { throw new Error('CHALK_CHECKPOINT_' + reason); };
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const valid = (pattern, value) => typeof value === 'string' && pattern.test(value);
+const leaseExpiryMs = value => {
+  if (value instanceof Date) return value.getTime();
+  if (value && typeof value === 'object' && typeof value.toMillis === 'function') {
+    try { return value.toMillis(); } catch { return Number.NaN; }
+  }
+  return Number.NaN;
+};
+const activeLease = (lease, token, nowMs) => record(lease) &&
+  lease.leaseToken === token &&
+  Number.isSafeInteger(nowMs) && Number.isSafeInteger(leaseExpiryMs(lease.expiresAt)) &&
+  leaseExpiryMs(lease.expiresAt) > nowMs;
 
 export function engineeringCheckpointBridge(db, { jobRef, queueRef, now = () => Date.now() }) {
   if (typeof db?.runTransaction !== 'function' || typeof jobRef !== 'function' ||
@@ -24,7 +36,9 @@ export function engineeringCheckpointBridge(db, { jobRef, queueRef, now = () => 
     if (!record(job) || job.jobId !== jobId || job.ownerUid !== actorUid) deny('OWNER_OR_JOB');
     // Explicitly non-admitted. Do not add this type to the active registry until
     // protected worker, permission and provider evidence exists.
-    if (job.type !== 'engineering.verify' && job.jobType !== 'engineering.verify') deny('TYPE');
+    if ((job.type !== undefined && job.type !== 'engineering.verify') ||
+        (job.jobType !== undefined && job.jobType !== 'engineering.verify') ||
+        (job.type === undefined && job.jobType === undefined)) deny('TYPE');
     if (!record(job.payload) || !valid(SHA40, job.payload.baseSha) ||
         !valid(SHA64, job.payload.requestDigest)) deny('SOURCE_BINDING');
   };
@@ -65,18 +79,24 @@ export function engineeringCheckpointBridge(db, { jobRef, queueRef, now = () => 
       const master = masterSnap.data();
       const queued = queueSnap.data();
       validateMaster(master, jobId, actorUid);
-      const lease = master.lease?.leaseToken;
+      const nowMs = now();
       if (master.status !== 'RUNNING' || queued.status !== 'RUNNING' ||
-          queued.jobId !== jobId || lease !== leaseToken ||
+          queued.jobId !== jobId ||
+          !activeLease(master.lease, leaseToken, nowMs) ||
+          !activeLease(queued.lease, leaseToken, nowMs) ||
           master.execution?.leaseToken !== leaseToken ||
-          queued.lease?.leaseToken !== leaseToken ||
           master.execution?.attemptCount !== attempt) deny('LEASE_STALE');
       const previous = validatedCheckpoint(master, master.execution?.engineeringCheckpoint);
       const revision = previous?.revision ?? 0;
       if (revision !== expectedRevision) deny('REVISION_STALE');
+      const nextIndex = PHASE_SEQUENCE.indexOf(phase);
+      const priorIndex = previous ? PHASE_SEQUENCE.indexOf(previous.phase) : -1;
+      if (previous && nextIndex === priorIndex &&
+          previous.outputDigest === outputDigest) return previous;
+      if (nextIndex !== priorIndex + 1) deny('PHASE_ORDER');
       const progress = { version: 1, revision: revision + 1, attempt, phase,
         sourceSha: master.payload.baseSha, requestDigest: master.payload.requestDigest,
-        outputDigest, savedAtMs: now() };
+        outputDigest, savedAtMs: nowMs };
       const checkpoint = { ...progress, integrity: digest(JSON.stringify(progress)) };
       tx.update(job, { 'execution.engineeringCheckpoint': checkpoint });
       return checkpoint;
