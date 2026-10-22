@@ -57,6 +57,7 @@
     "rules": "storage.rules"
   },
   "emulators": {
+    "singleProjectMode": false,
     "auth": {
       "port": 9099,
       "host": "127.0.0.1"

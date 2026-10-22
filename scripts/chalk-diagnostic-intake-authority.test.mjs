@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertChalkLocalEmulatorGate, buildChalkDiagnosticIntake, existingChalkIntakeMatches } from '../functions/src/jobs/chalkDiagnosticIntakeAuthority.ts';
+import { assertChalkLocalEmulatorGate, buildChalkDiagnosticIntake, existingChalkIntakeMatches } from '../functions/lib/functions/jobs/chalkDiagnosticIntakeAuthority.js';
 const sha='a'.repeat(40);
 const ownerUid='founder_1234';
 const approvedEnv=()=>({FUNCTIONS_EMULATOR:'true', GCLOUD_PROJECT:'demo-urai-jobs',
