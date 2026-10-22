@@ -35,3 +35,6 @@ export { listChalkEngineeringJobs } from "./jobs/chalkReadback.js";
 
 // Emulator-only, unqueued Chalk intake. Production gate is fail-closed.
 export { submitChalkEngineeringDiagnostic } from "./jobs/chalkDiagnosticIntake.js";
+
+// Disabled outside explicitly isolated dual-auth emulators.
+export { chalkSpatialJobsBridge } from './jobs/chalkSpatialBridge.js';
