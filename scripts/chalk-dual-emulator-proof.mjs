@@ -95,7 +95,7 @@ try{
  await evidence(first.jobId);await close(x);
  // Re-authenticate and prove durability from a genuinely new Node process.
  await verifyRealRestart({jobsEmail,jobsPassword,spatialEmail,spatialPassword,
-  sourceSha:gate.sourceSha,request,jobId:first.jobId});
+  sourceSha:gate.sourceSha,request,jobId:first.jobId,jobsUid,spatialUid});
  await evidence(first.jobId);
  x=await freshLogin();
  await binding.update({revoked:true});
