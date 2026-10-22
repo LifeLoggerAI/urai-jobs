@@ -5,6 +5,7 @@
 // CHALK_PINNED_SPATIAL_SHA=<exact-spatial-commit-sha> node scripts/chalk-dual-emulator-proof.mjs
 import {randomBytes} from 'node:crypto';
 import {spawn} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import {createRequire} from 'node:module';
 import {requireChalkDualEmulators,checkChalkHeldProof} from './chalk-dual-emulator-contract.mjs';
 const gate=requireChalkDualEmulators(process.env);
@@ -53,7 +54,7 @@ async function evidence(id){
 async function guardedCall(x,operation){return (await x.call({...operation,spatialIdToken:x.spatialToken})).data}
 async function verifyRealRestart(input){
  return new Promise((resolve,reject)=>{
-  const child=spawn(process.execPath,[new URL('./chalk-dual-emulator-restart.mjs',import.meta.url).pathname],{
+  const child=spawn(process.execPath,[fileURLToPath(new URL('./chalk-dual-emulator-restart.mjs',import.meta.url))],{
    stdio:['pipe','pipe','pipe'],shell:false,env:{...process.env},windowsHide:true});
   let stdout='',stderr='';
   const timeout=setTimeout(()=>child.kill(),35000);
