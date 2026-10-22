@@ -2,7 +2,7 @@
 // Parent passes synthetic test-only login in a bounded stdin message, never CLI argv.
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
-import {requireChalkDualEmulators,checkChalkHeldProof} from './chalk-dual-emulator-contract.mjs';
+import {requireChalkDualEmulators,checkChalkHeldProof,checkChalkDualIdentityReceipt} from './chalk-dual-emulator-contract.mjs';
 const gate=requireChalkDualEmulators(process.env);
 const json=readFileSync(0,'utf8');
 if(json.length>5000)throw Error('CHALK_RESTART_OVERSIZED');
@@ -34,4 +34,5 @@ const replay=await invoke(input.request);
 if(replay.jobId!==input.jobId||replay.deduplicated!==true||replay.queued!==false)throw Error('CHALK_RESTART_IDEMPOTENCY_FAILED');
 const master=await db.collection('jobs').doc(input.jobId).get(),queue=await db.collection('jobQueue').doc(input.jobId).get(),log=await db.collection('jobs').doc(input.jobId).collection('logs').doc('chalk-intake-created').get(),quota=await db.collection('chalkIntakeQuota').doc(master.data().ownerUid).get();
 checkChalkHeldProof(master.data(),queue.exists,log.exists,quota.data()?.count,gate.sourceSha,input.jobId);
+checkChalkDualIdentityReceipt(master.data(),log.data(),master.data().ownerUid,master.data().chalkOriginSpatialUid,1);
 process.stdout.write('CHALK_RESTART_CHILD_VERIFIED\n');
