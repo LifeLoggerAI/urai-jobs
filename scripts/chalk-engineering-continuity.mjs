@@ -127,6 +127,9 @@ export class EngineeringContinuityStore {
       const state = await this.load(path);
       if (!state) fail('NOT_FOUND');
       this.owner(state, ownerUid);
+      // Completion must certify the immutable source pinned at job creation.
+      // Even a worker holding the correct lease cannot substitute a new SHA.
+      if (sourceSha !== state.baseSha) fail('SOURCE_SHA_MISMATCH');
       if (state.status === 'COMPLETED' && state.result?.resultDigest === resultDigest &&
         state.result?.sourceSha === sourceSha && state.result?.generation === generation) return state;
       if (state.status !== 'RUNNING' || state.generation !== generation ||
