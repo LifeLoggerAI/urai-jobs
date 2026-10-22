@@ -34,3 +34,25 @@ test('hourly quota is eight new jobs',async()=>{const x=db();for(let n=0;n<8;n++
 test('invalid quota fails closed',async()=>{const x=db();
  x.store.set('chalkIntakeQuota/'+owner,{windowStartMs:100000,count:-1});
  await assert.rejects(x.run(),/QUOTA_CORRUPT/)});
+
+test('linked replay requires same Spatial identity and binding revision', async()=>{
+ const r=record(), db=makeDb();
+ const tx={get:async ref=>({exists:db.data.has(ref.id),data:()=>db.data.get(ref.id)}),
+  create:(ref,value)=>{db.data.set(ref.id,structuredClone(value));db.writes.push(ref.id)},
+  set:(ref,value)=>{db.data.set(ref.id,structuredClone(value));db.writes.push(ref.id)}};
+ const a={transaction:tx,masterRef:{id:'jobs/'+r.jobId},queueRef:{id:'jobQueue/'+r.jobId},
+  logRef:{id:'logs/created'},quotaRef:{id:'quota'},record:r,nowMs:100000,timestamp:stamp,
+  originSpatialUid:'spatial_founder_123',bindingRevision:4};
+ assert.equal((await persistChalkHeldIntake(a)).deduplicated,false);
+ assert.equal((await persistChalkHeldIntake(a)).deduplicated,true);
+ const before=db.writes.length;
+ await assert.rejects(persistChalkHeldIntake({...a,originSpatialUid:'spatial_other_456'}),/ORIGIN_CHANGED/);
+ await assert.rejects(persistChalkHeldIntake({...a,bindingRevision:5}),/ORIGIN_CHANGED/);
+ assert.equal(db.writes.length,before);
+});
+test('rejects incomplete linked-origin grants',async()=>{
+ const db=makeDb(),r=record(),tx={get:async()=>({exists:false,data:()=>null}),create:()=>{},set:()=>{}};
+ await assert.rejects(persistChalkHeldIntake({transaction:tx,masterRef:{id:'m'},queueRef:{id:'q'},
+  logRef:{id:'l'},quotaRef:{id:'quota'},record:r,nowMs:100000,timestamp:stamp,
+  originSpatialUid:'spatial_founder_123'}),/ORIGIN_BINDING/);
+});
