@@ -3,14 +3,11 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { currentJobActor, requireJobOperator } from '../core/currentJobActor.js';
 import { prepareChalkDiagnosticReview } from './chalkDiagnosticIntakeContract.js';
+import { requireChalkIntakeIsolation } from './chalkIntakeIsolation.js';
 
 function enabled(): string {
-  if (process.env.FUNCTIONS_EMULATOR !== 'true' ||
-      process.env.URAI_CHALK_INTAKE_ENABLED !== 'true' ||
-      ['prod','production','staging'].includes(String(process.env.URAI_ENV || '').toLowerCase())) {
-    throw new HttpsError('failed-precondition', 'Chalk diagnostic intake disabled.');
-  }
-  return process.env.URAI_CHALK_SPATIAL_SOURCE_SHA || '';
+  try { return requireChalkIntakeIsolation(process.env); }
+  catch { throw new HttpsError('failed-precondition','Isolated Chalk review intake unavailable.'); }
 }
 
 export const submitChalkDiagnosticReview = onCall({region:'us-central1',cors:true}, async request => {
