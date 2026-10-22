@@ -34,5 +34,5 @@ const replay=await invoke(input.request);
 if(replay.jobId!==input.jobId||replay.deduplicated!==true||replay.queued!==false)throw Error('CHALK_RESTART_IDEMPOTENCY_FAILED');
 const master=await db.collection('jobs').doc(input.jobId).get(),queue=await db.collection('jobQueue').doc(input.jobId).get(),log=await db.collection('jobs').doc(input.jobId).collection('logs').doc('chalk-intake-created').get(),quota=await db.collection('chalkIntakeQuota').doc(master.data().ownerUid).get();
 checkChalkHeldProof(master.data(),queue.exists,log.exists,quota.data()?.count,gate.sourceSha,input.jobId);
-checkChalkDualIdentityReceipt(master.data(),log.data(),master.data().ownerUid,master.data().chalkOriginSpatialUid,1);
+checkChalkDualIdentityReceipt(master.data(),log.data(),input.jobsUid,input.spatialUid,1);
 process.stdout.write('CHALK_RESTART_CHILD_VERIFIED\n');
