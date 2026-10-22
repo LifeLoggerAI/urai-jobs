@@ -1,7 +1,7 @@
 // Authenticated Chalk acceptance against REAL local Auth, Firestore and Functions emulators.
 // Never invoke against production: this script refuses non-loopback services and real projects.
 import assert from 'node:assert/strict';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -73,7 +73,16 @@ async function run(){
    const read=await call('getChalkDiagnosticReview',{reviewId:created.data.reviewId},owner);
    verify('owner readback',read.data?.reviewId,created.data.reviewId);
    verify('source pinned',read.data?.sourceSha,sha);
-   verify('SHA256 digest returned',/^[a-f0-9]{64}$/.test(read.data?.digest),true);
+   const exactDigest=createHash('sha256').update(JSON.stringify(diagnostic())).digest('hex');
+   verify('exact SHA256 evidence digest',read.data?.digest,exactDigest);
+   const stored=(await db.collection('chalkDiagnosticReviews').doc(created.data.reviewId).get()).data();
+   verify('durable Firestore state',stored?.state,'REVIEW_ONLY_NOT_QUEUED');
+   verify('persisted owner identity',stored?.ownerUid,people[0]);
+   verify('persisted evidence integrity',stored?.digest,exactDigest);
+   verify('no private media stored',Object.hasOwn(stored?.diagnostic||{},'privateMedia'),false);
+   const conflict={requestId:input.requestId,diagnostic:{...diagnostic(),p95Ms:22.7}};
+   verify('conflicting idempotency request rejected',
+     (await call('submitChalkDiagnosticReview',conflict,owner)).error,'ALREADY_EXISTS');
    verify('idempotent duplicate',(await call('submitChalkDiagnosticReview',input,owner)).data?.result,'EXISTING');
    verify('foreign owner denied',(await call('getChalkDiagnosticReview',{reviewId:created.data.reviewId},other)).error,'NOT_FOUND');
    const second=await call('submitChalkDiagnosticReview',input,other);
@@ -95,6 +104,8 @@ async function run(){
       verify('quota admission '+(i+2),x.data?.result,'RECORDED');receipts.push(x.data.reviewId);
    }
    verify('ninth blocked by quota',(await call('submitChalkDiagnosticReview',{requestId:randomUUID(),diagnostic:diagnostic()},renewed)).error,'RESOURCE_EXHAUSTED');
+   verify('rejected quota does not create receipt',
+     (await db.collection('chalkDiagnosticReviews').where('ownerUid','==',people[0]).count().get()).data().count,8);
    verify('no Jobs master admission',(await db.collection('jobs').count().get()).data().count,beforeJobs);
    verify('no Jobs queue admission',(await db.collection('jobQueue').count().get()).data().count,beforeQueue);
    console.log(JSON.stringify({suite:'chalk-authenticated-review-emulator',project:PROJECT,
