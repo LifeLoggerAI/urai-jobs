@@ -52,3 +52,14 @@ test('refuses traversal and non-test executable paths',()=>fixture(async({create
   await assert.rejects(verify({testFile:'../outside.test.mjs'}),/VERIFY_PATH/);
   await assert.rejects(verify({testFile:'scripts/deploy.sh'}),/VERIFY_PATH/);
 }));
+
+test('rejects Git-ignored executable files that are absent from pinned source',()=>fixture(async({workspace,create,verify})=>{
+  await writeFile(join(workspace,'.gitignore'),'test/ignored-module.mjs\n');
+  execFileSync('git',['add','.gitignore'],{cwd:workspace});
+  execFileSync('git',['-c','user.name=UrAi test','-c','user.email=local@example.invalid','commit','-qm','pin ignore rules'],{cwd:workspace});
+  // The base SHA changed when we committed .gitignore; use the new exact pin.
+  const sha=execFileSync('git',['rev-parse','HEAD'],{cwd:workspace,encoding:'utf8'}).trim();
+  await create(sha);
+  await writeFile(join(workspace,'test','ignored-module.mjs'),"throw Error('unexpected code');\n");
+  await assert.rejects(verify(),/UNCLEAN_WORKTREE/);
+}));
