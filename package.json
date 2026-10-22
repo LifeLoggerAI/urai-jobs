@@ -98,7 +98,9 @@
     "chalk:firestore:local": "node scripts/chalk-firestore-local.mjs",
     "chalk:readback:test": "node --experimental-strip-types --test scripts/chalk-readback-authority.test.mjs",
     "chalk:review:test": "node --experimental-strip-types --test scripts/chalk-diagnostic-intake.test.mjs",
-    "chalk:isolation:test": "node --experimental-strip-types --test scripts/chalk-intake-isolation.test.mjs"
+    "chalk:isolation:test": "node --experimental-strip-types --test scripts/chalk-intake-isolation.test.mjs",
+    "chalk:review:e2e:safety": "node --test scripts/chalk-review-emulator-safety.test.mjs",
+    "chalk:review:e2e": "node scripts/chalk-review-emulator-e2e.mjs"
   },
   "devDependencies": {
     "@types/uuid": "^10.0.0",
