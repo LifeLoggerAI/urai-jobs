@@ -32,3 +32,6 @@ export { publishCapturedRealityRuntime } from "./jobs/capturedRealityRuntimePubl
 
 // Chalk restricted engineering status only; no dispatcher registration.
 export { listChalkEngineeringJobs } from "./jobs/chalkReadback.js";
+
+// Emulator-only, operator-scoped review receipt; not an engineering job admission.
+export { submitChalkDiagnosticReview, getChalkDiagnosticReview } from './jobs/chalkDiagnosticIntake.js';
