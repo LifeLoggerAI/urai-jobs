@@ -6,7 +6,7 @@ import {currentJobActor,requireJobOperator} from '../core/currentJobActor.js';
 import {assertChalkLocalEmulatorGate,buildChalkDiagnosticIntake} from './chalkDiagnosticIntakeAuthority.js';
 import {authorizeChalkCrossProject,assertChalkBridgeLeaseUnchanged,type ChalkBridgeAction} from './chalkCrossProjectAuthority.js';
 import {persistChalkHeldIntake,type MinimalTransaction} from './chalkHeldIntakeTransaction.js';
-import {redactChalkJobDocuments,projectChalkHeldReadback} from './chalkReadbackAuthority.js';
+import {redactChalkJobDocuments,redactChalkBoundJobDocuments,projectChalkHeldReadback} from './chalkReadbackAuthority.js';
 
 // Requires TWO independently authenticated emulator project identities.
 // Never mints or exchanges tokens. No production admission.
@@ -54,16 +54,20 @@ export const chalkSpatialJobsBridge=onCall({region:'us-central1',cors:true,timeo
   const snap=await db.collection('jobs').where('ownerUid','==',actor.jobsUid).limit(Number(limit))
    .select('ownerUid','type','jobType','status','admission.state','admission.workerAdmitted',
     'admission.environment','admission.providerSpendUsd','admission.humanApprovalRequired',
+    'chalkOriginSpatialUid','chalkBindingRevision',
     'payload.repository','payload.baseSha').get();
-  // A held master is not proof of an absent queue. Read the real queue entries;
-  // never report queued:false from admission flags alone.
-  const queueExistsById=new Map(await Promise.all(snap.docs.map(async doc=>
+  // Bind every returned diagnostic to BOTH current principals and the exact
+  // approved identity-generation. Unbound or older origin rows stay private.
+  const scopedDocs=redactChalkBoundJobDocuments(snap.docs,actor.jobsUid,actor.spatialUid,actor.bindingRevision);
+  // A held master is not proof of an absent queue. Read the actual queue
+  // entries for the authorized slice, never infer queued:false from flags.
+  const queueExistsById=new Map(await Promise.all(scopedDocs.map(async doc=>
    [doc.id,(await db.collection('jobQueue').doc(doc.id).get()).exists] as const)));
   const after=await authorize(request,d.spatialIdToken,scope);
   try{assertChalkBridgeLeaseUnchanged(actor,after,Date.now());}
   catch{throw new HttpsError('permission-denied','Engineering approval expired or changed during read.');}
-  const validated=redactChalkJobDocuments(snap.docs,actor.jobsUid);
-  const byId=new Map(snap.docs.map(doc=>[doc.id,doc.data()]));
+  const validated=redactChalkJobDocuments(scopedDocs,actor.jobsUid);
+  const byId=new Map(scopedDocs.map(doc=>[doc.id,doc.data()]));
   return {jobs:validated.map(job=>{
    const raw=byId.get(job.jobId),record=plain(raw)?raw:{},admission=plain(record.admission)?record.admission:{};
    const payload=plain(record.payload)?record.payload:{};

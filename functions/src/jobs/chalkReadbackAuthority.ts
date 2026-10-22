@@ -42,3 +42,26 @@ export function projectChalkHeldReadback(
     a.providerSpendUsd === 0 && a.humanApprovalRequired === true && queueExists === false;
   return Object.freeze({admission: held ? 'HELD_UNQUEUED' : 'UNVERIFIED', queued: held ? false : null});
 }
+
+// The native Jobs-owner readback intentionally does not require Spatial consent.
+// This separate two-project bridge projection does: only a record minted for
+// the exact approved Spatial principal AND binding revision may cross it.
+type BoundChalkDocument = { id: string; data: () => unknown };
+const boundUid = (x: unknown): x is string =>
+  typeof x === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(x);
+export function redactChalkBoundJobDocuments<T extends BoundChalkDocument>(
+  documents: ReadonlyArray<T>, jobsUid: unknown, spatialUid: unknown, bindingRevision: unknown,
+): T[] {
+  if (!boundUid(jobsUid) || !boundUid(spatialUid) ||
+      !Number.isSafeInteger(bindingRevision) || Number(bindingRevision) < 1)
+    throw Error('CHALK_READBACK_SCOPE');
+  if (!Array.isArray(documents) || documents.length > 40) throw Error('CHALK_READBACK_BOUNDS');
+  return documents.filter(snapshot => {
+    const raw = snapshot?.data();
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+    const record = raw as Record<string, unknown>;
+    return record.ownerUid === jobsUid && record.chalkOriginSpatialUid === spatialUid &&
+      record.chalkBindingRevision === bindingRevision &&
+      record.type === 'engineering.verify' && record.jobType === 'engineering.verify';
+  });
+}
