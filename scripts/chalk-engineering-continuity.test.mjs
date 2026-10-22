@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import { EngineeringContinuityStore } from './chalk-engineering-continuity.mjs';
 
 const input = {
@@ -89,4 +89,34 @@ test('bad paths, repositories and lease tokens fail closed', () => fixture(async
   await assert.rejects(store.create({...input,repository:'other/repo'}),/INPUT/);
   await store.create(input);
   await assert.rejects(store.claim({jobId:input.jobId,ownerUid:input.ownerUid,token:'short'}),/LEASE_INPUT/);
+}));
+
+test('SIGKILL while holding local lock does not prevent worker recovery', () => fixture(async ({directory,store}) => {
+  await store.create(input);
+  const url = new URL('./chalk-engineering-continuity.mjs', import.meta.url).href;
+  const code = `import {EngineeringContinuityStore} from ${JSON.stringify(url)};
+    const store = new EngineeringContinuityStore({ directory: ${JSON.stringify(directory)} });
+    await store.withLock('eng-work-1234', async () => {
+      process.stdout.write('LOCKED\\n');
+      await new Promise(() => {});
+    });`;
+  const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', '--input-type=module', '-e', code],
+    { stdio: ['ignore', 'pipe', 'pipe'] });
+  try {
+    await Promise.race([
+      new Promise((resolve,reject)=>{
+        let chunk='';
+        child.stdout.on('data', d => {chunk+=d.toString(); if (chunk.includes('LOCKED')) resolve();});
+        child.on('error',reject);
+        child.on('exit',()=>reject(new Error('worker exited before lock')));
+      }),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('lock acquisition timeout')),4000))
+    ]);
+  } finally {
+    child.kill('SIGKILL');
+    await new Promise(resolve => child.once('exit',resolve));
+  }
+  const state = await store.claim({jobId:input.jobId,ownerUid:input.ownerUid,token:'replacement-worker-lease-token'});
+  assert.equal(state.status, 'RUNNING');
+  assert.equal(state.attempts,1);
 }));
