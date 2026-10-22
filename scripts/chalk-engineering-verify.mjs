@@ -33,6 +33,11 @@ async function cleanPinnedCheckout(root, sha) {
   // committed contents. Reject tracked changes and unexpected untracked files.
   const status = (await execFile('git', ['status', '--porcelain', '--untracked-files=all'], options)).stdout;
   if (status.trim()) fail('UNCLEAN_WORKTREE');
+  // Git status excludes ignored files. A test can import an ignored helper
+  // that is NOT part of the pinned commit, so treat all ignored on-disk files
+  // as untrusted in this strictly clean-checkout verifier.
+  const ignored = (await execFile('git', ['ls-files', '--others', '--ignored', '--exclude-standard'], options)).stdout;
+  if (ignored.trim()) fail('UNCLEAN_WORKTREE');
   return head;
 }
 
