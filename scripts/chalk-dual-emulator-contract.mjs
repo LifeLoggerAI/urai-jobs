@@ -33,3 +33,25 @@ export function checkChalkHeldProof(record, queueExists, logExists, quota, sourc
       !Number.isSafeInteger(quota) || quota !== 1) deny('BAD_HELD_RECEIPT');
   return true;
 }
+
+
+// The held master AND its audit entry must agree with both independently
+// authenticated synthetic test accounts and the pinned binding generation.
+export function checkChalkDualIdentityReceipt(master, audit, jobsUid, spatialUid, revision) {
+  if (!/^chalkjobs_[a-f0-9]{16}$/.test(jobsUid ?? '') ||
+      !/^chalkspatial_[a-f0-9]{16}$/.test(spatialUid ?? '') ||
+      !Number.isSafeInteger(revision) || revision !== 1 ||
+      !master || master.ownerUid !== jobsUid ||
+      master.chalkOriginSpatialUid !== spatialUid ||
+      master.chalkBindingRevision !== revision ||
+      master.admission?.state !== 'HELD_UNQUEUED' ||
+      master.admission?.workerAdmitted !== false ||
+      !audit || audit.source !== 'chalk-emulator-intake' ||
+      audit.metadata?.originSpatialUid !== spatialUid ||
+      audit.metadata?.bindingRevision !== revision ||
+      audit.metadata?.requestDigest !== master.payload?.requestDigest ||
+      audit.metadata?.sourceSha !== master.payload?.baseSha ||
+      audit.metadata?.queued !== false ||
+      audit.metadata?.providerSpendUsd !== 0) deny('BAD_IDENTITY_RECEIPT');
+  return true;
+}
