@@ -2,13 +2,28 @@
 // Nothing here deploys, merges, creates cloud projects, or admits engineering jobs.
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, resolve, sep } from 'node:path';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PROJECT = 'demo-urai-auth-journey';
 const SHA = /^[a-f0-9]{40}$/;
+const CLI_PACKAGE = 'firebase-tools@15.24.0';
+export function pinnedChalkFirebaseCliArgs() {
+  return Object.freeze(['--yes',CLI_PACKAGE,'--project',PROJECT,'emulators:exec','--only',
+    'auth,firestore,functions','node scripts/chalk-review-emulator-e2e.mjs']);
+}
+function runPinnedCli(args, env, timeout=180000) {
+  // npx installs the exact version into its disposable package cache.
+  // pnpm --frozen-lockfile does not provide firebase-tools in this repo.
+  if (process.platform === 'win32') {
+    // All CLI args are hardcoded. The sole spaced argument is quoted.
+    const fixed = 'npx ' + args.map(value => value.includes(' ') ? '"' + value + '"' : value).join(' ');
+    return command(process.env.ComSpec || 'cmd.exe',['/d','/s','/c',fixed],{env,timeout});
+  }
+  return command('npx',args,{env,timeout});
+}
 const fail = code => { throw Error('CHALK_LOCAL_' + code); };
 export function validateChalkLaunch(env) {
   if (env.CHALK_INTAKE_E2E !== '1' || env.URAI_CHALK_INTAKE_ENABLED !== 'true') fail('EXPLICIT_OPT_IN');
@@ -43,17 +58,11 @@ async function execute() {
   if (command('git',['rev-parse','HEAD']) !== a.jobsSha) fail('JOBS_SOURCE_DRIFT');
   if (command('git',['status','--porcelain','--untracked-files=all'])) fail('DIRTY_WORKTREE');
   const fnRequire=createRequire(new URL('../functions/package.json',import.meta.url));
-  let ts,cliPkgPath;
+  let ts;
   try {
     ts=fnRequire.resolve('typescript/lib/tsc.js');
     fnRequire.resolve('firebase-admin/firestore');
-    cliPkgPath=fnRequire.resolve('firebase-tools/package.json');
   } catch { fail('INSTALL_EXISTING_DEPS_FIRST'); }
-  const cliPkg=JSON.parse(readFileSync(cliPkgPath,'utf8'));
-  if (cliPkg.version !== '15.24.0' || typeof cliPkg.bin?.firebase !== 'string') fail('PINNED_FIREBASE_CLI_REQUIRED');
-  const cliPath=resolve(dirname(cliPkgPath),cliPkg.bin.firebase);
-  const pkgRoot=dirname(cliPkgPath)+sep;
-  if (!cliPath.startsWith(pkgRoot) || !existsSync(cliPath)) fail('FIREBASE_CLI_PATH');
   // Compile native packages from checked-out source, never reuse stale generated JS.
   command(process.execPath,[ts,'-p','packages/shared-types/tsconfig.json'],{timeout:180000});
   if (!existsSync(resolve(ROOT,'packages/shared-types/dist/index.d.ts'))) fail('SHARED_TYPES_BUILD_MISSING');
@@ -66,8 +75,10 @@ async function execute() {
     FUNCTIONS_EMULATOR:'true',URAI_ENV:'development',URAI_CHALK_INTAKE_ENABLED:'true',CHALK_INTAKE_E2E:'1',
     URAI_CHALK_SPATIAL_SOURCE_SHA:a.spatialSha,FIREBASE_CLI_DISABLE_TELEMETRY:'1',CI:'true'});
   console.log('CHALK_ISOLATED_ACCEPTANCE_START '+JSON.stringify({jobsSha:a.jobsSha,spatialSha:a.spatialSha,project:PROJECT}));
-  command(process.execPath,[cliPath,'--project',PROJECT,'emulators:exec','--only','auth,firestore,functions',
-    'node scripts/chalk-review-emulator-e2e.mjs'],{timeout:720000,env:cleanEnv});
+  // Resolve only the pinned CLI, and prove its reported version before starting.
+  const actualVersion=runPinnedCli(['--yes',CLI_PACKAGE,'--version'],cleanEnv);
+  if (actualVersion !== '15.24.0') fail('PINNED_FIREBASE_CLI_REQUIRED');
+  runPinnedCli(pinnedChalkFirebaseCliArgs(),cleanEnv,720000);
   console.log('CHALK_ISOLATED_ACCEPTANCE_REAL_EMULATORS_PASSED '+a.jobsSha);
 }
 const isMain=process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url);
