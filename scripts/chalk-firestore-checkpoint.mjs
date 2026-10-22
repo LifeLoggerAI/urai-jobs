@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 const SHA40 = /^[a-f0-9]{40}$/;
 const SHA64 = /^[a-f0-9]{64}$/;
 const ID = /^[a-zA-Z0-9_-]{8,64}$/;
+const REPOSITORY = /^LifeLoggerAI\/[A-Za-z0-9_.-]{2,90}$/;
 const PHASE_SEQUENCE = ['SOURCE_PINNED', 'TESTS_VERIFIED', 'PR_DRAFTED'];
 const PHASES = new Set(PHASE_SEQUENCE);
 const digest = value => createHash('sha256').update(value).digest('hex');
@@ -39,7 +40,8 @@ export function engineeringCheckpointBridge(db, { jobRef, queueRef, now = () => 
     if ((job.type !== undefined && job.type !== 'engineering.verify') ||
         (job.jobType !== undefined && job.jobType !== 'engineering.verify') ||
         (job.type === undefined && job.jobType === undefined)) deny('TYPE');
-    if (!record(job.payload) || !valid(SHA40, job.payload.baseSha) ||
+    if (!record(job.payload) || !valid(REPOSITORY, job.payload.repository) ||
+        !valid(SHA40, job.payload.baseSha) ||
         !valid(SHA64, job.payload.requestDigest)) deny('SOURCE_BINDING');
   };
   const validatedCheckpoint = (job, checkpoint) => {
@@ -47,9 +49,13 @@ export function engineeringCheckpointBridge(db, { jobRef, queueRef, now = () => 
     if (!record(checkpoint) || checkpoint.version !== 1 ||
         !Number.isSafeInteger(checkpoint.revision) || checkpoint.revision < 1 ||
         !Number.isSafeInteger(checkpoint.attempt) || checkpoint.attempt < 1 ||
-        !PHASES.has(checkpoint.phase) || !valid(SHA40, checkpoint.sourceSha) ||
+        !PHASES.has(checkpoint.phase) ||
+        !valid(ID, checkpoint.ownerUid) || !valid(REPOSITORY, checkpoint.repository) ||
+        !valid(SHA40, checkpoint.sourceSha) ||
         !valid(SHA64, checkpoint.requestDigest) || !valid(SHA64, checkpoint.outputDigest) ||
         checkpoint.sourceSha !== job.payload.baseSha ||
+        checkpoint.ownerUid !== job.ownerUid ||
+        checkpoint.repository !== job.payload.repository ||
         checkpoint.requestDigest !== job.payload.requestDigest ||
         !valid(SHA64, checkpoint.integrity)) deny('CORRUPT');
     const { integrity, ...rest } = checkpoint;
@@ -82,6 +88,9 @@ export function engineeringCheckpointBridge(db, { jobRef, queueRef, now = () => 
       const nowMs = now();
       if (master.status !== 'RUNNING' || queued.status !== 'RUNNING' ||
           queued.jobId !== jobId ||
+          (queued.ownerUid !== undefined && queued.ownerUid !== master.ownerUid) ||
+          (queued.tenantId !== undefined && queued.tenantId !== master.tenantId) ||
+          (queued.orgId !== undefined && queued.orgId !== master.orgId) ||
           !activeLease(master.lease, leaseToken, nowMs) ||
           !activeLease(queued.lease, leaseToken, nowMs) ||
           master.execution?.leaseToken !== leaseToken ||
@@ -95,6 +104,7 @@ export function engineeringCheckpointBridge(db, { jobRef, queueRef, now = () => 
           previous.outputDigest === outputDigest) return previous;
       if (nextIndex !== priorIndex + 1) deny('PHASE_ORDER');
       const progress = { version: 1, revision: revision + 1, attempt, phase,
+        ownerUid: master.ownerUid, repository: master.payload.repository,
         sourceSha: master.payload.baseSha, requestDigest: master.payload.requestDigest,
         outputDigest, savedAtMs: nowMs };
       const checkpoint = { ...progress, integrity: digest(JSON.stringify(progress)) };
