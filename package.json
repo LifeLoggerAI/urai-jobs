@@ -95,7 +95,8 @@
     "private-source:grant:validate": "node scripts/private-source-grant-provision.mjs --input scripts/fixtures/private-source-grant.synthetic.json",
     "chalk:verify": "node --test scripts/chalk-engineering-continuity.test.mjs scripts/chalk-engineering-verify.test.mjs scripts/chalk-firestore-checkpoint.test.mjs scripts/chalk-checkpoint-binding.test.mjs scripts/chalk-repository-identity.test.mjs scripts/chalk-firestore-canonical.test.mjs scripts/chalk-firestore-local.test.mjs scripts/chalk-pinned-source-completion.test.mjs scripts/chalk-engineering-policy.test.mjs",
     "chalk:firestore:verify": "node scripts/chalk-firestore-emulator-run.mjs",
-    "chalk:firestore:local": "node scripts/chalk-firestore-local.mjs"
+    "chalk:firestore:local": "node scripts/chalk-firestore-local.mjs",
+    "chalk:readback:test": "node --experimental-strip-types --test scripts/chalk-readback-authority.test.mjs"
   },
   "devDependencies": {
     "@types/uuid": "^10.0.0",
