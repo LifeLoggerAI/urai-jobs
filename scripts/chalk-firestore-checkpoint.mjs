@@ -10,6 +10,15 @@ const SHA64 = /^[a-f0-9]{64}$/;
 const ID = /^[a-zA-Z0-9_-]{8,64}$/;
 const PHASE_SEQUENCE = ['SOURCE_PINNED', 'TESTS_VERIFIED', 'PR_DRAFTED'];
 const PHASES = new Set(PHASE_SEQUENCE);
+// Firestore stores map fields without an insertion-order contract. The integrity
+// digest must use a stable encoding across SDKs, processes and transactions.
+const CHECKPOINT_FIELDS = new Set([
+  'version', 'revision', 'attempt', 'phase', 'ownerUid', 'repository',
+  'sourceSha', 'requestDigest', 'outputDigest', 'savedAtMs', 'integrity',
+]);
+const canonicalCheckpoint = value => JSON.stringify(
+  Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]]))
+);
 const digest = value => createHash('sha256').update(value).digest('hex');
 const deny = reason => { throw new Error('CHALK_CHECKPOINT_' + reason); };
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -57,9 +66,10 @@ export function engineeringCheckpointBridge(db, { jobRef, queueRef, now = () => 
         checkpoint.ownerUid !== job.ownerUid ||
         checkpoint.repository !== job.payload.repository ||
         checkpoint.requestDigest !== job.payload.requestDigest ||
-        !valid(SHA64, checkpoint.integrity)) deny('CORRUPT');
+        !valid(SHA64, checkpoint.integrity) ||
+        Object.keys(checkpoint).some(key => !CHECKPOINT_FIELDS.has(key))) deny('CORRUPT');
     const { integrity, ...rest } = checkpoint;
-    if (digest(JSON.stringify(rest)) !== integrity) deny('CORRUPT');
+    if (digest(canonicalCheckpoint(rest)) !== integrity) deny('CORRUPT');
     return checkpoint;
   };
   async function read({ jobId, actorUid }) {
@@ -107,7 +117,7 @@ export function engineeringCheckpointBridge(db, { jobRef, queueRef, now = () => 
         ownerUid: master.ownerUid, repository: master.payload.repository,
         sourceSha: master.payload.baseSha, requestDigest: master.payload.requestDigest,
         outputDigest, savedAtMs: nowMs };
-      const checkpoint = { ...progress, integrity: digest(JSON.stringify(progress)) };
+      const checkpoint = { ...progress, integrity: digest(canonicalCheckpoint(progress)) };
       tx.update(job, { 'execution.engineeringCheckpoint': checkpoint });
       return checkpoint;
     });
