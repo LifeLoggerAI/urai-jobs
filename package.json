@@ -100,7 +100,9 @@
     "chalk:review:test": "node --experimental-strip-types --test scripts/chalk-diagnostic-intake.test.mjs",
     "chalk:isolation:test": "node --experimental-strip-types --test scripts/chalk-intake-isolation.test.mjs",
     "chalk:review:e2e:safety": "node --test scripts/chalk-review-emulator-safety.test.mjs",
-    "chalk:review:e2e": "node scripts/chalk-review-emulator-e2e.mjs"
+    "chalk:review:e2e": "node scripts/chalk-review-emulator-e2e.mjs",
+    "chalk:review:local:safety": "node --test scripts/chalk-review-emulator-local.test.mjs",
+    "chalk:review:local": "node scripts/chalk-review-emulator-local.mjs"
   },
   "devDependencies": {
     "@types/uuid": "^10.0.0",
