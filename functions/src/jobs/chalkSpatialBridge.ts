@@ -53,7 +53,9 @@ export const chalkSpatialJobsBridge=onCall({region:'us-central1',cors:true,timeo
   const snap=await getFirestore().collection('jobs').where('ownerUid','==',actor.jobsUid).limit(Number(limit))
    .select('ownerUid','type','jobType','status','admission.state','admission.workerAdmitted','payload.repository','payload.baseSha').get();
   const after=await authorize(request,d.spatialIdToken,scope);
-  if(after.jobsUid!==actor.jobsUid||after.spatialUid!==actor.spatialUid||after.bindingRevision!==actor.bindingRevision)
+  if(after.jobsUid!==actor.jobsUid||after.spatialUid!==actor.spatialUid||
+     after.bindingRevision!==actor.bindingRevision||after.expiresAtMs!==actor.expiresAtMs||
+     after.tenantId!==actor.tenantId||after.orgId!==actor.orgId)
    throw new HttpsError('permission-denied','Identity changed during read.');
   const validated=redactChalkJobDocuments(snap.docs,actor.jobsUid);
   const byId=new Map(snap.docs.map(doc=>[doc.id,doc.data()]));
