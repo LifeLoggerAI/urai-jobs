@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {redactChalkJobDocuments} from '../functions/src/jobs/chalkReadbackAuthority.ts';
+import {redactChalkJobDocuments} from '../functions/lib/functions/jobs/chalkReadbackAuthority.js';
 const snap = (id, value) => ({id, data:()=>value});
 const actor = 'founder-1234';
 test('authorized owner engineering job readback contains exactly four safe keys',()=>{
