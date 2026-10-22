@@ -13,7 +13,7 @@ const local=/^(?:localhost|127\.0\.0\.1):[0-9]{2,5}$/.test(host);
 if(host&&!local)throw Error('CHALK_REFUSES_NONLOCAL_FIRESTORE_TARGET');
 if(!local&&process.env.CHALK_REQUIRE_FIRESTORE_EMULATOR==='1')
   throw Error('CHALK_FIRESTORE_EMULATOR_REQUIRED');
-const projectId='demo-urai-chalk-checkpoint';
+const projectId='demo-urai-jobs';
 const actorUid='synthetic-founder-123';
 const leaseA='synthetic-first-worker-token',leaseB='synthetic-recovery-worker-token';
 function sdk(){
