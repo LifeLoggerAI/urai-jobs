@@ -65,3 +65,26 @@ export function redactChalkBoundJobDocuments<T extends BoundChalkDocument>(
       record.type === 'engineering.verify' && record.jobType === 'engineering.verify';
   });
 }
+
+// Scope the database query BEFORE applying the limit: a client-side filter
+// after a Jobs-owner-only limit can hide valid held jobs behind stale ones.
+// Firestore's query builder is immutable, so no unscoped query is executed.
+export function scopeChalkBoundReadbackQuery<QueryT extends {
+  where(fieldPath: string, opStr: '==', value: string | number): QueryT;
+  limit(limit: number): QueryT;
+}>(
+  collection: {where(fieldPath: string, opStr: '==', value: string | number): QueryT},
+  jobsUid: unknown, spatialUid: unknown, bindingRevision: unknown, limit: unknown,
+): QueryT {
+  if (!boundUid(jobsUid) || !boundUid(spatialUid) ||
+      !Number.isSafeInteger(bindingRevision) || Number(bindingRevision) < 1)
+    throw Error('CHALK_READBACK_SCOPE');
+  if (!Number.isSafeInteger(limit) || Number(limit) < 1 || Number(limit) > 40)
+    throw Error('CHALK_READBACK_QUERY_LIMIT');
+  return collection.where('ownerUid', '==', jobsUid)
+    .where('chalkOriginSpatialUid', '==', spatialUid)
+    .where('chalkBindingRevision', '==', Number(bindingRevision))
+    .where('type', '==', 'engineering.verify')
+    .where('jobType', '==', 'engineering.verify')
+    .limit(Number(limit));
+}

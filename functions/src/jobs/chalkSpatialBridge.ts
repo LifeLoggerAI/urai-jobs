@@ -6,7 +6,7 @@ import {currentJobActor,requireJobOperator} from '../core/currentJobActor.js';
 import {assertChalkLocalEmulatorGate,buildChalkDiagnosticIntake} from './chalkDiagnosticIntakeAuthority.js';
 import {authorizeChalkCrossProject,assertChalkBridgeLeaseUnchanged,type ChalkBridgeAction} from './chalkCrossProjectAuthority.js';
 import {persistChalkHeldIntake,type MinimalTransaction} from './chalkHeldIntakeTransaction.js';
-import {redactChalkJobDocuments,redactChalkBoundJobDocuments,projectChalkHeldReadback} from './chalkReadbackAuthority.js';
+import {redactChalkJobDocuments,redactChalkBoundJobDocuments,projectChalkHeldReadback,scopeChalkBoundReadbackQuery} from './chalkReadbackAuthority.js';
 
 // Requires TWO independently authenticated emulator project identities.
 // Never mints or exchanges tokens. No production admission.
@@ -51,7 +51,11 @@ export const chalkSpatialJobsBridge=onCall({region:'us-central1',cors:true,timeo
   if(!Number.isSafeInteger(limit)||Number(limit)<1||Number(limit)>40)
    throw new HttpsError('invalid-argument','Limit out of bounds.');
   const db=getFirestore();
-  const snap=await db.collection('jobs').where('ownerUid','==',actor.jobsUid).limit(Number(limit))
+  // Apply all server-owned identity and job-kind constraints before LIMIT.
+  // A dedicated composite index is retained in firestore.indexes.json.
+  const scopedQuery=scopeChalkBoundReadbackQuery(db.collection('jobs'),
+   actor.jobsUid,actor.spatialUid,actor.bindingRevision,Number(limit));
+  const snap=await scopedQuery
    .select('ownerUid','type','jobType','status','admission.state','admission.workerAdmitted',
     'admission.environment','admission.providerSpendUsd','admission.humanApprovalRequired',
     'chalkOriginSpatialUid','chalkBindingRevision',
