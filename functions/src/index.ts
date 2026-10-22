@@ -29,3 +29,6 @@ export { processDataRightsRequest } from "./privacy/dataRightsExecution.js";
 export { storytimeNarratorBridge } from "./jobs/storytimeNarratorBridge.js";
 
 export { publishCapturedRealityRuntime } from "./jobs/capturedRealityRuntimePublisher.js";
+
+// Chalk restricted engineering status only; no dispatcher registration.
+export { listChalkEngineeringJobs } from "./jobs/chalkReadback.js";
