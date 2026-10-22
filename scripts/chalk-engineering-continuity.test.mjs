@@ -15,7 +15,7 @@ const input = {
 };
 const token = 'original-worker-lease-token';
 const second = 'second-worker-lease-token';
-const digest = 'c'.repeat(64), sourceSha = 'd'.repeat(40);
+const digest = 'c'.repeat(64), sourceSha = input.baseSha;
 
 async function fixture(fn) {
   const directory = await mkdtemp(join(tmpdir(), 'urai-chalk-'));
