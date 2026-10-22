@@ -19,7 +19,7 @@ const proofEnv={...process.env,CHALK_EMULATOR_PROOF:'1',CHALK_NONPRODUCTION_INTA
  NODE_ENV:'test'};
 for(const key of Object.keys(proofEnv))if(/(?:CREDENTIAL|TOKEN|SECRET|PRIVATE_KEY|SERVICE_ACCOUNT)/i.test(key)&&!['CHALK_NONPRODUCTION_INTAKE'].includes(key))delete proofEnv[key];
 const checks=spawnSync(process.execPath,['--test','scripts/chalk-dual-emulator-contract.test.mjs'],{stdio:'inherit',env:proofEnv,timeout:30000});if(checks.status!==0)die('CONTRACT_TEST_FAILED');
-const typecheck=spawnSync(process.platform==='win32'?'npm.cmd':'npm',['run','typecheck','--prefix','functions'],{stdio:'inherit',env:proofEnv,timeout:180000});if(typecheck.status!==0)die('TYPECHECK_FAILED');
+const build=spawnSync(process.platform==='win32'?'npm.cmd':'npm',['run','build','--prefix','functions'],{stdio:'inherit',env:proofEnv,timeout:180000});if(build.status!==0)die('FUNCTIONS_BUILD_FAILED');
 const run=spawnSync(npm,['--yes','firebase-tools@15.24.0','emulators:exec','--project',project,'--only','auth,firestore,functions','node scripts/chalk-dual-emulator-proof.mjs'],{stdio:'inherit',env:proofEnv,timeout:600000,shell:false});
 if(run.error)console.error('CHALK_LOCAL_EMULATOR_ERROR',run.error.message);
 if(run.status!==0)die('EMULATOR_INTEGRATION_FAILED');
