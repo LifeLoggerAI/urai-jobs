@@ -55,6 +55,8 @@ const source = run(process.execPath, ['--test',
   'scripts/chalk-repository-identity.test.mjs',
   'scripts/chalk-firestore-canonical.test.mjs',
   'scripts/chalk-firestore-local.test.mjs',
+  'scripts/chalk-pinned-source-completion.test.mjs',
+  'scripts/chalk-engineering-policy.test.mjs',
 ], { stdio: 'inherit', timeout: 120000 });
 if (source.status !== 0) fail('CHALK_SOURCE_TESTS_FAILED');
 console.log('CHALK_SOURCE_TESTS_PASSED ' + expectedSha);
