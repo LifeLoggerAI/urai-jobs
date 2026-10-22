@@ -2,6 +2,7 @@
 // Use an owner-scoped, authenticated durable adapter in the deployed worker.
 import { createHash } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
+import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 
 const VERSION = 'urai-engineering-continuity-v1';
@@ -24,15 +25,28 @@ export class EngineeringContinuityStore {
     return join(this.directory, jobId + '.json');
   }
   async withLock(jobId, callback) {
+    // This is a LOCAL TEST adapter. SQLite uses the OS-backed transaction lock,
+    // released automatically if a worker is killed. No orphanable .lock file.
+    // Production must use the existing UrAi Jobs Firestore queue transactions.
     const path = this.path(jobId);
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
-    const lock = await open(path + '.lock', 'wx', 0o600).catch(err => {
-      if (err?.code === 'EEXIST') fail('LOCKED');
-      throw err;
-    });
-    try { return await callback(path); }
-    finally { await lock.close(); await rm(path + '.lock', { force: true }); }
+    const db = new DatabaseSync(join(this.directory, 'chalk-local-locks.sqlite'));
+    try {
+      db.exec('PRAGMA busy_timeout = 5000');
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        const result = await callback(path);
+        db.exec('COMMIT');
+        return result;
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+    } finally {
+      db.close();
+    }
   }
+
   async load(path) {
     let envelope;
     try { envelope = JSON.parse(await readFile(path, 'utf8')); }
