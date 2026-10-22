@@ -36,23 +36,24 @@ test('invalid quota fails closed',async()=>{const x=db();
  await assert.rejects(x.run(),/QUOTA_CORRUPT/)});
 
 test('linked replay requires same Spatial identity and binding revision', async()=>{
- const r=record(), db=makeDb();
- const tx={get:async ref=>({exists:db.data.has(ref.id),data:()=>db.data.get(ref.id)}),
-  create:(ref,value)=>{db.data.set(ref.id,structuredClone(value));db.writes.push(ref.id)},
-  set:(ref,value)=>{db.data.set(ref.id,structuredClone(value));db.writes.push(ref.id)}};
+ const r=input(), state=db();
+ const tx={get:async ref=>({exists:state.store.has(ref.id),data:()=>state.store.get(ref.id)}),
+  create:(ref,value)=>{if(state.store.has(ref.id))throw Error('duplicate create');state.store.set(ref.id,structuredClone(value));state.writes.push(ref.id)},
+  set:(ref,value)=>{state.store.set(ref.id,structuredClone(value));state.writes.push(ref.id)}};
  const a={transaction:tx,masterRef:{id:'jobs/'+r.jobId},queueRef:{id:'jobQueue/'+r.jobId},
-  logRef:{id:'logs/created'},quotaRef:{id:'quota'},record:r,nowMs:100000,timestamp:stamp,
+  logRef:{id:'jobs/'+r.jobId+'/logs/created'},quotaRef:{id:'chalkIntakeQuota/'+owner},
+  record:r,nowMs:100000,timestamp:{serverTimestamp:true},
   originSpatialUid:'spatial_founder_123',bindingRevision:4};
  assert.equal((await persistChalkHeldIntake(a)).deduplicated,false);
  assert.equal((await persistChalkHeldIntake(a)).deduplicated,true);
- const before=db.writes.length;
+ const before=state.writes.length;
  await assert.rejects(persistChalkHeldIntake({...a,originSpatialUid:'spatial_other_456'}),/ORIGIN_CHANGED/);
  await assert.rejects(persistChalkHeldIntake({...a,bindingRevision:5}),/ORIGIN_CHANGED/);
- assert.equal(db.writes.length,before);
+ assert.equal(state.writes.length,before);
 });
 test('rejects incomplete linked-origin grants',async()=>{
- const db=makeDb(),r=record(),tx={get:async()=>({exists:false,data:()=>null}),create:()=>{},set:()=>{}};
+ const r=input(),tx={get:async()=>({exists:false,data:()=>null}),create:()=>{},set:()=>{}};
  await assert.rejects(persistChalkHeldIntake({transaction:tx,masterRef:{id:'m'},queueRef:{id:'q'},
-  logRef:{id:'l'},quotaRef:{id:'quota'},record:r,nowMs:100000,timestamp:stamp,
+  logRef:{id:'l'},quotaRef:{id:'quota'},record:r,nowMs:100000,timestamp:{serverTimestamp:true},
   originSpatialUid:'spatial_founder_123'}),/ORIGIN_BINDING/);
 });
