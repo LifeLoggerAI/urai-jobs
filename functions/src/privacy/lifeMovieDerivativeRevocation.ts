@@ -1,5 +1,5 @@
 import { FieldPath, FieldValue, getFirestore, type DocumentReference, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
-import { getStorage } from 'firebase-admin/storage';
+import { deleteOwnedLifeMovieArtifact } from '../jobs/privateMediaDelivery.js';
 import { jobQueueEntryDoc } from '../core/firestore-paths.js';
 
 type ArtifactLike = { ref?: unknown };
@@ -93,7 +93,7 @@ export async function invalidateLifeMovieDerivativesForConsent(
 
   const db = getFirestore(), now = FieldValue.serverTimestamp();
   const fencedPlans: DocumentReference[] = [];
-  const fencedJobs: Array<{ ref: DocumentReference; tenantId: string; projectId: string; refs: string[] }> = [];
+  const fencedJobs: Array<{ ref: DocumentReference; jobId: string; tenantId: string; projectId: string; refs: string[] }> = [];
 
   // The event endpoint has already durably blocked consent. Cancel every parent
   // before its children, then revoke leases/callbacks before any Storage await.
@@ -144,7 +144,7 @@ export async function invalidateLifeMovieDerivativesForConsent(
         }, { merge: true });
         // Keep aliases until cleanup succeeds so a partial failure remains retryable.
         transaction.update(snapshot.ref, patch);
-        outputs.push({ ref: snapshot.ref, tenantId: String(job.tenantId || ''),
+        outputs.push({ ref: snapshot.ref, jobId: snapshot.id, tenantId: String(job.tenantId || ''),
           projectId: String((job.payload as Record<string, unknown>)?.projectId || ''), refs });
       }
       return outputs;
@@ -154,16 +154,24 @@ export async function invalidateLifeMovieDerivativesForConsent(
   summary.jobsInvalidated = fencedJobs.length;
 
   const buckets = allowedOutputBuckets();
-  const objectLocations = new Map<string, { bucket: string; objectPath: string }>();
+  // Every physical deletion must retain the exact job and owner binding.
+  // Another attempt's object or a duplicate cross-job reference is never an
+  // authorized target, even when the bucket and tenant path look plausible.
+  const objectLocations = new Map<string, { bucket: string; objectPath: string; ownerUid: string; jobId: string }>();
   for (const job of fencedJobs) for (const ref of job.refs) {
     const location = parseAuthorizedLifeMovieRef(ref, job.tenantId, job.projectId, buckets);
-    objectLocations.set(`${location.bucket}/${location.objectPath}`, location);
+    const key = `${location.bucket}/${location.objectPath}`;
+    const previous = objectLocations.get(key);
+    if (previous && previous.jobId !== job.jobId) {
+      throw new Error('life_movie_revocation_output_owner_ambiguous');
+    }
+    objectLocations.set(key, { ...location, ownerUid: event.ownerUid, jobId: job.jobId });
   }
   const locations = [...objectLocations.values()];
   for (let offset = 0; offset < locations.length; offset += STORAGE_CONCURRENCY) {
     // Await every in-flight deletion before returning an error to the event sender.
     const deletions = await Promise.allSettled(locations.slice(offset, offset + STORAGE_CONCURRENCY)
-      .map(async ({ bucket, objectPath }) => getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true })));
+      .map((location) => deleteOwnedLifeMovieArtifact(location)));
     const failure = deletions.find((result) => result.status === 'rejected');
     if (failure?.status === 'rejected') throw failure.reason;
   }

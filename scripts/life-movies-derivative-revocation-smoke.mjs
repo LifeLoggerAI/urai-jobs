@@ -31,6 +31,7 @@ async function harness({ jobs = 1, plans = 1 } = {}) {
   const documents = new Map(), objects = new Map(), versions = new Map();
   const state = { transactions: [], queries: [], storageCalls: 0, activeDeletes: 0, maxActiveDeletes: 0,
     storageFailure: false, failTransaction: 0, beforeTransaction: null, beforeStorage: null,
+    replacementGeneration: false, metadataMismatch: false,
     afterStorage: null, fenceObserved: false };
   const ownedPaths = new Set();
   const event = { eventId: `event-${crypto.randomUUID()}`, ownerUid, purpose: consent.purpose, revokedAt: '2026-10-07T00:00:00.000Z' };
@@ -163,15 +164,34 @@ async function harness({ jobs = 1, plans = 1 } = {}) {
       assert.equal(plan.status, 'CANCELLED'); assert.equal(plan.derivativeAccessState, 'REVOKED');
     }
   };
-  const storage = { bucket: (name) => ({ file: (path) => ({ async delete(options) {
-    assert.equal(options.ignoreNotFound, true); state.storageCalls++; state.activeDeletes++;
-    state.maxActiveDeletes = Math.max(state.maxActiveDeletes, state.activeDeletes);
-    try {
-      await state.beforeStorage?.();
-      if (state.storageFailure === true || (typeof state.storageFailure === 'function' && state.storageFailure(path))) throw new Error('fixture_storage_failure');
-      objects.delete(`gs://${name}/${path}`); await state.afterStorage?.();
-    } finally { state.activeDeletes--; }
-  } }) }) };
+  const storage = { bucket: (name) => ({ file: (path) => ({
+    async getMetadata() {
+      const ref = `gs://${name}/${path}`;
+      if (!objects.has(ref)) throw Object.assign(new Error('fixture_missing'), { code: 404 });
+      const id = [...documents.entries()].find(([key, job]) =>
+        key.startsWith('jobs/') && [job.output, job.result].some((entry) =>
+          Array.isArray(entry?.outputs) && entry.outputs.some((artifact) =>
+            artifact.ref === ref)))?.[0]?.split('/').at(-1) || path.split('/').at(-1).replace(/\.mp4$/, '');
+      return [{ generation: state.replacementGeneration ? '2' : '1', metadata: {
+        uraiLifeMovieJobId: state.metadataMismatch ? 'another-job' : id,
+        uraiLifeMovieOwnerSha256: crypto.createHash('sha256').update(ownerUid).digest('hex'),
+        uraiLifeMovieLeaseSha256: 'a'.repeat(64),
+        uraiLifeMovieAttemptSha256: 'b'.repeat(64),
+      }}];
+    },
+    async delete(options) {
+      assert.equal(options.ignoreNotFound, true);
+      assert.equal(options.ifGenerationMatch, state.replacementGeneration ? '2' : '1');
+      state.storageCalls++; state.activeDeletes++;
+      state.maxActiveDeletes = Math.max(state.maxActiveDeletes, state.activeDeletes);
+      try {
+        await state.beforeStorage?.();
+        if (state.storageFailure === true || (typeof state.storageFailure === 'function' && state.storageFailure(path))) throw new Error('fixture_storage_failure');
+        if (state.replacementGeneration) throw new Error('fixture_storage_generation_mismatch');
+        objects.delete(`gs://${name}/${path}`); await state.afterStorage?.();
+      } finally { state.activeDeletes--; }
+    },
+  }) }) };
   const exports = {};
   const filename = 'functions/src/privacy/lifeMovieDerivativeRevocation.ts';
   let source;
@@ -185,6 +205,25 @@ async function harness({ jobs = 1, plans = 1 } = {}) {
       if (name === 'firebase-admin/firestore') return { FieldValue, FieldPath, getFirestore: () => db };
       if (name === 'firebase-admin/storage') return { getStorage: () => storage };
       if (name.endsWith('/firestore-paths.js')) return { jobQueueEntryDoc: (id) => ref(`jobQueue/${id}`) };
+      if (name.endsWith('/privateMediaDelivery.js')) return {
+        deleteOwnedLifeMovieArtifact: async (location) => {
+          const file = storage.bucket(location.bucket).file(location.objectPath);
+          let metadata;
+          try { [metadata] = await file.getMetadata(); }
+          catch (error) { if (error?.code === 404) return; throw error; }
+          const generation = String(metadata.generation || '');
+          const ownerHash = crypto.createHash('sha256').update(location.ownerUid).digest('hex');
+          const markers = metadata.metadata;
+          if (!/^[1-9][0-9]*$/.test(generation) ||
+              markers?.uraiLifeMovieJobId !== location.jobId ||
+              markers?.uraiLifeMovieOwnerSha256 !== ownerHash ||
+              !/^[a-f0-9]{64}$/.test(String(markers?.uraiLifeMovieLeaseSha256 || '')) ||
+              !/^[a-f0-9]{64}$/.test(String(markers?.uraiLifeMovieAttemptSha256 || ''))) {
+            throw Error('private_media_deletion_binding_mismatch');
+          }
+          await file.delete({ ignoreNotFound: true, ifGenerationMatch: generation });
+        }
+      };
       throw new Error(`Unexpected import: ${name}`);
     },
   });
@@ -317,6 +356,30 @@ try {
     };
     assert.equal((await late.invalidate()).storageObjectsDeleted, 2); assert.equal(late.objects.size, 0);
     console.log('[PASS] Transaction re-read captures a worker result published after the owner query');
+
+    const replaced = await harness(); replaced.state.replacementGeneration = true;
+    await assert.rejects(replaced.invalidate(), /fixture_storage_generation_mismatch/);
+    await replaced.assertFence();
+    assert.equal(replaced.objects.size, 1);
+    assert.equal((await replaced.get(`jobs/${replaced.childIds[0]}`)).outputDeletionState, 'PENDING');
+    replaced.state.replacementGeneration = false;
+    await replaced.invalidate(); assert.equal(replaced.objects.size, 0);
+    console.log('[PASS] Changed object generation remains protected and retryable');
+
+    const misbound = await harness(); misbound.state.metadataMismatch = true;
+    await assert.rejects(misbound.invalidate(), /private_media_deletion_binding_mismatch/);
+    await misbound.assertFence(); assert.equal(misbound.state.storageCalls, 0);
+    misbound.state.metadataMismatch = false;
+    await misbound.invalidate(); assert.equal(misbound.objects.size, 0);
+    console.log('[PASS] Mismatched per-job Storage provenance denies physical deletion');
+
+    const ambiguous = await harness({ jobs: 2 });
+    const ambiguousJob = await ambiguous.get(`jobs/${ambiguous.childIds[1]}`);
+    ambiguousJob.output = { outputs: [ambiguous.artifact(ambiguous.childIds[0])] };
+    await ambiguous.set(`jobs/${ambiguous.childIds[1]}`, ambiguousJob);
+    await assert.rejects(ambiguous.invalidate(), /life_movie_revocation_output_owner_ambiguous/);
+    await ambiguous.assertFence(); assert.equal(ambiguous.state.storageCalls, 0);
+    console.log('[PASS] Two jobs claiming the same storage path fail closed before Storage I/O');
 
     const changed = await harness(); let changedOnce = false;
     changed.state.afterStorage = async () => {
