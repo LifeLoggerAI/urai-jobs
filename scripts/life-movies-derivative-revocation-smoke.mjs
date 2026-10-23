@@ -168,7 +168,10 @@ async function harness({ jobs = 1, plans = 1 } = {}) {
     async getMetadata() {
       const ref = `gs://${name}/${path}`;
       if (!objects.has(ref)) throw Object.assign(new Error('fixture_missing'), { code: 404 });
-      const id = path.split('/').at(-1).replace(/\.mp4$/, '');
+      const id = [...documents.entries()].find(([key, job]) =>
+        key.startsWith('jobs/') && [job.output, job.result].some((entry) =>
+          Array.isArray(entry?.outputs) && entry.outputs.some((artifact) =>
+            artifact.ref === ref)))?.[0]?.split('/').at(-1) || path.split('/').at(-1).replace(/\.mp4$/, '');
       return [{ generation: state.replacementGeneration ? '2' : '1', metadata: {
         uraiLifeMovieJobId: state.metadataMismatch ? 'another-job' : id,
         uraiLifeMovieOwnerSha256: crypto.createHash('sha256').update(ownerUid).digest('hex'),
