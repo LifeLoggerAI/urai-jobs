@@ -27,20 +27,33 @@ const TERMINAL = new Set(['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED']);
 const PAGE_SIZE = 100;
 const STORAGE_CONCURRENCY = 8;
 
+/** An untyped or blank consent purpose is not evidence that a Life Movie
+ * belongs to an unrelated purpose. Only an explicit nonempty *different*
+ * purpose may exempt an otherwise owner-bound derivative from revocation. */
+function consentPurposeMatchesOrMalformed(consent: object, purpose: string): boolean {
+  if (Array.isArray(consent)) return true;
+  const persisted = (consent as Record<string, unknown>).purpose;
+  return persisted === purpose || typeof persisted !== 'string' || persisted.trim().length === 0;
+}
+
 function isAffectedJob(job: Record<string, unknown>, event: LifeMovieRevocationEvent): boolean {
   const jobType = String(job.jobType || job.type || '');
   if (job.ownerUid !== event.ownerUid || job.sourceSystem !== 'urai-studio') return false;
   if (jobType !== 'studio.render.video' && jobType !== 'studio.assemble.video') return false;
   const consent = job.consent;
-  // Legacy short-form jobs predate canonical consent persistence.
+  // Legacy short-form jobs predate canonical consent persistence. Preserve the
+  // legacy assembly exception, but never trust a malformed persisted envelope.
   if (!consent || typeof consent !== 'object') return jobType === 'studio.render.video';
-  return (consent as Record<string, unknown>).purpose === event.purpose;
+  return consentPurposeMatchesOrMalformed(consent, event.purpose);
 }
 
 function isAffectedPlan(plan: Record<string, unknown>, event: LifeMovieRevocationEvent): boolean {
+  if (plan.ownerUid !== event.ownerUid) return false;
   const consent = plan.consent;
-  return plan.ownerUid === event.ownerUid && !!consent && typeof consent === 'object'
-    && (consent as Record<string, unknown>).purpose === event.purpose;
+  // Longform plans are dedicated Life Movie derivatives. An invalid envelope
+  // cannot exempt them from their owner's Life Movie consent revocation.
+  if (!consent || typeof consent !== 'object') return true;
+  return consentPurposeMatchesOrMalformed(consent, event.purpose);
 }
 
 async function* ownerPages(collection: string, ownerUid: string) {
@@ -76,11 +89,28 @@ function parseAuthorizedLifeMovieRef(ref: string, tenantId: string, projectId: s
   return { bucket, objectPath };
 }
 
-function artifactRefs(value: unknown): string[] {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
-  const outputs = Array.isArray((value as OutputLike).outputs) ? (value as OutputLike).outputs! : [];
-  return outputs.map((artifact) => artifact?.ref)
-    .filter((ref): ref is string => typeof ref === 'string' && ref.startsWith('gs://'));
+// A malformed derivative ledger must never be treated as an empty ledger.
+// Return the error alongside valid refs so the transaction can durably revoke
+// job/queue access before the handler refuses physical Storage cleanup.
+function artifactRefs(value: unknown): { refs: string[]; malformed: boolean } {
+  if (value == null) return { refs: [], malformed: false };
+  if (typeof value !== 'object' || Array.isArray(value)) return { refs: [], malformed: true };
+  const outputs = (value as OutputLike).outputs;
+  // Unknown nonempty envelopes are not proof that their private artifacts
+  // are absent. Retain the ledger for explicit reconciliation.
+  if (outputs === undefined) return { refs: [], malformed: Object.keys(value).length > 0 };
+  if (!Array.isArray(outputs)) return { refs: [], malformed: true };
+  const refs: string[] = [];
+  let malformed = false;
+  for (const artifact of outputs) {
+    if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact)
+      || typeof artifact.ref !== 'string' || !artifact.ref.startsWith('gs://')) {
+      malformed = true;
+    } else {
+      refs.push(artifact.ref);
+    }
+  }
+  return { refs, malformed };
 }
 
 export async function invalidateLifeMovieDerivativesForConsent(
@@ -93,7 +123,7 @@ export async function invalidateLifeMovieDerivativesForConsent(
 
   const db = getFirestore(), now = FieldValue.serverTimestamp();
   const fencedPlans: DocumentReference[] = [];
-  const fencedJobs: Array<{ ref: DocumentReference; jobId: string; tenantId: string; projectId: string; refs: string[] }> = [];
+  const fencedJobs: Array<{ ref: DocumentReference; jobId: string; tenantId: string; projectId: string; refs: string[]; malformed: boolean }> = [];
 
   // The event endpoint has already durably blocked consent. Cancel every parent
   // before its children, then revoke leases/callbacks before any Storage await.
@@ -122,10 +152,12 @@ export async function invalidateLifeMovieDerivativesForConsent(
       const outputs: typeof fencedJobs = [];
       for (const snapshot of affected) {
         const job = snapshot.data()!, status = String(job.status || '');
-        const refs = [...new Set([...artifactRefs(job.output), ...artifactRefs(job.result)])];
+        const outputRefs = artifactRefs(job.output), resultRefs = artifactRefs(job.result);
+        const refs = [...new Set([...outputRefs.refs, ...resultRefs.refs])];
+        const malformed = outputRefs.malformed || resultRefs.malformed;
         const patch: Record<string, unknown> = {
           derivativeAccessState: 'REVOKED', consentRevocationEventId: event.eventId, consentRevokedAt: event.revokedAt,
-          outputDeletionState: !refs.length && job.outputDeletionState === 'COMPLETE' ? 'COMPLETE' : 'PENDING',
+          outputDeletionState: !malformed && !refs.length && job.outputDeletionState === 'COMPLETE' ? 'COMPLETE' : 'PENDING',
           lease: FieldValue.delete(), 'execution.leaseToken': FieldValue.delete(),
           'execution.asyncCallbackPending': false, 'execution.callbackTokenHash': FieldValue.delete(),
           'execution.callbackLeaseToken': FieldValue.delete(), 'execution.callbackDeadlineAt': FieldValue.delete(),
@@ -145,7 +177,7 @@ export async function invalidateLifeMovieDerivativesForConsent(
         // Keep aliases until cleanup succeeds so a partial failure remains retryable.
         transaction.update(snapshot.ref, patch);
         outputs.push({ ref: snapshot.ref, jobId: snapshot.id, tenantId: String(job.tenantId || ''),
-          projectId: String((job.payload as Record<string, unknown>)?.projectId || ''), refs });
+          projectId: String((job.payload as Record<string, unknown>)?.projectId || ''), refs, malformed });
       }
       return outputs;
     });
@@ -158,14 +190,17 @@ export async function invalidateLifeMovieDerivativesForConsent(
   // Another attempt's object or a duplicate cross-job reference is never an
   // authorized target, even when the bucket and tenant path look plausible.
   const objectLocations = new Map<string, { bucket: string; objectPath: string; ownerUid: string; jobId: string }>();
-  for (const job of fencedJobs) for (const ref of job.refs) {
-    const location = parseAuthorizedLifeMovieRef(ref, job.tenantId, job.projectId, buckets);
-    const key = `${location.bucket}/${location.objectPath}`;
-    const previous = objectLocations.get(key);
-    if (previous && previous.jobId !== job.jobId) {
-      throw new Error('life_movie_revocation_output_owner_ambiguous');
+  for (const job of fencedJobs) {
+    if (job.malformed) throw new Error('life_movie_revocation_output_ref_invalid');
+    for (const ref of job.refs) {
+      const location = parseAuthorizedLifeMovieRef(ref, job.tenantId, job.projectId, buckets);
+      const key = `${location.bucket}/${location.objectPath}`;
+      const previous = objectLocations.get(key);
+      if (previous && previous.jobId !== job.jobId) {
+        throw new Error('life_movie_revocation_output_owner_ambiguous');
+      }
+      objectLocations.set(key, { ...location, ownerUid: event.ownerUid, jobId: job.jobId });
     }
-    objectLocations.set(key, { ...location, ownerUid: event.ownerUid, jobId: job.jobId });
   }
   const locations = [...objectLocations.values()];
   for (let offset = 0; offset < locations.length; offset += STORAGE_CONCURRENCY) {
@@ -184,8 +219,11 @@ export async function invalidateLifeMovieDerivativesForConsent(
       const affected = snapshots.filter((snapshot) => snapshot.exists && isAffectedJob(snapshot.data()!, event));
       for (const snapshot of affected) {
         const job = snapshot.data()!, deletedRefs = group.find((entry) => entry.ref.path === snapshot.ref.path)!.refs;
-        const currentRefs = [...artifactRefs(job.output), ...artifactRefs(job.result)];
-        if (currentRefs.some((ref) => !deletedRefs.includes(ref))) throw new Error('life_movie_revocation_outputs_changed_retry');
+        const currentOutput = artifactRefs(job.output), currentResult = artifactRefs(job.result);
+        const currentRefs = [...currentOutput.refs, ...currentResult.refs];
+        if (currentOutput.malformed || currentResult.malformed || currentRefs.some((ref) => !deletedRefs.includes(ref))) {
+          throw new Error('life_movie_revocation_outputs_changed_retry');
+        }
         transaction.update(snapshot.ref, {
           output: FieldValue.delete(), result: FieldValue.delete(), outputDeletionState: 'COMPLETE',
           outputDeletedAt: job.outputDeletedAt || now, outputDeletedBy: 'consent-revocation', updatedAt: now,
