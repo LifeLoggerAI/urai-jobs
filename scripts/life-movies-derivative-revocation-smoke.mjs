@@ -408,6 +408,48 @@ try {
     assert.equal(mixed.objects.size, 1);
     console.log('[PASS] One malformed ref blocks deletion of otherwise valid same-job objects');
 
+    for (const malformedConsent of [{}, { purpose: 42 }, { purpose: '   ' }, []]) {
+      const invalidConsent = await harness();
+      const id = invalidConsent.childIds[0];
+      const job = await invalidConsent.get(`jobs/${id}`);
+      job.consent = malformedConsent;
+      await invalidConsent.set(`jobs/${id}`, job);
+      const planId = invalidConsent.planIds[0];
+      const plan = await invalidConsent.get(`studioLifeMovieLongformPlans/${planId}`);
+      plan.consent = malformedConsent;
+      await invalidConsent.set(`studioLifeMovieLongformPlans/${planId}`, plan);
+      const receipt = await invalidConsent.invalidate();
+      assert.equal(receipt.jobsInvalidated, 1);
+      assert.equal(receipt.plansInvalidated, 1);
+      await invalidConsent.assertFence();
+      assert.equal(invalidConsent.objects.size, 0);
+    }
+    console.log('[PASS] Malformed Life Movie consent purpose cannot exempt owned derivatives from revocation');
+
+    const missingPlanConsent = await harness();
+    const missingPlanId = missingPlanConsent.planIds[0];
+    const planWithoutConsent = await missingPlanConsent.get(`studioLifeMovieLongformPlans/${missingPlanId}`);
+    delete planWithoutConsent.consent;
+    await missingPlanConsent.set(`studioLifeMovieLongformPlans/${missingPlanId}`, planWithoutConsent);
+    assert.equal((await missingPlanConsent.invalidate()).plansInvalidated, 1);
+    await missingPlanConsent.assertFence();
+    console.log('[PASS] Missing longform consent envelope cannot bypass owner-bound plan fencing');
+
+    const unrelatedConsent = await harness();
+    const unrelatedJob = await unrelatedConsent.get(`jobs/${unrelatedConsent.childIds[0]}`);
+    unrelatedJob.consent = { purpose: 'other-purpose' };
+    await unrelatedConsent.set(`jobs/${unrelatedConsent.childIds[0]}`, unrelatedJob);
+    const unrelatedPlan = await unrelatedConsent.get(`studioLifeMovieLongformPlans/${unrelatedConsent.planIds[0]}`);
+    unrelatedPlan.consent = { purpose: 'other-purpose' };
+    await unrelatedConsent.set(`studioLifeMovieLongformPlans/${unrelatedConsent.planIds[0]}`, unrelatedPlan);
+    const unrelatedReceipt = await unrelatedConsent.invalidate();
+    assert.equal(unrelatedReceipt.jobsInvalidated, 0);
+    assert.equal(unrelatedReceipt.plansInvalidated, 0);
+    assert.equal(unrelatedConsent.state.storageCalls, 0);
+    assert.equal((await unrelatedConsent.get(`jobs/${unrelatedConsent.childIds[0]}`)).status, 'RUNNING');
+    console.log('[PASS] Explicit unrelated consent purpose remains outside revocation scope');
+
+
 
     const changed = await harness(); let changedOnce = false;
     changed.state.afterStorage = async () => {
