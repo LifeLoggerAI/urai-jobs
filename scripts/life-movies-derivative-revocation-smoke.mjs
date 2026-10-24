@@ -408,6 +408,34 @@ try {
     assert.equal(mixed.objects.size, 1);
     console.log('[PASS] One malformed ref blocks deletion of otherwise valid same-job objects');
 
+    for (const malformedEnvelope of [{ metrics: { privateOutputPresent: true } }, { ref: 'gs://hidden-unverified' }]) {
+      const missingLedger = await harness();
+      const id = missingLedger.childIds[0];
+      const job = await missingLedger.get(`jobs/${id}`);
+      job.output = malformedEnvelope;
+      job.outputDeletionState = 'COMPLETE';
+      await missingLedger.set(`jobs/${id}`, job);
+      await assert.rejects(missingLedger.invalidate(), /life_movie_revocation_output_ref_invalid/);
+      await missingLedger.assertFence();
+      const fenced = await missingLedger.get(`jobs/${id}`);
+      assert.equal(fenced.outputDeletionState, 'PENDING');
+      assert.deepEqual(fenced.output, malformedEnvelope);
+      assert.equal(missingLedger.state.storageCalls, 0);
+    }
+    console.log('[PASS] Unrecognized nonempty artifact envelopes never preserve stale COMPLETE receipts');
+
+    const malformedCompleted = await harness();
+    const completedId = malformedCompleted.childIds[0];
+    const completedJob = await malformedCompleted.get(`jobs/${completedId}`);
+    completedJob.output = { outputs: [{ ref: 'invalid://not-owned' }] };
+    completedJob.outputDeletionState = 'COMPLETE';
+    await malformedCompleted.set(`jobs/${completedId}`, completedJob);
+    await assert.rejects(malformedCompleted.invalidate(), /life_movie_revocation_output_ref_invalid/);
+    assert.equal((await malformedCompleted.get(`jobs/${completedId}`)).outputDeletionState, 'PENDING');
+    assert.equal(malformedCompleted.state.storageCalls, 0);
+    console.log('[PASS] Invalid output refs cannot retain a prior COMPLETE deletion state');
+
+
     for (const malformedConsent of [{}, { purpose: 42 }, { purpose: '   ' }, []]) {
       const invalidConsent = await harness();
       const id = invalidConsent.childIds[0];
