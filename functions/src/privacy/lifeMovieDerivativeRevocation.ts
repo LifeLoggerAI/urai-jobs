@@ -27,20 +27,33 @@ const TERMINAL = new Set(['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED']);
 const PAGE_SIZE = 100;
 const STORAGE_CONCURRENCY = 8;
 
+/** An untyped or blank consent purpose is not evidence that a Life Movie
+ * belongs to an unrelated purpose. Only an explicit nonempty *different*
+ * purpose may exempt an otherwise owner-bound derivative from revocation. */
+function consentPurposeMatchesOrMalformed(consent: object, purpose: string): boolean {
+  if (Array.isArray(consent)) return true;
+  const persisted = (consent as Record<string, unknown>).purpose;
+  return persisted === purpose || typeof persisted !== 'string' || persisted.trim().length === 0;
+}
+
 function isAffectedJob(job: Record<string, unknown>, event: LifeMovieRevocationEvent): boolean {
   const jobType = String(job.jobType || job.type || '');
   if (job.ownerUid !== event.ownerUid || job.sourceSystem !== 'urai-studio') return false;
   if (jobType !== 'studio.render.video' && jobType !== 'studio.assemble.video') return false;
   const consent = job.consent;
-  // Legacy short-form jobs predate canonical consent persistence.
+  // Legacy short-form jobs predate canonical consent persistence. Preserve the
+  // legacy assembly exception, but never trust a malformed persisted envelope.
   if (!consent || typeof consent !== 'object') return jobType === 'studio.render.video';
-  return (consent as Record<string, unknown>).purpose === event.purpose;
+  return consentPurposeMatchesOrMalformed(consent, event.purpose);
 }
 
 function isAffectedPlan(plan: Record<string, unknown>, event: LifeMovieRevocationEvent): boolean {
+  if (plan.ownerUid !== event.ownerUid) return false;
   const consent = plan.consent;
-  return plan.ownerUid === event.ownerUid && !!consent && typeof consent === 'object'
-    && (consent as Record<string, unknown>).purpose === event.purpose;
+  // Longform plans are dedicated Life Movie derivatives. An invalid envelope
+  // cannot exempt them from their owner's Life Movie consent revocation.
+  if (!consent || typeof consent !== 'object') return true;
+  return consentPurposeMatchesOrMalformed(consent, event.purpose);
 }
 
 async function* ownerPages(collection: string, ownerUid: string) {
