@@ -96,7 +96,9 @@ function artifactRefs(value: unknown): { refs: string[]; malformed: boolean } {
   if (value == null) return { refs: [], malformed: false };
   if (typeof value !== 'object' || Array.isArray(value)) return { refs: [], malformed: true };
   const outputs = (value as OutputLike).outputs;
-  if (outputs === undefined) return { refs: [], malformed: false };
+  // Unknown nonempty envelopes are not proof that their private artifacts
+  // are absent. Retain the ledger for explicit reconciliation.
+  if (outputs === undefined) return { refs: [], malformed: Object.keys(value).length > 0 };
   if (!Array.isArray(outputs)) return { refs: [], malformed: true };
   const refs: string[] = [];
   let malformed = false;
@@ -155,7 +157,7 @@ export async function invalidateLifeMovieDerivativesForConsent(
         const malformed = outputRefs.malformed || resultRefs.malformed;
         const patch: Record<string, unknown> = {
           derivativeAccessState: 'REVOKED', consentRevocationEventId: event.eventId, consentRevokedAt: event.revokedAt,
-          outputDeletionState: !refs.length && job.outputDeletionState === 'COMPLETE' ? 'COMPLETE' : 'PENDING',
+          outputDeletionState: !malformed && !refs.length && job.outputDeletionState === 'COMPLETE' ? 'COMPLETE' : 'PENDING',
           lease: FieldValue.delete(), 'execution.leaseToken': FieldValue.delete(),
           'execution.asyncCallbackPending': false, 'execution.callbackTokenHash': FieldValue.delete(),
           'execution.callbackLeaseToken': FieldValue.delete(), 'execution.callbackDeadlineAt': FieldValue.delete(),
