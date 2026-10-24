@@ -381,6 +381,34 @@ try {
     await ambiguous.assertFence(); assert.equal(ambiguous.state.storageCalls, 0);
     console.log('[PASS] Two jobs claiming the same storage path fail closed before Storage I/O');
 
+    for (const invalidOutput of [
+      { outputs: [{ ref: 'https://not-a-gcs-object.invalid/movie.mp4' }] },
+      { outputs: [{ kind: 'mp4' }] },
+      { outputs: [null] },
+      { outputs: 'not-an-artifact-array' },
+    ]) {
+      const invalid = await harness();
+      const job = await invalid.get(`jobs/${invalid.childIds[0]}`);
+      job.output = invalidOutput;
+      await invalid.set(`jobs/${invalid.childIds[0]}`, job);
+      await assert.rejects(invalid.invalidate(), /life_movie_revocation_output_ref_invalid/);
+      await invalid.assertFence();
+      assert.equal(invalid.state.storageCalls, 0);
+      assert.equal((await invalid.get(`jobs/${invalid.childIds[0]}`)).outputDeletionState, 'PENDING');
+      assert.deepEqual((await invalid.get(`jobs/${invalid.childIds[0]}`)).output, invalidOutput);
+    }
+    console.log('[PASS] Malformed or non-GCS derivative refs remain fenced and retryable, never silently cleared');
+
+    const mixed = await harness();
+    const mixedJob = await mixed.get(`jobs/${mixed.childIds[0]}`);
+    mixedJob.output.outputs.push({ ref: 'invalid://extra' });
+    await mixed.set(`jobs/${mixed.childIds[0]}`, mixedJob);
+    await assert.rejects(mixed.invalidate(), /life_movie_revocation_output_ref_invalid/);
+    await mixed.assertFence(); assert.equal(mixed.state.storageCalls, 0);
+    assert.equal(mixed.objects.size, 1);
+    console.log('[PASS] One malformed ref blocks deletion of otherwise valid same-job objects');
+
+
     const changed = await harness(); let changedOnce = false;
     changed.state.afterStorage = async () => {
       if (changedOnce) return; changedOnce = true;
