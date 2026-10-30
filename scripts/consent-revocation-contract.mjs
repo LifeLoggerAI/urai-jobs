@@ -19,6 +19,7 @@ const blocks = read("functions/src/privacy/consentBlocks.ts");
 const endpoint = read("functions/src/privacy/consentRevocation.ts");
 const derivativeRevocation = read("functions/src/privacy/lifeMovieDerivativeRevocation.ts");
 const shortMovieBridge = read("functions/src/jobs/studioLifeMovieBridge.ts");
+const shortMovieContract = read("functions/src/jobs/studioLifeMovieContract.ts");
 const longMovieBridge = read("functions/src/jobs/studioLifeMovieLongformBridge.ts");
 const ownerDeletion = read("functions/src/jobs/lifeMovieOwnerDeletion.ts");
 const index = read("functions/src/index.ts");
@@ -68,7 +69,8 @@ ok(
 );
 ok(
   "short Life Movie creation and playback require canonical consent",
-  shortMovieBridge.includes("purpose: z.literal('life-movie.render')")
+  shortMovieContract.includes("purpose: z.literal('life-movie.render')")
+    && shortMovieBridge.includes("const CreateSchema = StudioLifeMovieCreateRequestSchema")
     && shortMovieBridge.includes("const consent: JobConsentContext = { purpose, policyVersion, decisionReceiptId }")
     && shortMovieBridge.includes("consentBlockRef(input.userId, consent.purpose)")
     && shortMovieBridge.includes("consent,")

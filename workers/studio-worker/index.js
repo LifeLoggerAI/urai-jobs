@@ -152,6 +152,19 @@ function safeObjectPath(value, field) {
   return normalized;
 }
 
+function sourceGeneration(value) {
+  if (typeof value !== 'string' || !/^[1-9][0-9]{0,19}$/.test(value)
+    || !Number.isSafeInteger(Number(value))) throw new Error('invalid_source_generation');
+  return value;
+}
+
+function openSelectedSource(source) {
+  // The installed SDK converts this string to Number. Reject versions it
+  // cannot represent exactly; never round or fall back to the latest object.
+  const generation = sourceGeneration(source.generation);
+  return admin.storage().bucket(source.bucket).file(source.objectPath, { generation }).createReadStream();
+}
+
 function safeOutputPrefix(value, tenantId, projectId) {
   const prefix = safeObjectPath(value, 'output_prefix').replace(/\/+$/, '');
   const required = `tenants/${tenantId}/life-movies/${projectId}/`;
@@ -196,6 +209,7 @@ function parsePayload(job) {
     const id = safeSegment(String(raw.id || ''), 'source_id');
     const bucket = safeSegment(String(raw.bucket || ''), 'source_bucket');
     const objectPath = safeObjectPath(raw.objectPath, 'source_object_path');
+    const generation = sourceGeneration(raw.generation);
     const mimeType = String(raw.mimeType || '');
     if (!ALLOWED_MIME.has(mimeType)) throw new Error(`unsupported_source_mime:${mimeType}`);
     const allowedBuckets = new Set([
@@ -209,6 +223,7 @@ function parsePayload(job) {
       id,
       bucket,
       objectPath,
+      generation,
       mimeType,
       provenance: String(raw.provenance || 'unknown'),
       sourceRefs: Array.isArray(raw.sourceRefs) ? raw.sourceRefs.map(String).slice(0, 32) : [],
@@ -770,7 +785,7 @@ async function renderLifeMovie(job) {
         },
       });
       await pipeline(
-        admin.storage().bucket(source.bucket).file(source.objectPath).createReadStream(),
+        openSelectedSource(source),
         meter, fs.createWriteStream(localPath, { mode: 0o600 }), { signal: control.signal },
       );
       await control.check();
@@ -838,6 +853,7 @@ async function renderLifeMovie(job) {
         id: source.id,
         bucket: source.bucket,
         objectPath: source.objectPath,
+        generation: source.generation,
         mimeType: source.mimeType,
         provenance: source.provenance,
         sourceRefs: source.sourceRefs,

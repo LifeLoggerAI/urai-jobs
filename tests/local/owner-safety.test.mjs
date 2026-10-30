@@ -118,7 +118,7 @@ async function environment() {
       jobQueueEntryDoc: id => db.collection('jobQueue').doc(id),
     },
     '../core/jobsReliability.js': { bindingMatches() {}, buildIdempotencyBindingId() {}, buildRequestFingerprint() {} },
-    './studioLifeMovieContract.js': { StudioLifeMovieRenderPayloadSchema: schema, assertLifeMovieTenantPaths() {} },
+    './studioLifeMovieContract.js': { StudioLifeMovieCreateRequestSchema: schema, assertLifeMovieTenantPaths() {} },
     './studioLifeMovieLongformContract.js': { StudioLifeMovieLongformPayloadSchema: schema, assertLifeMovieLongformTenantPaths() {}, planLifeMovieLongformSegments() {} },
     './sceneTruthReceipt.js': { assertSceneTruthReceiptValue() {} },
     '../privacy/consentBlocks.js': { consentBlockRef: () => db.collection('blocks').doc('block'), isConsentContext: () => true },

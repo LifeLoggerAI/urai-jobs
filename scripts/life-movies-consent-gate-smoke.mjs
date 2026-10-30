@@ -126,7 +126,7 @@ const payload = {
   schemaVersion: 'urai-life-movie-render-v1', projectId, renderPlanDigest: 'a'.repeat(64),
   sceneTruthReceiptRef: `str_${receiptId}_${expiry}_${signature}`, sceneTruthDigest: digest,
   outputPrefix: `tenants/${tenant}/life-movies/${projectId}/`, width: 640, height: 480, fps: 30,
-  sources: [{ id: 'source', bucket: 'synthetic-bucket', objectPath: `tenants/${tenant}/source.png`,
+  sources: [{ id: 'source', bucket: 'synthetic-bucket', objectPath: `tenants/${tenant}/source.png`, generation: '1793378565000001',
     mimeType: 'image/png', provenance: 'original-source', sourceRefs: ['synthetic'],
     consentRef: 'unverified-source-consent', ownerOrRightsRef: 'unverified-rights' }],
   timeline: [{ sourceId: 'source', startMs: 0, endMs: 1000 }], audioCues: [], subtitleText: '',

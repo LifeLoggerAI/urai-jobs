@@ -13,7 +13,7 @@ import {
   buildRequestFingerprint,
   type IdempotencyBinding,
 } from '../core/jobsReliability.js';
-import { StudioLifeMovieRenderPayloadSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
+import { StudioLifeMovieCreateRequestSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
 import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
@@ -30,16 +30,7 @@ const IdentitySchema = z.object({
   userId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
 }).strict();
 
-const CreateSchema = IdentitySchema.extend({
-  action: z.literal('create'),
-  idempotencyKey: z.string().trim().min(8).max(160),
-  consent: z.object({
-    purpose: z.literal('life-movie.render'),
-    policyVersion: z.string().trim().min(1).max(80),
-    decisionReceiptId: z.string().trim().min(1).max(160),
-  }).strict(),
-  payload: StudioLifeMovieRenderPayloadSchema,
-}).strict();
+const CreateSchema = StudioLifeMovieCreateRequestSchema;
 
 const JobActionSchema = IdentitySchema.extend({
   action: z.enum(['status', 'cancel', 'playback', 'download', 'delete-output']),
