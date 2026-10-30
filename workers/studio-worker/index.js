@@ -937,13 +937,15 @@ app.get('/healthz', (_req, res) => {
 
 app.get('/readyz', (_req, res) => {
   const state = readiness();
-  res.status(state.ok ? 200 : 503).send({
-    ok: state.ok,
+  const checks = { ...state.checks, consentAuthorityConnected: lifeMovieConsentAuthorityAvailable() };
+  const ok = Object.values(checks).every(Boolean);
+  res.status(ok ? 200 : 503).send({
+    ok,
     service: 'studio-worker',
     implementation: 'life-movie-ffmpeg-v1',
     sourceSha: state.sourceSha,
     revision: process.env.K_REVISION || null,
-    checks: state.checks,
+    checks,
   });
 });
 
@@ -957,10 +959,21 @@ function publicErrorCode(error) {
   return code || 'render_failed';
 }
 
+function lifeMovieConsentAuthorityAvailable() {
+  return false;
+}
+
 app.post('/', requireWorkerAuth, async (req, res) => {
   const jobId = req.body?.jobId;
   const leaseToken = req.body?.leaseToken;
   if (!jobId || !leaseToken) return res.status(400).send({ ok: false, error: 'jobId and leaseToken are required' });
+
+  // Jobs has no connected authority that can validate a current Life Movie
+  // grant. A worker token and a caller-supplied receipt cannot replace one.
+  // This is an explicit closed boundary, not a runtime configuration switch.
+  if (!lifeMovieConsentAuthorityAvailable()) {
+    return res.status(503).send({ ok: false, code: 'CONSENT_AUTHORITY_UNAVAILABLE', jobId });
+  }
 
   try {
     const jobType = String(req.body?.jobType || req.body?.type || '');

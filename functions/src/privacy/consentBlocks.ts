@@ -43,6 +43,32 @@ export function canonicalConsentAckHash(input: {
     .digest('hex');
 }
 
+/** Versioned acknowledgement for a revocation receipt, not a consent decision. */
+export function canonicalSourceRevocationAckHash(input: {
+  eventId: string;
+  ownerUid: string;
+  purpose: string;
+  policyVersion: string;
+  sourceReceiptHash: string;
+  correlationId: string;
+  revokedAt: string;
+  status: string;
+}): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      type: 'consent.revoked.v2',
+      eventId: input.eventId,
+      ownerUid: input.ownerUid,
+      purpose: input.purpose,
+      policyVersion: input.policyVersion,
+      sourceReceiptHash: input.sourceReceiptHash,
+      correlationId: input.correlationId,
+      revokedAt: input.revokedAt,
+      status: input.status,
+    }))
+    .digest('hex');
+}
+
 export function isConsentContext(value: unknown): value is JobConsentContext {
   if (!value || typeof value !== 'object') return false;
   const record = value as Record<string, unknown>;

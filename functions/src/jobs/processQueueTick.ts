@@ -6,6 +6,7 @@ import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/sh
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { canRequeueUnstartedLease, isTerminalJobStatus } from './executionGuards.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { deferLifeMovieJob, LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS } from '../privacy/lifeMovieConsentGate.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
 const MAX_DISPATCH_RETRIES = 3;
@@ -267,6 +268,15 @@ export const processQueueTick = onSchedule('every 1 minutes', async () => {
         return null;
       }
       if (job.status !== 'PENDING') return null;
+
+      if (deferLifeMovieJob(job)) {
+        transaction.update(queueRef, {
+          availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+          updatedAt: now,
+          'dispatch.blockedReason': LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE,
+        });
+        return null;
+      }
 
       const consentContexts = jobConsentContexts(job);
       if (job.ownerUid && consentContexts.length > 0) {
