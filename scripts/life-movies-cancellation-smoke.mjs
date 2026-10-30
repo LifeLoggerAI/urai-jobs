@@ -22,7 +22,7 @@ const baseJob = {
     sceneTruthReceiptRef: `str_fixturefixture1234_zzzzzzzz_${'A'.repeat(40)}`,
     sceneTruthDigest: 'b'.repeat(64),
     width: 320, height: 320, fps: 30,
-    sources: [{ id: 'source-1', bucket: 'private-fixture-bucket', objectPath: 'tenants/tenant-fixture-1/source.wav',
+    sources: [{ id: 'source-1', bucket: 'private-fixture-bucket', objectPath: 'tenants/tenant-fixture-1/source.wav', generation: '1793378565000001',
       mimeType: 'audio/wav', provenance: 'original-source', sourceRefs: ['synthetic-test-tone'],
       consentRef: 'fixture-consent', ownerOrRightsRef: 'fixture-rights' }],
     timeline: [{ sourceId: 'source-1', startMs: 0, endMs: 500 }],

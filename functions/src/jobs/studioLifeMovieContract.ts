@@ -14,6 +14,8 @@ export const LifeMovieSourceSchema = z.object({
   id: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
   bucket: z.string().trim().min(3).max(255).regex(/^[a-z0-9][a-z0-9._-]+[a-z0-9]$/),
   objectPath: z.string().trim().min(1).max(1024).refine((value) => !value.startsWith('/') && !value.includes('..') && !value.includes('\\'), 'Unsafe object path'),
+  // A selection names immutable object bytes, never the current version at a path.
+  generation: z.string().regex(/^[1-9][0-9]{0,19}$/).refine((value) => /^[1-9][0-9]{0,19}$/.test(value) && Number.isSafeInteger(Number(value)), 'Invalid object generation'),
   mimeType: z.enum([
     'image/jpeg', 'image/png', 'image/webp',
     'video/mp4', 'video/quicktime', 'video/webm',
@@ -102,6 +104,21 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
 });
 
 export type StudioLifeMovieRenderPayload = z.infer<typeof StudioLifeMovieRenderPayloadSchema>;
+
+// Transport references are not an allow decision. The closed authority gate
+// remains responsible for preventing processing until canonical verification.
+export const StudioLifeMovieCreateRequestSchema = z.object({
+  tenantId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  userId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+  action: z.literal('create'),
+  idempotencyKey: z.string().trim().min(8).max(160),
+  consent: z.object({
+    purpose: z.literal('life-movie.render'),
+    policyVersion: z.string().trim().min(1).max(80),
+    decisionReceiptId: z.string().trim().min(1).max(160),
+  }).strict(),
+  payload: StudioLifeMovieRenderPayloadSchema,
+}).strict();
 
 export function assertLifeMovieTenantPaths(payload: StudioLifeMovieRenderPayload, tenantId: string) {
   const allowedSourcePrefixes = [`studios/${tenantId}/`, `tenants/${tenantId}/`];

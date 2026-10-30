@@ -152,6 +152,19 @@ function safeObjectPath(value, field) {
   return normalized;
 }
 
+function sourceGeneration(value) {
+  if (typeof value !== 'string' || !/^[1-9][0-9]{0,19}$/.test(value)
+    || !Number.isSafeInteger(Number(value))) throw new Error('invalid_source_generation');
+  return value;
+}
+
+function openSelectedSource(source) {
+  // The installed SDK converts this string to Number. Reject versions it
+  // cannot represent exactly; never round or fall back to the latest object.
+  const generation = sourceGeneration(source.generation);
+  return admin.storage().bucket(source.bucket).file(source.objectPath, { generation }).createReadStream();
+}
+
 function safeOutputPrefix(value, tenantId, projectId) {
   const prefix = safeObjectPath(value, 'output_prefix').replace(/\/+$/, '');
   const required = `tenants/${tenantId}/life-movies/${projectId}/`;
@@ -196,6 +209,7 @@ function parsePayload(job) {
     const id = safeSegment(String(raw.id || ''), 'source_id');
     const bucket = safeSegment(String(raw.bucket || ''), 'source_bucket');
     const objectPath = safeObjectPath(raw.objectPath, 'source_object_path');
+    const generation = sourceGeneration(raw.generation);
     const mimeType = String(raw.mimeType || '');
     if (!ALLOWED_MIME.has(mimeType)) throw new Error(`unsupported_source_mime:${mimeType}`);
     const allowedBuckets = new Set([
@@ -209,6 +223,7 @@ function parsePayload(job) {
       id,
       bucket,
       objectPath,
+      generation,
       mimeType,
       provenance: String(raw.provenance || 'unknown'),
       sourceRefs: Array.isArray(raw.sourceRefs) ? raw.sourceRefs.map(String).slice(0, 32) : [],
@@ -770,7 +785,7 @@ async function renderLifeMovie(job) {
         },
       });
       await pipeline(
-        admin.storage().bucket(source.bucket).file(source.objectPath).createReadStream(),
+        openSelectedSource(source),
         meter, fs.createWriteStream(localPath, { mode: 0o600 }), { signal: control.signal },
       );
       await control.check();
@@ -838,6 +853,7 @@ async function renderLifeMovie(job) {
         id: source.id,
         bucket: source.bucket,
         objectPath: source.objectPath,
+        generation: source.generation,
         mimeType: source.mimeType,
         provenance: source.provenance,
         sourceRefs: source.sourceRefs,
@@ -937,13 +953,15 @@ app.get('/healthz', (_req, res) => {
 
 app.get('/readyz', (_req, res) => {
   const state = readiness();
-  res.status(state.ok ? 200 : 503).send({
-    ok: state.ok,
+  const checks = { ...state.checks, consentAuthorityConnected: lifeMovieConsentAuthorityAvailable() };
+  const ok = Object.values(checks).every(Boolean);
+  res.status(ok ? 200 : 503).send({
+    ok,
     service: 'studio-worker',
     implementation: 'life-movie-ffmpeg-v1',
     sourceSha: state.sourceSha,
     revision: process.env.K_REVISION || null,
-    checks: state.checks,
+    checks,
   });
 });
 
@@ -957,10 +975,21 @@ function publicErrorCode(error) {
   return code || 'render_failed';
 }
 
+function lifeMovieConsentAuthorityAvailable() {
+  return false;
+}
+
 app.post('/', requireWorkerAuth, async (req, res) => {
   const jobId = req.body?.jobId;
   const leaseToken = req.body?.leaseToken;
   if (!jobId || !leaseToken) return res.status(400).send({ ok: false, error: 'jobId and leaseToken are required' });
+
+  // Jobs has no connected authority that can validate a current Life Movie
+  // grant. A worker token and a caller-supplied receipt cannot replace one.
+  // This is an explicit closed boundary, not a runtime configuration switch.
+  if (!lifeMovieConsentAuthorityAvailable()) {
+    return res.status(503).send({ ok: false, code: 'CONSENT_AUTHORITY_UNAVAILABLE', jobId });
+  }
 
   try {
     const jobType = String(req.body?.jobType || req.body?.type || '');

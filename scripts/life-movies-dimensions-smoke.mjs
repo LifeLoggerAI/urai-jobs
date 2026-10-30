@@ -26,7 +26,7 @@ const payload = {
   sceneTruthDigest: 'b'.repeat(64),
   outputPrefix: 'tenants/tenant-1/life-movies/project-1/render-1',
   width: 1920, height: 1080, fps: 30,
-  sources: [{ id: 'source-1', bucket: 'private-fixture-bucket', objectPath: 'tenants/tenant-1/source.png', mimeType: 'image/png', provenance: 'original-source', sourceRefs: ['fixture'], consentRef: 'consent-1', ownerOrRightsRef: 'rights-1' }],
+  sources: [{ id: 'source-1', bucket: 'private-fixture-bucket', objectPath: 'tenants/tenant-1/source.png', generation: '1793378565000001', mimeType: 'image/png', provenance: 'original-source', sourceRefs: ['fixture'], consentRef: 'consent-1', ownerOrRightsRef: 'rights-1' }],
   timeline: [{ sourceId: 'source-1', startMs: 0, endMs: 1000 }],
   spatialRequired: false, publicReleaseAuthorized: false, providerGenerationAuthorized: false,
 };

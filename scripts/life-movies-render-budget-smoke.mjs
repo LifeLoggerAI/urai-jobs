@@ -22,7 +22,7 @@ const jobs = Array.from({ length: 2 }, (_, i) => ({
     sceneTruthDigest: 'b'.repeat(64),
     width: 1920, height: 1080, fps: 30,
     outputPrefix: `tenants/synthetic/life-movies/proof/render-${i}`,
-    sources: [{ id: 'source', bucket: 'private-fixture', objectPath: 'tenants/synthetic/source.mp4', mimeType: 'video/mp4', provenance: 'original-source', sourceRefs: ['synthetic-testsrc2'], consentRef: 'fixture', ownerOrRightsRef: 'fixture' }],
+    sources: [{ id: 'source', bucket: 'private-fixture', objectPath: 'tenants/synthetic/source.mp4', generation: '1793378565000001', mimeType: 'video/mp4', provenance: 'original-source', sourceRefs: ['synthetic-testsrc2'], consentRef: 'fixture', ownerOrRightsRef: 'fixture' }],
     timeline: Array.from({ length: 3 }, (_, j) => ({ sourceId: 'source', startMs: j * 5000, endMs: (j + 1) * 5000 })),
     subtitleText: '', spatialRequired: false, publicReleaseAuthorized: false, providerGenerationAuthorized: false,
   },

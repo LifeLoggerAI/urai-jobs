@@ -3,9 +3,10 @@ import { defineSecret } from 'firebase-functions/params';
 import { onMessagePublished } from 'firebase-functions/v2/pubsub';
 import axios from 'axios';
 import { z } from 'zod';
-import type { Job } from '@urai-jobs/shared-types';
+import type { Job, JobQueueEntry } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { deferLifeMovieJob, LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS } from '../privacy/lifeMovieConsentGate.js';
 import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJobTypes.js';
 import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
 import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
@@ -380,6 +381,30 @@ export const executeJob = onMessagePublished({
     const decision = decideExecutionStart(job, leaseToken);
     if (decision.action === 'ignore') {
       return decision;
+    }
+
+    // A message may already have been leased before the admission gate was
+    // enabled. Return it to the pending queue without consuming an attempt.
+    if (deferLifeMovieJob(job)) {
+      const queueSnapshot = await transaction.get(queueRef);
+      const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+      if (!queue || queue.status !== 'LEASED' || queue.lease?.leaseToken !== leaseToken) {
+        return { action: 'ignore' as const, reason: 'queue-lease-mismatch' as const };
+      }
+      const now = FieldValue.serverTimestamp();
+      transaction.update(jobRef, {
+        status: 'PENDING',
+        lease: FieldValue.delete(),
+        updatedAt: now,
+      });
+      transaction.update(queueRef, {
+        status: 'PENDING',
+        availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+        lease: FieldValue.delete(),
+        updatedAt: now,
+        'dispatch.blockedReason': LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE,
+      });
+      return { action: 'ignore' as const, reason: 'consent-authority-unavailable' as const };
     }
 
     const consentContexts = jobConsentContexts(job);
