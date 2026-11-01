@@ -135,6 +135,7 @@ async function environment() {
     './sceneTruthReceipt.js': { assertSceneTruthReceiptValue() {} },
     '../privacy/consentBlocks.js': { consentBlockRef: () => db.collection('blocks').doc('block'), isConsentContext: () => true },
     '../privacy/lifeMovieConsentGate.js': { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE: 'closed', lifeMovieConsentAuthorityAvailable: () => false },
+    '../privacy/lifeMovieCreationAdmission.js': { requireLifeMovieCreationAdmission: async () => { throw new Error('closed'); } },
     './consentBlocks.js': { consentEventReceiptRef: id => db.collection('receipts').doc(id) },
   };
   async function load(name, extraExports) {
