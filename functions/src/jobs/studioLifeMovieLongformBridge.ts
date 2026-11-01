@@ -279,7 +279,19 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
   if (!longformEnabled()) throw new Error('life_movie_longform_disabled');
 
   const payload = assertStudioLifeMovieLongformPlanDigest(assertLifeMovieLongformTenantPaths(input.payload, input.tenantId));
-  await requireLifeMovieCreationAdmission({ ownerUid: input.userId, tenantId: input.tenantId, consent: input.consent, selection: payload });
+  // CreateSchema has already parsed the strict consent reference. Zod's
+  // inferred optional properties under the repo's TS settings are not an
+  // excuse to loosen the required downstream admission contract.
+  await requireLifeMovieCreationAdmission({
+    ownerUid: input.userId,
+    tenantId: input.tenantId,
+    consent: {
+      purpose: input.consent.purpose!,
+      policyVersion: input.consent.policyVersion!,
+      decisionReceiptId: input.consent.decisionReceiptId!,
+    },
+    selection: payload,
+  });
   const consentSnapshot = await consentBlockRef(input.userId, input.consent.purpose).get();
   if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
     throw new Error('life_movie_longform_consent_revoked');
