@@ -409,7 +409,10 @@ test('bridge responses do not leak storage or database exception text', async ()
 
 test('long-form assembled and delivered media binds every child to owner, digest, consent and segment prefix', async () => {
   const env = await environment(), { planId, childId } = planFixture();
-  const checksum = 'a'.repeat(64), truth = 'b'.repeat(64), parentDigest = 'c'.repeat(64);
+  const truth = 'b'.repeat(64), parentDigest = 'c'.repeat(64);
+  const checksum = createHash('sha256')
+    .update('urai-life-movie-longform-segment-v1\n' + parentDigest + '\n0\n0\n1000')
+    .digest('hex');
   const consent = { purpose: 'life-movie.render', policyVersion: '1.1.0', decisionReceiptId: 'd'.repeat(64) };
   const segmentPrefix = path(project, 'segments/0000/');
   const segmentFiles = [path(project, 'segments/0000/movie.mp4'), path(project, 'segments/0000/captions.srt')];
@@ -434,10 +437,14 @@ test('long-form assembled and delivered media binds every child to owner, digest
     [{ execution: { rootJobId: 'other-plan', parentJobId: 'other-plan' } }, /boundary_mismatch/],
     [{ payload: { ...valid.payload, outputPrefix: path(project, 'segments/0001/') } }, /boundary_mismatch/],
     [{ payload: { ...valid.payload, renderPlanDigest: '0'.repeat(64) } }, /segment_binding_mismatch/],
+    [{ output: { ...artifacts, sceneTruthDigest: '0'.repeat(64) } }, /segment_binding_mismatch/],
     [{ output: { ...artifacts, renderPlanDigest: '0'.repeat(64) } }, /segment_binding_mismatch/],
     [{ consent: { ...consent, decisionReceiptId: 'e'.repeat(64) } }, /segment_binding_mismatch/],
     [{ output: { ...artifacts, outputs: [{ kind: 'mp4', ref: ref(path(project, 'segments/0001/other.mp4')), checksum }] } }, /boundary_mismatch/],
   ]) assert.throws(() => assertBoundSegmentForUse(plan, { ...valid, ...mutation }, 0), error);
+  assert.throws(() => assertBoundSegmentForUse({
+    ...plan, segments: [{ ...plan.segments[0], childDigest: '0'.repeat(64) }]
+  }, valid, 0), /segment_binding_mismatch/);
 });
 
 test('long-form final assembly is owner-and-parent bound before playback', async () => {
