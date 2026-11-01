@@ -102,7 +102,12 @@ try {
   const audioSeek = worker.exports.clipArgs(
     audioFixture, path.join(seekFixtureDir, 'audio-out.mp4'), 'audio/wav', 1, 320, 320, 30, 1250);
   assert.equal(audioSeek[audioSeek.indexOf('-ss') + 1], '1.25');
-  assert.ok(audioSeek.indexOf('-ss') < audioSeek.indexOf('-i'));
+  // The audio-only output also has a synthetic black-video input first.
+  // The seek must precede the *second* -i (the selected audio file), not
+  // the first -i (the generated black video).
+  assert.ok(audioSeek.indexOf('-i') < audioSeek.indexOf('-ss'));
+  assert.ok(audioSeek.indexOf('-ss') < audioSeek.lastIndexOf('-i'));
+  assert.equal(audioSeek[audioSeek.lastIndexOf('-i') + 1], audioFixture);
 } finally {
   fs.rmSync(seekFixtureDir, { recursive: true, force: true });
 }
