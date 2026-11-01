@@ -23,6 +23,7 @@ import {
   assertLifeMovieLongformTenantPaths,
   planLifeMovieLongformSegments,
 } from './studioLifeMovieLongformContract.js';
+import { LifeMovieConsentReferenceSchema } from './studioLifeMovieContract.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
 const sceneTruthReceiptSecret = defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC');
@@ -40,11 +41,7 @@ const IdentitySchema = z.object({
 const CreateSchema = IdentitySchema.extend({
   action: z.literal('create'),
   idempotencyKey: z.string().trim().min(8).max(160),
-  consent: z.object({
-    purpose: z.literal('life-movie.render'),
-    policyVersion: z.string().trim().min(1).max(80),
-    decisionReceiptId: z.string().trim().min(1).max(160),
-  }).strict(),
+  consent: LifeMovieConsentReferenceSchema,
   payload: StudioLifeMovieLongformPayloadSchema,
 }).strict();
 
