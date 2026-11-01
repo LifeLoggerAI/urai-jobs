@@ -6,6 +6,7 @@ import {
   LifeMovieSourceSchema,
   LifeMovieTimelineItemSchema,
   StudioLifeMovieRenderPayloadSchema,
+  canonicalRenderPlanJson,
   type StudioLifeMovieRenderPayload,
 } from './studioLifeMovieContract.js';
 
@@ -17,6 +18,35 @@ export const LIFE_MOVIE_LONGFORM_BUDGET = {
   maxTimelineItems: 360,
   maxAudioCues: 720,
 } as const;
+
+/**
+ * Reject a caller-supplied parent digest if any immutable source generation,
+ * rights reference, timeline interval or output selection differs from the
+ * normalized contract. The hash is integrity only, never a consent grant.
+ */
+export function computeStudioLifeMovieLongformPlanDigest(payload: StudioLifeMovieLongformPayload): string {
+  const plan = {
+    projectId: payload.projectId,
+    sceneTruthReceiptRef: payload.sceneTruthReceiptRef,
+    sceneTruthDigest: payload.sceneTruthDigest,
+    outputPrefix: payload.outputPrefix,
+    width: payload.width,
+    height: payload.height,
+    fps: payload.fps,
+    sources: payload.sources,
+    timeline: payload.timeline,
+    audioCues: payload.audioCues,
+    subtitleText: payload.subtitleText,
+  };
+  return createHash('sha256').update(canonicalRenderPlanJson(plan)).digest('hex');
+}
+
+export function assertStudioLifeMovieLongformPlanDigest(payload: StudioLifeMovieLongformPayload): StudioLifeMovieLongformPayload {
+  if (payload.renderPlanDigest !== computeStudioLifeMovieLongformPlanDigest(payload)) {
+    throw new Error('life_movie_longform_render_plan_digest_mismatch');
+  }
+  return payload;
+}
 
 export const StudioLifeMovieLongformPayloadSchema = z.object({
   schemaVersion: z.literal('urai-life-movie-longform-v1'),
