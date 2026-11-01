@@ -108,6 +108,7 @@ const mocks = {
   '../privacy/consentBlocks.js': { consentBlockRef: () => ref('synthetic-block/missing'), isConsentContext: () => false },
   '../privacy/lifeMovieConsentGate.js': gate,
   '../privacy/lifeMovieCreationAdmission.js': { requireLifeMovieCreationAdmission: async () => { throw new Error('life_movie_consent_authority_unavailable'); } },
+  '../privacy/lifeMovieOutputGeneration.js': { requirePinnedOutputGeneration: async () => { throw new Error('generation_unavailable_in_test'); }, signedMovieAccessForPinnedGeneration: async () => { throw new Error('generation_unavailable_in_test'); } },
 };
 const artifactRefs = load('privacy/lifeMovieArtifactRefs.ts');
 const ownerDeletion = load('jobs/lifeMovieOwnerDeletion.ts', {
