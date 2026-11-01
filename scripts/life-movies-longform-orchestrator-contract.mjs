@@ -84,6 +84,32 @@ assert.doesNotMatch(bridge, /publicReleaseAuthorized:\s*true/)
 assert.ok(bridge.indexOf('assertSceneTruthReceiptValue(') < bridge.indexOf('planLifeMovieLongformSegments(payload)'), 'SceneTruth authority must be verified before child planning')
 assert.equal((bridge.match(/assertSceneTruthReceiptValue\(/g) ?? []).length, 1, 'SceneTruth receipt must be verified once at parent creation, not replayed per child')
 
+// A completed child from another owner, tenant, source plan, or segment number
+// must not be assembled or exposed through private playback.
+for (const marker of [
+  'function assertBoundSegmentForUse(',
+  'function assertBoundAssemblyForUse(',
+  "preflightOwnedMovieOutputs(job as unknown as Record<string, unknown>, boundPlanJob(plan, jobId, 'segment'))",
+  "boundPlanJob(plan, plan.assemblyJobId, 'assembly')",
+  'payload?.renderPlanDigest !== descriptor.childDigest',
+  'output?.renderPlanDigest !== descriptor.childDigest',
+  'payload?.sceneTruthDigest !== plan.sceneTruthDigest',
+  'output?.sceneTruthDigest !== plan.sceneTruthDigest',
+  '!isDeepStrictEqual(job.consent, plan.consent)',
+]) assert.ok(bridge.includes(marker), `long-form output use missing child authority check: ${marker}`)
+const assemblyStart = bridge.indexOf('async function assemblePlan(');
+const playbackStart = bridge.indexOf('async function readPlanPlayback(');
+assert.ok(assemblyStart >= 0 && playbackStart > assemblyStart);
+const assemblyBody = bridge.slice(assemblyStart, playbackStart);
+const playbackBody = bridge.slice(playbackStart, bridge.indexOf('async function resumePlan(', playbackStart));
+assert.ok(assemblyBody.includes('assertPlanStructure(plan, planId)'));
+assert.ok(assemblyBody.includes('assertBoundSegmentForUse(plan, job, index)'));
+assert.ok(assemblyBody.indexOf('assertBoundSegmentForUse(plan, job, index)') < assemblyBody.indexOf("const video = boundedArtifact(job.output, 'mp4')"));
+assert.ok(playbackBody.includes('assertPlanStructure(plan, planId)'));
+assert.ok(playbackBody.includes('assertBoundSegmentForUse(plan, job as Job, index)'));
+assert.ok(playbackBody.includes('assertBoundAssemblyForUse(plan, assembly)'));
+assert.ok(playbackBody.indexOf('assertBoundAssemblyForUse(plan, assembly)') < playbackBody.indexOf("const video = boundedArtifact(assembly.output, 'mp4')"));
+
 console.log('Life Movie durable long-form orchestrator contract passed')
 
 assert.ok(bridge.includes("status: 'CANCELLED'"), 'parent cancellation must retain explicit cancelled queue semantics')
