@@ -147,6 +147,7 @@ async function environment() {
         './lifeMovieOwnerDeletion.js': '../../functions/src/jobs/lifeMovieOwnerDeletion.ts',
         './lifeMovieArtifactRefs.js': '../../functions/src/privacy/lifeMovieArtifactRefs.ts',
         '../privacy/lifeMovieArtifactRefs.js': '../../functions/src/privacy/lifeMovieArtifactRefs.ts',
+        '../privacy/lifeMovieOutputGeneration.js': '../../functions/src/privacy/lifeMovieOutputGeneration.ts',
       };
       if (helpers[specifier]) {
         const file = new URL(helpers[specifier], import.meta.url);
