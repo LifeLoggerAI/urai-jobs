@@ -107,6 +107,7 @@ const mocks = {
   './sceneTruthReceipt.js': receipt,
   '../privacy/consentBlocks.js': { consentBlockRef: () => ref('synthetic-block/missing'), isConsentContext: () => false },
   '../privacy/lifeMovieConsentGate.js': gate,
+  '../privacy/lifeMovieCreationAdmission.js': { requireLifeMovieCreationAdmission: async () => { throw new Error('life_movie_consent_authority_unavailable'); } },
 };
 const artifactRefs = load('privacy/lifeMovieArtifactRefs.ts');
 const ownerDeletion = load('jobs/lifeMovieOwnerDeletion.ts', {
