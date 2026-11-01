@@ -44,6 +44,8 @@ export const LifeMovieTimelineItemSchema = z.object({
   sourceId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
   startMs: z.number().int().nonnegative(),
   endMs: z.number().int().positive(),
+  // Optional, not defaulted: absent must remain absent in the Studio plan digest.
+  sourceStartMs: z.number().int().nonnegative().max(45 * 60 * 1000).optional(),
 }).strict().refine((value) => value.endMs > value.startMs && value.endMs - value.startMs <= 30 * 60 * 1000, {
   message: 'Each timeline item must have a positive duration no longer than 30 minutes.',
 });
@@ -79,9 +81,13 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
   providerGenerationAuthorized: z.literal(false),
 }).strict().superRefine((value, context) => {
   const sourceIds = new Set(value.sources.map((source) => source.id));
+  const sourceById = new Map(value.sources.map((source) => [source.id, source]));
   for (const [index, item] of value.timeline.entries()) {
-    if (!sourceIds.has(item.sourceId)) {
+    const source = sourceById.get(item.sourceId);
+    if (!source) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index, 'sourceId'], message: 'Timeline source must exist in sources.' });
+    } else if (source.mimeType.startsWith('image/') && (item.sourceStartMs ?? 0) !== 0) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index, 'sourceStartMs'], message: 'Still images cannot use nonzero source offsets.' });
     }
   }
   for (const [index, cue] of value.audioCues.entries()) {
