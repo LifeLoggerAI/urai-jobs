@@ -4,7 +4,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentEventReceiptRef } from './consentBlocks.js';
-import { lifeMovieArtifactRefs } from './lifeMovieArtifactRefs.js';
+import { lifeMovieArtifactBindings } from './lifeMovieArtifactRefs.js';
 
 export type LifeMovieRevocationEvent = {
   eventId: string;
@@ -82,8 +82,8 @@ function parseAuthorizedLifeMovieRef(ref: string, job: Record<string, unknown>, 
   return { bucket, objectPath };
 }
 
-function artifactRefs(value: unknown): string[] {
-  try { return lifeMovieArtifactRefs(value); }
+function artifactRefs(value: unknown) {
+  try { return lifeMovieArtifactBindings(value); }
   catch { throw new Error('life_movie_revocation_output_ref_invalid'); }
 }
 
@@ -176,11 +176,16 @@ export async function invalidateLifeMovieDerivativesForConsent(
   // Validate every reference before the first deletion. Unknown or malformed
   // metadata is retained for reconciliation instead of acknowledged as deleted.
   const buckets = allowedOutputBuckets();
-  const objectLocations = new Map<string, { bucket: string; objectPath: string }>();
+  const objectLocations = new Map<string, { bucket: string; objectPath: string; pinnedGeneration?: string }>();
   for (const { data: job } of fencedJobs) {
-    for (const ref of [...artifactRefs(job.output), ...artifactRefs(job.result)]) {
-      const location = parseAuthorizedLifeMovieRef(ref, job, buckets);
-      objectLocations.set(`${location.bucket}/${location.objectPath}`, location);
+    for (const artifact of [...artifactRefs(job.output), ...artifactRefs(job.result)]) {
+      const location = parseAuthorizedLifeMovieRef(artifact.ref, job, buckets);
+      const locationId = `${location.bucket}/${location.objectPath}`;
+      const existing = objectLocations.get(locationId);
+      if (existing && existing.pinnedGeneration !== artifact.generation) {
+        throw new Error('life_movie_revocation_output_generation_invalid');
+      }
+      objectLocations.set(locationId, { ...location, pinnedGeneration: artifact.generation });
     }
   }
   const locations = [...objectLocations.values()];
@@ -188,18 +193,21 @@ export async function invalidateLifeMovieDerivativesForConsent(
   // Persist each observed generation before deletion so an exact event retry
   // cannot silently adopt a newer object written to the same path. Only a hash
   // of the storage location, not the private path itself, is added to the receipt.
-  const observedLocations = await mapInBatches(locations, async ({ bucket, objectPath }) => {
+  const observedLocations = await mapInBatches(locations, async ({ bucket, objectPath, pinnedGeneration }) => {
     let observed: string;
     try {
       const [metadata] = await getStorage().bucket(bucket).file(objectPath).getMetadata();
       observed = observedGeneration(metadata.generation);
+      if (pinnedGeneration !== undefined && observed !== pinnedGeneration) {
+        throw new Error('life_movie_revocation_output_generation_changed');
+      }
     } catch (error) {
       if ((error as { code?: unknown })?.code !== 404) throw error;
       // Generation zero requires that no live object exists at delete time.
       observed = '0';
     }
     const locationKey = createHash('sha256').update(JSON.stringify([bucket, objectPath])).digest('hex');
-    return { bucket, objectPath, locationKey, observed };
+    return { bucket, objectPath, locationKey, observed, pinnedGeneration };
   });
   const guardedLocations = observedLocations.length === 0 ? [] : await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(receiptRef);
@@ -213,11 +221,14 @@ export async function invalidateLifeMovieDerivativesForConsent(
       throw new Error('life_movie_revocation_output_generation_invalid');
     }
     const updates: Record<string, string> = {};
-    const guarded = observedLocations.map(({ bucket, objectPath, locationKey, observed }) => {
+    const guarded = observedLocations.map(({ bucket, objectPath, locationKey, observed, pinnedGeneration }) => {
       const existing = (fences as Record<string, unknown> | undefined)?.[locationKey];
       if (existing !== undefined) {
         if (typeof existing !== 'string' || !/^(?:0|[1-9][0-9]*)$/.test(existing)) {
           throw new Error('life_movie_revocation_output_generation_invalid');
+        }
+        if (pinnedGeneration !== undefined && existing !== '0' && existing !== pinnedGeneration) {
+          throw new Error('life_movie_revocation_output_generation_changed');
         }
         return { bucket, objectPath, generation: existing };
       }

@@ -485,3 +485,61 @@ test('long-form final assembly is owner-and-parent bound before playback', async
   assert.throws(() => assertBoundAssemblyForUse(plan, { ...valid,
     output: { ...valid.output, outputs: [{ kind: 'mp4', ref: ref(path(project, 'segments/0000/other.mp4')) }] } }), /boundary_mismatch/);
 });
+
+
+test('owner deletion refuses a media generation replaced before cleanup starts', async () => {
+  const env = await environment(), p = path(project, 'pinned.mp4');
+  const pinned = { outputs: [{ kind: 'mp4', ref: ref(p), generation: '1' }] };
+  await put(env, 'job-1234567890', shortJob({ output: pinned }));
+  env.storage.objects.set(`private-bucket/${p}`, '2');
+  const { deleteBoundMovieOutput } = await env.load('short', 'deleteBoundMovieOutput');
+  await assert.rejects(deleteBoundMovieOutput(tenant, owner, 'job-1234567890'), /generation_changed/);
+  assert.equal(env.storage.objects.get(`private-bucket/${p}`), '2');
+  assert.deepEqual((await env.db.collection('jobs').doc('job-1234567890').get()).data().output, pinned);
+});
+
+test('owner deletion accepts a matching pinned output generation', async () => {
+  const env = await environment(), p = path(project, 'pinned.mp4');
+  await put(env, 'job-1234567890', shortJob({ output: { outputs: [
+    { kind: 'mp4', ref: ref(p), generation: '1' },
+  ] } }));
+  env.storage.objects.set(`private-bucket/${p}`, '1');
+  const { deleteBoundMovieOutput } = await env.load('short', 'deleteBoundMovieOutput');
+  assert.equal((await deleteBoundMovieOutput(tenant, owner, 'job-1234567890')).deletedObjectCount, 1);
+  assert.equal(env.storage.objects.has(`private-bucket/${p}`), false);
+});
+
+test('owner deletion refuses conflicting pinned generations for a duplicate path', async () => {
+  const env = await environment(), p = path(project, 'pinned.mp4');
+  await put(env, 'job-1234567890', shortJob({
+    output: { outputs: [{ kind: 'mp4', ref: ref(p), generation: '1' }] },
+    result: { outputs: [{ kind: 'mp4', ref: ref(p), generation: '2' }] },
+  }));
+  env.storage.objects.set(`private-bucket/${p}`, '1');
+  const { deleteBoundMovieOutput } = await env.load('short', 'deleteBoundMovieOutput');
+  await assert.rejects(deleteBoundMovieOutput(tenant, owner, 'job-1234567890'), /generation_invalid/);
+  assert.equal(env.storage.objects.get(`private-bucket/${p}`), '1');
+});
+
+test('revocation refuses a media generation replaced before cleanup starts', async () => {
+  const env = await environment(), p = path(project, 'pinned.mp4');
+  const pinned = { outputs: [{ kind: 'mp4', ref: ref(p), generation: '1' }] };
+  await put(env, 'job-1234567890', shortJob({ output: pinned }));
+  env.storage.objects.set(`private-bucket/${p}`, '2');
+  const { invalidateLifeMovieDerivativesForConsent } = await env.load('revocation', 'invalidateLifeMovieDerivativesForConsent');
+  await assert.rejects(invalidateLifeMovieDerivativesForConsent({ eventId: 'event-a', ownerUid: owner,
+    purpose: 'life-movie.render', revokedAt: '2026-10-29T00:00:00Z' }), /generation_changed/);
+  assert.equal(env.storage.objects.get(`private-bucket/${p}`), '2');
+  assert.deepEqual((await env.db.collection('jobs').doc('job-1234567890').get()).data().output, pinned);
+});
+
+test('malformed pinned generation remains unresolved instead of deleting a movie', async () => {
+  const env = await environment(), p = path(project, 'pinned.mp4');
+  await put(env, 'job-1234567890', shortJob({ output: { outputs: [
+    { kind: 'mp4', ref: ref(p), generation: '9007199254740992' },
+  ] } }));
+  env.storage.objects.set(`private-bucket/${p}`, '1');
+  const { deleteBoundMovieOutput } = await env.load('short', 'deleteBoundMovieOutput');
+  await assert.rejects(deleteBoundMovieOutput(tenant, owner, 'job-1234567890'), /generation_invalid/);
+  assert.equal(env.storage.objects.get(`private-bucket/${p}`), '1');
+});

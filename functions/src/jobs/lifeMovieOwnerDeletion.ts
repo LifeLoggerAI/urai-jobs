@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { jobDoc } from '../core/firestore-paths.js';
-import { lifeMovieArtifactRefs } from '../privacy/lifeMovieArtifactRefs.js';
+import { lifeMovieArtifactBindings } from '../privacy/lifeMovieArtifactRefs.js';
 
 type Owner = { tenantId: string; userId: string; jobId: string; projectId?: string; planId?: string;
   kind?: 'segment' | 'assembly'; expectedOutputPrefix?: string };
@@ -50,7 +50,7 @@ function validateOutputs(job: Record<string, unknown>, owner: Owner) {
   const { projectId } = validateOwnedMovieJob(job, owner);
   if (!TERMINAL.has(String(job.status)) || job.outputDeletionInFlightUnresolved === true
     || job.consentRevocationInFlightUnresolved === true) throw new Error('life_movie_output_inflight_unresolved');
-  const refs = [...lifeMovieArtifactRefs(job.output), ...lifeMovieArtifactRefs(job.result)];
+  const refs = [...lifeMovieArtifactBindings(job.output), ...lifeMovieArtifactBindings(job.result)];
   if (refs.length > MAX_OUTPUTS) throw new Error('life_movie_output_limit_exceeded');
   const allowed = buckets();
   const prefix = `tenants/${owner.tenantId}/life-movies/${projectId}/`;
@@ -64,8 +64,9 @@ function validateOutputs(job: Record<string, unknown>, owner: Owner) {
     || declaredPrefix.split('/').some((part, index, parts) => !part && index !== parts.length - 1))) {
     throw new Error('life_movie_output_boundary_mismatch');
   }
-  const locations = new Map<string, { bucket: string; objectPath: string; key: string }>();
-  for (const ref of refs) {
+  const locations = new Map<string, { bucket: string; objectPath: string; key: string; pinnedGeneration?: string }>();
+  for (const artifact of refs) {
+    const ref = artifact.ref;
     const match = /^gs:\/\/([^/]+)\/(.+)$/.exec(ref);
     if (!match) throw new Error('life_movie_output_ref_invalid');
     const [, bucket, objectPath] = match;
@@ -76,7 +77,11 @@ function validateOutputs(job: Record<string, unknown>, owner: Owner) {
       throw new Error('life_movie_output_boundary_mismatch');
     }
     const key = createHash('sha256').update(JSON.stringify([bucket, objectPath])).digest('hex');
-    locations.set(key, { bucket, objectPath, key });
+    const existing = locations.get(key);
+    if (existing && existing.pinnedGeneration !== artifact.generation) {
+      throw new Error('life_movie_output_generation_invalid');
+    }
+    locations.set(key, { bucket, objectPath, key, pinnedGeneration: artifact.generation });
   }
   return [...locations.values()];
 }
@@ -112,7 +117,12 @@ export async function deleteOwnedMovieOutputs(owner: Owner) {
   const observed = await Promise.all(locations.map(async (location) => {
     try {
       const [metadata] = await getStorage().bucket(location.bucket).file(location.objectPath).getMetadata();
-      return { ...location, generation: generation(metadata.generation) };
+      const liveGeneration = generation(metadata.generation);
+      // A generation already replaced before cleanup must never be adopted.
+      if (location.pinnedGeneration !== undefined && liveGeneration !== location.pinnedGeneration) {
+        throw new Error('life_movie_output_generation_changed');
+      }
+      return { ...location, generation: liveGeneration };
     } catch (error) {
       if ((error as { code?: unknown })?.code === 404) return { ...location, generation: '0' };
       throw error;
@@ -133,6 +143,10 @@ export async function deleteOwnedMovieOutputs(owner: Owner) {
       const prior = (fences as Record<string, unknown> | undefined)?.[item.key];
       if (prior !== undefined && (typeof prior !== 'string' || !/^(?:0|[1-9][0-9]*)$/.test(prior))) {
         throw new Error('life_movie_output_generation_invalid');
+      }
+      if (prior !== undefined && item.pinnedGeneration !== undefined &&
+          prior !== '0' && prior !== item.pinnedGeneration) {
+        throw new Error('life_movie_output_generation_changed');
       }
       if (prior === undefined) updates[`ownerOutputDeletionFences.${item.key}`] = item.generation;
       return { ...item, generation: (prior as string | undefined) ?? item.generation };
