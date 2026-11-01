@@ -17,6 +17,7 @@ import { StudioLifeMovieCreateRequestSchema, assertLifeMovieTenantPaths, assertS
 import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
+import { requireLifeMovieCreationAdmission } from '../privacy/lifeMovieCreationAdmission.js';
 import { deleteOwnedMovieOutputs, preflightOwnedMovieOutputs } from './lifeMovieOwnerDeletion.js';
 import { requirePinnedMovieOutputGeneration } from '../privacy/lifeMovieOutputGeneration.js';
 
@@ -136,6 +137,7 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
     throw new Error('life_movie_consent_missing');
   }
   const consent: JobConsentContext = { purpose, policyVersion, decisionReceiptId };
+  await requireLifeMovieCreationAdmission({ ownerUid: input.userId, tenantId: input.tenantId, consent, selection: payload });
   const sceneTruthReceipt = verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, input.userId, payload.sceneTruthReceiptRef);
   const consentSnapshot = await consentBlockRef(input.userId, consent.purpose).get();
   if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {

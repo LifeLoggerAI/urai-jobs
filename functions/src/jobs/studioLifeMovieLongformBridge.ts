@@ -10,6 +10,7 @@ import type { Job, JobQueueEntry, JobStatus } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef } from '../privacy/consentBlocks.js';
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
+import { requireLifeMovieCreationAdmission } from '../privacy/lifeMovieCreationAdmission.js';
 import { requirePinnedMovieOutputGeneration } from '../privacy/lifeMovieOutputGeneration.js';
 import { deleteOwnedMovieOutputs, preflightOwnedMovieOutputs, validateOwnedMovieJob } from './lifeMovieOwnerDeletion.js';
 import {
@@ -278,6 +279,7 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
   if (!longformEnabled()) throw new Error('life_movie_longform_disabled');
 
   const payload = assertStudioLifeMovieLongformPlanDigest(assertLifeMovieLongformTenantPaths(input.payload, input.tenantId));
+  await requireLifeMovieCreationAdmission({ ownerUid: input.userId, tenantId: input.tenantId, consent: input.consent, selection: payload });
   const consentSnapshot = await consentBlockRef(input.userId, input.consent.purpose).get();
   if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
     throw new Error('life_movie_longform_consent_revoked');
