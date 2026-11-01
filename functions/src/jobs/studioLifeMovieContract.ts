@@ -166,7 +166,7 @@ export function assertStudioLifeMovieRenderPlanDigest(payload: StudioLifeMovieRe
  * Storage generations and rights references, not merely bucket/object paths.
  * This is an identifier, NOT proof of user consent, source ownership, or IAM.
  */
-export function deriveStudioLifeMovieRenderScope(payload: StudioLifeMovieRenderPayload) {
+export function deriveStudioLifeMovieRenderScope(payload: Pick<StudioLifeMovieRenderPayload, 'projectId' | 'renderPlanDigest' | 'sources'>) {
   const selection = payload.sources.map((source) => [
     source.id,
     source.bucket,
