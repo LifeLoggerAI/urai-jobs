@@ -120,7 +120,13 @@ export function createLifeMovieAdmissionPreflight(deps: LifeMovieAdmissionDepend
       }
       return verifiedAt;
     };
-    const rightsMs = validRights(rights, now);
+    // The source verifier does asynchronous Firestore/Storage checks. Its
+    // server-issued timestamp is expected to be later than the clock sampled
+    // before those reads. Check against a fresh post-verification timestamp.
+    const rightsCheckedAt = clock();
+    if (!Number.isSafeInteger(rightsCheckedAt) || rightsCheckedAt < now ||
+        rightsCheckedAt - now > MAX_RIGHTS_AGE_MS) throw new Error(RIGHTS_DENIED);
+    const rightsMs = validRights(rights, rightsCheckedAt);
 
     const expected: ExpectedLifeMovieDecision = {
       subjectUid: input.ownerUid,
