@@ -206,8 +206,13 @@ function boundPlanJob(plan: StoredPlan, jobId: string, kind: 'segment' | 'assemb
 function assertBoundSegmentForUse(plan: StoredPlan, job: Job, index: number) {
   const jobId = plan.childJobIds[index];
   const descriptor = plan.segments[index];
+  const expectedChildDigest = descriptor && createHash('sha256')
+    .update(`urai-life-movie-longform-segment-v1\n${plan.renderPlanDigest}\n${index}\n${descriptor.startMs}\n${descriptor.endMs}`)
+    .digest('hex');
   if (!jobId || !descriptor || descriptor.jobId !== jobId || descriptor.index !== index
-    || typeof descriptor.childDigest !== 'string' || !/^[0-9a-f]{64}$/.test(descriptor.childDigest)) {
+    || !Number.isSafeInteger(descriptor.startMs) || !Number.isSafeInteger(descriptor.endMs)
+    || descriptor.startMs < 0 || descriptor.endMs <= descriptor.startMs
+    || descriptor.childDigest !== expectedChildDigest) {
     throw new Error('longform_segment_binding_mismatch');
   }
   // Reuse the owner-bound deletion preflight: it checks the exact child output
