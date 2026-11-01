@@ -6,6 +6,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const { setTimeout, clearTimeout } = require('node:timers');
 const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
+const { cleanupPinnedPrivateOutputs } = require('./private-output-cleanup');
 const express = require('express');
 const admin = require('firebase-admin');
 
@@ -618,6 +619,7 @@ async function assembleLifeMovie(job) {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'urai-life-movie-assembly-'));
   const attemptPrefix = `${input.outputPrefix.replace(/\/+$/, '')}/attempt-${crypto.randomUUID()}`;
   const writtenObjects = [];
+  let pendingUnfencedOutputWrite = false;
   let completed = false;
 
   async function downloadVerified(location, expectedChecksum, localPath, budget) {
@@ -645,7 +647,7 @@ async function assembleLifeMovie(job) {
 
   async function uploadPrivateFile(localPath, destination, contentType, expectedHash) {
     await control.check();
-    writtenObjects.push(destination);
+    pendingUnfencedOutputWrite = true;
     const file = bucket.file(destination);
     await pipeline(fs.createReadStream(localPath), file.createWriteStream({
       resumable: false, preconditionOpts: { ifGenerationMatch: 0 },
@@ -653,7 +655,10 @@ async function assembleLifeMovie(job) {
     }), { signal: control.signal });
     const [metadata] = await file.getMetadata();
     if (metadata?.metadata?.uraiSha256 !== expectedHash) throw new Error('output_checksum_metadata_mismatch');
-    return pinnedUploadedOutputGeneration(metadata.generation);
+    const uploadedGeneration = pinnedUploadedOutputGeneration(metadata.generation);
+    writtenObjects.push({ destination, generation: uploadedGeneration });
+    pendingUnfencedOutputWrite = false;
+    return uploadedGeneration;
   }
 
   try {
@@ -770,11 +775,8 @@ async function assembleLifeMovie(job) {
     control.stop();
     fs.rmSync(workDir, { recursive: true, force: true });
     if (!completed) {
-      const cleanup = await Promise.allSettled(writtenObjects.map((destination) =>
-        bucket.file(destination).delete({ ignoreNotFound: true })));
-      if (cleanup.some((result) => result.status === 'rejected')) {
-        throw new Error('assembly_cleanup_incomplete');
-      }
+      await cleanupPinnedPrivateOutputs(bucket, writtenObjects, 'assembly_cleanup_incomplete');
+      if (pendingUnfencedOutputWrite) throw new Error('assembly_cleanup_incomplete');
     }
   }
 }
@@ -790,6 +792,7 @@ async function renderLifeMovie(job) {
   // delete a newer attempt's objects, even when the requested prefix is reused.
   const attemptPrefix = `${input.outputPrefix}/attempt-${crypto.randomUUID()}`;
   const writtenObjects = [];
+  let pendingUnfencedOutputWrite = false;
   let completed = false;
   try {
     await control.start();
@@ -912,7 +915,7 @@ async function renderLifeMovie(job) {
     };
     async function uploadPrivateFile(localPath, destination, contentType, expectedHash) {
       await control.check();
-      writtenObjects.push(destination);
+      pendingUnfencedOutputWrite = true;
       const file = bucket.file(destination);
       await pipeline(fs.createReadStream(localPath), file.createWriteStream({
         resumable: false, preconditionOpts: { ifGenerationMatch: 0 },
@@ -920,7 +923,10 @@ async function renderLifeMovie(job) {
       }), { signal: control.signal });
       const [metadata] = await file.getMetadata();
       if (metadata?.metadata?.uraiSha256 !== expectedHash) throw new Error('output_checksum_metadata_mismatch');
-      return pinnedUploadedOutputGeneration(metadata.generation);
+      const uploadedGeneration = pinnedUploadedOutputGeneration(metadata.generation);
+      writtenObjects.push({ destination, generation: uploadedGeneration });
+      pendingUnfencedOutputWrite = false;
+      return uploadedGeneration;
     }
     const outputGenerations = {
       mp4: await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4', movieHash),
@@ -954,11 +960,8 @@ async function renderLifeMovie(job) {
     control.stop();
     fs.rmSync(workDir, { recursive: true, force: true });
     if (!completed) {
-      const cleanup = await Promise.allSettled(writtenObjects.map((destination) =>
-        bucket.file(destination).delete({ ignoreNotFound: true })));
-      if (cleanup.some((result) => result.status === 'rejected')) {
-        throw new Error('render_cleanup_incomplete');
-      }
+      await cleanupPinnedPrivateOutputs(bucket, writtenObjects, 'render_cleanup_incomplete');
+      if (pendingUnfencedOutputWrite) throw new Error('render_cleanup_incomplete');
     }
   }
 }
