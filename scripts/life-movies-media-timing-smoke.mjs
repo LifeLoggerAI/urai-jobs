@@ -66,6 +66,32 @@ const args = worker.exports.gapArgs('gap.mp4', 0.5, 320, 320, 30);
 assert.ok(args.includes('color=c=black:s=320x320:r=30'));
 assert.ok(args.includes('anullsrc=channel_layout=stereo:sample_rate=48000'));
 assert.equal(args[args.indexOf('-t') + 1], '0.5');
+
+const offsetPayload = {
+  ...payload,
+  sources: [{ ...payload.sources[0], mimeType: 'video/mp4' }],
+  timeline: [{ sourceId: 'source-1', startMs: 0, endMs: 1000, sourceStartMs: 1250 }],
+};
+assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(offsetPayload).success, true);
+const parsedOffset = workerParse(offsetPayload);
+assert.equal(parsedOffset.timeline[0].sourceStartMs, 1250);
+const clipSeek = worker.exports.clipArgs('source.mp4', 'clip.mp4', 'video/mp4', 1, 320, 320, 30, 1250);
+assert.equal(clipSeek[clipSeek.indexOf('-ss') + 1], '1.25');
+assert.ok(clipSeek.indexOf('-ss') < clipSeek.indexOf('-i'));
+const audioSeek = worker.exports.clipArgs('source.wav', 'clip.mp4', 'audio/wav', 1, 320, 320, 30, 1250);
+assert.equal(audioSeek[audioSeek.indexOf('-ss') + 1], '1.25');
+assert.ok(audioSeek.indexOf('-ss') < audioSeek.indexOf('-i'));
+for (const invalid of [-1, 0.5, 45 * 60 * 1000 + 1, null, '1250', false, NaN, Infinity]) {
+  const changed = { ...offsetPayload, timeline: [{ ...offsetPayload.timeline[0], sourceStartMs: invalid }] };
+  assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(changed).success, false);
+  assert.throws(() => workerParse(changed), /invalid_timeline_source_start/);
+}
+const imageOffset = { ...payload, timeline: [{ ...payload.timeline[0], sourceStartMs: 1250 }] };
+assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(imageOffset).success, false);
+assert.throws(() => workerParse(imageOffset), /image_source_start_must_be_zero/);
+assert.throws(() => worker.exports.clipArgs('source.png', 'clip.mp4', 'image/png', 1, 320, 320, 30, 1250), /image_source_start_must_be_zero/);
+console.log('[PASS] Source interval preserves video/audio seek and rejects invalid/image offsets');
+
 console.log('[PASS] Life Movies output timeline preserves leading/inter-clip gaps and chronological ordering');
 
 const { spawnSync } = require('node:child_process');
