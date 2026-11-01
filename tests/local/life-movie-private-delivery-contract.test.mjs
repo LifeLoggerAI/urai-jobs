@@ -81,7 +81,7 @@ for (const [mode, file] of [
     const legacyBody = source.slice(legacyDenial, source.indexOf('  if ([', legacyDenial));
     assert.ok(legacyDenial > parsedRequest, 'legacy gate must follow strict request parsing');
     assert.match(legacyBody, /life_movie_authenticated_delivery_required/);
-    assert.match(legacyBody, /res\\.status\\(503\\)/);
-    assert.doesNotMatch(legacyBody, /getSignedUrl|signedMovieAccess|readPlanPlayback|res\\.send/);
+    assert.match(legacyBody, /res\.status\(503\)/);
+    assert.doesNotMatch(legacyBody, /getSignedUrl|signedMovieAccess|readPlanPlayback|res\.send/);
   });
 }
