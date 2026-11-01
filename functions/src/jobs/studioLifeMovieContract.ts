@@ -116,6 +116,46 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
 export type StudioLifeMovieRenderPayload = z.infer<typeof StudioLifeMovieRenderPayloadSchema>;
 
 /**
+ * Recompute the hash of the exact normalized worker plan produced by Studio.
+ * Do not trust a renderPlanDigest merely because it has a SHA-256 shape.
+ * This is a payload-integrity check, not consent or source-rights authority.
+ */
+function canonicalRenderPlanJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalRenderPlanJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalRenderPlanJson(record[key])}`).join(',')}}`;
+  }
+  const encoded = JSON.stringify(value);
+  if (typeof encoded !== 'string') throw new Error('life_movie_render_plan_digest_mismatch');
+  return encoded;
+}
+
+export function computeStudioLifeMovieRenderPlanDigest(payload: StudioLifeMovieRenderPayload): string {
+  const plan = {
+    projectId: payload.projectId,
+    sceneTruthReceiptRef: payload.sceneTruthReceiptRef,
+    sceneTruthDigest: payload.sceneTruthDigest,
+    outputPrefix: payload.outputPrefix,
+    width: payload.width,
+    height: payload.height,
+    fps: payload.fps,
+    sources: payload.sources,
+    timeline: payload.timeline,
+    audioCues: payload.audioCues,
+    subtitleText: payload.subtitleText,
+  };
+  return createHash('sha256').update(canonicalRenderPlanJson(plan)).digest('hex');
+}
+
+export function assertStudioLifeMovieRenderPlanDigest(payload: StudioLifeMovieRenderPayload): StudioLifeMovieRenderPayload {
+  if (payload.renderPlanDigest !== computeStudioLifeMovieRenderPlanDigest(payload)) {
+    throw new Error('life_movie_render_plan_digest_mismatch');
+  }
+  return payload;
+}
+
+/**
  * Versioned source-selection fingerprint shared with Studio. It binds immutable
  * Storage generations and rights references, not merely bucket/object paths.
  * This is an identifier, NOT proof of user consent, source ownership, or IAM.
