@@ -126,7 +126,7 @@ export type StudioLifeMovieRenderPayload = z.infer<typeof StudioLifeMovieRenderP
  * Do not trust a renderPlanDigest merely because it has a SHA-256 shape.
  * This is a payload-integrity check, not consent or source-rights authority.
  */
-function canonicalRenderPlanJson(value: unknown): string {
+export function canonicalRenderPlanJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalRenderPlanJson).join(',')}]`;
   if (value && typeof value === 'object') {
     const record = value as Record<string, unknown>;
