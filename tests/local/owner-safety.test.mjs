@@ -81,6 +81,7 @@ function fakeStorage() {
   const objects = new Map();
   const state = { objects, onDelete: undefined, onAfterDelete: undefined };
   state.bucket = bucket => ({ file: (path, options) => ({
+    async getSignedUrl() { return ['https://fixture.invalid/signed-movie']; },
     async getMetadata() {
       const generation = objects.get(`${bucket}/${path}`);
       if (!generation) throw Object.assign(new Error('missing'), { code: 404 });
@@ -172,6 +173,38 @@ const shortJob = (extra = {}) => ({ jobId: 'job-1234567890', tenantId: tenant, o
   sourceSystem: 'urai-studio', jobType: 'studio.render.video', status: 'SUCCESS',
   payload: { projectId: project, outputPrefix: path(project, '') }, ...extra });
 const put = (env, id, job) => env.db.collection('jobs').doc(id).set(job);
+
+test('short-form signed playback requires exact source output and owner project binding', async () => {
+  const env = await environment();
+  const clip = path(project, 'renders/clip.mp4');
+  const digest = 'a'.repeat(64), truth = 'b'.repeat(64), receipt = 'scene-truth-receipt';
+  const payload = {
+    projectId: project, outputPrefix: path(project, 'renders/'),
+    renderPlanDigest: digest, sceneTruthDigest: truth, sceneTruthReceiptRef: receipt,
+  };
+  const movieOutput = {
+    renderPlanDigest: digest, sceneTruthDigest: truth, sceneTruthReceiptRef: receipt,
+    outputs: [{ kind: 'mp4', ref: ref(clip), mimeType: 'video/mp4' }],
+  };
+  const original = shortJob({ payload, output: movieOutput,
+    consent: { purpose: 'life-movie.render', policyVersion: '1.1.0', decisionReceiptId: 'c'.repeat(64) } });
+  await put(env, original.jobId, original);
+  const { signedMovieAccess } = await env.load('short', 'signedMovieAccess');
+  const result = await signedMovieAccess(tenant, owner, original.jobId, 'inline');
+  assert.equal(result.video.url, 'https://fixture.invalid/signed-movie');
+  for (const invalid of [
+    { payload: { ...payload, projectId: 'another-project' } },
+    { payload: { ...payload, renderPlanDigest: 'd'.repeat(64) } },
+    { payload: { ...payload, sceneTruthDigest: 'd'.repeat(64) } },
+    { output: { ...movieOutput, sceneTruthReceiptRef: 'other-receipt' } },
+    { output: { ...movieOutput, outputs: [{ kind: 'mp4', ref: ref(path('project-b', 'movie.mp4')) }] } },
+    { output: { ...movieOutput, unknownDerivative: ref(clip) } },
+    { outputDeletionInFlightUnresolved: true },
+  ]) {
+    await put(env, original.jobId, { ...original, ...invalid });
+    await assert.rejects(signedMovieAccess(tenant, owner, original.jobId, 'inline'));
+  }
+});
 
 test('short-form deletion cannot delete another project', async () => {
   const env = await environment();
