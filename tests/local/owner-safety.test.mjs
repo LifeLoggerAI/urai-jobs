@@ -185,7 +185,7 @@ test('short-form signed playback requires exact source output and owner project 
   };
   const movieOutput = {
     renderPlanDigest: digest, sceneTruthDigest: truth, sceneTruthReceiptRef: receipt,
-    outputs: [{ kind: 'mp4', ref: ref(clip), mimeType: 'video/mp4' }],
+    outputs: [{ kind: 'mp4', ref: ref(clip), mimeType: 'video/mp4', generation: '1793378565000001' }],
   };
   const original = shortJob({ payload, output: movieOutput,
     consent: { purpose: 'life-movie.render', policyVersion: '1.1.0', decisionReceiptId: 'c'.repeat(64) } });
