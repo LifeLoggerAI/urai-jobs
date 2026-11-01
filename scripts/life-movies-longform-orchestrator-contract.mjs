@@ -91,7 +91,7 @@ for (const marker of [
   'function assertBoundAssemblyForUse(',
   "preflightOwnedMovieOutputs(job as unknown as Record<string, unknown>, boundPlanJob(plan, jobId, 'segment'))",
   "boundPlanJob(plan, plan.assemblyJobId, 'assembly')",
-  'payload?.renderPlanDigest !== descriptor.childDigest',
+  'payload.renderPlanDigest !== descriptor.childDigest',
   'output?.renderPlanDigest !== descriptor.childDigest',
   'payload?.sceneTruthDigest !== plan.sceneTruthDigest',
   'output?.sceneTruthDigest !== plan.sceneTruthDigest',
