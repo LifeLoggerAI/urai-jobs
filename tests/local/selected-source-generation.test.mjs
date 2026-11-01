@@ -94,3 +94,40 @@ test('installed Storage SDK serializes the selected generation exactly without n
 test('preparing source contracts does not activate render authority', () => {
   assert.equal(worker({}).lifeMovieConsentAuthorityAvailable(), false);
 });
+
+
+test('Jobs independently checks the exact normalized Studio render-plan digest', () => {
+  const plan = {
+    schemaVersion: 'urai-life-movie-render-v1',
+    projectId: 'synthetic-project',
+    renderPlanDigest: '0'.repeat(64),
+    sceneTruthReceiptRef: 'str_' + 'a'.repeat(24) + '_' + 'b'.repeat(8) + '_' + 'c'.repeat(43),
+    sceneTruthDigest: 'd'.repeat(64),
+    outputPrefix: 'tenants/synthetic/life-movies/synthetic-project/',
+    width: 640, height: 480, fps: 30,
+    sources: [source],
+    timeline: [{ sourceId: source.id, startMs: 0, endMs: 1000 }],
+    audioCues: [], subtitleText: '',
+    spatialRequired: false, publicReleaseAuthorized: false, providerGenerationAuthorized: false,
+  };
+  const sorted = (value) => Array.isArray(value) ? value.map(sorted)
+    : value && typeof value === 'object'
+      ? Object.fromEntries(Object.keys(value).sort().map(key => [key, sorted(value[key])]))
+      : value;
+  const { renderPlanDigest, schemaVersion, spatialRequired,
+    publicReleaseAuthorized, providerGenerationAuthorized, ...renderPlan } = plan;
+  const expected = require('node:crypto').createHash('sha256')
+    .update(JSON.stringify(sorted(renderPlan))).digest('hex');
+  assert.equal(contract.computeStudioLifeMovieRenderPlanDigest(plan), expected);
+  assert.equal(contract.assertStudioLifeMovieRenderPlanDigest({ ...plan, renderPlanDigest: expected }).renderPlanDigest, expected);
+  assert.throws(() => contract.assertStudioLifeMovieRenderPlanDigest(plan), /life_movie_render_plan_digest_mismatch/);
+  for (const altered of [
+    { ...plan, sources: [{ ...source, generation: '1793378565000002' }] },
+    { ...plan, sources: [{ ...source, ownerOrRightsRef: 'other-rights' }] },
+    { ...plan, subtitleText: 'other subtitle' },
+    { ...plan, timeline: [{ sourceId: source.id, startMs: 0, endMs: 999 }] },
+  ]) {
+    assert.notEqual(contract.computeStudioLifeMovieRenderPlanDigest(altered), expected);
+    assert.throws(() => contract.assertStudioLifeMovieRenderPlanDigest({ ...altered, renderPlanDigest: expected }), /life_movie_render_plan_digest_mismatch/);
+  }
+});
