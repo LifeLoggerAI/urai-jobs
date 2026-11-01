@@ -137,6 +137,7 @@ type StoredPlan = {
     startMs: number;
     endMs: number;
     childDigest: string;
+    childPayloadFingerprint: string;
     jobId: string;
   }>;
 };
@@ -212,7 +213,9 @@ function assertBoundSegmentForUse(plan: StoredPlan, job: Job, index: number) {
   if (!jobId || !descriptor || descriptor.jobId !== jobId || descriptor.index !== index
     || !Number.isSafeInteger(descriptor.startMs) || !Number.isSafeInteger(descriptor.endMs)
     || descriptor.startMs < 0 || descriptor.endMs <= descriptor.startMs
-    || descriptor.childDigest !== expectedChildDigest) {
+    || descriptor.childDigest !== expectedChildDigest
+    || typeof descriptor.childPayloadFingerprint !== 'string'
+    || !/^[0-9a-f]{64}$/.test(descriptor.childPayloadFingerprint)) {
     throw new Error('longform_segment_binding_mismatch');
   }
   // Reuse the owner-bound deletion preflight: it checks the exact child output
@@ -221,7 +224,12 @@ function assertBoundSegmentForUse(plan: StoredPlan, job: Job, index: number) {
   preflightOwnedMovieOutputs(job as unknown as Record<string, unknown>, boundPlanJob(plan, jobId, 'segment'));
   const payload = job.payload as Record<string, unknown> | undefined;
   const output = job.output as WorkerOutput | undefined;
-  if (payload?.renderPlanDigest !== descriptor.childDigest
+  // The child digest derives only from the parent and time range. The exact
+  // normalized media selection/timeline must separately match its original
+  // immutable request fingerprint before reading private output.
+  if (!payload
+    || buildRequestFingerprint('studio.render.video', payload) !== descriptor.childPayloadFingerprint
+    || payload.renderPlanDigest !== descriptor.childDigest
     || output?.renderPlanDigest !== descriptor.childDigest
     || payload?.sceneTruthDigest !== plan.sceneTruthDigest
     || output?.sceneTruthDigest !== plan.sceneTruthDigest
@@ -356,6 +364,7 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
       startMs: segment.startMs,
       endMs: segment.endMs,
       childDigest: segment.childDigest,
+      childPayloadFingerprint: buildRequestFingerprint('studio.render.video', segment.payload),
       jobId: childIds[index],
     }));
 
