@@ -68,9 +68,11 @@ const storage = { bucket(bucket) { return { file(path, options) {
     return [options?.generation === undefined ? active.currentMetadata : active.selectedMetadata];
   } };
 } }; } };
+const firebaseApp = { options: { projectId: 'urai-staging' } };
 const adapter = compile('../functions/src/privacy/lifeMovieFirebaseSourceRightsAdapter.ts', {
-  'firebase-admin/firestore': { getFirestore: () => db, FieldValue: { serverTimestamp: () => '<server-time>' } },
-  'firebase-admin/storage': { getStorage: () => storage },
+  'firebase-admin/app': { getApp: () => active?.firebaseApp ?? firebaseApp },
+  'firebase-admin/firestore': { getFirestore: (app) => { assert.equal(app, firebaseApp); return db; }, FieldValue: { serverTimestamp: () => '<server-time>' } },
+  'firebase-admin/storage': { getStorage: (app) => { assert.equal(app, firebaseApp); return storage; } },
   './lifeMovieSourceRightsVerifier.js': verifier,
 });
 const checker = async (uid, tenant) => {
@@ -81,17 +83,36 @@ function fixture(overrides = {}) {
   active = { rights: structuredClone(rights), currentMetadata: structuredClone(metadata),
     selectedMetadata: structuredClone(metadata), events: [], ownerChecks: 0, ...overrides };
   const run = adapter.createFirebaseLifeMovieSourceRightsVerifier({
+    firebaseProjectId: 'urai-staging',
     allowedBuckets: ['private-source-bucket'], assertCurrentOwner: checker, nowMs: () => time,
   });
   return { run, state: active };
 }
 let passed = 0;
+{
+  active = { firebaseApp: { options: { projectId: 'untrusted-project' } } };
+  assert.throws(() => adapter.createFirebaseLifeMovieSourceRightsVerifier({
+    firebaseProjectId: 'urai-staging', allowedBuckets: ['private-source-bucket'],
+    assertCurrentOwner: checker,
+  }), /life_movie_source_rights_unverified/);
+  passed++;
+}
+{
+  active = { firebaseApp: { options: {} } };
+  assert.throws(() => adapter.createFirebaseLifeMovieSourceRightsVerifier({
+    firebaseProjectId: 'urai-staging', allowedBuckets: ['private-source-bucket'],
+    assertCurrentOwner: checker,
+  }), /life_movie_source_rights_unverified/);
+  passed++;
+}
 for (const config of [
   {}, { allowedBuckets: [], assertCurrentOwner: checker },
   { allowedBuckets: ['bad/bucket'], assertCurrentOwner: checker },
   { allowedBuckets: [1], assertCurrentOwner: checker },
   { allowedBuckets: ['private-source-bucket'] },
   { allowedBuckets: ['private-source-bucket'], assertCurrentOwner: null },
+  { firebaseProjectId: '', allowedBuckets: ['private-source-bucket'], assertCurrentOwner: checker },
+  { firebaseProjectId: 'BAD-PROJECT', allowedBuckets: ['private-source-bucket'], assertCurrentOwner: checker },
 ]) {
   assert.throws(() => adapter.createFirebaseLifeMovieSourceRightsVerifier(config), /life_movie_source_rights_unverified/);
   passed++;

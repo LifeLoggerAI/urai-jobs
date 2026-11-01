@@ -1,3 +1,4 @@
+import { getApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { createLifeMovieSourceRightsVerifier, type RightsBackend } from './lifeMovieSourceRightsVerifier.js';
@@ -10,18 +11,31 @@ import { createLifeMovieSourceRightsVerifier, type RightsBackend } from './lifeM
  * Neither dependency may be substituted with caller-provided metadata.
  */
 export function createFirebaseLifeMovieSourceRightsVerifier(config: Readonly<{
+  firebaseProjectId: string;
   allowedBuckets: readonly string[];
   assertCurrentOwner: RightsBackend['assertCurrentOwner'];
   nowMs?: () => number;
 }>) {
-  if (!config || !Array.isArray(config.allowedBuckets) || config.allowedBuckets.length === 0 ||
+  if (!config || typeof config.firebaseProjectId !== 'string' ||
+      !/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(config.firebaseProjectId) ||
+      !Array.isArray(config.allowedBuckets) || config.allowedBuckets.length === 0 ||
       config.allowedBuckets.some((bucket) => typeof bucket !== 'string' ||
         !/^[a-z0-9][a-z0-9._-]{1,253}[a-z0-9]$/.test(bucket)) ||
       typeof config.assertCurrentOwner !== 'function') {
     throw new Error('life_movie_source_rights_unverified');
   }
-  const db = getFirestore();
-  const storage = getStorage();
+  // Both Admin clients must belong to the reviewed source-rights project.
+  // A default App from a different Firebase project is not an authority.
+  let db: ReturnType<typeof getFirestore>;
+  let storage: ReturnType<typeof getStorage>;
+  try {
+    const app = getApp();
+    if (app.options.projectId !== config.firebaseProjectId) throw new Error('wrong_firebase_project');
+    db = getFirestore(app);
+    storage = getStorage(app);
+  } catch {
+    throw new Error('life_movie_source_rights_unverified');
+  }
   const dependencies: RightsBackend = {
     allowedBuckets: config.allowedBuckets,
     assertCurrentOwner: config.assertCurrentOwner,

@@ -17,6 +17,7 @@ import type { RightsBackend } from './lifeMovieSourceRightsVerifier.js';
  */
 export type TrustedLifeMovieAdmissionConfig = Readonly<{
   sourceRights: Readonly<{
+    firebaseProjectId: string;
     allowedBuckets: readonly string[];
     assertCurrentOwner: RightsBackend['assertCurrentOwner'];
   }>;
@@ -44,6 +45,7 @@ export function createTrustedLifeMovieAdmissionPreflight(
   // Never fall back to a caller, static 'allow', or a generic admin role.
   try {
     const verifySourceRights = createFirebaseLifeMovieSourceRightsVerifier({
+      firebaseProjectId: config.sourceRights.firebaseProjectId,
       allowedBuckets: config.sourceRights.allowedBuckets,
       assertCurrentOwner: config.sourceRights.assertCurrentOwner,
       nowMs: dependencies.nowMs,
