@@ -11,6 +11,14 @@ import vm from 'node:vm';
 const deleted = { __fieldDelete: true };
 const FieldValue = { delete: () => deleted, serverTimestamp: () => 'synthetic-time' };
 const clone = value => value === undefined ? undefined : structuredClone(value);
+// The source implementation fingerprints job type plus the full stable payload.
+const stableValue = value => Array.isArray(value) ? value.map(stableValue)
+  : value && typeof value === 'object'
+    ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, nested]) => [key, stableValue(nested)]))
+    : value;
+const fingerprint = (jobType, payload) => createHash('sha256')
+  .update(JSON.stringify(stableValue({ jobType, payload }))).digest('hex');
 
 function fakeDatabase() {
   const docs = new Map();
@@ -117,7 +125,7 @@ async function environment() {
       jobDoc: id => db.collection('jobs').doc(id),
       jobQueueEntryDoc: id => db.collection('jobQueue').doc(id),
     },
-    '../core/jobsReliability.js': { bindingMatches() {}, buildIdempotencyBindingId() {}, buildRequestFingerprint() {} },
+    '../core/jobsReliability.js': { bindingMatches() {}, buildIdempotencyBindingId() {}, buildRequestFingerprint: fingerprint },
     './studioLifeMovieContract.js': { StudioLifeMovieCreateRequestSchema: schema, LifeMovieConsentReferenceSchema: schema,
       assertLifeMovieTenantPaths() {}, assertStudioLifeMovieRenderPlanDigest: value => value },
     './studioLifeMovieLongformContract.js': { StudioLifeMovieLongformPayloadSchema: schema,
@@ -432,6 +440,7 @@ test('long-form assembled and delivered media binds every child to owner, digest
   const valid = planChild(planId, childId, { payload: {
     projectId: project, outputPrefix: segmentPrefix, renderPlanDigest: checksum, sceneTruthDigest: truth,
   }, consent, output: artifacts });
+  plan.segments[0].childPayloadFingerprint = fingerprint('studio.render.video', valid.payload);
   const { assertBoundSegmentForUse } = await env.load('long', 'assertBoundSegmentForUse');
   assert.doesNotThrow(() => assertBoundSegmentForUse(plan, valid, 0));
   for (const [mutation, error] of [
@@ -440,6 +449,8 @@ test('long-form assembled and delivered media binds every child to owner, digest
     [{ execution: { rootJobId: 'other-plan', parentJobId: 'other-plan' } }, /boundary_mismatch/],
     [{ payload: { ...valid.payload, outputPrefix: path(project, 'segments/0001/') } }, /boundary_mismatch/],
     [{ payload: { ...valid.payload, renderPlanDigest: '0'.repeat(64) } }, /segment_binding_mismatch/],
+    [{ payload: { ...valid.payload, sources: [{ id: 'foreign-source', generation: '2' }] } }, /segment_binding_mismatch/],
+    [{ payload: { ...valid.payload, timeline: [{ sourceId: 'alternate', startMs: 0, endMs: 1000 }] } }, /segment_binding_mismatch/],
     [{ output: { ...artifacts, sceneTruthDigest: '0'.repeat(64) } }, /segment_binding_mismatch/],
     [{ output: { ...artifacts, renderPlanDigest: '0'.repeat(64) } }, /segment_binding_mismatch/],
     [{ consent: { ...consent, decisionReceiptId: 'e'.repeat(64) } }, /segment_binding_mismatch/],
