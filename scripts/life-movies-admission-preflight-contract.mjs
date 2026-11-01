@@ -24,4 +24,28 @@ for(const request of [{...input,ownerUid:''},{...input,ownerUid:undefined},{...i
 for(const wrong of [{...rights,ownerUid:'other'},{...rights,tenantId:'other'},{...rights,renderScope:{...scope,sourceSetDigest:'d'.repeat(64)}},{...rights,renderScope:{...scope,extra:'secret'}},{...rights,rightsEventId:''},{...rights,verifiedAt:new Date(time-60000).toISOString()},{...rights,verifiedAt:new Date(time+1000).toISOString()}]){const prev=decisions;await assert.rejects(configured({rights:wrong})(input),/life_movie_source_rights_unverified/);assert.equal(decisions,prev);cases++;}
 for(const wrong of [{decisionEventId:'',evaluatedAt:new Date(time-1000).toISOString()},{decisionEventId:'decision-1',evaluatedAt:new Date(time-60000).toISOString()},{decisionEventId:'decision-1',evaluatedAt:new Date(time+1000).toISOString()}]){await assert.rejects(configured({decision:wrong})(input),/life_movie_admission_authority_unavailable/);cases++;}
 await assert.rejects(configured({rejectDecision:true})(input),/life_movie_admission_authority_unavailable/);cases++;
+// A revoked source may change while Privacy completes its own remote check.
+// Admission must consult the server-owned rights authority again afterwards.
+{
+  const events=[];
+  let revoked=false;
+  const race=create({nowMs:()=>time,
+    verifySourceRights:async()=>{events.push('rights');return revoked?{...rights,ownerUid:'revoked-owner'}:rights;},
+    getCurrentPrivacyDecision:async()=>{events.push('privacy');revoked=true;return {decisionEventId:'decision-event-1',evaluatedAt:new Date(time-500).toISOString()};},
+  });
+  await assert.rejects(race(input), /life_movie_source_rights_unverified/);
+  assert.deepEqual(events,['rights','privacy','rights']);cases++;
+}
+{
+  const events=[];
+  let finished=false;
+  const race=create({nowMs:()=>time,
+    verifySourceRights:async()=>{events.push('rights');return {...rights,rightsEventId:finished?'rights-event-final':'rights-event-first'};},
+    getCurrentPrivacyDecision:async()=>{events.push('privacy');finished=true;return {decisionEventId:'decision-event-1',evaluatedAt:new Date(time-500).toISOString()};},
+  });
+  const result=await race(input);
+  assert.equal(result.rightsEventId,'rights-event-final');
+  assert.deepEqual(events,['rights','privacy','rights']);cases++;
+}
+
 console.log('[PASS] ' + cases + ' synthetic preflight contract cases; no network, credentials, grants or rendering');

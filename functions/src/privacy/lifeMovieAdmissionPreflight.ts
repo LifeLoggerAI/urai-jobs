@@ -108,13 +108,19 @@ export function createLifeMovieAdmissionPreflight(deps: LifeMovieAdmissionDepend
     } catch {
       throw new Error(RIGHTS_DENIED);
     }
-    const rightsMs = rights && typeof rights.verifiedAt === 'string' ? Date.parse(rights.verifiedAt) : NaN;
-    if (!rights || rights.ownerUid !== input.ownerUid || rights.tenantId !== input.tenantId ||
-        !matchesScope(rights.renderScope, scope) ||
-        typeof rights.rightsEventId !== 'string' || !ID.test(rights.rightsEventId) ||
-        !Number.isFinite(rightsMs) || rightsMs > now || now - rightsMs > MAX_RIGHTS_AGE_MS) {
-      throw new Error(RIGHTS_DENIED);
-    }
+    const validRights = (evidence: LifeMovieSourceRightsEvidence, checkedAt: number): number => {
+      const verifiedAt = evidence && typeof evidence.verifiedAt === 'string'
+        ? Date.parse(evidence.verifiedAt) : NaN;
+      if (!evidence || evidence.ownerUid !== input.ownerUid || evidence.tenantId !== input.tenantId ||
+          !matchesScope(evidence.renderScope, scope) ||
+          typeof evidence.rightsEventId !== 'string' || !ID.test(evidence.rightsEventId) ||
+          !Number.isFinite(verifiedAt) || verifiedAt > checkedAt ||
+          checkedAt - verifiedAt > MAX_RIGHTS_AGE_MS) {
+        throw new Error(RIGHTS_DENIED);
+      }
+      return verifiedAt;
+    };
+    const rightsMs = validRights(rights, now);
 
     const expected: ExpectedLifeMovieDecision = {
       subjectUid: input.ownerUid,
@@ -138,9 +144,31 @@ export function createLifeMovieAdmissionPreflight(deps: LifeMovieAdmissionDepend
       throw new Error(UNAVAILABLE);
     }
 
+    // Rights can be revoked while Privacy evaluates the scoped grant. Repeat
+    // the server-owned source and immutable-generation check after the remote
+    // decision, never reuse the earlier rights event as a lasting capability.
+    // This is intentionally a point-in-time second audit; every media lifecycle
+    // stage still needs independent, fresh authorization before activation.
+    let finalRights: LifeMovieSourceRightsEvidence;
+    try {
+      finalRights = await deps.verifySourceRights({
+        ownerUid: input.ownerUid,
+        tenantId: input.tenantId,
+        selection: input.selection,
+        renderScope: scope,
+      });
+    } catch {
+      throw new Error(RIGHTS_DENIED);
+    }
+    const finalTime = clock();
+    if (!Number.isSafeInteger(finalTime) || finalTime < finishedAt ||
+        finalTime - rightsMs > MAX_RIGHTS_AGE_MS) throw new Error(RIGHTS_DENIED);
+    const finalRightsMs = validRights(finalRights, finalTime);
+    if (finalRightsMs < rightsMs) throw new Error(RIGHTS_DENIED);
+
     // Audit identifiers only; this return value MUST NEVER be treated as a
     // reusable capability or proof of independent source/issuer approval.
-    return Object.freeze({ rightsEventId: rights.rightsEventId,
+    return Object.freeze({ rightsEventId: finalRights.rightsEventId,
       decisionEventId: decision.decisionEventId, evaluatedAt: decision.evaluatedAt,
       renderScope: scope });
   };
