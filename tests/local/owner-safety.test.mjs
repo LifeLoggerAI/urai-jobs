@@ -146,6 +146,7 @@ async function environment() {
     await mod.link(async specifier => {
       const helpers = {
         './lifeMovieOwnerDeletion.js': '../../functions/src/jobs/lifeMovieOwnerDeletion.ts',
+        './lifeMoviePrivateDeliveryContract.js': '../../functions/src/jobs/lifeMoviePrivateDeliveryContract.ts',
         './lifeMovieArtifactRefs.js': '../../functions/src/privacy/lifeMovieArtifactRefs.ts',
         '../privacy/lifeMovieArtifactRefs.js': '../../functions/src/privacy/lifeMovieArtifactRefs.ts',
         '../privacy/lifeMovieOutputGeneration.js': '../../functions/src/privacy/lifeMovieOutputGeneration.ts',
