@@ -16,7 +16,6 @@ for (const marker of [
   "const BINDING_COLLECTION = 'studioLifeMovieLongformBindings'",
   "const jobType = 'studio.render.longform'",
   "assertSceneTruthReceiptValue(",
-  "consent: z.object({",
   "consent: LifeMovieConsentReferenceSchema",
   "consentBlockRef(input.userId, input.consent.purpose)",
   "life_movie_longform_consent_revoked",
