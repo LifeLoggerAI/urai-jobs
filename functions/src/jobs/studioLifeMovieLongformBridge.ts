@@ -10,6 +10,7 @@ import type { Job, JobQueueEntry, JobStatus } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef } from '../privacy/consentBlocks.js';
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
+import { parseLifeMoviePrivateDeliveryRequest } from './lifeMoviePrivateDeliveryContract.js';
 import { requireLifeMovieCreationAdmission } from '../privacy/lifeMovieCreationAdmission.js';
 import { requirePinnedMovieOutputGeneration } from '../privacy/lifeMovieOutputGeneration.js';
 import { deleteOwnedMovieOutputs, preflightOwnedMovieOutputs, validateOwnedMovieJob } from './lifeMovieOwnerDeletion.js';
@@ -994,6 +995,19 @@ export const studioLifeMovieLongformBridge = onRequest({
   }
   if (jsonBytes(req.body) > MAX_BODY_BYTES) {
     res.status(413).json({ ok: false, error: 'request_too_large' });
+    return;
+  }
+
+  // This is an authenticated contract endpoint, not a delivery grant. The
+  // caller's authorityHash cannot authorize private data access.
+  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body) && req.body.action === 'deliver') {
+    try {
+      parseLifeMoviePrivateDeliveryRequest(req.body, 'longform');
+    } catch {
+      res.status(400).json({ ok: false, error: 'life_movie_private_delivery_request_invalid' });
+      return;
+    }
+    res.status(503).json({ ok: false, error: LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE });
     return;
   }
 
