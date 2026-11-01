@@ -124,4 +124,46 @@ const audio=path.join(dir,'short.wav');
  const audioDuration=Number(JSON.parse(audioProbe.stdout).format.duration);
  assert.ok(Math.abs(audioDuration-.5)<=1/30,'short audio must preserve declared output duration');
  console.log('[PASS] Actual FFmpeg short video/audio retain0.5s declared timeline duration');
+
+ // Real source seeking: the first half is red and the second half blue.
+ // A 2.5-second source offset must produce blue pixels, not the first red frames.
+ const colors = ['red', 'blue'];
+ const clips = colors.map((color) => path.join(dir, color + '-source.mp4'));
+ for (let index = 0; index < colors.length; index += 1) {
+   const colored = spawnSync('ffmpeg', [
+     '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=' + colors[index] + ':s=320x320:r=30',
+     '-t', '2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', clips[index],
+   ], { encoding: 'utf8' });
+   assert.equal(colored.status, 0, colored.stderr);
+ }
+ const listPath = path.join(dir, 'source-selection-concat.txt');
+ fs.writeFileSync(listPath, clips.map((file) => "file '" + file + "'").join('\n') + '\n');
+ const twoColorSource = path.join(dir, 'two-color-source.mp4');
+ const combined = spawnSync('ffmpeg', [
+   '-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', twoColorSource,
+ ], { encoding: 'utf8' });
+ assert.equal(combined.status, 0, combined.stderr);
+ const seekOutput = path.join(dir, 'seek-selected.mp4');
+ const sourceOffsetMs = 2500;
+ const seek = spawnSync('ffmpeg',
+   worker.exports.clipArgs(twoColorSource, seekOutput, 'video/mp4', 1, 320, 320, 30, sourceOffsetMs),
+   { encoding: 'utf8' });
+ assert.equal(seek.status, 0, seek.stderr);
+ const pixels = spawnSync('ffmpeg', [
+   '-v', 'error', '-i', seekOutput, '-frames:v', '1', '-f', 'rawvideo',
+   '-pix_fmt', 'rgb24', '-',
+ ], { maxBuffer: 2 * 1024 * 1024 });
+ assert.equal(pixels.status, 0, String(pixels.stderr));
+ const [red, green, blue] = pixels.stdout.subarray(0, 3);
+ assert.ok(blue > 140 && red < 75 && green < 75,
+   'the 2.5-second selected clip must begin in blue frames; got RGB(' + [red, green, blue].join(',') + ')');
+ const seekDuration = spawnSync('ffprobe', [
+   '-v', 'error', '-show_entries', 'format=duration', '-of', 'json', seekOutput,
+ ], { encoding: 'utf8' });
+ assert.equal(seekDuration.status, 0, seekDuration.stderr);
+ const selectedSeconds = Number(JSON.parse(seekDuration.stdout).format.duration);
+ assert.ok(Math.abs(selectedSeconds - 1) <= 1 / 30,
+   'selected output must retain the declared one-second duration; got ' + selectedSeconds);
+ console.log('[PASS] Actual FFmpeg 2.5-second source seek selects blue second-half frames for a one-second output');
+
 } finally {fs.rmSync(dir,{recursive:true,force:true})}
