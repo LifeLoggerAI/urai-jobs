@@ -67,6 +67,10 @@ assert.ok(args.includes('color=c=black:s=320x320:r=30'));
 assert.ok(args.includes('anullsrc=channel_layout=stereo:sample_rate=48000'));
 assert.equal(args[args.indexOf('-t') + 1], '0.5');
 
+const { spawnSync } = require('node:child_process');
+const { tmpdir } = require('node:os');
+const path = require('node:path');
+
 const offsetPayload = {
   ...payload,
   sources: [{ ...payload.sources[0], mimeType: 'video/mp4' }],
@@ -75,12 +79,33 @@ const offsetPayload = {
 assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(offsetPayload).success, true);
 const parsedOffset = workerParse(offsetPayload);
 assert.equal(parsedOffset.timeline[0].sourceStartMs, 1250);
-const clipSeek = worker.exports.clipArgs('source.mp4', 'clip.mp4', 'video/mp4', 1, 320, 320, 30, 1250);
-assert.equal(clipSeek[clipSeek.indexOf('-ss') + 1], '1.25');
-assert.ok(clipSeek.indexOf('-ss') < clipSeek.indexOf('-i'));
-const audioSeek = worker.exports.clipArgs('source.wav', 'clip.mp4', 'audio/wav', 1, 320, 320, 30, 1250);
-assert.equal(audioSeek[audioSeek.indexOf('-ss') + 1], '1.25');
-assert.ok(audioSeek.indexOf('-ss') < audioSeek.indexOf('-i'));
+// clipArgs probes real streams before constructing a command. Use real
+// generated fixtures rather than nonexistent source.mp4/source.wav paths.
+const seekFixtureDir = fs.mkdtempSync(path.join(tmpdir(), 'urai-source-seek-'));
+try {
+  const videoFixture = path.join(seekFixtureDir, 'source.mp4');
+  const audioFixture = path.join(seekFixtureDir, 'source.wav');
+  const videoFixtureRun = spawnSync('ffmpeg', [
+    '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=320x320:r=30',
+    '-t', '3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', videoFixture,
+  ], { encoding: 'utf8' });
+  assert.equal(videoFixtureRun.status, 0, videoFixtureRun.stderr);
+  const audioFixtureRun = spawnSync('ffmpeg', [
+    '-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000',
+    '-t', '3', audioFixture,
+  ], { encoding: 'utf8' });
+  assert.equal(audioFixtureRun.status, 0, audioFixtureRun.stderr);
+  const clipSeek = worker.exports.clipArgs(
+    videoFixture, path.join(seekFixtureDir, 'video-out.mp4'), 'video/mp4', 1, 320, 320, 30, 1250);
+  assert.equal(clipSeek[clipSeek.indexOf('-ss') + 1], '1.25');
+  assert.ok(clipSeek.indexOf('-ss') < clipSeek.indexOf('-i'));
+  const audioSeek = worker.exports.clipArgs(
+    audioFixture, path.join(seekFixtureDir, 'audio-out.mp4'), 'audio/wav', 1, 320, 320, 30, 1250);
+  assert.equal(audioSeek[audioSeek.indexOf('-ss') + 1], '1.25');
+  assert.ok(audioSeek.indexOf('-ss') < audioSeek.indexOf('-i'));
+} finally {
+  fs.rmSync(seekFixtureDir, { recursive: true, force: true });
+}
 for (const invalid of [-1, 0.5, 45 * 60 * 1000 + 1, null, '1250', false, NaN, Infinity]) {
   const changed = { ...offsetPayload, timeline: [{ ...offsetPayload.timeline[0], sourceStartMs: invalid }] };
   assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(changed).success, false);
@@ -94,9 +119,6 @@ console.log('[PASS] Source interval preserves video/audio seek and rejects inval
 
 console.log('[PASS] Life Movies output timeline preserves leading/inter-clip gaps and chronological ordering');
 
-const { spawnSync } = require('node:child_process');
-const { tmpdir } = require('node:os');
-const path = require('node:path');
 const dir = fs.mkdtempSync(path.join(tmpdir(),'urai-gap-proof-'));
 try {
  const output=path.join(dir,'gap.mp4');
