@@ -21,6 +21,7 @@ import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 import {
   StudioLifeMovieLongformPayloadSchema,
   assertLifeMovieLongformTenantPaths,
+  assertStudioLifeMovieLongformPlanDigest,
   planLifeMovieLongformSegments,
 } from './studioLifeMovieLongformContract.js';
 import { LifeMovieConsentReferenceSchema } from './studioLifeMovieContract.js';
@@ -216,7 +217,7 @@ async function assertPlanConsentActive(plan: StoredPlan) {
 async function createPlan(input: z.infer<typeof CreateSchema>) {
   if (!longformEnabled()) throw new Error('life_movie_longform_disabled');
 
-  const payload = assertLifeMovieLongformTenantPaths(input.payload, input.tenantId);
+  const payload = assertStudioLifeMovieLongformPlanDigest(assertLifeMovieLongformTenantPaths(input.payload, input.tenantId));
   const consentSnapshot = await consentBlockRef(input.userId, input.consent.purpose).get();
   if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
     throw new Error('life_movie_longform_consent_revoked');
