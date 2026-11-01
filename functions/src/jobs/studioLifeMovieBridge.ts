@@ -18,6 +18,7 @@ import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
 import { deleteOwnedMovieOutputs } from './lifeMovieOwnerDeletion.js';
+import { requirePinnedMovieOutputGeneration } from '../privacy/lifeMovieOutputGeneration.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
 const sceneTruthReceiptSecret = defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC');
@@ -81,7 +82,7 @@ function jsonBytes(value: unknown) {
   return Buffer.byteLength(JSON.stringify(value ?? {}), 'utf8');
 }
 
-type WorkerOutputArtifact = { kind?: unknown; ref?: unknown; mimeType?: unknown; checksum?: unknown };
+type WorkerOutputArtifact = { kind?: unknown; ref?: unknown; generation?: unknown; mimeType?: unknown; checksum?: unknown };
 type WorkerOutput = {
   outputs?: WorkerOutputArtifact[];
   renderPlanDigest?: unknown;
@@ -322,6 +323,7 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
   const video = artifacts.find((artifact) => artifact?.kind === 'mp4');
   if (!video?.ref) throw new Error('life_movie_video_output_missing');
   const videoLocation = parseGcsRef(video.ref);
+  const videoGeneration = requirePinnedMovieOutputGeneration(video.generation);
   const allowedBuckets = allowedLifeMovieOutputBuckets();
   const expectedPrefix = `tenants/${tenantId}/life-movies/`;
   if (!allowedBuckets.has(videoLocation.bucket) || !videoLocation.objectPath.startsWith(expectedPrefix)) {
@@ -329,7 +331,8 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
   }
 
   const expiresAtMs = Date.now() + 5 * 60 * 1000;
-  const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
+  const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath, { generation: Number(videoGeneration) }).getSignedUrl({
+    version: 'v4', queryParams: { generation: videoGeneration },
     action: 'read',
     expires: expiresAtMs,
     responseDisposition: disposition,
@@ -340,10 +343,11 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
   let subtitleText = '';
   if (subtitle?.ref) {
     const subtitleLocation = parseGcsRef(subtitle.ref);
+    const subtitleGeneration = requirePinnedMovieOutputGeneration(subtitle.generation);
     if (!allowedBuckets.has(subtitleLocation.bucket) || !subtitleLocation.objectPath.startsWith(expectedPrefix)) {
       throw new Error('life_movie_output_boundary_mismatch');
     }
-    const [bytes] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).download();
+    const [bytes] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath, { generation: Number(subtitleGeneration) }).download();
     if (bytes.length > 2 * 1024 * 1024) throw new Error('life_movie_subtitles_too_large');
     subtitleText = bytes.toString('utf8');
   }

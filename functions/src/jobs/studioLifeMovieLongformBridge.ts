@@ -10,6 +10,7 @@ import type { Job, JobQueueEntry, JobStatus } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef } from '../privacy/consentBlocks.js';
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
+import { requirePinnedMovieOutputGeneration } from '../privacy/lifeMovieOutputGeneration.js';
 import { deleteOwnedMovieOutputs, preflightOwnedMovieOutputs, validateOwnedMovieJob } from './lifeMovieOwnerDeletion.js';
 import {
   bindingMatches,
@@ -105,6 +106,7 @@ function makeAssemblyJobId(planId: string) {
 type WorkerArtifact = {
   kind?: unknown;
   ref?: unknown;
+  generation?: unknown;
   mimeType?: unknown;
   checksum?: unknown;
 };
@@ -166,6 +168,7 @@ function boundedArtifact(output: unknown, kind: 'mp4' | 'srt') {
   if (!artifact || typeof artifact.ref !== 'string') throw new Error(`longform_${kind}_output_missing`);
   return {
     ref: artifact.ref,
+    generation: requirePinnedMovieOutputGeneration(artifact.generation),
     mimeType: typeof artifact.mimeType === 'string'
       ? artifact.mimeType
       : kind === 'mp4' ? 'video/mp4' : 'application/x-subrip',
@@ -534,8 +537,10 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
       startMs: descriptor.startMs,
       endMs: descriptor.endMs,
       videoRef: video.ref,
+      videoGeneration: video.generation,
       videoChecksum: video.checksum as string,
       subtitleRef: subtitle.ref,
+      subtitleGeneration: subtitle.generation,
       subtitleChecksum: subtitle.checksum as string,
     };
   });
@@ -647,10 +652,12 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
           || !subtitleLocation.objectPath.startsWith(finalPrefix)) {
           throw new Error('longform_output_boundary_mismatch');
         }
-        const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
+        const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath, { generation: Number(video.generation) }).getSignedUrl({
+      version: 'v4', queryParams: { generation: video.generation },
           action: 'read', expires: expiresAtMs, responseDisposition: disposition, responseType: video.mimeType,
         });
-        const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).getSignedUrl({
+        const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath, { generation: Number(subtitle.generation) }).getSignedUrl({
+      version: 'v4', queryParams: { generation: subtitle.generation },
           action: 'read', expires: expiresAtMs, responseDisposition: disposition, responseType: subtitle.mimeType,
         });
         finalFile = {
@@ -686,13 +693,15 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
       throw new Error('longform_output_boundary_mismatch');
     }
 
-    const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
+    const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath, { generation: Number(video.generation) }).getSignedUrl({
+      version: 'v4', queryParams: { generation: video.generation },
       action: 'read',
       expires: expiresAtMs,
       responseDisposition: disposition,
       responseType: video.mimeType,
     });
-    const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).getSignedUrl({
+    const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath, { generation: Number(subtitle.generation) }).getSignedUrl({
+      version: 'v4', queryParams: { generation: subtitle.generation },
       action: 'read',
       expires: expiresAtMs,
       responseDisposition: disposition,

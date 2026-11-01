@@ -158,6 +158,12 @@ function sourceGeneration(value) {
   return value;
 }
 
+function pinnedUploadedOutputGeneration(value) {
+  if (typeof value !== 'string' || !/^[1-9][0-9]{0,19}$/.test(value) ||
+      !Number.isSafeInteger(Number(value))) throw new Error('output_generation_unavailable');
+  return value;
+}
+
 function openSelectedSource(source) {
   // The installed SDK converts this string to Number. Reject versions it
   // cannot represent exactly; never round or fall back to the latest object.
@@ -383,12 +389,15 @@ function parseAssemblyPayload(job) {
       || !subtitle.objectPath.startsWith(requiredSegmentPrefix)) {
       throw new Error('assembly_segment_boundary_mismatch');
     }
+    const videoGeneration = sourceGeneration(segment.videoGeneration);
+    const subtitleGeneration = sourceGeneration(segment.subtitleGeneration);
     const videoChecksum = String(segment.videoChecksum || '');
     const subtitleChecksum = String(segment.subtitleChecksum || '');
     if (!/^[a-f0-9]{64}$/.test(videoChecksum) || !/^[a-f0-9]{64}$/.test(subtitleChecksum)) {
       throw new Error('assembly_segment_checksum_invalid');
     }
-    return { index, startMs, endMs, video, subtitle, videoChecksum, subtitleChecksum };
+    return { index, startMs, endMs, video: { ...video, generation: videoGeneration },
+      subtitle: { ...subtitle, generation: subtitleGeneration }, videoChecksum, subtitleChecksum };
   });
 
   return {
@@ -624,7 +633,7 @@ async function assembleLifeMovie(job) {
       },
     });
     await pipeline(
-      admin.storage().bucket(location.bucket).file(location.objectPath).createReadStream(),
+      admin.storage().bucket(location.bucket).file(location.objectPath, { generation: Number(location.generation) }).createReadStream(),
       meter,
       fs.createWriteStream(localPath, { mode: 0o600 }),
       { signal: control.signal },
@@ -634,12 +643,17 @@ async function assembleLifeMovie(job) {
     return bytes;
   }
 
-  async function uploadPrivateFile(localPath, destination, contentType) {
+  async function uploadPrivateFile(localPath, destination, contentType, expectedHash) {
     await control.check();
     writtenObjects.push(destination);
-    await pipeline(fs.createReadStream(localPath), bucket.file(destination).createWriteStream({
-      resumable: false, metadata: { contentType, cacheControl: 'private, no-store' },
+    const file = bucket.file(destination);
+    await pipeline(fs.createReadStream(localPath), file.createWriteStream({
+      resumable: false, preconditionOpts: { ifGenerationMatch: 0 },
+      metadata: { contentType, cacheControl: 'private, no-store', metadata: { uraiSha256: expectedHash } },
     }), { signal: control.signal });
+    const [metadata] = await file.getMetadata();
+    if (metadata?.metadata?.uraiSha256 !== expectedHash) throw new Error('output_checksum_metadata_mismatch');
+    return pinnedUploadedOutputGeneration(metadata.generation);
   }
 
   try {
@@ -724,9 +738,11 @@ async function assembleLifeMovie(job) {
       srt: `${attemptPrefix}/life-movie-final.srt`,
       manifest: `${attemptPrefix}/life-movie-final.assembly-manifest.json`,
     };
-    await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4');
-    await uploadPrivateFile(subtitlePath, outputPaths.srt, 'application/x-subrip');
-    await uploadPrivateFile(manifestPath, outputPaths.manifest, 'application/json');
+    const outputGenerations = {
+      mp4: await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4', movieHash),
+      srt: await uploadPrivateFile(subtitlePath, outputPaths.srt, 'application/x-subrip', subtitleHash),
+      manifest: await uploadPrivateFile(manifestPath, outputPaths.manifest, 'application/json', manifestHash),
+    };
     await control.check();
     completed = true;
 
@@ -740,9 +756,9 @@ async function assembleLifeMovie(job) {
       providerSpendAuthorized: false,
       publicReleaseAuthorized: false,
       outputs: [
-        { kind: 'mp4', ref: `gs://${bucketName}/${outputPaths.mp4}`, mimeType: 'video/mp4', checksum: movieHash },
-        { kind: 'srt', ref: `gs://${bucketName}/${outputPaths.srt}`, mimeType: 'application/x-subrip', checksum: subtitleHash },
-        { kind: 'manifest', ref: `gs://${bucketName}/${outputPaths.manifest}`, mimeType: 'application/json', checksum: manifestHash },
+        { kind: 'mp4', ref: `gs://${bucketName}/${outputPaths.mp4}`, generation: outputGenerations.mp4, mimeType: 'video/mp4', checksum: movieHash },
+        { kind: 'srt', ref: `gs://${bucketName}/${outputPaths.srt}`, generation: outputGenerations.srt, mimeType: 'application/x-subrip', checksum: subtitleHash },
+        { kind: 'manifest', ref: `gs://${bucketName}/${outputPaths.manifest}`, generation: outputGenerations.manifest, mimeType: 'application/json', checksum: manifestHash },
       ],
       renderPlanDigest: input.renderPlanDigest,
       sceneTruthReceiptRef: input.sceneTruthReceiptRef,
@@ -894,16 +910,23 @@ async function renderLifeMovie(job) {
       srt: `${attemptPrefix}/life-movie.srt`,
       manifest: `${attemptPrefix}/life-movie.render-manifest.json`,
     };
-    async function uploadPrivateFile(localPath, destination, contentType) {
+    async function uploadPrivateFile(localPath, destination, contentType, expectedHash) {
       await control.check();
       writtenObjects.push(destination);
-      await pipeline(fs.createReadStream(localPath), bucket.file(destination).createWriteStream({
-        resumable: false, metadata: { contentType, cacheControl: 'private, no-store' },
+      const file = bucket.file(destination);
+      await pipeline(fs.createReadStream(localPath), file.createWriteStream({
+        resumable: false, preconditionOpts: { ifGenerationMatch: 0 },
+        metadata: { contentType, cacheControl: 'private, no-store', metadata: { uraiSha256: expectedHash } },
       }), { signal: control.signal });
+      const [metadata] = await file.getMetadata();
+      if (metadata?.metadata?.uraiSha256 !== expectedHash) throw new Error('output_checksum_metadata_mismatch');
+      return pinnedUploadedOutputGeneration(metadata.generation);
     }
-    await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4');
-    await uploadPrivateFile(subtitlePath, outputPaths.srt, 'application/x-subrip');
-    await uploadPrivateFile(manifestPath, outputPaths.manifest, 'application/json');
+    const outputGenerations = {
+      mp4: await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4', movieHash),
+      srt: await uploadPrivateFile(subtitlePath, outputPaths.srt, 'application/x-subrip', subtitleHash),
+      manifest: await uploadPrivateFile(manifestPath, outputPaths.manifest, 'application/json', manifestHash),
+    };
     await control.check();
     completed = true;
 
@@ -917,9 +940,9 @@ async function renderLifeMovie(job) {
       publicReleaseAuthorized: false,
       spatialRequired: false,
       outputs: [
-        { kind: 'mp4', ref: `gs://${bucketName}/${outputPaths.mp4}`, mimeType: 'video/mp4', checksum: movieHash },
-        { kind: 'srt', ref: `gs://${bucketName}/${outputPaths.srt}`, mimeType: 'application/x-subrip', checksum: subtitleHash },
-        { kind: 'manifest', ref: `gs://${bucketName}/${outputPaths.manifest}`, mimeType: 'application/json', checksum: manifestHash },
+        { kind: 'mp4', ref: `gs://${bucketName}/${outputPaths.mp4}`, generation: outputGenerations.mp4, mimeType: 'video/mp4', checksum: movieHash },
+        { kind: 'srt', ref: `gs://${bucketName}/${outputPaths.srt}`, generation: outputGenerations.srt, mimeType: 'application/x-subrip', checksum: subtitleHash },
+        { kind: 'manifest', ref: `gs://${bucketName}/${outputPaths.manifest}`, generation: outputGenerations.manifest, mimeType: 'application/json', checksum: manifestHash },
       ],
       renderPlanDigest: input.renderPlanDigest,
       sceneTruthReceiptRef: input.sceneTruthReceiptRef,

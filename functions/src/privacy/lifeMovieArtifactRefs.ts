@@ -6,7 +6,7 @@ const OUTPUT_FIELDS = new Set([
   'outputs', 'renderPlanDigest', 'sceneTruthReceiptRef', 'sceneTruthDigest',
   'artifactUrl', 'manifestUrl', 'message', 'payloadEcho', 'completedAt',
 ]);
-const ARTIFACT_FIELDS = new Set(['kind', 'ref', 'mimeType', 'checksum', 'sizeBytes']);
+const ARTIFACT_FIELDS = new Set(['kind', 'ref', 'generation', 'mimeType', 'checksum', 'sizeBytes']);
 
 export function lifeMovieArtifactRefs(value: unknown): string[] {
   if (value === undefined || value === null) return [];
