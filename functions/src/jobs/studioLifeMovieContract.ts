@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 // Admission for the existing bounded synchronous worker, not an authoring limit.
@@ -113,6 +114,37 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
 });
 
 export type StudioLifeMovieRenderPayload = z.infer<typeof StudioLifeMovieRenderPayloadSchema>;
+
+/**
+ * Versioned source-selection fingerprint shared with Studio. It binds immutable
+ * Storage generations and rights references, not merely bucket/object paths.
+ * This is an identifier, NOT proof of user consent, source ownership, or IAM.
+ */
+export function deriveStudioLifeMovieRenderScope(payload: StudioLifeMovieRenderPayload) {
+  const selection = payload.sources.map((source) => [
+    source.id,
+    source.bucket,
+    source.objectPath,
+    source.generation,
+    source.mimeType,
+    source.provenance,
+    source.sourceRefs,
+    source.consentRef,
+    source.ownerOrRightsRef,
+  ] as const);
+  // Source order does not change which media are selected. Use bytewise order,
+  // never a locale-sensitive sort, to keep independent services deterministic.
+  selection.sort((left, right) => left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0);
+  if (selection.some((source, index) => index > 0 && source[0] === selection[index - 1][0])) {
+    throw new Error('life_movie_duplicate_source_id');
+  }
+  const sourceSetDigest = createHash('sha256')
+    .update('urai-life-movie-source-set-v1\\n'.replace('\\n', '\n'))
+    .update(JSON.stringify(selection))
+    .digest('hex');
+  return { projectId: payload.projectId, renderPlanDigest: payload.renderPlanDigest, sourceSetDigest };
+}
+
 
 // Transport references are not an allow decision. The closed authority gate
 // remains responsible for preventing processing until canonical verification.
