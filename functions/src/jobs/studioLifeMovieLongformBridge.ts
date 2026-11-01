@@ -197,6 +197,50 @@ function boundPlanJob(plan: StoredPlan, jobId: string, kind: 'segment' | 'assemb
     projectId: plan.projectId, kind, expectedOutputPrefix } as const;
 }
 
+/**
+ * A successful child is not sufficient evidence for assembly or private
+ * playback. Bind its owner, parent, immutable segment number and content
+ * identity to the originally approved long-form plan before accessing refs.
+ * The preflight is read-only; it never deletes media.
+ */
+function assertBoundSegmentForUse(plan: StoredPlan, job: Job, index: number) {
+  const jobId = plan.childJobIds[index];
+  const descriptor = plan.segments[index];
+  if (!jobId || !descriptor || descriptor.jobId !== jobId || descriptor.index !== index
+    || typeof descriptor.childDigest !== 'string' || !/^[0-9a-f]{64}$/.test(descriptor.childDigest)) {
+    throw new Error('longform_segment_binding_mismatch');
+  }
+  // Reuse the owner-bound deletion preflight: it checks the exact child output
+  // prefix (including segment index), permitted buckets, unsafe object paths,
+  // live in-flight flags and any unrecognized derivative refs.
+  preflightOwnedMovieOutputs(job as unknown as Record<string, unknown>, boundPlanJob(plan, jobId, 'segment'));
+  const payload = job.payload as Record<string, unknown> | undefined;
+  const output = job.output as WorkerOutput | undefined;
+  if (payload?.renderPlanDigest !== descriptor.childDigest
+    || output?.renderPlanDigest !== descriptor.childDigest
+    || payload?.sceneTruthDigest !== plan.sceneTruthDigest
+    || output?.sceneTruthDigest !== plan.sceneTruthDigest
+    || !isDeepStrictEqual(job.consent, plan.consent)) {
+    throw new Error('longform_segment_binding_mismatch');
+  }
+}
+
+/** Require the same complete authority binding for final assembled media. */
+function assertBoundAssemblyForUse(plan: StoredPlan, job: Job) {
+  if (!plan.assemblyJobId) throw new Error('longform_assembly_binding_mismatch');
+  preflightOwnedMovieOutputs(job as unknown as Record<string, unknown>,
+    boundPlanJob(plan, plan.assemblyJobId, 'assembly'));
+  const payload = job.payload as Record<string, unknown> | undefined;
+  const output = job.output as WorkerOutput | undefined;
+  if (payload?.renderPlanDigest !== plan.renderPlanDigest
+    || output?.renderPlanDigest !== plan.renderPlanDigest
+    || payload?.sceneTruthDigest !== plan.sceneTruthDigest
+    || output?.sceneTruthDigest !== plan.sceneTruthDigest
+    || !isDeepStrictEqual(job.consent, plan.consent)) {
+    throw new Error('longform_assembly_binding_mismatch');
+  }
+}
+
 function deriveStatus(plan: StoredPlan, statuses: JobStatus[]) {
   if (plan.status === 'CANCELLED') return 'CANCELLED';
   if (statuses.length === 0) return 'PENDING';
@@ -438,6 +482,7 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
 
 async function assemblePlan(planId: string, tenantId: string, userId: string) {
   const plan = await loadPlan(planId, tenantId, userId);
+  assertPlanStructure(plan, planId);
   if (plan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
   await assertPlanConsentActive(plan);
 
@@ -455,6 +500,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
     if (!job || !descriptor || descriptor.jobId !== plan.childJobIds[index]) {
       throw new Error('longform_segment_binding_mismatch');
     }
+    assertBoundSegmentForUse(plan, job, index);
     const video = boundedArtifact(job.output, 'mp4');
     const subtitle = boundedArtifact(job.output, 'srt');
     const videoLocation = parseGcsRef(video.ref);
@@ -555,6 +601,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
 
 async function readPlanPlayback(planId: string, tenantId: string, userId: string, disposition: 'inline' | 'attachment' = 'inline') {
   const plan = await loadPlan(planId, tenantId, userId);
+  assertPlanStructure(plan, planId);
   await assertPlanConsentActive(plan);
   const db = getFirestore();
   const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
@@ -574,6 +621,7 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
     if (assemblySnapshot.exists) {
       const assembly = assemblySnapshot.data() as Job;
       if (assembly.status === 'SUCCESS') {
+        assertBoundAssemblyForUse(plan, assembly);
         const video = boundedArtifact(assembly.output, 'mp4');
         const subtitle = boundedArtifact(assembly.output, 'srt');
         const finalPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/final/`;
@@ -612,6 +660,7 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
     if (!job || job.status !== 'SUCCESS') throw new Error('longform_plan_not_ready_for_playback');
     const descriptor = plan.segments[index];
     if (!descriptor || descriptor.jobId !== plan.childJobIds[index]) throw new Error('longform_segment_binding_mismatch');
+    assertBoundSegmentForUse(plan, job as Job, index);
     const video = boundedArtifact(job.output, 'mp4');
     const subtitle = boundedArtifact(job.output, 'srt');
     const videoLocation = parseGcsRef(video.ref);
