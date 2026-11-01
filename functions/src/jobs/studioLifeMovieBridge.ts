@@ -13,7 +13,7 @@ import {
   buildRequestFingerprint,
   type IdempotencyBinding,
 } from '../core/jobsReliability.js';
-import { StudioLifeMovieCreateRequestSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
+import { StudioLifeMovieCreateRequestSchema, assertLifeMovieTenantPaths, assertStudioLifeMovieRenderPlanDigest } from './studioLifeMovieContract.js';
 import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
@@ -127,7 +127,7 @@ function safeJobProjection(job: Job) {
 }
 
 async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
-  const payload = assertLifeMovieTenantPaths(input.payload, input.tenantId);
+  const payload = assertStudioLifeMovieRenderPlanDigest(assertLifeMovieTenantPaths(input.payload, input.tenantId));
   const purpose = input.consent?.purpose;
   const policyVersion = input.consent?.policyVersion;
   const decisionReceiptId = input.consent?.decisionReceiptId;
