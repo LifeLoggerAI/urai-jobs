@@ -62,6 +62,7 @@ const deny = /life_movie_source_rights_unverified/;
 function fixture(overrides = {}) {
   const actions = [];
   let ownerReads = 0;
+  let rightsReads = 0;
   const backend = {
     allowedBuckets: ['private-movie-bucket'], nowMs: () => now,
     async assertCurrentOwner(uid, tenant) {
@@ -71,8 +72,12 @@ function fixture(overrides = {}) {
     },
     async readRightsRecord(id) {
       actions.push('rights'); assert.equal(id, 'rights-1');
-      if (overrides.noRights) return null;
-      if (overrides.rightsError) throw Error('database denied');
+      rightsReads++;
+      if (overrides.noRights || (overrides.missingOnSecondRead && rightsReads === 2)) return null;
+      if (overrides.rightsError || (overrides.errorOnSecondRead && rightsReads === 2)) throw Error('database denied');
+      if (overrides.changedOnSecondRead && rightsReads === 2) {
+        return { ...makeRecord(), ...overrides.changedOnSecondRead };
+      }
       return { ...makeRecord(), ...(overrides.record || {}) };
     },
     async currentObject(bucket, path) {
@@ -105,7 +110,7 @@ for (const invalid of [null, {}, { allowedBuckets: [] }, { allowedBuckets: ['x']
   assert.equal(evidence.ownerUid, 'owner-1'); assert.equal(evidence.tenantId, 'tenant-1');
   assert.equal(evidence.renderScope.sourceSetDigest, makeRequest().renderScope.sourceSetDigest);
   assert.ok(typeof evidence.rightsEventId === 'string' && evidence.rightsEventId.length > 8);
-  assert.deepEqual(f.actions, ['rights', 'live', 'pinned', 'audit']);
+  assert.deepEqual(f.actions, ['rights', 'live', 'pinned', 'rights', 'audit']);
   assert.equal(f.ownerReads(), 2); checks += 6;
 }
 for (const mutate of [
@@ -154,6 +159,22 @@ for (const override of [
 ]) {
   const f = fixture(override);
   await assert.rejects(() => createLifeMovieSourceRightsVerifier(f.backend)(makeRequest()), deny);
+  checks++;
+}
+// A rights record can be revoked after the first read while Storage I/O is
+// pending. Neither that new state nor a failed final read may be accepted.
+for (const override of [
+  { changedOnSecondRead: { status: 'revoked' } },
+  { changedOnSecondRead: { revokedAt: new Date(now).toISOString() } },
+  { changedOnSecondRead: { expiresAt: new Date(now-1).toISOString() } },
+  { changedOnSecondRead: { tenantId: 'another-tenant' } },
+  { missingOnSecondRead: true },
+  { errorOnSecondRead: true },
+]) {
+  const f = fixture(override);
+  await assert.rejects(() => createLifeMovieSourceRightsVerifier(f.backend)(makeRequest()), deny);
+  assert.equal(f.actions.filter(x => x === 'rights').length, 2);
+  assert.equal(f.actions.includes('audit'), false);
   checks++;
 }
 console.log('[PASS] ' + checks + ' synthetic source-rights verifier scenarios; no Firebase, grants or rendering.');

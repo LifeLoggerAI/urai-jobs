@@ -56,6 +56,10 @@ const observed = () => active.events;
 const db = { collection(name) { return { doc(id) { return {
   async get() { active.events.push({ operation: 'get', collection: name, id });
     if (active.readError) throw Error('Firestore denied');
+    if (name === 'lifeMovieSourceRights' && active.revokeOnSecondRead &&
+        active.events.filter(x => x.operation === 'get' && x.collection === name).length === 2) {
+      return { exists: true, data: () => ({ ...active.rights, status: 'revoked' }) };
+    }
     return { exists: active.rights != null, data: () => active.rights }; },
   async create(value) { active.events.push({ operation: 'create', collection: name, id, value });
     if (active.auditError) throw Error('Firestore audit unavailable'); },
@@ -125,7 +129,9 @@ for (const config of [
   assert.equal(result.renderScope.sourceSetDigest, scope.sourceSetDigest);
   assert.match(result.rightsEventId, /^[0-9a-f-]{36}$/);
   const reads = state.events.filter(x => x.operation === 'get');
-  assert.deepEqual(reads.map(x => [x.collection, x.id]), [['lifeMovieSourceRights', 'rights-1']]);
+  assert.deepEqual(reads.map(x => [x.collection, x.id]), [
+    ['lifeMovieSourceRights', 'rights-1'], ['lifeMovieSourceRights', 'rights-1'],
+  ]);
   const files = state.events.filter(x => x.operation === 'file');
   assert.equal(files.length, 2);
   assert.equal(files[0].bucket, source.bucket);
@@ -153,6 +159,7 @@ await denied({ rights: null });
 await denied({ readError: true });
 await denied({ ownerError: true });
 await denied({ revokeAfterFirst: true });
+await denied({ revokeOnSecondRead: true });
 await denied({ storageError: true });
 await denied({ auditError: true });
 await denied({ rights: { ...rights, tenantId: 'foreign-tenant' } });

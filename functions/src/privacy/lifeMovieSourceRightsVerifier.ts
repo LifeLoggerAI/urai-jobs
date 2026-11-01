@@ -145,6 +145,14 @@ export function createLifeMovieSourceRightsVerifier(backend: RightsBackend) {
         assertObject(selected, source);
       }
       await backend.assertCurrentOwner(request.ownerUid, request.tenantId);
+      // Rights may be revoked or replaced while immutable Storage metadata is
+      // checked. Re-read the server-owned records before recording an allow.
+      // This narrows the race; the result is still point-in-time evidence,
+      // never a processing grant or a substitute for lifecycle rechecks.
+      for (const source of sources) {
+        const currentRights = await backend.readRightsRecord(source.ownerOrRightsRef);
+        assertRightsRecord(currentRights, request, source, clock());
+      }
       const checkedAt = clock();
       if (!Number.isSafeInteger(checkedAt) || checkedAt < now || checkedAt - now > 30_000) throw new Error(DENIED);
       const id = randomUUID();
