@@ -153,6 +153,17 @@ for (const action of ['playback', 'download']) await blocked(short, { action, ..
 for (const action of ['playback', 'download', 'resume', 'assemble']) {
   await blocked(long, { action, ...identity, planId: 'lmp_abcdefghijklmnopqrst' });
 }
+for (const invalidConsent of [
+  { ...consent, policyVersion: 'invented-policy' },
+  { ...consent, policyVersion: '1.0.0' },
+  { ...consent, decisionReceiptId: 'invented-receipt' },
+  { ...consent, decisionReceiptId: 'A'.repeat(64) },
+  { ...consent, decisionReceiptId: 'a'.repeat(63) },
+]) {
+  assert.equal((await request(short, { ...create, consent: invalidConsent })).status, 400);
+  assert.equal((await request(long, { ...create, consent: invalidConsent, payload: { ...payload, schemaVersion: 'urai-life-movie-longform-v1' } })).status, 400);
+}
+assert.equal((await request(short, create)).status, 503, 'Well-formed receipt reference is not authority');
 assert.equal((await request(short, create, 'Bearer invalid')).status, 401);
 assert.equal((await request(short, { ...create, consent: undefined })).status, 400);
 for (const action of ['status', 'cancel', 'delete-output']) {
