@@ -6,7 +6,9 @@ const require = createRequire(new URL('../functions/package.json', import.meta.u
 const ts = require('typescript');
 const schemaExports = {};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../functions/src/jobs/studioLifeMovieContract.ts', import.meta.url), 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS },
+  // Preserve for-of iteration over Map/Array iterators in Zod superRefine.
+  // The default ES5 target silently drops these loops in synthetic tests.
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText, { exports: schemaExports, require });
 const app = { use() {}, get() {}, post() {}, listen() {} };
 const express = Object.assign(() => app, { json: () => () => {} });
