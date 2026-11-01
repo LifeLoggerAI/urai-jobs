@@ -17,7 +17,7 @@ for (const marker of [
   "const jobType = 'studio.render.longform'",
   "assertSceneTruthReceiptValue(",
   "consent: z.object({",
-  "purpose: z.literal('life-movie.render')",
+  "consent: LifeMovieConsentReferenceSchema",
   "consentBlockRef(input.userId, input.consent.purpose)",
   "life_movie_longform_consent_revoked",
   "planLifeMovieLongformSegments(payload)",
