@@ -38,6 +38,7 @@ function worker(storage) {
     require(name) {
       if (name === 'express') return express;
       if (name === 'firebase-admin') return { initializeApp() {}, storage: () => storage };
+      if (name === './private-output-cleanup') return { cleanupPrivateOutputs: async () => { throw new Error('test_cleanup_not_available'); } };
       return require(name);
     },
   });
