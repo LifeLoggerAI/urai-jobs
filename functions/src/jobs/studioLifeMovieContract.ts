@@ -1,6 +1,15 @@
 import { z } from 'zod';
 
 // Admission for the existing bounded synchronous worker, not an authoring limit.
+// Must match Privacy's distinct life-movie.render policy (v1.1.0).
+// This only validates a receipt reference shape; no grant is implied.
+export const LIFE_MOVIE_RENDER_CONSENT_POLICY_VERSION = '1.1.0' as const;
+export const LifeMovieConsentReferenceSchema = z.object({
+  purpose: z.literal('life-movie.render'),
+  policyVersion: z.literal(LIFE_MOVIE_RENDER_CONSENT_POLICY_VERSION),
+  decisionReceiptId: z.string().regex(/^[0-9a-f]{64}$/),
+}).strict();
+
 export const LIFE_MOVIE_EXECUTION_BUDGET = {
   maxDurationMs: 30_000,
   maxPixelFrames: 1920 * 1080 * 30 * 15,
@@ -112,11 +121,7 @@ export const StudioLifeMovieCreateRequestSchema = z.object({
   userId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
   action: z.literal('create'),
   idempotencyKey: z.string().trim().min(8).max(160),
-  consent: z.object({
-    purpose: z.literal('life-movie.render'),
-    policyVersion: z.string().trim().min(1).max(80),
-    decisionReceiptId: z.string().trim().min(1).max(160),
-  }).strict(),
+  consent: LifeMovieConsentReferenceSchema,
   payload: StudioLifeMovieRenderPayloadSchema,
 }).strict();
 
