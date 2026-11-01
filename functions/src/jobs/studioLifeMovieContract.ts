@@ -139,7 +139,7 @@ export function deriveStudioLifeMovieRenderScope(payload: StudioLifeMovieRenderP
     throw new Error('life_movie_duplicate_source_id');
   }
   const sourceSetDigest = createHash('sha256')
-    .update('urai-life-movie-source-set-v1\\n'.replace('\\n', '\n'))
+    .update('urai-life-movie-source-set-v1\n')
     .update(JSON.stringify(selection))
     .digest('hex');
   return { projectId: payload.projectId, renderPlanDigest: payload.renderPlanDigest, sourceSetDigest };
