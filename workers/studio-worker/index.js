@@ -241,7 +241,18 @@ function parsePayload(job) {
       throw new Error(`invalid_timeline_range:${index}`);
     }
     if (endMs - startMs > 30 * 60 * 1000) throw new Error(`timeline_item_too_long:${index}`);
-    return { sourceId, startMs, endMs };
+    // A timeline offset is a position in the source, not in the final movie.
+    // Preserve absence for byte-for-byte plan identity with Studio/Jobs.
+    const sourceStartMs = raw.sourceStartMs === undefined ? 0 : raw.sourceStartMs;
+    if (!Number.isInteger(sourceStartMs) || sourceStartMs < 0 || sourceStartMs > 45 * 60 * 1000) {
+      throw new Error(`invalid_timeline_source_start:${index}`);
+    }
+    if (sourceById.get(sourceId).mimeType.startsWith('image/') && sourceStartMs !== 0) {
+      throw new Error(`image_source_start_must_be_zero:${index}`);
+    }
+    return raw.sourceStartMs === undefined
+      ? { sourceId, startMs, endMs }
+      : { sourceId, startMs, endMs, sourceStartMs };
   }).sort((left, right) => left.startMs - right.startMs);
 
   for (let i = 1; i < normalizedTimeline.length; i += 1) {
@@ -487,7 +498,14 @@ function probeStreams(filePath) {
   };
 }
 
-function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, height, fps) {
+function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, height, fps, sourceStartMs = 0) {
+  if (!Number.isInteger(sourceStartMs) || sourceStartMs < 0 || sourceStartMs > 45 * 60 * 1000) {
+    throw new Error('invalid_timeline_source_start');
+  }
+  if (mimeType.startsWith('image/') && sourceStartMs !== 0) throw new Error('image_source_start_must_be_zero');
+  // Input seeking precedes -i so the selected source interval is used when
+  // transcoding video or audio, not the first frames at the original path.
+  const seekArgs = sourceStartMs === 0 ? [] : ['-ss', String(sourceStartMs / 1000)];
   const visualFilter = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,fps=${fps},format=yuv420p`;
   if (mimeType.startsWith('image/')) {
     return [
@@ -504,7 +522,7 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
 
   const streams = probeStreams(inputPath);
   if (streams.video) {
-    const args = ['-y', '-i', inputPath];
+    const args = ['-y', ...seekArgs, '-i', inputPath];
     if (!streams.audio) {
       args.push('-f', 'lavfi', '-t', String(durationSeconds), '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
     }
@@ -521,7 +539,7 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
   if (streams.audio) {
     return [
       '-y', '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=${fps}`,
-      '-i', inputPath, '-t', String(durationSeconds), '-af', 'apad',
+      ...seekArgs, '-i', inputPath, '-t', String(durationSeconds), '-af', 'apad',
       '-map', '0:v:0', '-map', '1:a:0',
       '-c:v', 'libx264', '-threads', '1', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
@@ -805,7 +823,7 @@ async function renderLifeMovie(job) {
       } else {
         const source = input.sourceById.get(item.sourceId);
         const sourcePath = localBySource.get(item.sourceId);
-        await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps), { signal: control.signal });
+        await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps, item.sourceStartMs ?? 0), { signal: control.signal });
       }
       clipPaths.push(clipPath);
     }
