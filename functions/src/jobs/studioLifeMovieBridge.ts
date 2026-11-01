@@ -17,7 +17,7 @@ import { StudioLifeMovieCreateRequestSchema, assertLifeMovieTenantPaths, assertS
 import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
-import { deleteOwnedMovieOutputs } from './lifeMovieOwnerDeletion.js';
+import { deleteOwnedMovieOutputs, preflightOwnedMovieOutputs } from './lifeMovieOwnerDeletion.js';
 import { requirePinnedMovieOutputGeneration } from '../privacy/lifeMovieOutputGeneration.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
@@ -319,13 +319,29 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
   }
   if (String(job.status) !== 'SUCCESS') throw new Error('job_not_ready_for_playback');
   const output = job.output as WorkerOutput | undefined;
-  const artifacts = Array.isArray(output?.outputs) ? output!.outputs! : [];
+  const payload = job.payload as Record<string, unknown> | undefined;
+  if (!payload || !output || typeof payload.projectId !== 'string'
+    || typeof payload.renderPlanDigest !== 'string'
+    || !/^[0-9a-f]{64}$/.test(payload.renderPlanDigest)
+    || output.renderPlanDigest !== payload.renderPlanDigest
+    || typeof payload.sceneTruthDigest !== 'string'
+    || !/^[0-9a-f]{64}$/.test(payload.sceneTruthDigest)
+    || output.sceneTruthDigest !== payload.sceneTruthDigest
+    || typeof payload.sceneTruthReceiptRef !== 'string'
+    || !payload.sceneTruthReceiptRef
+    || output.sceneTruthReceiptRef !== payload.sceneTruthReceiptRef) {
+    throw new Error('life_movie_output_binding_mismatch');
+  }
+  preflightOwnedMovieOutputs(job as unknown as Record<string, unknown>, {
+    tenantId, userId, jobId, projectId: payload.projectId,
+  });
+  const artifacts = Array.isArray(output.outputs) ? output.outputs : [];
   const video = artifacts.find((artifact) => artifact?.kind === 'mp4');
   if (!video?.ref) throw new Error('life_movie_video_output_missing');
   const videoLocation = parseGcsRef(video.ref);
   const videoGeneration = requirePinnedMovieOutputGeneration(video.generation);
   const allowedBuckets = allowedLifeMovieOutputBuckets();
-  const expectedPrefix = `tenants/${tenantId}/life-movies/`;
+  const expectedPrefix = `tenants/${tenantId}/life-movies/${payload.projectId}/`;
   if (!allowedBuckets.has(videoLocation.bucket) || !videoLocation.objectPath.startsWith(expectedPrefix)) {
     throw new Error('life_movie_output_boundary_mismatch');
   }
