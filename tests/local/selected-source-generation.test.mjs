@@ -11,6 +11,17 @@ const contract = {};
 vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../functions/src/jobs/studioLifeMovieContract.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText, { exports: contract, require });
+const longform = {};
+vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../functions/src/jobs/studioLifeMovieLongformContract.ts', import.meta.url), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText, {
+  exports: longform,
+  require(name) {
+    if (name === './studioLifeMovieContract.js') return contract;
+    return require(name);
+  },
+});
+
 const source = {
   id: 'selected-source', bucket: 'synthetic-private-bucket', objectPath: 'tenants/synthetic/source.png',
   generation: '1793378565000001', mimeType: 'image/png', provenance: 'original-source',
@@ -129,5 +140,38 @@ test('Jobs independently checks the exact normalized Studio render-plan digest',
   ]) {
     assert.notEqual(contract.computeStudioLifeMovieRenderPlanDigest(altered), expected);
     assert.throws(() => contract.assertStudioLifeMovieRenderPlanDigest({ ...altered, renderPlanDigest: expected }), /life_movie_render_plan_digest_mismatch/);
+  }
+});
+
+
+test('Jobs recomputes long-form digest and rejects source/rights/timeline tampering', () => {
+  const plan = {
+    schemaVersion: 'urai-life-movie-longform-v1',
+    projectId: 'synthetic-project',
+    renderPlanDigest: '0'.repeat(64),
+    sceneTruthReceiptRef: 'str_' + 'a'.repeat(24) + '_' + 'b'.repeat(8) + '_' + 'c'.repeat(43),
+    sceneTruthDigest: 'd'.repeat(64),
+    outputPrefix: 'tenants/synthetic/life-movies/synthetic-project/',
+    width: 640, height: 480, fps: 30,
+    sources: [source],
+    timeline: [{ sourceId: source.id, startMs: 0, endMs: 15000 }],
+    audioCues: [], subtitleText: '',
+    spatialRequired: false, publicReleaseAuthorized: false, providerGenerationAuthorized: false,
+  };
+  const { schemaVersion, renderPlanDigest, spatialRequired,
+    publicReleaseAuthorized, providerGenerationAuthorized, ...renderPlan } = plan;
+  const expected = require('node:crypto').createHash('sha256')
+    .update(contract.canonicalRenderPlanJson(renderPlan)).digest('hex');
+  assert.equal(longform.computeStudioLifeMovieLongformPlanDigest(plan), expected);
+  assert.equal(longform.assertStudioLifeMovieLongformPlanDigest({ ...plan, renderPlanDigest: expected }).renderPlanDigest, expected);
+  assert.throws(() => longform.assertStudioLifeMovieLongformPlanDigest(plan), /life_movie_longform_render_plan_digest_mismatch/);
+  for (const altered of [
+    { ...plan, sources: [{ ...source, generation: '1793378565000002' }] },
+    { ...plan, sources: [{ ...source, ownerOrRightsRef: 'other-rights' }] },
+    { ...plan, timeline: [{ sourceId: source.id, startMs: 0, endMs: 14999 }] },
+    { ...plan, subtitleText: 'changed subtitle' },
+  ]) {
+    assert.notEqual(longform.computeStudioLifeMovieLongformPlanDigest(altered), expected);
+    assert.throws(() => longform.assertStudioLifeMovieLongformPlanDigest({ ...altered, renderPlanDigest: expected }), /life_movie_longform_render_plan_digest_mismatch/);
   }
 });
