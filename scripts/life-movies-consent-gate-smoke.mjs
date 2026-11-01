@@ -133,7 +133,7 @@ const payload = {
   spatialRequired: false, publicReleaseAuthorized: false, providerGenerationAuthorized: false,
 };
 const identity = { tenantId: tenant, userId: owner };
-const consent = { purpose: 'life-movie.render', policyVersion: 'invented-policy', decisionReceiptId: 'invented-receipt' };
+const consent = { purpose: 'life-movie.render', policyVersion: '1.1.0', decisionReceiptId: 'a'.repeat(64) };
 const create = { action: 'create', ...identity, idempotencyKey: 'synthetic-idempotency', consent, payload };
 async function request(handler, body, auth = `Bearer ${token}`) {
   let status, result;
