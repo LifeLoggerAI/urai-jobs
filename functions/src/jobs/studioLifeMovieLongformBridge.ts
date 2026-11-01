@@ -1017,6 +1017,14 @@ export const studioLifeMovieLongformBridge = onRequest({
     return;
   }
 
+  // Legacy playback/download return five-minute signed URLs and cannot revoke
+  // access while the link is live. Never resurrect them when the scoped
+  // consent authority becomes available: use authenticated 'deliver' only.
+  if (parsed.data.action === 'playback' || parsed.data.action === 'download') {
+    res.status(503).json({ ok: false, error: 'life_movie_authenticated_delivery_required' });
+    return;
+  }
+
   if (['create', 'playback', 'download', 'resume', 'assemble'].includes(parsed.data.action)
     && !lifeMovieConsentAuthorityAvailable()) {
     res.status(503).json({ ok: false, error: LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE });

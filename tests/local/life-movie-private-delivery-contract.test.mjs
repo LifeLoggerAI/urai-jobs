@@ -74,5 +74,14 @@ for (const [mode, file] of [
     assert.match(section, /res\.status\(503\)/);
     assert.doesNotMatch(section, /getStorage|getSignedUrl|\.download\(|res\.send\(|\.pipe\(/);
     assert.match(source, /lifeMovieConsentAuthorityAvailable/);
+    // Both legacy URL-issuing actions must stay unreachable independently of
+    // a future change to lifeMovieConsentAuthorityAvailable().
+    const parsedRequest = source.indexOf('const parsed = RequestSchema.safeParse(req.body);');
+    const legacyDenial = source.indexOf("if (parsed.data.action === 'playback' || parsed.data.action === 'download')");
+    const legacyBody = source.slice(legacyDenial, source.indexOf('  if ([', legacyDenial));
+    assert.ok(legacyDenial > parsedRequest, 'legacy gate must follow strict request parsing');
+    assert.match(legacyBody, /life_movie_authenticated_delivery_required/);
+    assert.match(legacyBody, /res\\.status\\(503\\)/);
+    assert.doesNotMatch(legacyBody, /getSignedUrl|signedMovieAccess|readPlanPlayback|res\\.send/);
   });
 }
