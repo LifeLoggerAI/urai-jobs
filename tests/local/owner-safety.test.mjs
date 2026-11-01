@@ -405,3 +405,62 @@ test('bridge responses do not leak storage or database exception text', async ()
   assert.equal(body.error, 'bridge_failed');
   assert.doesNotMatch(JSON.stringify(body), /private synthetic/);
 });
+
+
+test('long-form assembled and delivered media binds every child to owner, digest, consent and segment prefix', async () => {
+  const env = await environment(), { planId, childId } = planFixture();
+  const checksum = 'a'.repeat(64), truth = 'b'.repeat(64), parentDigest = 'c'.repeat(64);
+  const consent = { purpose: 'life-movie.render', policyVersion: '1.1.0', decisionReceiptId: 'd'.repeat(64) };
+  const segmentPrefix = path(project, 'segments/0000/');
+  const segmentFiles = [path(project, 'segments/0000/movie.mp4'), path(project, 'segments/0000/captions.srt')];
+  const artifacts = { outputs: [
+    { kind: 'mp4', ref: ref(segmentFiles[0]), checksum },
+    { kind: 'srt', ref: ref(segmentFiles[1]), checksum },
+  ], renderPlanDigest: checksum, sceneTruthDigest: truth };
+  const plan = {
+    planId, tenantId: tenant, ownerUid: owner, projectId: project,
+    renderPlanDigest: parentDigest, sceneTruthDigest: truth, consent,
+    status: 'PENDING', childJobIds: [childId],
+    segments: [{ jobId: childId, index: 0, childDigest: checksum, startMs: 0, endMs: 1000 }],
+  };
+  const valid = planChild(planId, childId, { payload: {
+    projectId: project, outputPrefix: segmentPrefix, renderPlanDigest: checksum, sceneTruthDigest: truth,
+  }, consent, output: artifacts });
+  const { assertBoundSegmentForUse } = await env.load('long', 'assertBoundSegmentForUse');
+  assert.doesNotThrow(() => assertBoundSegmentForUse(plan, valid, 0));
+  for (const [mutation, error] of [
+    [{ ownerUid: 'other-owner' }, /boundary_mismatch/],
+    [{ tenantId: 'another-tenant' }, /boundary_mismatch/],
+    [{ execution: { rootJobId: 'other-plan', parentJobId: 'other-plan' } }, /boundary_mismatch/],
+    [{ payload: { ...valid.payload, outputPrefix: path(project, 'segments/0001/') } }, /boundary_mismatch/],
+    [{ payload: { ...valid.payload, renderPlanDigest: '0'.repeat(64) } }, /segment_binding_mismatch/],
+    [{ output: { ...artifacts, renderPlanDigest: '0'.repeat(64) } }, /segment_binding_mismatch/],
+    [{ consent: { ...consent, decisionReceiptId: 'e'.repeat(64) } }, /segment_binding_mismatch/],
+    [{ output: { ...artifacts, outputs: [{ kind: 'mp4', ref: ref(path(project, 'segments/0001/other.mp4')), checksum }] } }, /boundary_mismatch/],
+  ]) assert.throws(() => assertBoundSegmentForUse(plan, { ...valid, ...mutation }, 0), error);
+});
+
+test('long-form final assembly is owner-and-parent bound before playback', async () => {
+  const env = await environment(), { planId } = planFixture();
+  const jobId = 'lma_' + createHash('sha256').update(planId + ':assembly-v1').digest('hex').slice(0, 40);
+  const digest = 'f'.repeat(64), truth = 'e'.repeat(64);
+  const consent = { purpose: 'life-movie.render', policyVersion: '1.1.0', decisionReceiptId: 'd'.repeat(64) };
+  const plan = { planId, tenantId: tenant, ownerUid: owner, projectId: project,
+    assemblyJobId: jobId, renderPlanDigest: digest, sceneTruthDigest: truth, consent };
+  const movie = path(project, 'final/movie.mp4');
+  const valid = planChild(planId, jobId, {
+    jobType: 'studio.assemble.video',
+    payload: { projectId: project, outputPrefix: path(project, 'final/'),
+      renderPlanDigest: digest, sceneTruthDigest: truth },
+    output: { renderPlanDigest: digest, sceneTruthDigest: truth, outputs: [
+      { kind: 'mp4', ref: ref(movie), checksum: 'a'.repeat(64) },
+    ] }, consent,
+  });
+  const { assertBoundAssemblyForUse } = await env.load('long', 'assertBoundAssemblyForUse');
+  assert.doesNotThrow(() => assertBoundAssemblyForUse(plan, valid));
+  assert.throws(() => assertBoundAssemblyForUse(plan, { ...valid, ownerUid: 'other-owner' }), /boundary_mismatch/);
+  assert.throws(() => assertBoundAssemblyForUse(plan, { ...valid,
+    payload: { ...valid.payload, renderPlanDigest: '0'.repeat(64) } }), /assembly_binding_mismatch/);
+  assert.throws(() => assertBoundAssemblyForUse(plan, { ...valid,
+    output: { ...valid.output, outputs: [{ kind: 'mp4', ref: ref(path(project, 'segments/0000/other.mp4')) }] } }), /boundary_mismatch/);
+});
