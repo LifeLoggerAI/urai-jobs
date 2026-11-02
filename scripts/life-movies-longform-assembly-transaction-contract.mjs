@@ -27,3 +27,11 @@ test('assembly rereads selected outputs and consent before dedupe',()=>{
   for(const key of ['payload','output','consent'])assert.match(fn,new RegExp('isDeepStrictEqual\\(currentChild\\.'+key+', selectedChild\\.'+key+'\\)'));
   assert.ok(fn.indexOf('currentChildSnapshots.entries()')<fn.indexOf('if (existing.exists)'));
 });
+test('assembly fails closed on malformed persisted plan status before and inside transaction',()=>{
+  assert.match(fn,/if \(plan\.status !== 'PENDING'\)/,
+    'preflight must deny any unsupported stored plan status');
+  assert.match(fn,/if \(currentPlan\.status !== 'PENDING'\)/,
+    'current transaction must deny any unsupported stored plan status');
+  assert.ok(fn.indexOf("currentPlan.status !== 'PENDING'") < fn.indexOf('if (existing.exists)'),
+    'status authority check must precede deduplication or writes');
+});

@@ -510,6 +510,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
   const plan = await loadPlan(planId, tenantId, userId);
   assertPlanStructure(plan, planId);
   if (plan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
+  if (plan.status !== 'PENDING') throw new Error('longform_plan_changed');
   await assertPlanConsentActive(plan);
 
   const db = getFirestore();
@@ -587,6 +588,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
     const currentPlan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
     assertPlanStructure(currentPlan, planId);
     if (currentPlan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
+    if (currentPlan.status !== 'PENDING') throw new Error('longform_plan_changed');
     if (!isDeepStrictEqual(currentPlan.childJobIds, plan.childJobIds)
       || !isDeepStrictEqual(currentPlan.segments, plan.segments)
       || !isDeepStrictEqual(currentPlan.consent, plan.consent)
