@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
 const require = createRequire(import.meta.url);
-const ts = require('typescript');
+const ts = createRequire(new URL('../functions/package.json', import.meta.url))('typescript');
 const source = readFileSync(new URL('../functions/src/privacy/lifeMovieAdmissionPreflight.ts', import.meta.url), 'utf8');
 const js = ts.transpileModule(source, {compilerOptions: {module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const time=Date.parse('2026-11-01T13:00:00Z');
