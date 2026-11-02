@@ -126,7 +126,7 @@ const audioOffsetPayload = {
 };
 assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(audioOffsetPayload).success, true);
 assert.equal(workerParse(audioOffsetPayload).audioCues[0].sourceStartMs, 45 * 60 * 1000);
-for (const invalid of [45 * 60 * 1000 + 1, Number.MAX_SAFE_INTEGER]) {
+for (const invalid of [45 * 60 * 1000 + 1, Number.MAX_SAFE_INTEGER, null, '1250', false, -1, 0.5]) {
   const altered = { ...audioOffsetPayload, audioCues: [{ ...audioOffsetPayload.audioCues[0], sourceStartMs: invalid }] };
   assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(altered).success, false);
   assert.throws(() => workerParse(altered), /invalid_audio_cue_source_start/);
