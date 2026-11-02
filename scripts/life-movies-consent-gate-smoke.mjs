@@ -168,7 +168,7 @@ async function request(handler, body, auth = `Bearer ${token}`) {
 async function blocked(handler, body) {
   const output = await request(handler, body);
   assert.equal(output.status, 503);
-  assert.equal(output.result.error, 'life_movie_consent_authority_unavailable');
+  assert.equal(output.result.error, ['playback', 'download'].includes(body.action) ? 'life_movie_authenticated_delivery_required' : 'life_movie_consent_authority_unavailable');
 }
 await blocked(short, create);
 await blocked(long, { ...create, payload: { ...payload, schemaVersion: 'urai-life-movie-longform-v1' } });
