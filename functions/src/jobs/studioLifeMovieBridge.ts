@@ -15,7 +15,7 @@ import {
 } from '../core/jobsReliability.js';
 import { StudioLifeMovieCreateRequestSchema, assertLifeMovieTenantPaths, assertStudioLifeMovieRenderPlanDigest } from './studioLifeMovieContract.js';
 import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
-import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { consentBlockRef, isConsentContext, assertJobConsentBlockClear } from '../privacy/consentBlocks.js';
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
 import { parseLifeMoviePrivateDeliveryRequest } from './lifeMoviePrivateDeliveryContract.js';
 import { requireLifeMovieCreationAdmission } from '../privacy/lifeMovieCreationAdmission.js';
@@ -140,10 +140,9 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   const consent: JobConsentContext = { purpose, policyVersion, decisionReceiptId };
   await requireLifeMovieCreationAdmission({ ownerUid: input.userId, tenantId: input.tenantId, consent, selection: payload });
   const sceneTruthReceipt = verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, input.userId, payload.sceneTruthReceiptRef);
-  const consentSnapshot = await consentBlockRef(input.userId, consent.purpose).get();
-  if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
-    throw new Error('life_movie_consent_revoked');
-  }
+  const consentRef = consentBlockRef(input.userId, consent.purpose);
+  const consentSnapshot = await consentRef.get();
+  assertJobConsentBlockClear(consentSnapshot, 'life_movie_consent_revoked');
   const ownerBinding = `${input.tenantId}:${input.userId}`;
   const jobType = 'studio.render.video';
   const fingerprintPayload = { tenantId: input.tenantId, userId: input.userId, consent, payload };
@@ -154,15 +153,6 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   const bindingRef = db.collection(IDEMPOTENCY_COLLECTION).doc(bindingId);
   const sceneTruthBindingId = createHash('sha256').update(payload.sceneTruthReceiptRef).digest('hex');
   const sceneTruthBindingRef = db.collection(SCENE_TRUTH_RECEIPT_BINDING_COLLECTION).doc(sceneTruthBindingId);
-
-  const existing = await bindingRef.get();
-  if (existing.exists) {
-    const binding = existing.data() as Partial<IdempotencyBinding>;
-    if (!bindingMatches(binding, expectedBinding) || typeof binding.jobId !== 'string' || !binding.jobId) {
-      throw new Error('idempotency_conflict');
-    }
-    return { jobId: binding.jobId, deduplicated: true };
-  }
 
   const jobId = ulid();
   const now = FieldValue.serverTimestamp();
@@ -188,8 +178,14 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   };
 
   return db.runTransaction(async (transaction) => {
-    const inside = await transaction.get(bindingRef);
-    const sceneTruthInside = await transaction.get(sceneTruthBindingRef);
+    // Bind the revocation veto to the very transaction that admits the job.
+    // A concurrent consent-block write invalidates/retries the transaction.
+    const [inside, sceneTruthInside, liveConsentBlock] = await Promise.all([
+      transaction.get(bindingRef),
+      transaction.get(sceneTruthBindingRef),
+      transaction.get(consentRef),
+    ]);
+    assertJobConsentBlockClear(liveConsentBlock, 'life_movie_consent_revoked');
 
     if (sceneTruthInside.exists) {
       const bound = sceneTruthInside.data() as {
@@ -317,9 +313,7 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
     throw new Error('life_movie_consent_missing');
   }
   const consentSnapshot = await consentBlockRef(userId, job.consent.purpose).get();
-  if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
-    throw new Error('life_movie_consent_revoked');
-  }
+  assertJobConsentBlockClear(consentSnapshot, 'life_movie_consent_revoked');
   if (String(job.status) !== 'SUCCESS') throw new Error('job_not_ready_for_playback');
   const output = job.output as WorkerOutput | undefined;
   const payload = job.payload as Record<string, unknown> | undefined;

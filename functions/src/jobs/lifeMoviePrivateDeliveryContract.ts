@@ -48,12 +48,21 @@ export function parseLifeMoviePrivateDeliveryRequest(
   // symbol properties rather than silently dropping unreviewed instructions.
   const proto = Object.getPrototypeOf(value);
   if (proto !== Object.prototype && proto !== null) fail();
-  const body = value as Record<string, unknown>;
-  const keys = Reflect.ownKeys(body);
+  const input = value as Record<string, unknown>;
+  const keys = Reflect.ownKeys(input);
   const required = mode === 'short'
     ? [...COMMON_FIELDS, 'jobId']
     : [...COMMON_FIELDS, 'planId', 'artifact'];
   if (keys.length !== required.length || keys.some((key) => typeof key !== 'string' || !required.includes(key))) fail();
+  // Inspect data descriptors without invoking getter claims. Validate only a
+  // detached own-value snapshot, so subsequent validation/return cannot run a
+  // caller-defined accessor between key validation and media selection.
+  const body: Record<string, unknown> = Object.create(null);
+  for (const key of required) {
+    const descriptor = Object.getOwnPropertyDescriptor(input, key);
+    if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) fail();
+    body[key] = descriptor.value;
+  }
   if (body.action !== 'deliver' || typeof body.tenantId !== 'string' || !ID.test(body.tenantId)
     || typeof body.userId !== 'string' || !ID.test(body.userId)
     || (body.kind !== 'mp4' && body.kind !== 'srt')

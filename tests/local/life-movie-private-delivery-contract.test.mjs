@@ -85,3 +85,37 @@ for (const [mode, file] of [
     assert.doesNotMatch(legacyBody, /getSignedUrl|signedMovieAccess|readPlanPlayback|res\.send/);
   });
 }
+
+// R374: reject computed/accessor-backed claims before invoking untrusted code.
+// Studio's corresponding private-delivery parser already rejects accessors.
+for (const [mode, base] of [['short', short], ['longform', long]]) {
+  const mandatory = [...Object.keys(base)];
+  for (const key of mandatory) {
+    test(mode + ' rejects accessor-backed ' + key + ' without running a getter', () => {
+      const value = { ...base };
+      const original = value[key];
+      let getterReads = 0;
+      Object.defineProperty(value, key, {
+        enumerable: true,
+        configurable: true,
+        get() { getterReads++; return original; },
+      });
+      assert.throws(() => parse(value, mode, now), /life_movie_private_delivery_request_invalid/);
+      assert.equal(getterReads, 0, 'validation must inspect descriptors rather than invoke accessors');
+    });
+  }
+  test(mode + ' rejects setter-only required claims', () => {
+    const value = { ...base };
+    Object.defineProperty(value, 'tenantId', { enumerable: true, set(_v) {} });
+    assert.throws(() => parse(value, mode, now), /life_movie_private_delivery_request_invalid/);
+  });
+  test(mode + ' detaches validated output from subsequent descriptor changes', () => {
+    const value = { ...base };
+    const validated = parse(value, mode, now);
+    value.tenantId = 'other-tenant';
+    value.generation = '1793378565000002';
+    assert.equal(validated.tenantId, base.tenantId);
+    assert.equal(validated.generation, base.generation);
+    assert.ok(Object.isFrozen(validated));
+  });
+}

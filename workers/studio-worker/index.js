@@ -49,6 +49,23 @@ function canonicalJson(value) {
 
 // The queue's cancellation endpoint revokes this lease. Check the same durable
 // authority during rendering, not just when the dispatcher starts the request.
+/** Treat an absent revocation block as clear; only a literal owned boolean
+ * false on a present block proves that revocation has not been asserted.
+ * Corrupt or unreadable authority data must stop media access. */
+function checkedStudioConsentBlockState(snapshot) {
+  try {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return 'unverified';
+    if (snapshot.exists === false) return 'clear';
+    if (snapshot.exists !== true || typeof snapshot.data !== 'function') return 'unverified';
+    const record = snapshot.data();
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return 'unverified';
+    const descriptor = Object.getOwnPropertyDescriptor(record, 'active');
+    if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value') ||
+        typeof descriptor.value !== 'boolean') return 'unverified';
+    return descriptor.value === true ? 'revoked' : 'clear';
+  } catch { return 'unverified'; }
+}
+
 function createRenderControl(job) {
   const jobId = safeSegment(String(job.jobId || ''), 'job_id');
   const jobType = String(job.jobType || job.type || '');
@@ -96,7 +113,10 @@ function createRenderControl(job) {
         if (current.ownerUid && current.consent?.purpose) {
           const id = crypto.createHash('sha256').update(`${current.ownerUid}\n${current.consent.purpose}`).digest('hex');
           const block = await wait(admin.firestore().collection('jobConsentBlocks').doc(id).get());
-          if (block.exists && block.data()?.active === true) throw new Error('render_consent_revoked');
+          const consentBlockState = checkedStudioConsentBlockState(block);
+        if (consentBlockState !== 'clear') {
+          throw new Error(consentBlockState === 'revoked' ? 'render_consent_revoked' : 'render_authority_unavailable');
+        }
         }
       })().catch((error) => {
         const allowed = ['render_lease_revoked', 'render_job_binding_mismatch', 'render_consent_revoked', 'render_deadline_exceeded'];

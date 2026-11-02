@@ -8,7 +8,7 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 import type { Job, JobQueueEntry, JobStatus } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
-import { consentBlockRef } from '../privacy/consentBlocks.js';
+import { consentBlockRef, checkedJobConsentBlockState, assertJobConsentBlockClear } from '../privacy/consentBlocks.js';
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
 import { parseLifeMoviePrivateDeliveryRequest } from './lifeMoviePrivateDeliveryContract.js';
 import { requireLifeMovieCreationAdmission } from '../privacy/lifeMovieCreationAdmission.js';
@@ -271,9 +271,7 @@ function deriveStatus(plan: StoredPlan, statuses: JobStatus[]) {
 
 async function assertPlanConsentActive(plan: StoredPlan) {
   const snapshot = await consentBlockRef(plan.ownerUid, plan.consent.purpose).get();
-  if (snapshot.exists && snapshot.data()?.active === true) {
-    throw new Error('life_movie_longform_consent_revoked');
-  }
+  assertJobConsentBlockClear(snapshot, 'life_movie_longform_consent_revoked');
 }
 
 async function createPlan(input: z.infer<typeof CreateSchema>) {
@@ -293,10 +291,9 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
     },
     selection: payload,
   });
-  const consentSnapshot = await consentBlockRef(input.userId, input.consent.purpose).get();
-  if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
-    throw new Error('life_movie_longform_consent_revoked');
-  }
+  const consentRef = consentBlockRef(input.userId, input.consent.purpose);
+  const consentSnapshot = await consentRef.get();
+  assertJobConsentBlockClear(consentSnapshot, 'life_movie_longform_consent_revoked');
   const secret = configuredSceneTruthSecret();
   const receipt = assertSceneTruthReceiptValue(
     payload.projectId,
@@ -323,24 +320,19 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
   const receiptBindingId = createHash('sha256').update(payload.sceneTruthReceiptRef).digest('hex');
   const receiptBindingRef = db.collection(SCENE_TRUTH_RECEIPT_BINDING_COLLECTION).doc(receiptBindingId);
 
-  const existing = await bindingRef.get();
-  if (existing.exists) {
-    const binding = existing.data() as Partial<IdempotencyBinding>;
-    if (!bindingMatches(binding, expectedBinding) || typeof binding.jobId !== 'string' || !binding.jobId) {
-      throw new Error('idempotency_conflict');
-    }
-    return { planId: binding.jobId, deduplicated: true, segmentCount: segments.length };
-  }
-
   const planId = `lmp_${ulid()}`;
   const childIds = segments.map((segment) => makeChildId(planId, segment.index));
   const now = FieldValue.serverTimestamp();
 
   return db.runTransaction(async (transaction) => {
-    const [inside, receiptInside] = await Promise.all([
+    // Check active revocation in the same serializable write transaction.
+    // Preflight alone cannot close the revoke-before-commit window.
+    const [inside, receiptInside, liveConsentBlock] = await Promise.all([
       transaction.get(bindingRef),
       transaction.get(receiptBindingRef),
+      transaction.get(consentRef),
     ]);
+    assertJobConsentBlockClear(liveConsentBlock, 'life_movie_longform_consent_revoked');
 
     if (receiptInside.exists) {
       const bound = receiptInside.data() as {
@@ -478,7 +470,9 @@ async function loadPlan(planId: string, tenantId: string, userId: string) {
 async function readPlanStatus(planId: string, tenantId: string, userId: string) {
   const plan = await loadPlan(planId, tenantId, userId);
   const consentSnapshot = await consentBlockRef(plan.ownerUid, plan.consent.purpose).get();
-  const revoked = consentSnapshot.exists && consentSnapshot.data()?.active === true;
+  const consentState = checkedJobConsentBlockState(consentSnapshot);
+  if (consentState === 'unverified') throw new Error('life_movie_consent_block_unverified');
+  const revoked = consentState === 'revoked';
   const db = getFirestore();
   const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
   const assemblySnapshot = plan.assemblyJobId ? await jobDoc(plan.assemblyJobId).get() : null;
