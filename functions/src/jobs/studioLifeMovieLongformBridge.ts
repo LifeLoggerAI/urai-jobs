@@ -766,10 +766,31 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
   const db = getFirestore();
   const childRefs = plan.childJobIds.map((jobId) => jobDoc(jobId));
   return db.runTransaction(async (transaction) => {
-    const [snapshots, assemblySnapshot] = await Promise.all([
+    // Read both owner-plan state and consent revocation in the same write
+    // transaction that can requeue failed children. These transaction reads
+    // force retry/abort if cancellation or revocation races this resume.
+    const [snapshots, assemblySnapshot, planSnapshot, liveConsentBlock] = await Promise.all([
       childRefs.length ? transaction.getAll(...childRefs) : Promise.resolve([]),
       plan.assemblyJobId ? transaction.get(jobDoc(plan.assemblyJobId)) : Promise.resolve(null),
+      transaction.get(planRef(planId)),
+      transaction.get(consentBlockRef(plan.ownerUid, plan.consent.purpose)),
     ]);
+    assertJobConsentBlockClear(liveConsentBlock, 'life_movie_longform_consent_revoked');
+    if (!planSnapshot.exists) throw new Error('longform_plan_not_found');
+    const currentPlan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
+    assertPlanStructure(currentPlan, planId);
+    if (currentPlan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
+    // Child refs came from the earlier plan snapshot; stale membership,
+    // source selection, or consent must not be replayed into a newer plan.
+    if (!isDeepStrictEqual(currentPlan.childJobIds, plan.childJobIds)
+      || !isDeepStrictEqual(currentPlan.segments, plan.segments)
+      || currentPlan.assemblyJobId !== plan.assemblyJobId
+      || currentPlan.projectId !== plan.projectId
+      || currentPlan.renderPlanDigest !== plan.renderPlanDigest
+      || currentPlan.sceneTruthDigest !== plan.sceneTruthDigest
+      || !isDeepStrictEqual(currentPlan.consent, plan.consent)) {
+      throw new Error('longform_plan_changed');
+    }
     const now = FieldValue.serverTimestamp();
     let resumedChildren = 0;
 
