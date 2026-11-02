@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
-const require = createRequire(import.meta.url);
+const require = createRequire(new URL('../functions/package.json', import.meta.url));
 const ts = require('typescript');
 const code = readFileSync(new URL('../functions/src/jobs/studioLifeMovieLongformBridge.ts', import.meta.url), 'utf8');
 const begin = code.indexOf('async function resumePlan(');
