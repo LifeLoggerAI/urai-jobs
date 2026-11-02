@@ -320,15 +320,6 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
   const receiptBindingId = createHash('sha256').update(payload.sceneTruthReceiptRef).digest('hex');
   const receiptBindingRef = db.collection(SCENE_TRUTH_RECEIPT_BINDING_COLLECTION).doc(receiptBindingId);
 
-  const existing = await bindingRef.get();
-  if (existing.exists) {
-    const binding = existing.data() as Partial<IdempotencyBinding>;
-    if (!bindingMatches(binding, expectedBinding) || typeof binding.jobId !== 'string' || !binding.jobId) {
-      throw new Error('idempotency_conflict');
-    }
-    return { planId: binding.jobId, deduplicated: true, segmentCount: segments.length };
-  }
-
   const planId = `lmp_${ulid()}`;
   const childIds = segments.map((segment) => makeChildId(planId, segment.index));
   const now = FieldValue.serverTimestamp();
