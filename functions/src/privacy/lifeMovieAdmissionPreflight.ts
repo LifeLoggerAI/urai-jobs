@@ -47,6 +47,70 @@ const MAX_RIGHTS_AGE_MS = 30_000;
 const UNAVAILABLE = 'life_movie_admission_authority_unavailable';
 const RIGHTS_DENIED = 'life_movie_source_rights_unverified';
 
+/** Make a data-only, immutable copy of the exact media authorization input.
+ * Never keep references to a caller-owned selection across await boundaries.
+ * Upstream Zod parsing remains mandatory; this is an independent race fence.
+ */
+function ownData(value: unknown, key: string): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(UNAVAILABLE);
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  if (!descriptor) return undefined;
+  if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) throw new Error(UNAVAILABLE);
+  return descriptor.value;
+}
+
+const SOURCE_FIELDS = [
+  'id', 'bucket', 'objectPath', 'generation', 'mimeType', 'provenance',
+  'sourceRefs', 'consentRef', 'ownerOrRightsRef',
+] as const;
+
+function snapshotAdmissionRequest(raw: LifeMovieAdmissionRequest): LifeMovieAdmissionRequest {
+  const consent = ownData(raw, 'consent');
+  const originalSelection = ownData(raw, 'selection');
+  const originalSources = ownData(originalSelection, 'sources');
+  if (!Array.isArray(originalSources) || originalSources.length < 1 || originalSources.length > 12) {
+    throw new Error(UNAVAILABLE);
+  }
+  const sources = Array.from({length: originalSources.length}, (_, i) => {
+    const item = Object.getOwnPropertyDescriptor(originalSources, String(i));
+    if (!item || !Object.prototype.hasOwnProperty.call(item, 'value')) throw new Error(UNAVAILABLE);
+    const source: Record<string, unknown> = {};
+    for (const key of SOURCE_FIELDS) {
+      const value = ownData(item.value, key);
+      if (value === undefined) continue;
+      if (key === 'sourceRefs') {
+        if (!Array.isArray(value) || value.length < 1 || value.length > 32) throw new Error(UNAVAILABLE);
+        const refs = Array.from({length: value.length}, (_, j) => {
+          const field = Object.getOwnPropertyDescriptor(value, String(j));
+          if (!field || !Object.prototype.hasOwnProperty.call(field, 'value') ||
+              typeof field.value !== 'string') throw new Error(UNAVAILABLE);
+          return field.value;
+        });
+        source.sourceRefs = Object.freeze(refs);
+      } else {
+        if (typeof value !== 'string') throw new Error(UNAVAILABLE);
+        source[key] = value;
+      }
+    }
+    return Object.freeze(source);
+  });
+  const selection: Selection = Object.freeze({
+    projectId: ownData(originalSelection, 'projectId') as string,
+    renderPlanDigest: ownData(originalSelection, 'renderPlanDigest') as string,
+    sources: Object.freeze(sources) as Selection['sources'],
+  });
+  return Object.freeze({
+    ownerUid: ownData(raw, 'ownerUid') as string,
+    tenantId: ownData(raw, 'tenantId') as string,
+    consent: Object.freeze({
+      purpose: ownData(consent, 'purpose') as string,
+      policyVersion: ownData(consent, 'policyVersion') as string,
+      decisionReceiptId: ownData(consent, 'decisionReceiptId') as string,
+    }),
+    selection,
+  });
+}
+
 const matchesScope = (a: LifeMovieRenderScope, b: LifeMovieRenderScope): boolean =>
   !!a && typeof a === 'object' && !Array.isArray(a) &&
   Reflect.ownKeys(a).length === 3 &&
@@ -71,7 +135,13 @@ export function createLifeMovieAdmissionPreflight(deps: LifeMovieAdmissionDepend
     throw new Error(UNAVAILABLE);
   }
   const clock = deps.nowMs ?? Date.now;
-  return async (input: LifeMovieAdmissionRequest) => {
+  return async (rawInput: LifeMovieAdmissionRequest) => {
+    let input: LifeMovieAdmissionRequest;
+    try {
+      input = snapshotAdmissionRequest(rawInput);
+    } catch {
+      throw new Error(UNAVAILABLE);
+    }
     if (!input || typeof input.ownerUid !== 'string' || !ID.test(input.ownerUid) ||
         typeof input.tenantId !== 'string' || !ID.test(input.tenantId) ||
         input.consent?.purpose !== 'life-movie.render' ||
@@ -88,12 +158,15 @@ export function createLifeMovieAdmissionPreflight(deps: LifeMovieAdmissionDepend
     // cannot supply its own sourceSetDigest in the authorization expectation.
     let scope: LifeMovieRenderScope;
     try {
-      scope = deriveStudioLifeMovieRenderScope(input.selection);
+      // The trusted canonical derivation runs synchronously; the validated
+      // immutable copy is used at every subsequent asynchronous boundary.
+      scope = deriveStudioLifeMovieRenderScope(rawInput.selection);
       if (!HASH.test(scope.sourceSetDigest) || scope.projectId !== input.selection.projectId ||
           scope.renderPlanDigest !== input.selection.renderPlanDigest) throw new Error(UNAVAILABLE);
     } catch {
       throw new Error(UNAVAILABLE);
     }
+    Object.freeze(scope);
     const now = clock();
     if (!Number.isSafeInteger(now) || now <= 0) throw new Error(UNAVAILABLE);
 
@@ -128,13 +201,13 @@ export function createLifeMovieAdmissionPreflight(deps: LifeMovieAdmissionDepend
         rightsCheckedAt - now > MAX_RIGHTS_AGE_MS) throw new Error(RIGHTS_DENIED);
     const rightsMs = validRights(rights, rightsCheckedAt);
 
-    const expected: ExpectedLifeMovieDecision = {
+    const expected: ExpectedLifeMovieDecision = Object.freeze({
       subjectUid: input.ownerUid,
       tenantId: input.tenantId,
       correlationId: randomUUID(),
       decisionReceiptId: input.consent.decisionReceiptId,
       renderScope: scope,
-    };
+    });
     let decision: { decisionEventId: string; evaluatedAt: string };
     try {
       decision = await deps.getCurrentPrivacyDecision(expected);
