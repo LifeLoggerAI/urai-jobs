@@ -131,6 +131,21 @@ for (const invalid of [45 * 60 * 1000 + 1, Number.MAX_SAFE_INTEGER, null, '1250'
   assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(altered).success, false);
   assert.throws(() => workerParse(altered), /invalid_audio_cue_source_start/);
 }
+// Worker must reject JSON scalar coercion for timing and gain values.
+for (const [field, invalids, error] of [
+  ['startMs', ['0', null, false, 0.5], /invalid_audio_cue_range/],
+  ['endMs', ['1000', null, false, 0.5], /invalid_audio_cue_range/],
+  ['gainDb', ['0', null, false, '3'], /invalid_audio_cue_gain/],
+]) {
+  for (const invalid of invalids) {
+    const altered = {
+      ...audioOffsetPayload,
+      audioCues: [{ ...audioOffsetPayload.audioCues[0], [field]: invalid }],
+    };
+    assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(altered).success, false);
+    assert.throws(() => workerParse(altered), error);
+  }
+}
 const imageOffset = { ...payload, timeline: [{ ...payload.timeline[0], sourceStartMs: 1250 }] };
 assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(imageOffset).success, false);
 assert.throws(() => workerParse(imageOffset), /image_source_start_must_be_zero/);
