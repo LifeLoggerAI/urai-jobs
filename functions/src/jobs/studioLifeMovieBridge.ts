@@ -489,17 +489,7 @@ export const studioLifeMovieBridge = onRequest({
       return;
     }
 
-    if (parsed.data.action === 'playback') {
-      const playback = await signedMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'inline');
-      res.status(200).json({ ok: true, playback });
-      return;
-    }
-
-    if (parsed.data.action === 'download') {
-      const download = await signedMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'attachment');
-      res.status(200).json({ ok: true, download });
-      return;
-    }
+    // Legacy playback/download are rejected before dispatch; no signed URL fallback.
 
     if (parsed.data.action === 'delete-output') {
       const deletion = await deleteBoundMovieOutput(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId);
