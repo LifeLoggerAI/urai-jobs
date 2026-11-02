@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
+const requireWorker = createRequire(new URL('../workers/studio-worker/index.js', import.meta.url));
 const ts = require('typescript');
 const schemaExports = {};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../functions/src/jobs/studioLifeMovieContract.ts', import.meta.url), 'utf8'), {
@@ -19,7 +20,7 @@ vm.runInNewContext(fs.readFileSync(new URL('../workers/studio-worker/index.js', 
   require(name) {
     if (name === 'express') return express;
     if (name === 'firebase-admin') return { initializeApp() {} };
-    return require(name);
+    return requireWorker(name);
   },
 });
 const payload = {
