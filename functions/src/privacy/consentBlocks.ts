@@ -79,3 +79,32 @@ export function isConsentContext(value: unknown): value is JobConsentContext {
     && typeof record.decisionReceiptId === 'string'
     && record.decisionReceiptId.length > 0;
 }
+
+export type JobConsentBlockState = 'clear' | 'revoked' | 'unverified';
+
+/** A missing Firestore document is clear. An existing block must own a
+ * literal boolean active field; malformed or unreadable evidence denies. */
+export function checkedJobConsentBlockState(snapshot: unknown): JobConsentBlockState {
+  try {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return 'unverified';
+    const recordSnapshot = snapshot as { exists?: unknown; data?: () => unknown };
+    if (recordSnapshot.exists === false) return 'clear';
+    if (recordSnapshot.exists !== true || typeof recordSnapshot.data !== 'function') return 'unverified';
+    const record = recordSnapshot.data();
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return 'unverified';
+    const active = Object.getOwnPropertyDescriptor(record, 'active');
+    if (!active || !Object.prototype.hasOwnProperty.call(active, 'value') ||
+        typeof active.value !== 'boolean') return 'unverified';
+    return active.value ? 'revoked' : 'clear';
+  } catch {
+    return 'unverified';
+  }
+}
+
+/** Shared preflight; this is a revocation veto, never a positive grant. */
+export function assertJobConsentBlockClear(snapshot: unknown, revokedCode: string): void {
+  const state = checkedJobConsentBlockState(snapshot);
+  if (state !== 'clear') {
+    throw new Error(state === 'revoked' ? revokedCode : 'life_movie_consent_block_unverified');
+  }
+}

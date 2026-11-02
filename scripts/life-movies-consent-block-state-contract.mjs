@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
 
 // Exercise the actual, committed worker guard in an isolated VM without
 // importing Express, Firebase, reading private data or enabling rendering.
@@ -39,3 +40,49 @@ assert.match(worker, /if \(consentBlockState !== 'clear'\) \{/);
 assert.match(worker, /consentBlockState === 'revoked' \? 'render_consent_revoked' : 'render_authority_unavailable'/);
 assert.doesNotMatch(worker, /if \(block\.exists && block\.data\(\)\?\.active === true\)/);
 console.log(`[PASS] ${total} worker consent-block states + original-worker revocation wiring; no provider access`);
+
+// R373: exercise the exact committed Jobs TS helper using the Functions-owning
+// TypeScript dependency, and verify both bridge call sites fail closed.
+const ts = createRequire(new URL('../functions/package.json', import.meta.url))('typescript');
+const consentSource = readFileSync(new URL('../functions/src/privacy/consentBlocks.ts', import.meta.url), 'utf8');
+const at = consentSource.indexOf('export type JobConsentBlockState =');
+assert.ok(at >= 0, 'shared Life Movie consent-block state helper missing');
+const transpiled = ts.transpileModule(consentSource.slice(at), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const isolatedModule = { exports: {} };
+vm.runInNewContext(transpiled, { module: isolatedModule, exports: isolatedModule.exports, Object, Array, Error });
+const { checkedJobConsentBlockState: checkJobs, assertJobConsentBlockClear: assertJobsClear } = isolatedModule.exports;
+assert.equal(typeof checkJobs, 'function');
+const present = active => ({ exists: true, data: () => active });
+const cases = [
+  [{exists:false,data:()=>{throw Error('do not read absent data')}},'clear'],
+  [present({active:false}),'clear'],[present({active:true}),'revoked'],
+  [undefined,'unverified'],[null,'unverified'],[[],'unverified'],[{},'unverified'],
+  [{exists:'false',data:()=>({active:false})},'unverified'],
+  [{exists:true,data:null},'unverified'],
+  [present(null),'unverified'],[present([]),'unverified'],[present({}),'unverified'],
+  [present({active:'false'}),'unverified'],[present({active:0}),'unverified'],[present({active:null}),'unverified'],
+  [present(Object.create({active:false})),'unverified'],
+  [present(Object.create({active:true})),'unverified'],
+  [{exists:true,data:()=>{throw Error('Firestore unavailable')}},'unverified'],
+  [Object.defineProperty({},'exists',{get(){throw Error('unreadable')}}),'unverified'],
+  [present(Object.defineProperty({},'active',{get(){throw Error('trap')}})),'unverified'],
+  [present(new Proxy({active:false},{getOwnPropertyDescriptor(){throw Error('trap')}})),'unverified'],
+];
+for (const [snapshot,state] of cases) {
+  assert.equal(checkJobs(snapshot),state);
+  if (state==='clear') assert.doesNotThrow(()=>assertJobsClear(snapshot,'life_movie_test_revoked'));
+  else assert.throws(()=>assertJobsClear(snapshot,'life_movie_test_revoked'),
+    new RegExp(state==='revoked'?'life_movie_test_revoked':'life_movie_consent_block_unverified'));
+}
+const shortBridge=readFileSync(new URL('../functions/src/jobs/studioLifeMovieBridge.ts',import.meta.url),'utf8');
+const longBridge=readFileSync(new URL('../functions/src/jobs/studioLifeMovieLongformBridge.ts',import.meta.url),'utf8');
+assert.equal((shortBridge.match(/assertJobConsentBlockClear\(consentSnapshot, 'life_movie_consent_revoked'\)/g)||[]).length,2);
+assert.equal((longBridge.match(/assertJobConsentBlockClear\((?:snapshot|consentSnapshot), 'life_movie_longform_consent_revoked'\)/g)||[]).length,2);
+assert.match(longBridge,/if \(consentState === 'unverified'\) throw new Error\('life_movie_consent_block_unverified'\)/);
+for(const bridge of [shortBridge,longBridge]){
+  assert.doesNotMatch(bridge,/(?:snapshot|consentSnapshot)\.exists && (?:snapshot|consentSnapshot)\.data\(\)\?\.active === true/);
+}
+console.log('[PASS] 21 Jobs consent-block scenarios and strict bridge preflight/status wiring. Life Movie remains unavailable.');
+
