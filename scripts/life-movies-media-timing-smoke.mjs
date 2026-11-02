@@ -118,6 +118,19 @@ for (const invalid of [-1, 0.5, 45 * 60 * 1000 + 1, null, '1250', false, NaN, In
   assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(changed).success, false);
   assert.throws(() => workerParse(changed), /invalid_timeline_source_start/);
 }
+// Audio seek offsets must match the existing bounded video source seek.
+const audioOffsetPayload = {
+  ...payload,
+  sources: [{ ...payload.sources[0], mimeType: 'audio/wav' }],
+  audioCues: [{ sourceId: 'source-1', role: 'narration', startMs: 0, endMs: 1000, sourceStartMs: 45 * 60 * 1000 }],
+};
+assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(audioOffsetPayload).success, true);
+assert.equal(workerParse(audioOffsetPayload).audioCues[0].sourceStartMs, 45 * 60 * 1000);
+for (const invalid of [45 * 60 * 1000 + 1, Number.MAX_SAFE_INTEGER]) {
+  const altered = { ...audioOffsetPayload, audioCues: [{ ...audioOffsetPayload.audioCues[0], sourceStartMs: invalid }] };
+  assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(altered).success, false);
+  assert.throws(() => workerParse(altered), /invalid_audio_cue_source_start/);
+}
 const imageOffset = { ...payload, timeline: [{ ...payload.timeline[0], sourceStartMs: 1250 }] };
 assert.equal(schemaExports.StudioLifeMovieRenderPayloadSchema.safeParse(imageOffset).success, false);
 assert.throws(() => workerParse(imageOffset), /image_source_start_must_be_zero/);
