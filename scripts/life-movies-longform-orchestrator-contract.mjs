@@ -65,7 +65,7 @@ for (const marker of [
   "finalFile",
   "parsed.data.action === 'download'",
   "longform_final_assembly_not_ready",
-  "readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId, 'attachment')",
+  "error: 'life_movie_authenticated_delivery_required'",
   "assemblyResumed",
   "assemblyCancelled",
 ]) assert.ok(bridge.includes(marker), `long-form orchestrator missing ${marker}`)
@@ -118,11 +118,8 @@ assert.doesNotMatch(bridge, /status: 'DONE'[\s\S]{0,120}longform/, 'long-form ca
 assert.doesNotMatch(bridge, /segments\.push\([\s\S]*?ref:/, 'private playback response must not expose raw GCS refs')
 assert.ok(bridge.indexOf('assertPlanOwner') < bridge.indexOf('readPlanPlayback'), 'owner/tenant boundary helper must exist before playback implementation')
 
-assert.ok(bridge.includes("readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);"), 'ordinary playback must retain the default inline signed-access mode')
-assert.ok(bridge.includes("readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId, 'attachment')"), 'download must be the explicit attachment signed-access path')
 assert.ok(bridge.includes("outputPrefix: `tenants/${tenantId}/life-movies/${plan.projectId}/final/`"), 'assembly output must remain inside the tenant/project final prefix')
 assert.ok(bridge.includes("buildRequestFingerprint('studio.assemble.video'"), 'assembly job replay must bind to exact payload identity')
 
 
 assert.ok(bridge.includes("responseDisposition: disposition"), 'long-form signed access must bind inline versus attachment disposition explicitly')
-assert.ok(bridge.includes("if (!result.finalFile) throw new Error('longform_final_assembly_not_ready')"), 'long-form download must require completed final assembly')
