@@ -44,5 +44,23 @@ reject({ ...allowed, expiresAt: new Date(now - 1000).toISOString() });
 reject({ ...allowed, decisionEventId: null });
 reject(allowed, { ...expected, decisionReceiptId: 'not-a-hash' });
 reject({ ...allowed, renderScope: { ...renderScope, [Symbol('critical')]: true } });
+// An allow response must contain concrete own data fields, not inherited
+// authority values or getters. Firebase's JSON response naturally does.
+reject(Object.create(allowed));
+for (const field of Object.keys(allowed)) {
+  const inherited = { ...allowed };
+  delete inherited[field];
+  Object.setPrototypeOf(inherited, { [field]: allowed[field] });
+  reject(inherited);
+}
+let inheritedGetterReads = 0;
+const inheritedGetter = { ...allowed };
+delete inheritedGetter.allowed;
+Object.setPrototypeOf(inheritedGetter, Object.defineProperty({}, 'allowed', {
+  get() { inheritedGetterReads++; return true; }
+}));
+reject(inheritedGetter);
+assert.equal(inheritedGetterReads, 0, 'must not execute inherited privileged getter');
+accept(Object.assign(Object.create(null), allowed));
 assert.equal(source.includes('lifeMovieConsentAuthorityAvailable'), true, 'gate must remain referenced as unavailable');
 console.log('[PASS] ' + passes + ' synthetic decision-contract cases; no transport or processing enabled.');

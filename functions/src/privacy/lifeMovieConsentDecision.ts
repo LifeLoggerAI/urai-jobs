@@ -22,6 +22,14 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const owns = (value: Record<string, unknown>, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
 
+// An authenticated JSON response must carry its own concrete authority fields.
+// Prototype defaults or accessor-backed claims are not consent evidence.
+const REQUIRED_DECISION_FIELDS = [
+  'allowed', 'reason', 'purpose', 'policyVersion', 'requiredTier', 'subjectUid',
+  'tenantId', 'correlationId', 'receiptHash', 'renderScope', 'evaluatedAt',
+  'expiresAt', 'decisionEventId',
+] as const;
+
 function exactScope(scope: unknown, expected: LifeMovieRenderScope): boolean {
   if (!scope || typeof scope !== 'object' || Array.isArray(scope)) return false;
   const value = scope as Record<string, unknown>;
@@ -52,6 +60,12 @@ export function assertLifeMovieConsentDecision(
     throw new Error('life_movie_consent_decision_denied');
   }
   const value = decision as Record<string, unknown>;
+  if (!REQUIRED_DECISION_FIELDS.every(key => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor !== undefined && Object.prototype.hasOwnProperty.call(descriptor, 'value');
+  })) {
+    throw new Error('life_movie_consent_decision_denied');
+  }
   const time = typeof value.evaluatedAt === 'string' ? Date.parse(value.evaluatedAt) : NaN;
   const expiry = typeof value.expiresAt === 'string' ? Date.parse(value.expiresAt) : NaN;
   const current = Number.isFinite(time) && time <= nowMs && nowMs - time <= maxAgeMs &&
