@@ -1042,17 +1042,7 @@ export const studioLifeMovieLongformBridge = onRequest({
       res.status(200).json({ ok: true, plan: result });
       return;
     }
-    if (parsed.data.action === 'playback') {
-      const result = await readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);
-      res.status(200).json({ ok: true, playback: result });
-      return;
-    }
-    if (parsed.data.action === 'download') {
-      const result = await readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId, 'attachment');
-      if (!result.finalFile) throw new Error('longform_final_assembly_not_ready');
-      res.status(200).json({ ok: true, download: result });
-      return;
-    }
+    // Legacy playback/download are rejected before dispatch; no signed URL fallback.
     if (parsed.data.action === 'resume') {
       const result = await resumePlan(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);
       res.status(200).json({ ok: true, resume: result });
