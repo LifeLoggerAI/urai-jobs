@@ -130,6 +130,19 @@ function publicBaseUrl(req){
   if(productionRuntime()&&proto!=='https') throw new Error('captured reality callback origin must use HTTPS outside local/test');
   return `${proto}://${hostName}`;
 }
+/** A verified absent block is clear; a present block must own literal boolean active. */
+function checkedCapturedRealityConsentBlockState(snapshot){
+  try{
+    if(!snapshot||typeof snapshot!=='object'||Array.isArray(snapshot)) return 'unverified';
+    if(snapshot.exists===false) return 'clear';
+    if(snapshot.exists!==true||typeof snapshot.data!=='function') return 'unverified';
+    const record=snapshot.data();
+    if(!record||typeof record!=='object'||Array.isArray(record)) return 'unverified';
+    const field=Object.getOwnPropertyDescriptor(record,'active');
+    if(!field||!Object.prototype.hasOwnProperty.call(field,'value')||typeof field.value!=='boolean') return 'unverified';
+    return field.value===true?'revoked':'clear';
+  }catch{return 'unverified';}
+}
 function consentBlockId(ownerUid,purpose){
   return crypto.createHash('sha256').update(String(ownerUid)+'\n'+String(purpose)).digest('hex');
 }
@@ -226,7 +239,11 @@ app.post('/engine-callback',callbackRateLimit,async(req,res)=>{
       for(const purpose of requiredPurposes){
         blockSnaps.push({purpose,snapshot:await tx.get(db.collection('jobConsentBlocks').doc(consentBlockId(String(job.ownerUid||''),purpose)))});
       }
-      const blocked=blockSnaps.find(x=>x.snapshot.exists&&x.snapshot.data()?.active===true);
+      const blockStates=blockSnaps.map(x=>({...x,state:checkedCapturedRealityConsentBlockState(x.snapshot)}));
+      // An active revocation always cancels; unreadable evidence must never
+      // permit a terminal callback or erase the ability to retry safely.
+      const blocked=blockStates.find(x=>x.state==='revoked');
+      if(!blocked&&blockStates.some(x=>x.state!=='clear')) throw new Error('captured reality consent block authority unavailable');
       const now=admin.firestore.FieldValue.serverTimestamp();
       if(blocked){
         tx.update(jobRef,{status:'CANCELLED',error:{message:`Captured Reality consent revoked: ${blocked.purpose}`},lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
