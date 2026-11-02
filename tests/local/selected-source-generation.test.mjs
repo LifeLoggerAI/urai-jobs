@@ -11,6 +11,17 @@ const contract = {};
 vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../functions/src/jobs/studioLifeMovieContract.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText, { exports: contract, require });
+const longform = {};
+vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../../functions/src/jobs/studioLifeMovieLongformContract.ts', import.meta.url), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText, {
+  exports: longform,
+  require(name) {
+    if (name === './studioLifeMovieContract.js') return contract;
+    return require(name);
+  },
+});
+
 const source = {
   id: 'selected-source', bucket: 'synthetic-private-bucket', objectPath: 'tenants/synthetic/source.png',
   generation: '1793378565000001', mimeType: 'image/png', provenance: 'original-source',
@@ -27,6 +38,7 @@ function worker(storage) {
     require(name) {
       if (name === 'express') return express;
       if (name === 'firebase-admin') return { initializeApp() {}, storage: () => storage };
+      if (name === './private-output-cleanup') return { cleanupPrivateOutputs: async () => { throw new Error('test_cleanup_not_available'); } };
       return require(name);
     },
   });
@@ -93,4 +105,74 @@ test('installed Storage SDK serializes the selected generation exactly without n
 
 test('preparing source contracts does not activate render authority', () => {
   assert.equal(worker({}).lifeMovieConsentAuthorityAvailable(), false);
+});
+
+
+test('Jobs independently checks the exact normalized Studio render-plan digest', () => {
+  const plan = {
+    schemaVersion: 'urai-life-movie-render-v1',
+    projectId: 'synthetic-project',
+    renderPlanDigest: '0'.repeat(64),
+    sceneTruthReceiptRef: 'str_' + 'a'.repeat(24) + '_' + 'b'.repeat(8) + '_' + 'c'.repeat(43),
+    sceneTruthDigest: 'd'.repeat(64),
+    outputPrefix: 'tenants/synthetic/life-movies/synthetic-project/',
+    width: 640, height: 480, fps: 30,
+    sources: [source],
+    timeline: [{ sourceId: source.id, startMs: 0, endMs: 1000 }],
+    audioCues: [], subtitleText: '',
+    spatialRequired: false, publicReleaseAuthorized: false, providerGenerationAuthorized: false,
+  };
+  const sorted = (value) => Array.isArray(value) ? value.map(sorted)
+    : value && typeof value === 'object'
+      ? Object.fromEntries(Object.keys(value).sort().map(key => [key, sorted(value[key])]))
+      : value;
+  const { renderPlanDigest, schemaVersion, spatialRequired,
+    publicReleaseAuthorized, providerGenerationAuthorized, ...renderPlan } = plan;
+  const expected = require('node:crypto').createHash('sha256')
+    .update(JSON.stringify(sorted(renderPlan))).digest('hex');
+  assert.equal(contract.computeStudioLifeMovieRenderPlanDigest(plan), expected);
+  assert.equal(contract.assertStudioLifeMovieRenderPlanDigest({ ...plan, renderPlanDigest: expected }).renderPlanDigest, expected);
+  assert.throws(() => contract.assertStudioLifeMovieRenderPlanDigest(plan), /life_movie_render_plan_digest_mismatch/);
+  for (const altered of [
+    { ...plan, sources: [{ ...source, generation: '1793378565000002' }] },
+    { ...plan, sources: [{ ...source, ownerOrRightsRef: 'other-rights' }] },
+    { ...plan, subtitleText: 'other subtitle' },
+    { ...plan, timeline: [{ sourceId: source.id, startMs: 0, endMs: 999 }] },
+  ]) {
+    assert.notEqual(contract.computeStudioLifeMovieRenderPlanDigest(altered), expected);
+    assert.throws(() => contract.assertStudioLifeMovieRenderPlanDigest({ ...altered, renderPlanDigest: expected }), /life_movie_render_plan_digest_mismatch/);
+  }
+});
+
+
+test('Jobs recomputes long-form digest and rejects source/rights/timeline tampering', () => {
+  const plan = {
+    schemaVersion: 'urai-life-movie-longform-v1',
+    projectId: 'synthetic-project',
+    renderPlanDigest: '0'.repeat(64),
+    sceneTruthReceiptRef: 'str_' + 'a'.repeat(24) + '_' + 'b'.repeat(8) + '_' + 'c'.repeat(43),
+    sceneTruthDigest: 'd'.repeat(64),
+    outputPrefix: 'tenants/synthetic/life-movies/synthetic-project/',
+    width: 640, height: 480, fps: 30,
+    sources: [source],
+    timeline: [{ sourceId: source.id, startMs: 0, endMs: 15000 }],
+    audioCues: [], subtitleText: '',
+    spatialRequired: false, publicReleaseAuthorized: false, providerGenerationAuthorized: false,
+  };
+  const { schemaVersion, renderPlanDigest, spatialRequired,
+    publicReleaseAuthorized, providerGenerationAuthorized, ...renderPlan } = plan;
+  const expected = require('node:crypto').createHash('sha256')
+    .update(contract.canonicalRenderPlanJson(renderPlan)).digest('hex');
+  assert.equal(longform.computeStudioLifeMovieLongformPlanDigest(plan), expected);
+  assert.equal(longform.assertStudioLifeMovieLongformPlanDigest({ ...plan, renderPlanDigest: expected }).renderPlanDigest, expected);
+  assert.throws(() => longform.assertStudioLifeMovieLongformPlanDigest(plan), /life_movie_longform_render_plan_digest_mismatch/);
+  for (const altered of [
+    { ...plan, sources: [{ ...source, generation: '1793378565000002' }] },
+    { ...plan, sources: [{ ...source, ownerOrRightsRef: 'other-rights' }] },
+    { ...plan, timeline: [{ sourceId: source.id, startMs: 0, endMs: 14999 }] },
+    { ...plan, subtitleText: 'changed subtitle' },
+  ]) {
+    assert.notEqual(longform.computeStudioLifeMovieLongformPlanDigest(altered), expected);
+    assert.throws(() => longform.assertStudioLifeMovieLongformPlanDigest({ ...altered, renderPlanDigest: expected }), /life_movie_longform_render_plan_digest_mismatch/);
+  }
 });

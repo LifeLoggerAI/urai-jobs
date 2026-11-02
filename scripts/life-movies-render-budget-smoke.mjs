@@ -67,10 +67,27 @@ try {
     const probe = spawnSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', file], { encoding: 'utf8' });
     assert.equal(probe.status, 0, probe.stderr);
     const info = JSON.parse(probe.stdout);
-    assert.equal(info.streams.find(s => s.codec_type === 'video').codec_name, 'h264');
-    assert.equal(info.streams.find(s => s.codec_type === 'audio').codec_name, 'aac');
+    const video = info.streams.find(s => s.codec_type === 'video');
+    const audio = info.streams.find(s => s.codec_type === 'audio');
+    assert.equal(video?.codec_name, 'h264');
+    assert.equal(audio?.codec_name, 'aac');
+    // The timeline is precisely 450 frames at 30 fps. A container-duration
+    // assertion alone is weaker: AAC encoding and concat muxing add priming
+    // and packet padding, even when all 450 video frames are present.
+    assert.equal(Number(video.nb_frames), 15 * 30, 'all 450 timeline frames must be retained');
+    const videoSeconds = Number(video.duration);
+    assert.ok(Number.isFinite(videoSeconds) && Math.abs(videoSeconds - 15) <= 2 / 30,
+      `video frame duration must remain within two 30fps frames: ${videoSeconds}`);
     const duration = Number(info.format.duration);
-    assert.ok(Math.abs(duration - 15) <= 1 / 30, `declared 15-second timeline must be preserved: ${duration}`);
+    const audioSampleRate = Number(audio.sample_rate);
+    assert.ok(Number.isFinite(audioSampleRate) && audioSampleRate > 0);
+    // A 48 kHz AAC packet spans 1024 samples (21.33 ms). Permit at most four
+    // padded AAC packets, while still rejecting missing video frames or larger
+    // drift in the container timeline.
+    const maxAacPaddingSeconds = (4 * 1024) / audioSampleRate;
+    assert.ok(Number.isFinite(duration) && duration >= 15 - 1 / 30
+      && duration <= 15 + maxAacPaddingSeconds,
+      `15s movie container exceeded bounded AAC padding: ${duration}`);
     durations.push(duration);
   }
   console.log(JSON.stringify({ result: 'pass', renders: 2, profile: '1080p30 / 15s / three segments', elapsedMs, durations, workerDeadlineMs: 110000, providerCalls: 0, storage: 'local filesystem fixture', cloudPerformanceCertified: false }));

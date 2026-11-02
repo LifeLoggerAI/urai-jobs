@@ -16,8 +16,7 @@ for (const marker of [
   "const BINDING_COLLECTION = 'studioLifeMovieLongformBindings'",
   "const jobType = 'studio.render.longform'",
   "assertSceneTruthReceiptValue(",
-  "consent: z.object({",
-  "purpose: z.literal('life-movie.render')",
+  "consent: LifeMovieConsentReferenceSchema",
   "consentBlockRef(input.userId, input.consent.purpose)",
   "life_movie_longform_consent_revoked",
   "planLifeMovieLongformSegments(payload)",
@@ -66,7 +65,7 @@ for (const marker of [
   "finalFile",
   "parsed.data.action === 'download'",
   "longform_final_assembly_not_ready",
-  "readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId, 'attachment')",
+  "error: 'life_movie_authenticated_delivery_required'",
   "assemblyResumed",
   "assemblyCancelled",
 ]) assert.ok(bridge.includes(marker), `long-form orchestrator missing ${marker}`)
@@ -85,6 +84,32 @@ assert.doesNotMatch(bridge, /publicReleaseAuthorized:\s*true/)
 assert.ok(bridge.indexOf('assertSceneTruthReceiptValue(') < bridge.indexOf('planLifeMovieLongformSegments(payload)'), 'SceneTruth authority must be verified before child planning')
 assert.equal((bridge.match(/assertSceneTruthReceiptValue\(/g) ?? []).length, 1, 'SceneTruth receipt must be verified once at parent creation, not replayed per child')
 
+// A completed child from another owner, tenant, source plan, or segment number
+// must not be assembled or exposed through private playback.
+for (const marker of [
+  'function assertBoundSegmentForUse(',
+  'function assertBoundAssemblyForUse(',
+  "preflightOwnedMovieOutputs(job as unknown as Record<string, unknown>, boundPlanJob(plan, jobId, 'segment'))",
+  "boundPlanJob(plan, plan.assemblyJobId, 'assembly')",
+  'payload.renderPlanDigest !== descriptor.childDigest',
+  'output?.renderPlanDigest !== descriptor.childDigest',
+  'payload?.sceneTruthDigest !== plan.sceneTruthDigest',
+  'output?.sceneTruthDigest !== plan.sceneTruthDigest',
+  '!isDeepStrictEqual(job.consent, plan.consent)',
+]) assert.ok(bridge.includes(marker), `long-form output use missing child authority check: ${marker}`)
+const assemblyStart = bridge.indexOf('async function assemblePlan(');
+const playbackStart = bridge.indexOf('async function readPlanPlayback(');
+assert.ok(assemblyStart >= 0 && playbackStart > assemblyStart);
+const assemblyBody = bridge.slice(assemblyStart, playbackStart);
+const playbackBody = bridge.slice(playbackStart, bridge.indexOf('async function resumePlan(', playbackStart));
+assert.ok(assemblyBody.includes('assertPlanStructure(plan, planId)'));
+assert.ok(assemblyBody.includes('assertBoundSegmentForUse(plan, job, index)'));
+assert.ok(assemblyBody.indexOf('assertBoundSegmentForUse(plan, job, index)') < assemblyBody.indexOf("const video = boundedArtifact(job.output, 'mp4')"));
+assert.ok(playbackBody.includes('assertPlanStructure(plan, planId)'));
+assert.ok(playbackBody.includes('assertBoundSegmentForUse(plan, job as Job, index)'));
+assert.ok(playbackBody.includes('assertBoundAssemblyForUse(plan, assembly)'));
+assert.ok(playbackBody.indexOf('assertBoundAssemblyForUse(plan, assembly)') < playbackBody.indexOf("const video = boundedArtifact(assembly.output, 'mp4')"));
+
 console.log('Life Movie durable long-form orchestrator contract passed')
 
 assert.ok(bridge.includes("status: 'CANCELLED'"), 'parent cancellation must retain explicit cancelled queue semantics')
@@ -93,11 +118,8 @@ assert.doesNotMatch(bridge, /status: 'DONE'[\s\S]{0,120}longform/, 'long-form ca
 assert.doesNotMatch(bridge, /segments\.push\([\s\S]*?ref:/, 'private playback response must not expose raw GCS refs')
 assert.ok(bridge.indexOf('assertPlanOwner') < bridge.indexOf('readPlanPlayback'), 'owner/tenant boundary helper must exist before playback implementation')
 
-assert.ok(bridge.includes("readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);"), 'ordinary playback must retain the default inline signed-access mode')
-assert.ok(bridge.includes("readPlanPlayback(parsed.data.planId, parsed.data.tenantId, parsed.data.userId, 'attachment')"), 'download must be the explicit attachment signed-access path')
 assert.ok(bridge.includes("outputPrefix: `tenants/${tenantId}/life-movies/${plan.projectId}/final/`"), 'assembly output must remain inside the tenant/project final prefix')
 assert.ok(bridge.includes("buildRequestFingerprint('studio.assemble.video'"), 'assembly job replay must bind to exact payload identity')
 
 
 assert.ok(bridge.includes("responseDisposition: disposition"), 'long-form signed access must bind inline versus attachment disposition explicitly')
-assert.ok(bridge.includes("if (!result.finalFile) throw new Error('longform_final_assembly_not_ready')"), 'long-form download must require completed final assembly')

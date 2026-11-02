@@ -11,6 +11,14 @@ import vm from 'node:vm';
 const deleted = { __fieldDelete: true };
 const FieldValue = { delete: () => deleted, serverTimestamp: () => 'synthetic-time' };
 const clone = value => value === undefined ? undefined : structuredClone(value);
+// The source implementation fingerprints job type plus the full stable payload.
+const stableValue = value => Array.isArray(value) ? value.map(stableValue)
+  : value && typeof value === 'object'
+    ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, nested]) => [key, stableValue(nested)]))
+    : value;
+const fingerprint = (jobType, payload) => createHash('sha256')
+  .update(JSON.stringify(stableValue({ jobType, payload }))).digest('hex');
 
 function fakeDatabase() {
   const docs = new Map();
@@ -73,6 +81,7 @@ function fakeStorage() {
   const objects = new Map();
   const state = { objects, onDelete: undefined, onAfterDelete: undefined };
   state.bucket = bucket => ({ file: (path, options) => ({
+    async getSignedUrl() { return ['https://fixture.invalid/signed-movie']; },
     async getMetadata() {
       const generation = objects.get(`${bucket}/${path}`);
       if (!generation) throw Object.assign(new Error('missing'), { code: 404 });
@@ -117,12 +126,16 @@ async function environment() {
       jobDoc: id => db.collection('jobs').doc(id),
       jobQueueEntryDoc: id => db.collection('jobQueue').doc(id),
     },
-    '../core/jobsReliability.js': { bindingMatches() {}, buildIdempotencyBindingId() {}, buildRequestFingerprint() {} },
-    './studioLifeMovieContract.js': { StudioLifeMovieCreateRequestSchema: schema, assertLifeMovieTenantPaths() {} },
-    './studioLifeMovieLongformContract.js': { StudioLifeMovieLongformPayloadSchema: schema, assertLifeMovieLongformTenantPaths() {}, planLifeMovieLongformSegments() {} },
+    '../core/jobsReliability.js': { bindingMatches() {}, buildIdempotencyBindingId() {}, buildRequestFingerprint: fingerprint },
+    './studioLifeMovieContract.js': { StudioLifeMovieCreateRequestSchema: schema, LifeMovieConsentReferenceSchema: schema,
+      assertLifeMovieTenantPaths() {}, assertStudioLifeMovieRenderPlanDigest: value => value },
+    './studioLifeMovieLongformContract.js': { StudioLifeMovieLongformPayloadSchema: schema,
+      assertLifeMovieLongformTenantPaths() {}, assertStudioLifeMovieLongformPlanDigest: value => value,
+      planLifeMovieLongformSegments() {} },
     './sceneTruthReceipt.js': { assertSceneTruthReceiptValue() {} },
     '../privacy/consentBlocks.js': { consentBlockRef: () => db.collection('blocks').doc('block'), isConsentContext: () => true },
     '../privacy/lifeMovieConsentGate.js': { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE: 'closed', lifeMovieConsentAuthorityAvailable: () => false },
+    '../privacy/lifeMovieCreationAdmission.js': { requireLifeMovieCreationAdmission: async () => { throw new Error('closed'); } },
     './consentBlocks.js': { consentEventReceiptRef: id => db.collection('receipts').doc(id) },
   };
   async function load(name, extraExports) {
@@ -133,8 +146,10 @@ async function environment() {
     await mod.link(async specifier => {
       const helpers = {
         './lifeMovieOwnerDeletion.js': '../../functions/src/jobs/lifeMovieOwnerDeletion.ts',
+        './lifeMoviePrivateDeliveryContract.js': '../../functions/src/jobs/lifeMoviePrivateDeliveryContract.ts',
         './lifeMovieArtifactRefs.js': '../../functions/src/privacy/lifeMovieArtifactRefs.ts',
         '../privacy/lifeMovieArtifactRefs.js': '../../functions/src/privacy/lifeMovieArtifactRefs.ts',
+        '../privacy/lifeMovieOutputGeneration.js': '../../functions/src/privacy/lifeMovieOutputGeneration.ts',
       };
       if (helpers[specifier]) {
         const file = new URL(helpers[specifier], import.meta.url);
@@ -161,6 +176,38 @@ const shortJob = (extra = {}) => ({ jobId: 'job-1234567890', tenantId: tenant, o
   sourceSystem: 'urai-studio', jobType: 'studio.render.video', status: 'SUCCESS',
   payload: { projectId: project, outputPrefix: path(project, '') }, ...extra });
 const put = (env, id, job) => env.db.collection('jobs').doc(id).set(job);
+
+test('short-form signed playback requires exact source output and owner project binding', async () => {
+  const env = await environment();
+  const clip = path(project, 'renders/clip.mp4');
+  const digest = 'a'.repeat(64), truth = 'b'.repeat(64), receipt = 'scene-truth-receipt';
+  const payload = {
+    projectId: project, outputPrefix: path(project, 'renders/'),
+    renderPlanDigest: digest, sceneTruthDigest: truth, sceneTruthReceiptRef: receipt,
+  };
+  const movieOutput = {
+    renderPlanDigest: digest, sceneTruthDigest: truth, sceneTruthReceiptRef: receipt,
+    outputs: [{ kind: 'mp4', ref: ref(clip), mimeType: 'video/mp4', generation: '1793378565000001' }],
+  };
+  const original = shortJob({ payload, output: movieOutput,
+    consent: { purpose: 'life-movie.render', policyVersion: '1.1.0', decisionReceiptId: 'c'.repeat(64) } });
+  await put(env, original.jobId, original);
+  const { signedMovieAccess } = await env.load('short', 'signedMovieAccess');
+  const result = await signedMovieAccess(tenant, owner, original.jobId, 'inline');
+  assert.equal(result.video.url, 'https://fixture.invalid/signed-movie');
+  for (const invalid of [
+    { payload: { ...payload, projectId: 'another-project' } },
+    { payload: { ...payload, renderPlanDigest: 'd'.repeat(64) } },
+    { payload: { ...payload, sceneTruthDigest: 'd'.repeat(64) } },
+    { output: { ...movieOutput, sceneTruthReceiptRef: 'other-receipt' } },
+    { output: { ...movieOutput, outputs: [{ kind: 'mp4', ref: ref(path('project-b', 'movie.mp4')) }] } },
+    { output: { ...movieOutput, unknownDerivative: ref(clip) } },
+    { outputDeletionInFlightUnresolved: true },
+  ]) {
+    await put(env, original.jobId, { ...original, ...invalid });
+    await assert.rejects(signedMovieAccess(tenant, owner, original.jobId, 'inline'));
+  }
+});
 
 test('short-form deletion cannot delete another project', async () => {
   const env = await environment();
@@ -404,4 +451,131 @@ test('bridge responses do not leak storage or database exception text', async ()
   assert.equal(status, 500);
   assert.equal(body.error, 'bridge_failed');
   assert.doesNotMatch(JSON.stringify(body), /private synthetic/);
+});
+
+
+test('long-form assembled and delivered media binds every child to owner, digest, consent and segment prefix', async () => {
+  const env = await environment(), { planId, childId } = planFixture();
+  const truth = 'b'.repeat(64), parentDigest = 'c'.repeat(64);
+  const checksum = createHash('sha256')
+    .update('urai-life-movie-longform-segment-v1\n' + parentDigest + '\n0\n0\n1000')
+    .digest('hex');
+  const consent = { purpose: 'life-movie.render', policyVersion: '1.1.0', decisionReceiptId: 'd'.repeat(64) };
+  const segmentPrefix = path(project, 'segments/0000/');
+  const segmentFiles = [path(project, 'segments/0000/movie.mp4'), path(project, 'segments/0000/captions.srt')];
+  const artifacts = { outputs: [
+    { kind: 'mp4', ref: ref(segmentFiles[0]), checksum },
+    { kind: 'srt', ref: ref(segmentFiles[1]), checksum },
+  ], renderPlanDigest: checksum, sceneTruthDigest: truth };
+  const plan = {
+    planId, tenantId: tenant, ownerUid: owner, projectId: project,
+    renderPlanDigest: parentDigest, sceneTruthDigest: truth, consent,
+    status: 'PENDING', childJobIds: [childId],
+    segments: [{ jobId: childId, index: 0, childDigest: checksum, startMs: 0, endMs: 1000 }],
+  };
+  const valid = planChild(planId, childId, { payload: {
+    projectId: project, outputPrefix: segmentPrefix, renderPlanDigest: checksum, sceneTruthDigest: truth,
+  }, consent, output: artifacts });
+  plan.segments[0].childPayloadFingerprint = fingerprint('studio.render.video', valid.payload);
+  const { assertBoundSegmentForUse } = await env.load('long', 'assertBoundSegmentForUse');
+  assert.doesNotThrow(() => assertBoundSegmentForUse(plan, valid, 0));
+  for (const [mutation, error] of [
+    [{ ownerUid: 'other-owner' }, /boundary_mismatch/],
+    [{ tenantId: 'another-tenant' }, /boundary_mismatch/],
+    [{ execution: { rootJobId: 'other-plan', parentJobId: 'other-plan' } }, /boundary_mismatch/],
+    [{ payload: { ...valid.payload, outputPrefix: path(project, 'segments/0001/') } }, /boundary_mismatch/],
+    [{ payload: { ...valid.payload, renderPlanDigest: '0'.repeat(64) } }, /segment_binding_mismatch/],
+    [{ payload: { ...valid.payload, sources: [{ id: 'foreign-source', generation: '2' }] } }, /segment_binding_mismatch/],
+    [{ payload: { ...valid.payload, timeline: [{ sourceId: 'alternate', startMs: 0, endMs: 1000 }] } }, /segment_binding_mismatch/],
+    [{ output: { ...artifacts, sceneTruthDigest: '0'.repeat(64) } }, /segment_binding_mismatch/],
+    [{ output: { ...artifacts, renderPlanDigest: '0'.repeat(64) } }, /segment_binding_mismatch/],
+    [{ consent: { ...consent, decisionReceiptId: 'e'.repeat(64) } }, /segment_binding_mismatch/],
+    [{ output: { ...artifacts, outputs: [{ kind: 'mp4', ref: ref(path(project, 'segments/0001/other.mp4')), checksum }] } }, /boundary_mismatch/],
+  ]) assert.throws(() => assertBoundSegmentForUse(plan, { ...valid, ...mutation }, 0), error);
+  assert.throws(() => assertBoundSegmentForUse({
+    ...plan, segments: [{ ...plan.segments[0], childDigest: '0'.repeat(64) }]
+  }, valid, 0), /segment_binding_mismatch/);
+});
+
+test('long-form final assembly is owner-and-parent bound before playback', async () => {
+  const env = await environment(), { planId } = planFixture();
+  const jobId = 'lma_' + createHash('sha256').update(planId + ':assembly-v1').digest('hex').slice(0, 40);
+  const digest = 'f'.repeat(64), truth = 'e'.repeat(64);
+  const consent = { purpose: 'life-movie.render', policyVersion: '1.1.0', decisionReceiptId: 'd'.repeat(64) };
+  const plan = { planId, tenantId: tenant, ownerUid: owner, projectId: project,
+    assemblyJobId: jobId, renderPlanDigest: digest, sceneTruthDigest: truth, consent };
+  const movie = path(project, 'final/movie.mp4');
+  const valid = planChild(planId, jobId, {
+    jobType: 'studio.assemble.video',
+    payload: { projectId: project, outputPrefix: path(project, 'final/'),
+      renderPlanDigest: digest, sceneTruthDigest: truth },
+    output: { renderPlanDigest: digest, sceneTruthDigest: truth, outputs: [
+      { kind: 'mp4', ref: ref(movie), checksum: 'a'.repeat(64) },
+    ] }, consent,
+  });
+  const { assertBoundAssemblyForUse } = await env.load('long', 'assertBoundAssemblyForUse');
+  assert.doesNotThrow(() => assertBoundAssemblyForUse(plan, valid));
+  assert.throws(() => assertBoundAssemblyForUse(plan, { ...valid, ownerUid: 'other-owner' }), /boundary_mismatch/);
+  assert.throws(() => assertBoundAssemblyForUse(plan, { ...valid,
+    payload: { ...valid.payload, renderPlanDigest: '0'.repeat(64) } }), /assembly_binding_mismatch/);
+  assert.throws(() => assertBoundAssemblyForUse(plan, { ...valid,
+    output: { ...valid.output, outputs: [{ kind: 'mp4', ref: ref(path(project, 'segments/0000/other.mp4')) }] } }), /boundary_mismatch/);
+});
+
+
+test('owner deletion refuses a media generation replaced before cleanup starts', async () => {
+  const env = await environment(), p = path(project, 'pinned.mp4');
+  const pinned = { outputs: [{ kind: 'mp4', ref: ref(p), generation: '1' }] };
+  await put(env, 'job-1234567890', shortJob({ output: pinned }));
+  env.storage.objects.set(`private-bucket/${p}`, '2');
+  const { deleteBoundMovieOutput } = await env.load('short', 'deleteBoundMovieOutput');
+  await assert.rejects(deleteBoundMovieOutput(tenant, owner, 'job-1234567890'), /generation_changed/);
+  assert.equal(env.storage.objects.get(`private-bucket/${p}`), '2');
+  assert.deepEqual((await env.db.collection('jobs').doc('job-1234567890').get()).data().output, pinned);
+});
+
+test('owner deletion accepts a matching pinned output generation', async () => {
+  const env = await environment(), p = path(project, 'pinned.mp4');
+  await put(env, 'job-1234567890', shortJob({ output: { outputs: [
+    { kind: 'mp4', ref: ref(p), generation: '1' },
+  ] } }));
+  env.storage.objects.set(`private-bucket/${p}`, '1');
+  const { deleteBoundMovieOutput } = await env.load('short', 'deleteBoundMovieOutput');
+  assert.equal((await deleteBoundMovieOutput(tenant, owner, 'job-1234567890')).deletedObjectCount, 1);
+  assert.equal(env.storage.objects.has(`private-bucket/${p}`), false);
+});
+
+test('owner deletion refuses conflicting pinned generations for a duplicate path', async () => {
+  const env = await environment(), p = path(project, 'pinned.mp4');
+  await put(env, 'job-1234567890', shortJob({
+    output: { outputs: [{ kind: 'mp4', ref: ref(p), generation: '1' }] },
+    result: { outputs: [{ kind: 'mp4', ref: ref(p), generation: '2' }] },
+  }));
+  env.storage.objects.set(`private-bucket/${p}`, '1');
+  const { deleteBoundMovieOutput } = await env.load('short', 'deleteBoundMovieOutput');
+  await assert.rejects(deleteBoundMovieOutput(tenant, owner, 'job-1234567890'), /generation_invalid/);
+  assert.equal(env.storage.objects.get(`private-bucket/${p}`), '1');
+});
+
+test('revocation refuses a media generation replaced before cleanup starts', async () => {
+  const env = await environment(), p = path(project, 'pinned.mp4');
+  const pinned = { outputs: [{ kind: 'mp4', ref: ref(p), generation: '1' }] };
+  await put(env, 'job-1234567890', shortJob({ output: pinned }));
+  env.storage.objects.set(`private-bucket/${p}`, '2');
+  const { invalidateLifeMovieDerivativesForConsent } = await env.load('revocation', 'invalidateLifeMovieDerivativesForConsent');
+  await assert.rejects(invalidateLifeMovieDerivativesForConsent({ eventId: 'event-a', ownerUid: owner,
+    purpose: 'life-movie.render', revokedAt: '2026-10-29T00:00:00Z' }), /generation_changed/);
+  assert.equal(env.storage.objects.get(`private-bucket/${p}`), '2');
+  assert.deepEqual((await env.db.collection('jobs').doc('job-1234567890').get()).data().output, pinned);
+});
+
+test('malformed pinned generation remains unresolved instead of deleting a movie', async () => {
+  const env = await environment(), p = path(project, 'pinned.mp4');
+  await put(env, 'job-1234567890', shortJob({ output: { outputs: [
+    { kind: 'mp4', ref: ref(p), generation: '9007199254740992' },
+  ] } }));
+  env.storage.objects.set(`private-bucket/${p}`, '1');
+  const { deleteBoundMovieOutput } = await env.load('short', 'deleteBoundMovieOutput');
+  await assert.rejects(deleteBoundMovieOutput(tenant, owner, 'job-1234567890'), /generation_invalid/);
+  assert.equal(env.storage.objects.get(`private-bucket/${p}`), '1');
 });

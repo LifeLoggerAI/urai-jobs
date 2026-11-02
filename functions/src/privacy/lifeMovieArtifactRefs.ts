@@ -6,7 +6,7 @@ const OUTPUT_FIELDS = new Set([
   'outputs', 'renderPlanDigest', 'sceneTruthReceiptRef', 'sceneTruthDigest',
   'artifactUrl', 'manifestUrl', 'message', 'payloadEcho', 'completedAt',
 ]);
-const ARTIFACT_FIELDS = new Set(['kind', 'ref', 'mimeType', 'checksum', 'sizeBytes']);
+const ARTIFACT_FIELDS = new Set(['kind', 'ref', 'generation', 'mimeType', 'checksum', 'sizeBytes']);
 
 export function lifeMovieArtifactRefs(value: unknown): string[] {
   if (value === undefined || value === null) return [];
@@ -35,4 +35,36 @@ export function lifeMovieArtifactRefs(value: unknown): string[] {
   }
   if (!recognized) throw new Error('life_movie_output_ref_invalid');
   return refs;
+}
+
+export type LifeMovieArtifactBinding = Readonly<{ ref: string; generation?: string }>;
+
+/** Carry verified worker-produced generations through destructive operations. */
+export function lifeMovieArtifactBindings(value: unknown): LifeMovieArtifactBinding[] {
+  const refs = lifeMovieArtifactRefs(value);
+  if (!refs.length) return [];
+  const root = value as Record<string, unknown>;
+  const bindings: LifeMovieArtifactBinding[] = [];
+  if (Array.isArray(root.outputs)) {
+    for (const artifact of root.outputs) {
+      const record = artifact as Record<string, unknown>;
+      if (Object.prototype.hasOwnProperty.call(record, 'generation')) {
+        const candidate = record.generation;
+        if (typeof candidate !== 'string' || !/^[1-9][0-9]{0,19}$/.test(candidate) ||
+            !Number.isSafeInteger(Number(candidate))) {
+          throw new Error('life_movie_output_generation_invalid');
+        }
+        bindings.push({ ref: record.ref as string, generation: candidate });
+      } else {
+        bindings.push({ ref: record.ref as string });
+      }
+    }
+  }
+  for (const key of ['artifactUrl', 'manifestUrl']) {
+    if (Object.prototype.hasOwnProperty.call(root, key)) bindings.push({ ref: root[key] as string });
+  }
+  if (bindings.length !== refs.length || bindings.some((binding, index) => binding.ref !== refs[index])) {
+    throw new Error('life_movie_output_ref_invalid');
+  }
+  return bindings;
 }
