@@ -291,7 +291,8 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
     },
     selection: payload,
   });
-  const consentSnapshot = await consentBlockRef(input.userId, input.consent.purpose).get();
+  const consentRef = consentBlockRef(input.userId, input.consent.purpose);
+  const consentSnapshot = await consentRef.get();
   assertJobConsentBlockClear(consentSnapshot, 'life_movie_longform_consent_revoked');
   const secret = configuredSceneTruthSecret();
   const receipt = assertSceneTruthReceiptValue(
@@ -333,10 +334,14 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
   const now = FieldValue.serverTimestamp();
 
   return db.runTransaction(async (transaction) => {
-    const [inside, receiptInside] = await Promise.all([
+    // Check active revocation in the same serializable write transaction.
+    // Preflight alone cannot close the revoke-before-commit window.
+    const [inside, receiptInside, liveConsentBlock] = await Promise.all([
       transaction.get(bindingRef),
       transaction.get(receiptBindingRef),
+      transaction.get(consentRef),
     ]);
+    assertJobConsentBlockClear(liveConsentBlock, 'life_movie_longform_consent_revoked');
 
     if (receiptInside.exists) {
       const bound = receiptInside.data() as {

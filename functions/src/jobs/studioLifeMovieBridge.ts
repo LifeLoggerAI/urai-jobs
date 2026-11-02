@@ -140,7 +140,8 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   const consent: JobConsentContext = { purpose, policyVersion, decisionReceiptId };
   await requireLifeMovieCreationAdmission({ ownerUid: input.userId, tenantId: input.tenantId, consent, selection: payload });
   const sceneTruthReceipt = verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, input.userId, payload.sceneTruthReceiptRef);
-  const consentSnapshot = await consentBlockRef(input.userId, consent.purpose).get();
+  const consentRef = consentBlockRef(input.userId, consent.purpose);
+  const consentSnapshot = await consentRef.get();
   assertJobConsentBlockClear(consentSnapshot, 'life_movie_consent_revoked');
   const ownerBinding = `${input.tenantId}:${input.userId}`;
   const jobType = 'studio.render.video';
@@ -186,8 +187,14 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
   };
 
   return db.runTransaction(async (transaction) => {
-    const inside = await transaction.get(bindingRef);
-    const sceneTruthInside = await transaction.get(sceneTruthBindingRef);
+    // Bind the revocation veto to the very transaction that admits the job.
+    // A concurrent consent-block write invalidates/retries the transaction.
+    const [inside, sceneTruthInside, liveConsentBlock] = await Promise.all([
+      transaction.get(bindingRef),
+      transaction.get(sceneTruthBindingRef),
+      transaction.get(consentRef),
+    ]);
+    assertJobConsentBlockClear(liveConsentBlock, 'life_movie_consent_revoked');
 
     if (sceneTruthInside.exists) {
       const bound = sceneTruthInside.data() as {
