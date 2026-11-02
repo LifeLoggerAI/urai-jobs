@@ -206,11 +206,31 @@ const handler = async (data: unknown, _context: CallableContext) => {
       transaction.get(executionRef),
     ]);
     if (!requestSnap.exists) throw httpsError('not-found', 'Data-rights request was not found.');
-    if (priorExecution.exists) return { replay: priorExecution.data(), record: requestSnap.data() as RequestRecord };
-
     const record = requestSnap.data() as RequestRecord;
-    if (!record.ownerUid || !['EXPORT', 'DELETE'].includes(String(record.requestType))) {
+    if (!record?.ownerUid || !['EXPORT', 'DELETE'].includes(String(record.requestType))) {
       throw httpsError('failed-precondition', 'Data-rights request schema requires reconciliation.');
+    }
+    if (priorExecution.exists) {
+      const prior = priorExecution.data();
+      const expectedTerminal = record.requestType === 'EXPORT'
+        ? 'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'
+        : 'PROTECTED_STAGING_JOBS_SCOPE_APPLIED_CENTRAL_PRIVACY_REQUIRED';
+      const expectedOwner = createHash('sha256').update(record.ownerUid).digest('hex');
+      // A STARTED/FAILED audit is not completion evidence. Never turn an
+      // interrupted or partly destructive execution into a successful replay,
+      // and never blindly re-run it without an independent reconciliation.
+      if (!prior || prior.schemaVersion !== EXECUTION_SCHEMA ||
+          prior.ownerHash !== expectedOwner || prior.requestType !== record.requestType ||
+          prior.retentionDecisionReceiptId !== parsed.data.retentionDecisionReceiptId) {
+        throw httpsError('failed-precondition', 'Data-rights execution receipt identity requires reconciliation.');
+      }
+      if (prior.event !== 'DATA_RIGHTS_EXECUTION_FINISHED' ||
+          prior.terminalState !== expectedTerminal ||
+          typeof prior.resultDigest !== 'string' || !/^[a-f0-9]{64}$/.test(prior.resultDigest) ||
+          !prior.result || typeof prior.result !== 'object' || Array.isArray(prior.result)) {
+        throw httpsError('failed-precondition', 'Data-rights execution is not verifiably complete; reconciliation is required.');
+      }
+      return { replay: prior, record };
     }
     if (record.status !== 'APPROVED') {
       throw httpsError('failed-precondition', 'Only an explicitly APPROVED request can enter protected staging execution.');
