@@ -56,7 +56,7 @@ export const LifeMovieAudioCueSchema = z.object({
   role: z.enum(['narration', 'dialogue', 'music', 'ambience', 'foley', 'effects']),
   startMs: z.number().int().nonnegative(),
   endMs: z.number().int().positive(),
-  sourceStartMs: z.number().int().nonnegative().default(0),
+  sourceStartMs: z.number().int().nonnegative().max(45 * 60 * 1000).default(0),
   gainDb: z.number().finite().min(-60).max(12).default(0),
 }).strict().refine((value) => value.endMs > value.startMs, {
   message: 'Audio cue must have positive output duration.',
