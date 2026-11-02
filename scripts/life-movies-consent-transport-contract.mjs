@@ -91,6 +91,9 @@ for (const claims of [
   { ...validClaims, firebase: { sign_in_provider: 'password' } },
   { ...validClaims, exp: seconds - 1 },
   { ...validClaims, iat: seconds + 100 },
+  { ...validClaims, iat: seconds - 7200, exp: seconds + 300 },
+  { ...validClaims, iat: seconds - 100, exp: seconds + 7200 },
+  { ...validClaims, iat: seconds - 100, exp: seconds - 100 },
 ]) await rejects(make({ claims }), 'life_movie_consent_jobs_identity_unavailable');
 for (const token of ['', 'Bearer some-other-token', 'abc.def', 'not-a-jwt']) {
   await rejects(make({ token }), 'life_movie_consent_jobs_identity_unavailable');
