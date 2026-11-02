@@ -284,11 +284,11 @@ function parsePayload(job) {
     }
     const role = String(raw.role || '');
     if (!audioRoles.has(role)) throw new Error(`invalid_audio_cue_role:${index}`);
-    const startMs = Number(raw.startMs);
-    const endMs = Number(raw.endMs);
+    const startMs = raw.startMs;
+    const endMs = raw.endMs;
     const sourceStartMs = raw.sourceStartMs === undefined ? 0 : raw.sourceStartMs;
-    const gainDb = Number(raw.gainDb ?? 0);
-    if (!Number.isInteger(startMs) || !Number.isInteger(endMs) || startMs < 0 || endMs <= startMs) {
+    const gainDb = raw.gainDb === undefined ? 0 : raw.gainDb;
+    if (!Number.isSafeInteger(startMs) || !Number.isSafeInteger(endMs) || startMs < 0 || endMs <= startMs) {
       throw new Error(`invalid_audio_cue_range:${index}`);
     }
     if (!Number.isSafeInteger(sourceStartMs) || sourceStartMs < 0 || sourceStartMs > 45 * 60 * 1000) throw new Error(`invalid_audio_cue_source_start:${index}`);
