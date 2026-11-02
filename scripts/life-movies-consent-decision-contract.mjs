@@ -61,6 +61,33 @@ Object.setPrototypeOf(inheritedGetter, Object.defineProperty({}, 'allowed', {
 }));
 reject(inheritedGetter);
 assert.equal(inheritedGetterReads, 0, 'must not execute inherited privileged getter');
+// Nested movie/source selection is also consent authority. Do not execute
+// accessor-backed fields in the purported Privacy response or expectation.
+for (const key of Object.keys(renderScope)) {
+  let receivedGetterReads = 0;
+  const accessorScope = { ...renderScope };
+  Object.defineProperty(accessorScope, key, { enumerable: true,
+    get() { receivedGetterReads++; return renderScope[key]; } });
+  reject({ ...allowed, renderScope: accessorScope });
+  assert.equal(receivedGetterReads, 0, `response scope getter for ${key} must not execute`);
+  let expectedGetterReads = 0;
+  const accessorExpectation = { ...renderScope };
+  Object.defineProperty(accessorExpectation, key, { enumerable: true,
+    get() { expectedGetterReads++; return renderScope[key]; } });
+  assert.throws(() => verify(allowed, { ...expected, renderScope: accessorExpectation }, now),
+    /life_movie_consent_decision_invalid_expectation/);
+  assert.equal(expectedGetterReads, 0, `expected scope getter for ${key} must not execute`);
+  passes++;
+}
+let topLevelScopeGetterReads = 0;
+const scopedGetterExpectation = { ...expected };
+Object.defineProperty(scopedGetterExpectation, 'renderScope', {
+  get() { topLevelScopeGetterReads++; return renderScope; }
+});
+assert.throws(() => verify(allowed, scopedGetterExpectation, now),
+  /life_movie_consent_decision_invalid_expectation/);
+assert.equal(topLevelScopeGetterReads, 0, 'top-level scope getter must not execute');
+passes++;
 accept(Object.assign(Object.create(null), allowed));
 assert.equal(source.includes('lifeMovieConsentAuthorityAvailable'), true, 'gate must remain referenced as unavailable');
 console.log('[PASS] ' + passes + ' synthetic decision-contract cases; no transport or processing enabled.');

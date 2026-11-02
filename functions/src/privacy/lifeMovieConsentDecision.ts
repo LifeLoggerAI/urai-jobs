@@ -19,8 +19,6 @@ export type ExpectedLifeMovieDecision = Readonly<{
 
 const HASH = /^[0-9a-f]{64}$/;
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-const owns = (value: Record<string, unknown>, key: string): boolean =>
-  Object.prototype.hasOwnProperty.call(value, key);
 
 // An authenticated JSON response must carry its own concrete authority fields.
 // Prototype defaults or accessor-backed claims are not consent evidence.
@@ -30,14 +28,34 @@ const REQUIRED_DECISION_FIELDS = [
   'expiresAt', 'decisionEventId',
 ] as const;
 
+/** Only literal own data properties can carry selected-media authority. */
+function ownDataScope(scope: unknown): LifeMovieRenderScope | null {
+  if (!scope || typeof scope !== 'object' || Array.isArray(scope)) return null;
+  try {
+    const value = scope as Record<string, unknown>;
+    if (Reflect.ownKeys(value).length !== 3) return null;
+    const props = Object.getOwnPropertyDescriptors(value);
+    const keys = ['projectId', 'renderPlanDigest', 'sourceSetDigest'] as const;
+    if (!keys.every(key => Object.prototype.hasOwnProperty.call(props, key) &&
+        Object.prototype.hasOwnProperty.call(props[key], 'value'))) return null;
+    if (typeof props.projectId.value !== 'string' ||
+        typeof props.renderPlanDigest.value !== 'string' ||
+        typeof props.sourceSetDigest.value !== 'string') return null;
+    return {
+      projectId: props.projectId.value,
+      renderPlanDigest: props.renderPlanDigest.value,
+      sourceSetDigest: props.sourceSetDigest.value,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function exactScope(scope: unknown, expected: LifeMovieRenderScope): boolean {
-  if (!scope || typeof scope !== 'object' || Array.isArray(scope)) return false;
-  const value = scope as Record<string, unknown>;
-  return Reflect.ownKeys(value).length === 3 &&
-    owns(value, 'projectId') && owns(value, 'renderPlanDigest') && owns(value, 'sourceSetDigest') &&
-    value.projectId === expected.projectId &&
+  const value = ownDataScope(scope);
+  return Boolean(value && value.projectId === expected.projectId &&
     value.renderPlanDigest === expected.renderPlanDigest &&
-    value.sourceSetDigest === expected.sourceSetDigest;
+    value.sourceSetDigest === expected.sourceSetDigest);
 }
 
 /** Consume ONLY a fresh response retrieved over a reviewed, authenticated
@@ -50,9 +68,14 @@ export function assertLifeMovieConsentDecision(
   nowMs: number = Date.now(),
   maxAgeMs = 30_000,
 ): void {
+  const expectedScopeDescriptor = expected && typeof expected === 'object'
+    ? Object.getOwnPropertyDescriptor(expected, 'renderScope') : undefined;
+  const expectedScope = ownDataScope(expectedScopeDescriptor &&
+    Object.prototype.hasOwnProperty.call(expectedScopeDescriptor, 'value')
+      ? expectedScopeDescriptor.value : undefined);
   if (!Number.isFinite(nowMs) || !Number.isSafeInteger(maxAgeMs) || maxAgeMs < 1 || maxAgeMs > 30_000 ||
-      !ID.test(expected.renderScope.projectId) || !HASH.test(expected.renderScope.renderPlanDigest) ||
-      !HASH.test(expected.renderScope.sourceSetDigest) || !HASH.test(expected.decisionReceiptId) ||
+      !expectedScope || !ID.test(expectedScope.projectId) || !HASH.test(expectedScope.renderPlanDigest) ||
+      !HASH.test(expectedScope.sourceSetDigest) || !HASH.test(expected.decisionReceiptId) ||
       !expected.subjectUid || !expected.tenantId || !expected.correlationId) {
     throw new Error('life_movie_consent_decision_invalid_expectation');
   }
@@ -75,7 +98,7 @@ export function assertLifeMovieConsentDecision(
       value.subjectUid !== expected.subjectUid || value.tenantId !== expected.tenantId ||
       value.correlationId !== expected.correlationId || value.receiptHash !== expected.decisionReceiptId ||
       typeof value.decisionEventId !== 'string' || !value.decisionEventId ||
-      !exactScope(value.renderScope, expected.renderScope) || !current) {
+      !exactScope(value.renderScope, expectedScope) || !current) {
     throw new Error('life_movie_consent_decision_denied');
   }
 }
