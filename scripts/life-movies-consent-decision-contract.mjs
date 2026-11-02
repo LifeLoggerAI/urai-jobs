@@ -88,6 +88,20 @@ assert.throws(() => verify(allowed, scopedGetterExpectation, now),
   /life_movie_consent_decision_invalid_expectation/);
 assert.equal(topLevelScopeGetterReads, 0, 'top-level scope getter must not execute');
 passes++;
+// Expected owner/tenant/correlation/receipt values must be literal own data.
+// A getter could otherwise change authority between validation and comparison.
+for (const field of ['subjectUid', 'tenantId', 'correlationId', 'decisionReceiptId']) {
+  let reads = 0;
+  const forged = { ...expected };
+  Object.defineProperty(forged, field, {
+    enumerable: true, get() { reads++; return expected[field]; },
+  });
+  assert.throws(() => verify(allowed, forged, now),
+    /life_movie_consent_decision_invalid_expectation/);
+  assert.equal(reads, 0, 'expected authority getter must not run: ' + field);
+  passes++;
+}
+reject(allowed, Object.create(expected));
 accept(Object.assign(Object.create(null), allowed));
 assert.equal(source.includes('lifeMovieConsentAuthorityAvailable'), true, 'gate must remain referenced as unavailable');
 console.log('[PASS] ' + passes + ' synthetic decision-contract cases; no transport or processing enabled.');
