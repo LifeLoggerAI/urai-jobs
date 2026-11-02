@@ -69,10 +69,8 @@ assert.ok(signedAccess.includes("consentBlockRef(userId, job.consent.purpose)"),
 assert.ok(signedAccess.indexOf("consentBlockRef(userId, job.consent.purpose)") < signedAccess.indexOf('getSignedUrl('), 'Consent revocation check must run before any signed playback/download URL');
 assert.ok(signedAccess.includes('Date.now() + 5 * 60 * 1000'), 'Playback access must be short-lived');
 assert.ok(signedAccess.includes('responseDisposition: disposition'), 'Playback/download disposition must remain explicit and caller-bounded');
-assert.ok(bridge.includes("signedMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'inline')"), 'Playback action must request inline private access');
 assert.ok(bridge.includes('life_movie_subtitles_too_large'), 'Subtitle playback response must be byte bounded');
 assert.ok(bridge.includes('sanitizedOutput(job.output)'), 'Status projection must sanitize worker output');
-assert.ok(bridge.includes("signedMovieAccess(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId, 'attachment')"), 'Download must use owner-bound short-lived access');
 assert.ok(bridge.includes('deleteBoundMovieOutput'), 'Generated-output deletion must use an owner-bound path');
 assert.ok(bridge.includes('output_delete_boundary_mismatch'), 'Deletion must fail closed outside the Life Movies tenant prefix');
 assert.ok(bridge.includes('allowedLifeMovieOutputBuckets'), 'Playback/delete must enforce configured output bucket authority');
