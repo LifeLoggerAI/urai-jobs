@@ -573,13 +573,45 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
   const now = FieldValue.serverTimestamp();
 
   return db.runTransaction(async (transaction) => {
-    const [planSnapshot, existing] = await Promise.all([
+    // Refresh source, consent, and all selected segment outputs in the same
+    // write transaction that queues an assembly job. These reads conflict
+    // with concurrent revocation/cancellation/output changes at commit time.
+    const [planSnapshot, existing, liveConsentBlock, currentChildSnapshots] = await Promise.all([
       transaction.get(planRef(planId)),
       transaction.get(jobDoc(jobId)),
+      transaction.get(consentBlockRef(plan.ownerUid, plan.consent.purpose)),
+      transaction.getAll(...plan.childJobIds.map((childId) => jobDoc(childId))),
     ]);
+    assertJobConsentBlockClear(liveConsentBlock, 'life_movie_longform_consent_revoked');
     if (!planSnapshot.exists) throw new Error('longform_plan_not_found');
     const currentPlan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
+    assertPlanStructure(currentPlan, planId);
     if (currentPlan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
+    if (!isDeepStrictEqual(currentPlan.childJobIds, plan.childJobIds)
+      || !isDeepStrictEqual(currentPlan.segments, plan.segments)
+      || !isDeepStrictEqual(currentPlan.consent, plan.consent)
+      || currentPlan.projectId !== plan.projectId
+      || currentPlan.renderPlanDigest !== plan.renderPlanDigest
+      || currentPlan.sceneTruthDigest !== plan.sceneTruthDigest
+      || currentPlan.sceneTruthReceiptRef !== plan.sceneTruthReceiptRef
+      || currentPlan.width !== plan.width || currentPlan.height !== plan.height
+      || currentPlan.fps !== plan.fps
+      || (currentPlan.assemblyJobId !== undefined && currentPlan.assemblyJobId !== jobId)) {
+      throw new Error('longform_plan_changed');
+    }
+    for (const [index, latest] of currentChildSnapshots.entries()) {
+      if (!latest.exists) throw new Error('longform_plan_not_ready_for_assembly');
+      const currentChild = latest.data() as Job;
+      if (currentChild.status !== 'SUCCESS') throw new Error('longform_plan_not_ready_for_assembly');
+      assertBoundSegmentForUse(currentPlan, currentChild, index);
+      const selectedChild = children[index];
+      if (!selectedChild
+        || !isDeepStrictEqual(currentChild.payload, selectedChild.payload)
+        || !isDeepStrictEqual(currentChild.output, selectedChild.output)
+        || !isDeepStrictEqual(currentChild.consent, selectedChild.consent)) {
+        throw new Error('longform_segment_binding_mismatch');
+      }
+    }
 
     if (existing.exists) {
       const current = existing.data() as Job;
