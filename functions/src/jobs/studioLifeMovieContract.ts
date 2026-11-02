@@ -1,6 +1,16 @@
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 // Admission for the existing bounded synchronous worker, not an authoring limit.
+// Must match Privacy's distinct life-movie.render policy (v1.1.0).
+// This only validates a receipt reference shape; no grant is implied.
+export const LIFE_MOVIE_RENDER_CONSENT_POLICY_VERSION = '1.1.0' as const;
+export const LifeMovieConsentReferenceSchema = z.object({
+  purpose: z.literal('life-movie.render'),
+  policyVersion: z.literal(LIFE_MOVIE_RENDER_CONSENT_POLICY_VERSION),
+  decisionReceiptId: z.string().regex(/^[0-9a-f]{64}$/),
+}).strict();
+
 export const LIFE_MOVIE_EXECUTION_BUDGET = {
   maxDurationMs: 30_000,
   maxPixelFrames: 1920 * 1080 * 30 * 15,
@@ -34,6 +44,8 @@ export const LifeMovieTimelineItemSchema = z.object({
   sourceId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
   startMs: z.number().int().nonnegative(),
   endMs: z.number().int().positive(),
+  // Optional, not defaulted: absent must remain absent in the Studio plan digest.
+  sourceStartMs: z.number().int().nonnegative().max(45 * 60 * 1000).optional(),
 }).strict().refine((value) => value.endMs > value.startMs && value.endMs - value.startMs <= 30 * 60 * 1000, {
   message: 'Each timeline item must have a positive duration no longer than 30 minutes.',
 });
@@ -69,9 +81,13 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
   providerGenerationAuthorized: z.literal(false),
 }).strict().superRefine((value, context) => {
   const sourceIds = new Set(value.sources.map((source) => source.id));
+  const sourceById = new Map(value.sources.map((source) => [source.id, source]));
   for (const [index, item] of value.timeline.entries()) {
-    if (!sourceIds.has(item.sourceId)) {
+    const source = sourceById.get(item.sourceId);
+    if (!source) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index, 'sourceId'], message: 'Timeline source must exist in sources.' });
+    } else if (source.mimeType.startsWith('image/') && (item.sourceStartMs ?? 0) !== 0) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index, 'sourceStartMs'], message: 'Still images cannot use nonzero source offsets.' });
     }
   }
   for (const [index, cue] of value.audioCues.entries()) {
@@ -105,6 +121,77 @@ export const StudioLifeMovieRenderPayloadSchema = z.object({
 
 export type StudioLifeMovieRenderPayload = z.infer<typeof StudioLifeMovieRenderPayloadSchema>;
 
+/**
+ * Recompute the hash of the exact normalized worker plan produced by Studio.
+ * Do not trust a renderPlanDigest merely because it has a SHA-256 shape.
+ * This is a payload-integrity check, not consent or source-rights authority.
+ */
+export function canonicalRenderPlanJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalRenderPlanJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalRenderPlanJson(record[key])}`).join(',')}}`;
+  }
+  const encoded = JSON.stringify(value);
+  if (typeof encoded !== 'string') throw new Error('life_movie_render_plan_digest_mismatch');
+  return encoded;
+}
+
+export function computeStudioLifeMovieRenderPlanDigest(payload: StudioLifeMovieRenderPayload): string {
+  const plan = {
+    projectId: payload.projectId,
+    sceneTruthReceiptRef: payload.sceneTruthReceiptRef,
+    sceneTruthDigest: payload.sceneTruthDigest,
+    outputPrefix: payload.outputPrefix,
+    width: payload.width,
+    height: payload.height,
+    fps: payload.fps,
+    sources: payload.sources,
+    timeline: payload.timeline,
+    audioCues: payload.audioCues,
+    subtitleText: payload.subtitleText,
+  };
+  return createHash('sha256').update(canonicalRenderPlanJson(plan)).digest('hex');
+}
+
+export function assertStudioLifeMovieRenderPlanDigest(payload: StudioLifeMovieRenderPayload): StudioLifeMovieRenderPayload {
+  if (payload.renderPlanDigest !== computeStudioLifeMovieRenderPlanDigest(payload)) {
+    throw new Error('life_movie_render_plan_digest_mismatch');
+  }
+  return payload;
+}
+
+/**
+ * Versioned source-selection fingerprint shared with Studio. It binds immutable
+ * Storage generations and rights references, not merely bucket/object paths.
+ * This is an identifier, NOT proof of user consent, source ownership, or IAM.
+ */
+export function deriveStudioLifeMovieRenderScope(payload: Pick<StudioLifeMovieRenderPayload, 'projectId' | 'renderPlanDigest' | 'sources'>) {
+  const selection = payload.sources.map((source) => [
+    source.id,
+    source.bucket,
+    source.objectPath,
+    source.generation,
+    source.mimeType,
+    source.provenance,
+    source.sourceRefs,
+    source.consentRef,
+    source.ownerOrRightsRef,
+  ] as const);
+  // Source order does not change which media are selected. Use bytewise order,
+  // never a locale-sensitive sort, to keep independent services deterministic.
+  selection.sort((left, right) => left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0);
+  if (selection.some((source, index) => index > 0 && source[0] === selection[index - 1][0])) {
+    throw new Error('life_movie_duplicate_source_id');
+  }
+  const sourceSetDigest = createHash('sha256')
+    .update('urai-life-movie-source-set-v1\n')
+    .update(JSON.stringify(selection))
+    .digest('hex');
+  return { projectId: payload.projectId, renderPlanDigest: payload.renderPlanDigest, sourceSetDigest };
+}
+
+
 // Transport references are not an allow decision. The closed authority gate
 // remains responsible for preventing processing until canonical verification.
 export const StudioLifeMovieCreateRequestSchema = z.object({
@@ -112,11 +199,7 @@ export const StudioLifeMovieCreateRequestSchema = z.object({
   userId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
   action: z.literal('create'),
   idempotencyKey: z.string().trim().min(8).max(160),
-  consent: z.object({
-    purpose: z.literal('life-movie.render'),
-    policyVersion: z.string().trim().min(1).max(80),
-    decisionReceiptId: z.string().trim().min(1).max(160),
-  }).strict(),
+  consent: LifeMovieConsentReferenceSchema,
   payload: StudioLifeMovieRenderPayloadSchema,
 }).strict();
 

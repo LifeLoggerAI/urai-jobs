@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { createHmac } from 'node:crypto';
+import { createHmac, createHash } from 'node:crypto';
 import vm from 'node:vm';
 
 // Synthetic request and in-memory Firestore doubles. The real Jobs handlers,
@@ -107,6 +107,9 @@ const mocks = {
   './sceneTruthReceipt.js': receipt,
   '../privacy/consentBlocks.js': { consentBlockRef: () => ref('synthetic-block/missing'), isConsentContext: () => false },
   '../privacy/lifeMovieConsentGate.js': gate,
+  '../privacy/lifeMovieCreationAdmission.js': { requireLifeMovieCreationAdmission: async () => { throw new Error('life_movie_consent_authority_unavailable'); } },
+  './lifeMoviePrivateDeliveryContract.js': { parseLifeMoviePrivateDeliveryRequest: () => { throw new Error('life_movie_private_delivery_request_invalid'); } },
+  '../privacy/lifeMovieOutputGeneration.js': { requirePinnedOutputGeneration: async () => { throw new Error('generation_unavailable_in_test'); }, signedMovieAccessForPinnedGeneration: async () => { throw new Error('generation_unavailable_in_test'); } },
 };
 const artifactRefs = load('privacy/lifeMovieArtifactRefs.ts');
 const ownerDeletion = load('jobs/lifeMovieOwnerDeletion.ts', {
@@ -132,8 +135,28 @@ const payload = {
   timeline: [{ sourceId: 'source', startMs: 0, endMs: 1000 }], audioCues: [], subtitleText: '',
   spatialRequired: false, publicReleaseAuthorized: false, providerGenerationAuthorized: false,
 };
+// A shape-valid source selection fingerprint does not enable rendering.
+const actualScope = contract.deriveStudioLifeMovieRenderScope(payload);
+const sourceSelection = payload.sources.map((source) => [
+  source.id, source.bucket, source.objectPath, source.generation,
+  source.mimeType, source.provenance, source.sourceRefs,
+  source.consentRef, source.ownerOrRightsRef,
+]);
+sourceSelection.sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+const expectedScopeDigest = createHash('sha256')
+  .update('urai-life-movie-source-set-v1\n')
+  .update(JSON.stringify(sourceSelection)).digest('hex');
+assert.equal(actualScope.sourceSetDigest, expectedScopeDigest);
+assert.equal(actualScope.projectId, payload.projectId);
+assert.equal(actualScope.renderPlanDigest, payload.renderPlanDigest);
+const replacedSelection = {
+  ...payload, sources: payload.sources.map((source) => ({ ...source, generation: '1793378565000002' })),
+};
+assert.notEqual(contract.deriveStudioLifeMovieRenderScope(replacedSelection).sourceSetDigest, actualScope.sourceSetDigest);
+console.log('[PASS] Versioned consent source-set fingerprint binds immutable object generations.');
+
 const identity = { tenantId: tenant, userId: owner };
-const consent = { purpose: 'life-movie.render', policyVersion: 'invented-policy', decisionReceiptId: 'invented-receipt' };
+const consent = { purpose: 'life-movie.render', policyVersion: '1.1.0', decisionReceiptId: 'a'.repeat(64) };
 const create = { action: 'create', ...identity, idempotencyKey: 'synthetic-idempotency', consent, payload };
 async function request(handler, body, auth = `Bearer ${token}`) {
   let status, result;
@@ -153,6 +176,17 @@ for (const action of ['playback', 'download']) await blocked(short, { action, ..
 for (const action of ['playback', 'download', 'resume', 'assemble']) {
   await blocked(long, { action, ...identity, planId: 'lmp_abcdefghijklmnopqrst' });
 }
+for (const invalidConsent of [
+  { ...consent, policyVersion: 'invented-policy' },
+  { ...consent, policyVersion: '1.0.0' },
+  { ...consent, decisionReceiptId: 'invented-receipt' },
+  { ...consent, decisionReceiptId: 'A'.repeat(64) },
+  { ...consent, decisionReceiptId: 'a'.repeat(63) },
+]) {
+  assert.equal((await request(short, { ...create, consent: invalidConsent })).status, 400);
+  assert.equal((await request(long, { ...create, consent: invalidConsent, payload: { ...payload, schemaVersion: 'urai-life-movie-longform-v1' } })).status, 400);
+}
+assert.equal((await request(short, create)).status, 503, 'Well-formed receipt reference is not authority');
 assert.equal((await request(short, create, 'Bearer invalid')).status, 401);
 assert.equal((await request(short, { ...create, consent: undefined })).status, 400);
 for (const action of ['status', 'cancel', 'delete-output']) {

@@ -10,6 +10,9 @@ import type { Job, JobQueueEntry, JobStatus } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef } from '../privacy/consentBlocks.js';
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
+import { parseLifeMoviePrivateDeliveryRequest } from './lifeMoviePrivateDeliveryContract.js';
+import { requireLifeMovieCreationAdmission } from '../privacy/lifeMovieCreationAdmission.js';
+import { requirePinnedMovieOutputGeneration } from '../privacy/lifeMovieOutputGeneration.js';
 import { deleteOwnedMovieOutputs, preflightOwnedMovieOutputs, validateOwnedMovieJob } from './lifeMovieOwnerDeletion.js';
 import {
   bindingMatches,
@@ -21,8 +24,10 @@ import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 import {
   StudioLifeMovieLongformPayloadSchema,
   assertLifeMovieLongformTenantPaths,
+  assertStudioLifeMovieLongformPlanDigest,
   planLifeMovieLongformSegments,
 } from './studioLifeMovieLongformContract.js';
+import { LifeMovieConsentReferenceSchema } from './studioLifeMovieContract.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
 const sceneTruthReceiptSecret = defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC');
@@ -40,11 +45,7 @@ const IdentitySchema = z.object({
 const CreateSchema = IdentitySchema.extend({
   action: z.literal('create'),
   idempotencyKey: z.string().trim().min(8).max(160),
-  consent: z.object({
-    purpose: z.literal('life-movie.render'),
-    policyVersion: z.string().trim().min(1).max(80),
-    decisionReceiptId: z.string().trim().min(1).max(160),
-  }).strict(),
+  consent: LifeMovieConsentReferenceSchema,
   payload: StudioLifeMovieLongformPayloadSchema,
 }).strict();
 
@@ -107,6 +108,7 @@ function makeAssemblyJobId(planId: string) {
 type WorkerArtifact = {
   kind?: unknown;
   ref?: unknown;
+  generation?: unknown;
   mimeType?: unknown;
   checksum?: unknown;
 };
@@ -139,6 +141,7 @@ type StoredPlan = {
     startMs: number;
     endMs: number;
     childDigest: string;
+    childPayloadFingerprint: string;
     jobId: string;
   }>;
 };
@@ -167,6 +170,7 @@ function boundedArtifact(output: unknown, kind: 'mp4' | 'srt') {
   if (!artifact || typeof artifact.ref !== 'string') throw new Error(`longform_${kind}_output_missing`);
   return {
     ref: artifact.ref,
+    generation: requirePinnedMovieOutputGeneration(artifact.generation),
     mimeType: typeof artifact.mimeType === 'string'
       ? artifact.mimeType
       : kind === 'mp4' ? 'video/mp4' : 'application/x-subrip',
@@ -199,6 +203,62 @@ function boundPlanJob(plan: StoredPlan, jobId: string, kind: 'segment' | 'assemb
     projectId: plan.projectId, kind, expectedOutputPrefix } as const;
 }
 
+/**
+ * A successful child is not sufficient evidence for assembly or private
+ * playback. Bind its owner, parent, immutable segment number and content
+ * identity to the originally approved long-form plan before accessing refs.
+ * The preflight is read-only; it never deletes media.
+ */
+function assertBoundSegmentForUse(plan: StoredPlan, job: Job, index: number) {
+  const jobId = plan.childJobIds[index];
+  const descriptor = plan.segments[index];
+  const expectedChildDigest = descriptor && createHash('sha256')
+    .update(`urai-life-movie-longform-segment-v1\n${plan.renderPlanDigest}\n${index}\n${descriptor.startMs}\n${descriptor.endMs}`)
+    .digest('hex');
+  if (!jobId || !descriptor || descriptor.jobId !== jobId || descriptor.index !== index
+    || !Number.isSafeInteger(descriptor.startMs) || !Number.isSafeInteger(descriptor.endMs)
+    || descriptor.startMs < 0 || descriptor.endMs <= descriptor.startMs
+    || descriptor.childDigest !== expectedChildDigest
+    || typeof descriptor.childPayloadFingerprint !== 'string'
+    || !/^[0-9a-f]{64}$/.test(descriptor.childPayloadFingerprint)) {
+    throw new Error('longform_segment_binding_mismatch');
+  }
+  // Reuse the owner-bound deletion preflight: it checks the exact child output
+  // prefix (including segment index), permitted buckets, unsafe object paths,
+  // live in-flight flags and any unrecognized derivative refs.
+  preflightOwnedMovieOutputs(job as unknown as Record<string, unknown>, boundPlanJob(plan, jobId, 'segment'));
+  const payload = job.payload as Record<string, unknown> | undefined;
+  const output = job.output as WorkerOutput | undefined;
+  // The child digest derives only from the parent and time range. The exact
+  // normalized media selection/timeline must separately match its original
+  // immutable request fingerprint before reading private output.
+  if (!payload
+    || buildRequestFingerprint('studio.render.video', payload) !== descriptor.childPayloadFingerprint
+    || payload.renderPlanDigest !== descriptor.childDigest
+    || output?.renderPlanDigest !== descriptor.childDigest
+    || payload?.sceneTruthDigest !== plan.sceneTruthDigest
+    || output?.sceneTruthDigest !== plan.sceneTruthDigest
+    || !isDeepStrictEqual(job.consent, plan.consent)) {
+    throw new Error('longform_segment_binding_mismatch');
+  }
+}
+
+/** Require the same complete authority binding for final assembled media. */
+function assertBoundAssemblyForUse(plan: StoredPlan, job: Job) {
+  if (!plan.assemblyJobId) throw new Error('longform_assembly_binding_mismatch');
+  preflightOwnedMovieOutputs(job as unknown as Record<string, unknown>,
+    boundPlanJob(plan, plan.assemblyJobId, 'assembly'));
+  const payload = job.payload as Record<string, unknown> | undefined;
+  const output = job.output as WorkerOutput | undefined;
+  if (payload?.renderPlanDigest !== plan.renderPlanDigest
+    || output?.renderPlanDigest !== plan.renderPlanDigest
+    || payload?.sceneTruthDigest !== plan.sceneTruthDigest
+    || output?.sceneTruthDigest !== plan.sceneTruthDigest
+    || !isDeepStrictEqual(job.consent, plan.consent)) {
+    throw new Error('longform_assembly_binding_mismatch');
+  }
+}
+
 function deriveStatus(plan: StoredPlan, statuses: JobStatus[]) {
   if (plan.status === 'CANCELLED') return 'CANCELLED';
   if (statuses.length === 0) return 'PENDING';
@@ -219,7 +279,20 @@ async function assertPlanConsentActive(plan: StoredPlan) {
 async function createPlan(input: z.infer<typeof CreateSchema>) {
   if (!longformEnabled()) throw new Error('life_movie_longform_disabled');
 
-  const payload = assertLifeMovieLongformTenantPaths(input.payload, input.tenantId);
+  const payload = assertStudioLifeMovieLongformPlanDigest(assertLifeMovieLongformTenantPaths(input.payload, input.tenantId));
+  // CreateSchema has already parsed the strict consent reference. Zod's
+  // inferred optional properties under the repo's TS settings are not an
+  // excuse to loosen the required downstream admission contract.
+  await requireLifeMovieCreationAdmission({
+    ownerUid: input.userId,
+    tenantId: input.tenantId,
+    consent: {
+      purpose: input.consent.purpose!,
+      policyVersion: input.consent.policyVersion!,
+      decisionReceiptId: input.consent.decisionReceiptId!,
+    },
+    selection: payload,
+  });
   const consentSnapshot = await consentBlockRef(input.userId, input.consent.purpose).get();
   if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
     throw new Error('life_movie_longform_consent_revoked');
@@ -309,6 +382,7 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
       startMs: segment.startMs,
       endMs: segment.endMs,
       childDigest: segment.childDigest,
+      childPayloadFingerprint: buildRequestFingerprint('studio.render.video', segment.payload),
       jobId: childIds[index],
     }));
 
@@ -440,6 +514,7 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
 
 async function assemblePlan(planId: string, tenantId: string, userId: string) {
   const plan = await loadPlan(planId, tenantId, userId);
+  assertPlanStructure(plan, planId);
   if (plan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
   await assertPlanConsentActive(plan);
 
@@ -457,6 +532,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
     if (!job || !descriptor || descriptor.jobId !== plan.childJobIds[index]) {
       throw new Error('longform_segment_binding_mismatch');
     }
+    assertBoundSegmentForUse(plan, job, index);
     const video = boundedArtifact(job.output, 'mp4');
     const subtitle = boundedArtifact(job.output, 'srt');
     const videoLocation = parseGcsRef(video.ref);
@@ -476,8 +552,10 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
       startMs: descriptor.startMs,
       endMs: descriptor.endMs,
       videoRef: video.ref,
+      videoGeneration: video.generation,
       videoChecksum: video.checksum as string,
       subtitleRef: subtitle.ref,
+      subtitleGeneration: subtitle.generation,
       subtitleChecksum: subtitle.checksum as string,
     };
   });
@@ -557,6 +635,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
 
 async function readPlanPlayback(planId: string, tenantId: string, userId: string, disposition: 'inline' | 'attachment' = 'inline') {
   const plan = await loadPlan(planId, tenantId, userId);
+  assertPlanStructure(plan, planId);
   await assertPlanConsentActive(plan);
   const db = getFirestore();
   const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
@@ -576,6 +655,7 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
     if (assemblySnapshot.exists) {
       const assembly = assemblySnapshot.data() as Job;
       if (assembly.status === 'SUCCESS') {
+        assertBoundAssemblyForUse(plan, assembly);
         const video = boundedArtifact(assembly.output, 'mp4');
         const subtitle = boundedArtifact(assembly.output, 'srt');
         const finalPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/final/`;
@@ -587,10 +667,12 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
           || !subtitleLocation.objectPath.startsWith(finalPrefix)) {
           throw new Error('longform_output_boundary_mismatch');
         }
-        const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
+        const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath, { generation: Number(video.generation) }).getSignedUrl({
+      version: 'v4', queryParams: { generation: video.generation },
           action: 'read', expires: expiresAtMs, responseDisposition: disposition, responseType: video.mimeType,
         });
-        const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).getSignedUrl({
+        const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath, { generation: Number(subtitle.generation) }).getSignedUrl({
+      version: 'v4', queryParams: { generation: subtitle.generation },
           action: 'read', expires: expiresAtMs, responseDisposition: disposition, responseType: subtitle.mimeType,
         });
         finalFile = {
@@ -614,6 +696,7 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
     if (!job || job.status !== 'SUCCESS') throw new Error('longform_plan_not_ready_for_playback');
     const descriptor = plan.segments[index];
     if (!descriptor || descriptor.jobId !== plan.childJobIds[index]) throw new Error('longform_segment_binding_mismatch');
+    assertBoundSegmentForUse(plan, job as Job, index);
     const video = boundedArtifact(job.output, 'mp4');
     const subtitle = boundedArtifact(job.output, 'srt');
     const videoLocation = parseGcsRef(video.ref);
@@ -625,13 +708,15 @@ async function readPlanPlayback(planId: string, tenantId: string, userId: string
       throw new Error('longform_output_boundary_mismatch');
     }
 
-    const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
+    const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath, { generation: Number(video.generation) }).getSignedUrl({
+      version: 'v4', queryParams: { generation: video.generation },
       action: 'read',
       expires: expiresAtMs,
       responseDisposition: disposition,
       responseType: video.mimeType,
     });
-    const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).getSignedUrl({
+    const [subtitleUrl] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath, { generation: Number(subtitle.generation) }).getSignedUrl({
+      version: 'v4', queryParams: { generation: subtitle.generation },
       action: 'read',
       expires: expiresAtMs,
       responseDisposition: disposition,
@@ -913,9 +998,30 @@ export const studioLifeMovieLongformBridge = onRequest({
     return;
   }
 
+  // This is an authenticated contract endpoint, not a delivery grant. The
+  // caller's authorityHash cannot authorize private data access.
+  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body) && req.body.action === 'deliver') {
+    try {
+      parseLifeMoviePrivateDeliveryRequest(req.body, 'longform');
+    } catch {
+      res.status(400).json({ ok: false, error: 'life_movie_private_delivery_request_invalid' });
+      return;
+    }
+    res.status(503).json({ ok: false, error: LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE });
+    return;
+  }
+
   const parsed = RequestSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ ok: false, error: 'invalid_longform_request' });
+    return;
+  }
+
+  // Legacy playback/download return five-minute signed URLs and cannot revoke
+  // access while the link is live. Never resurrect them when the scoped
+  // consent authority becomes available: use authenticated 'deliver' only.
+  if (parsed.data.action === 'playback' || parsed.data.action === 'download') {
+    res.status(503).json({ ok: false, error: 'life_movie_authenticated_delivery_required' });
     return;
   }
 

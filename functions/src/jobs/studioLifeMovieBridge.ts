@@ -13,11 +13,14 @@ import {
   buildRequestFingerprint,
   type IdempotencyBinding,
 } from '../core/jobsReliability.js';
-import { StudioLifeMovieCreateRequestSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
+import { StudioLifeMovieCreateRequestSchema, assertLifeMovieTenantPaths, assertStudioLifeMovieRenderPlanDigest } from './studioLifeMovieContract.js';
 import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
-import { deleteOwnedMovieOutputs } from './lifeMovieOwnerDeletion.js';
+import { parseLifeMoviePrivateDeliveryRequest } from './lifeMoviePrivateDeliveryContract.js';
+import { requireLifeMovieCreationAdmission } from '../privacy/lifeMovieCreationAdmission.js';
+import { deleteOwnedMovieOutputs, preflightOwnedMovieOutputs } from './lifeMovieOwnerDeletion.js';
+import { requirePinnedMovieOutputGeneration } from '../privacy/lifeMovieOutputGeneration.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
 const sceneTruthReceiptSecret = defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC');
@@ -81,7 +84,7 @@ function jsonBytes(value: unknown) {
   return Buffer.byteLength(JSON.stringify(value ?? {}), 'utf8');
 }
 
-type WorkerOutputArtifact = { kind?: unknown; ref?: unknown; mimeType?: unknown; checksum?: unknown };
+type WorkerOutputArtifact = { kind?: unknown; ref?: unknown; generation?: unknown; mimeType?: unknown; checksum?: unknown };
 type WorkerOutput = {
   outputs?: WorkerOutputArtifact[];
   renderPlanDigest?: unknown;
@@ -127,7 +130,7 @@ function safeJobProjection(job: Job) {
 }
 
 async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
-  const payload = assertLifeMovieTenantPaths(input.payload, input.tenantId);
+  const payload = assertStudioLifeMovieRenderPlanDigest(assertLifeMovieTenantPaths(input.payload, input.tenantId));
   const purpose = input.consent?.purpose;
   const policyVersion = input.consent?.policyVersion;
   const decisionReceiptId = input.consent?.decisionReceiptId;
@@ -135,6 +138,7 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
     throw new Error('life_movie_consent_missing');
   }
   const consent: JobConsentContext = { purpose, policyVersion, decisionReceiptId };
+  await requireLifeMovieCreationAdmission({ ownerUid: input.userId, tenantId: input.tenantId, consent, selection: payload });
   const sceneTruthReceipt = verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, input.userId, payload.sceneTruthReceiptRef);
   const consentSnapshot = await consentBlockRef(input.userId, consent.purpose).get();
   if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
@@ -318,18 +322,36 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
   }
   if (String(job.status) !== 'SUCCESS') throw new Error('job_not_ready_for_playback');
   const output = job.output as WorkerOutput | undefined;
-  const artifacts = Array.isArray(output?.outputs) ? output!.outputs! : [];
+  const payload = job.payload as Record<string, unknown> | undefined;
+  if (!payload || !output || typeof payload.projectId !== 'string'
+    || typeof payload.renderPlanDigest !== 'string'
+    || !/^[0-9a-f]{64}$/.test(payload.renderPlanDigest)
+    || output.renderPlanDigest !== payload.renderPlanDigest
+    || typeof payload.sceneTruthDigest !== 'string'
+    || !/^[0-9a-f]{64}$/.test(payload.sceneTruthDigest)
+    || output.sceneTruthDigest !== payload.sceneTruthDigest
+    || typeof payload.sceneTruthReceiptRef !== 'string'
+    || !payload.sceneTruthReceiptRef
+    || output.sceneTruthReceiptRef !== payload.sceneTruthReceiptRef) {
+    throw new Error('life_movie_output_binding_mismatch');
+  }
+  preflightOwnedMovieOutputs(job as unknown as Record<string, unknown>, {
+    tenantId, userId, jobId, projectId: payload.projectId,
+  });
+  const artifacts = Array.isArray(output.outputs) ? output.outputs : [];
   const video = artifacts.find((artifact) => artifact?.kind === 'mp4');
   if (!video?.ref) throw new Error('life_movie_video_output_missing');
   const videoLocation = parseGcsRef(video.ref);
+  const videoGeneration = requirePinnedMovieOutputGeneration(video.generation);
   const allowedBuckets = allowedLifeMovieOutputBuckets();
-  const expectedPrefix = `tenants/${tenantId}/life-movies/`;
+  const expectedPrefix = `tenants/${tenantId}/life-movies/${payload.projectId}/`;
   if (!allowedBuckets.has(videoLocation.bucket) || !videoLocation.objectPath.startsWith(expectedPrefix)) {
     throw new Error('life_movie_output_boundary_mismatch');
   }
 
   const expiresAtMs = Date.now() + 5 * 60 * 1000;
-  const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath).getSignedUrl({
+  const [videoUrl] = await getStorage().bucket(videoLocation.bucket).file(videoLocation.objectPath, { generation: Number(videoGeneration) }).getSignedUrl({
+    version: 'v4', queryParams: { generation: videoGeneration },
     action: 'read',
     expires: expiresAtMs,
     responseDisposition: disposition,
@@ -340,10 +362,11 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
   let subtitleText = '';
   if (subtitle?.ref) {
     const subtitleLocation = parseGcsRef(subtitle.ref);
+    const subtitleGeneration = requirePinnedMovieOutputGeneration(subtitle.generation);
     if (!allowedBuckets.has(subtitleLocation.bucket) || !subtitleLocation.objectPath.startsWith(expectedPrefix)) {
       throw new Error('life_movie_output_boundary_mismatch');
     }
-    const [bytes] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath).download();
+    const [bytes] = await getStorage().bucket(subtitleLocation.bucket).file(subtitleLocation.objectPath, { generation: Number(subtitleGeneration) }).download();
     if (bytes.length > 2 * 1024 * 1024) throw new Error('life_movie_subtitles_too_large');
     subtitleText = bytes.toString('utf8');
   }
@@ -421,9 +444,30 @@ export const studioLifeMovieBridge = onRequest({
     return;
   }
 
+  // This is an authenticated contract endpoint, not a delivery grant. The
+  // caller's authorityHash cannot authorize private data access.
+  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body) && req.body.action === 'deliver') {
+    try {
+      parseLifeMoviePrivateDeliveryRequest(req.body, 'short');
+    } catch {
+      res.status(400).json({ ok: false, error: 'life_movie_private_delivery_request_invalid' });
+      return;
+    }
+    res.status(503).json({ ok: false, error: LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE });
+    return;
+  }
+
   const parsed = RequestSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ ok: false, error: 'invalid_bridge_request' });
+    return;
+  }
+
+  // Legacy playback/download return five-minute signed URLs and cannot revoke
+  // access while the link is live. Never resurrect them when the scoped
+  // consent authority becomes available: use authenticated 'deliver' only.
+  if (parsed.data.action === 'playback' || parsed.data.action === 'download') {
+    res.status(503).json({ ok: false, error: 'life_movie_authenticated_delivery_required' });
     return;
   }
 

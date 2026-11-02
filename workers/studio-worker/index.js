@@ -6,6 +6,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const { setTimeout, clearTimeout } = require('node:timers');
 const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
+const { cleanupPinnedPrivateOutputs } = require('./private-output-cleanup');
 const express = require('express');
 const admin = require('firebase-admin');
 
@@ -158,6 +159,12 @@ function sourceGeneration(value) {
   return value;
 }
 
+function pinnedUploadedOutputGeneration(value) {
+  if (typeof value !== 'string' || !/^[1-9][0-9]{0,19}$/.test(value) ||
+      !Number.isSafeInteger(Number(value))) throw new Error('output_generation_unavailable');
+  return value;
+}
+
 function openSelectedSource(source) {
   // The installed SDK converts this string to Number. Reject versions it
   // cannot represent exactly; never round or fall back to the latest object.
@@ -241,7 +248,18 @@ function parsePayload(job) {
       throw new Error(`invalid_timeline_range:${index}`);
     }
     if (endMs - startMs > 30 * 60 * 1000) throw new Error(`timeline_item_too_long:${index}`);
-    return { sourceId, startMs, endMs };
+    // A timeline offset is a position in the source, not in the final movie.
+    // Preserve absence for byte-for-byte plan identity with Studio/Jobs.
+    const sourceStartMs = raw.sourceStartMs === undefined ? 0 : raw.sourceStartMs;
+    if (!Number.isInteger(sourceStartMs) || sourceStartMs < 0 || sourceStartMs > 45 * 60 * 1000) {
+      throw new Error(`invalid_timeline_source_start:${index}`);
+    }
+    if (sourceById.get(sourceId).mimeType.startsWith('image/') && sourceStartMs !== 0) {
+      throw new Error(`image_source_start_must_be_zero:${index}`);
+    }
+    return raw.sourceStartMs === undefined
+      ? { sourceId, startMs, endMs }
+      : { sourceId, startMs, endMs, sourceStartMs };
   }).sort((left, right) => left.startMs - right.startMs);
 
   for (let i = 1; i < normalizedTimeline.length; i += 1) {
@@ -372,12 +390,15 @@ function parseAssemblyPayload(job) {
       || !subtitle.objectPath.startsWith(requiredSegmentPrefix)) {
       throw new Error('assembly_segment_boundary_mismatch');
     }
+    const videoGeneration = sourceGeneration(segment.videoGeneration);
+    const subtitleGeneration = sourceGeneration(segment.subtitleGeneration);
     const videoChecksum = String(segment.videoChecksum || '');
     const subtitleChecksum = String(segment.subtitleChecksum || '');
     if (!/^[a-f0-9]{64}$/.test(videoChecksum) || !/^[a-f0-9]{64}$/.test(subtitleChecksum)) {
       throw new Error('assembly_segment_checksum_invalid');
     }
-    return { index, startMs, endMs, video, subtitle, videoChecksum, subtitleChecksum };
+    return { index, startMs, endMs, video: { ...video, generation: videoGeneration },
+      subtitle: { ...subtitle, generation: subtitleGeneration }, videoChecksum, subtitleChecksum };
   });
 
   return {
@@ -487,7 +508,14 @@ function probeStreams(filePath) {
   };
 }
 
-function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, height, fps) {
+function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, height, fps, sourceStartMs = 0) {
+  if (!Number.isInteger(sourceStartMs) || sourceStartMs < 0 || sourceStartMs > 45 * 60 * 1000) {
+    throw new Error('invalid_timeline_source_start');
+  }
+  if (mimeType.startsWith('image/') && sourceStartMs !== 0) throw new Error('image_source_start_must_be_zero');
+  // Input seeking precedes -i so the selected source interval is used when
+  // transcoding video or audio, not the first frames at the original path.
+  const seekArgs = sourceStartMs === 0 ? [] : ['-ss', String(sourceStartMs / 1000)];
   const visualFilter = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black,fps=${fps},format=yuv420p`;
   if (mimeType.startsWith('image/')) {
     return [
@@ -504,7 +532,7 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
 
   const streams = probeStreams(inputPath);
   if (streams.video) {
-    const args = ['-y', '-i', inputPath];
+    const args = ['-y', ...seekArgs, '-i', inputPath];
     if (!streams.audio) {
       args.push('-f', 'lavfi', '-t', String(durationSeconds), '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
     }
@@ -521,7 +549,7 @@ function clipArgs(inputPath, outputPath, mimeType, durationSeconds, width, heigh
   if (streams.audio) {
     return [
       '-y', '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=${fps}`,
-      '-i', inputPath, '-t', String(durationSeconds), '-af', 'apad',
+      ...seekArgs, '-i', inputPath, '-t', String(durationSeconds), '-af', 'apad',
       '-map', '0:v:0', '-map', '1:a:0',
       '-c:v', 'libx264', '-threads', '1', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
@@ -591,6 +619,7 @@ async function assembleLifeMovie(job) {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'urai-life-movie-assembly-'));
   const attemptPrefix = `${input.outputPrefix.replace(/\/+$/, '')}/attempt-${crypto.randomUUID()}`;
   const writtenObjects = [];
+  let pendingUnfencedOutputWrite = false;
   let completed = false;
 
   async function downloadVerified(location, expectedChecksum, localPath, budget) {
@@ -606,7 +635,7 @@ async function assembleLifeMovie(job) {
       },
     });
     await pipeline(
-      admin.storage().bucket(location.bucket).file(location.objectPath).createReadStream(),
+      admin.storage().bucket(location.bucket).file(location.objectPath, { generation: Number(location.generation) }).createReadStream(),
       meter,
       fs.createWriteStream(localPath, { mode: 0o600 }),
       { signal: control.signal },
@@ -616,12 +645,20 @@ async function assembleLifeMovie(job) {
     return bytes;
   }
 
-  async function uploadPrivateFile(localPath, destination, contentType) {
+  async function uploadPrivateFile(localPath, destination, contentType, expectedHash) {
     await control.check();
-    writtenObjects.push(destination);
-    await pipeline(fs.createReadStream(localPath), bucket.file(destination).createWriteStream({
-      resumable: false, metadata: { contentType, cacheControl: 'private, no-store' },
+    pendingUnfencedOutputWrite = true;
+    const file = bucket.file(destination);
+    await pipeline(fs.createReadStream(localPath), file.createWriteStream({
+      resumable: false, preconditionOpts: { ifGenerationMatch: 0 },
+      metadata: { contentType, cacheControl: 'private, no-store', metadata: { uraiSha256: expectedHash } },
     }), { signal: control.signal });
+    const [metadata] = await file.getMetadata();
+    if (metadata?.metadata?.uraiSha256 !== expectedHash) throw new Error('output_checksum_metadata_mismatch');
+    const uploadedGeneration = pinnedUploadedOutputGeneration(metadata.generation);
+    writtenObjects.push({ destination, generation: uploadedGeneration });
+    pendingUnfencedOutputWrite = false;
+    return uploadedGeneration;
   }
 
   try {
@@ -706,9 +743,11 @@ async function assembleLifeMovie(job) {
       srt: `${attemptPrefix}/life-movie-final.srt`,
       manifest: `${attemptPrefix}/life-movie-final.assembly-manifest.json`,
     };
-    await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4');
-    await uploadPrivateFile(subtitlePath, outputPaths.srt, 'application/x-subrip');
-    await uploadPrivateFile(manifestPath, outputPaths.manifest, 'application/json');
+    const outputGenerations = {
+      mp4: await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4', movieHash),
+      srt: await uploadPrivateFile(subtitlePath, outputPaths.srt, 'application/x-subrip', subtitleHash),
+      manifest: await uploadPrivateFile(manifestPath, outputPaths.manifest, 'application/json', manifestHash),
+    };
     await control.check();
     completed = true;
 
@@ -722,9 +761,9 @@ async function assembleLifeMovie(job) {
       providerSpendAuthorized: false,
       publicReleaseAuthorized: false,
       outputs: [
-        { kind: 'mp4', ref: `gs://${bucketName}/${outputPaths.mp4}`, mimeType: 'video/mp4', checksum: movieHash },
-        { kind: 'srt', ref: `gs://${bucketName}/${outputPaths.srt}`, mimeType: 'application/x-subrip', checksum: subtitleHash },
-        { kind: 'manifest', ref: `gs://${bucketName}/${outputPaths.manifest}`, mimeType: 'application/json', checksum: manifestHash },
+        { kind: 'mp4', ref: `gs://${bucketName}/${outputPaths.mp4}`, generation: outputGenerations.mp4, mimeType: 'video/mp4', checksum: movieHash },
+        { kind: 'srt', ref: `gs://${bucketName}/${outputPaths.srt}`, generation: outputGenerations.srt, mimeType: 'application/x-subrip', checksum: subtitleHash },
+        { kind: 'manifest', ref: `gs://${bucketName}/${outputPaths.manifest}`, generation: outputGenerations.manifest, mimeType: 'application/json', checksum: manifestHash },
       ],
       renderPlanDigest: input.renderPlanDigest,
       sceneTruthReceiptRef: input.sceneTruthReceiptRef,
@@ -736,11 +775,8 @@ async function assembleLifeMovie(job) {
     control.stop();
     fs.rmSync(workDir, { recursive: true, force: true });
     if (!completed) {
-      const cleanup = await Promise.allSettled(writtenObjects.map((destination) =>
-        bucket.file(destination).delete({ ignoreNotFound: true })));
-      if (cleanup.some((result) => result.status === 'rejected')) {
-        throw new Error('assembly_cleanup_incomplete');
-      }
+      await cleanupPinnedPrivateOutputs(bucket, writtenObjects, 'assembly_cleanup_incomplete');
+      if (pendingUnfencedOutputWrite) throw new Error('assembly_cleanup_incomplete');
     }
   }
 }
@@ -756,6 +792,7 @@ async function renderLifeMovie(job) {
   // delete a newer attempt's objects, even when the requested prefix is reused.
   const attemptPrefix = `${input.outputPrefix}/attempt-${crypto.randomUUID()}`;
   const writtenObjects = [];
+  let pendingUnfencedOutputWrite = false;
   let completed = false;
   try {
     await control.start();
@@ -805,7 +842,7 @@ async function renderLifeMovie(job) {
       } else {
         const source = input.sourceById.get(item.sourceId);
         const sourcePath = localBySource.get(item.sourceId);
-        await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps), { signal: control.signal });
+        await run('ffmpeg', clipArgs(sourcePath, clipPath, source.mimeType, durationSeconds, input.width, input.height, input.fps, item.sourceStartMs ?? 0), { signal: control.signal });
       }
       clipPaths.push(clipPath);
     }
@@ -876,16 +913,26 @@ async function renderLifeMovie(job) {
       srt: `${attemptPrefix}/life-movie.srt`,
       manifest: `${attemptPrefix}/life-movie.render-manifest.json`,
     };
-    async function uploadPrivateFile(localPath, destination, contentType) {
+    async function uploadPrivateFile(localPath, destination, contentType, expectedHash) {
       await control.check();
-      writtenObjects.push(destination);
-      await pipeline(fs.createReadStream(localPath), bucket.file(destination).createWriteStream({
-        resumable: false, metadata: { contentType, cacheControl: 'private, no-store' },
+      pendingUnfencedOutputWrite = true;
+      const file = bucket.file(destination);
+      await pipeline(fs.createReadStream(localPath), file.createWriteStream({
+        resumable: false, preconditionOpts: { ifGenerationMatch: 0 },
+        metadata: { contentType, cacheControl: 'private, no-store', metadata: { uraiSha256: expectedHash } },
       }), { signal: control.signal });
+      const [metadata] = await file.getMetadata();
+      if (metadata?.metadata?.uraiSha256 !== expectedHash) throw new Error('output_checksum_metadata_mismatch');
+      const uploadedGeneration = pinnedUploadedOutputGeneration(metadata.generation);
+      writtenObjects.push({ destination, generation: uploadedGeneration });
+      pendingUnfencedOutputWrite = false;
+      return uploadedGeneration;
     }
-    await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4');
-    await uploadPrivateFile(subtitlePath, outputPaths.srt, 'application/x-subrip');
-    await uploadPrivateFile(manifestPath, outputPaths.manifest, 'application/json');
+    const outputGenerations = {
+      mp4: await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4', movieHash),
+      srt: await uploadPrivateFile(subtitlePath, outputPaths.srt, 'application/x-subrip', subtitleHash),
+      manifest: await uploadPrivateFile(manifestPath, outputPaths.manifest, 'application/json', manifestHash),
+    };
     await control.check();
     completed = true;
 
@@ -899,9 +946,9 @@ async function renderLifeMovie(job) {
       publicReleaseAuthorized: false,
       spatialRequired: false,
       outputs: [
-        { kind: 'mp4', ref: `gs://${bucketName}/${outputPaths.mp4}`, mimeType: 'video/mp4', checksum: movieHash },
-        { kind: 'srt', ref: `gs://${bucketName}/${outputPaths.srt}`, mimeType: 'application/x-subrip', checksum: subtitleHash },
-        { kind: 'manifest', ref: `gs://${bucketName}/${outputPaths.manifest}`, mimeType: 'application/json', checksum: manifestHash },
+        { kind: 'mp4', ref: `gs://${bucketName}/${outputPaths.mp4}`, generation: outputGenerations.mp4, mimeType: 'video/mp4', checksum: movieHash },
+        { kind: 'srt', ref: `gs://${bucketName}/${outputPaths.srt}`, generation: outputGenerations.srt, mimeType: 'application/x-subrip', checksum: subtitleHash },
+        { kind: 'manifest', ref: `gs://${bucketName}/${outputPaths.manifest}`, generation: outputGenerations.manifest, mimeType: 'application/json', checksum: manifestHash },
       ],
       renderPlanDigest: input.renderPlanDigest,
       sceneTruthReceiptRef: input.sceneTruthReceiptRef,
@@ -913,11 +960,8 @@ async function renderLifeMovie(job) {
     control.stop();
     fs.rmSync(workDir, { recursive: true, force: true });
     if (!completed) {
-      const cleanup = await Promise.allSettled(writtenObjects.map((destination) =>
-        bucket.file(destination).delete({ ignoreNotFound: true })));
-      if (cleanup.some((result) => result.status === 'rejected')) {
-        throw new Error('render_cleanup_incomplete');
-      }
+      await cleanupPinnedPrivateOutputs(bucket, writtenObjects, 'render_cleanup_incomplete');
+      if (pendingUnfencedOutputWrite) throw new Error('render_cleanup_incomplete');
     }
   }
 }
