@@ -15,7 +15,11 @@ assert.ok(start >= 0 && stop > start, 'Original protected-staging transaction mu
 const fragment = content.slice(start, stop);
 const requireFn = createRequire(new URL('../functions/package.json', import.meta.url));
 const ts = requireFn('typescript');
-const moduleText = `async function transactionFromSource(db, requestRef, executionRef, parsed, admission) {\n${fragment}\nreturn request;\n}\nmodule.exports.transactionFromSource = transactionFromSource;`;
+const digestStart = content.indexOf('function canonicalDigest(value: unknown) {');
+const digestEnd = content.indexOf('\n}', digestStart) + 2;
+assert.ok(digestStart >= 0 && digestEnd > digestStart, 'Original result digest function must remain source-bound');
+const digestSource = content.slice(digestStart, digestEnd);
+const moduleText = `${digestSource}\nasync function transactionFromSource(db, requestRef, executionRef, parsed, admission) {\n${fragment}\nreturn request;\n}\nmodule.exports.transactionFromSource = transactionFromSource;`;
 const compiled = ts.transpileModule(moduleText, {
   fileName: 'JobsDataRightsTransaction.ts', reportDiagnostics: true,
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -34,11 +38,12 @@ const ownerUid = 'synthetic-owner-01';
 const ownerHash = createHash('sha256').update(ownerUid).digest('hex');
 const request = { ownerUid, requestType: 'DELETE', status: 'IN_REVIEW' };
 const receiptId = 'synthetic-retention-decision-0001';
+const completeResult = {jobsAnonymized: 1, unresolvedDomains:['synthetic-external']};
 const completed = {
   event: 'DATA_RIGHTS_EXECUTION_FINISHED', schemaVersion: 'urai-jobs-data-rights-execution-v1',
   requestType: 'DELETE', ownerHash, retentionDecisionReceiptId: receiptId,
   terminalState: 'PROTECTED_STAGING_JOBS_SCOPE_APPLIED_CENTRAL_PRIVACY_REQUIRED',
-  resultDigest: 'a'.repeat(64), result: {jobsAnonymized: 1, unresolvedDomains:['synthetic-external']},
+  resultDigest: createHash('sha256').update(JSON.stringify(completeResult)).digest('hex'), result: completeResult,
 };
 const requestRef = {tag:'request'};
 const executionRef = {tag:'execution'};
@@ -80,6 +85,10 @@ for (const [label, prior] of [
   ['incorrect terminal state', {...completed, terminalState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
   ['invalid result digest', {...completed, resultDigest:'truncated'}],
   ['missing result', {...completed, result:null}],
+  ['well-formed but incorrect result checksum', {...completed, resultDigest:'b'.repeat(64)}],
+  ['changed record count with unchanged digest', {...completed, result:{...completeResult,jobsAnonymized:999}}],
+  ['changed unresolved domains with unchanged digest', {...completed, result:{...completeResult,unresolvedDomains:['deleted-everything']}}],
+  ['missing fields with unchanged digest', {...completed, result:{}}],
 ]) {
   test(`existing ${label} must not assert successful replay`, async () => {
     const h = setup({prior});

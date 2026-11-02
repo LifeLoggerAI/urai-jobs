@@ -227,7 +227,8 @@ const handler = async (data: unknown, _context: CallableContext) => {
       if (prior.event !== 'DATA_RIGHTS_EXECUTION_FINISHED' ||
           prior.terminalState !== expectedTerminal ||
           typeof prior.resultDigest !== 'string' || !/^[a-f0-9]{64}$/.test(prior.resultDigest) ||
-          !prior.result || typeof prior.result !== 'object' || Array.isArray(prior.result)) {
+          !prior.result || typeof prior.result !== 'object' || Array.isArray(prior.result) ||
+          prior.resultDigest !== canonicalDigest(prior.result)) {
         throw httpsError('failed-precondition', 'Data-rights execution is not verifiably complete; reconciliation is required.');
       }
       return { replay: prior, record };
