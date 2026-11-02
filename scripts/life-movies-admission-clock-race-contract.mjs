@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
 
-const ts = createRequire(import.meta.url)('typescript');
+const ts = createRequire(new URL('../functions/package.json', import.meta.url))('typescript');
 const sourceFile = process.env.LIFE_MOVIE_PREFLIGHT_SOURCE || new URL('../functions/src/privacy/lifeMovieAdmissionPreflight.ts', import.meta.url);
 const source = readFileSync(sourceFile, 'utf8');
 const {outputText,diagnostics} = ts.transpileModule(source, {fileName:'lifeMovieAdmissionPreflight.ts',reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});

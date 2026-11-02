@@ -7,7 +7,7 @@ import vm from 'node:vm';
 // Actual committed TypeScript modules run with simulated Firebase Admin APIs.
 // These are contract regressions, not Firestore/Storage emulator or hosted tests.
 const require = createRequire(import.meta.url);
-const ts = require('typescript');
+const ts = createRequire(new URL('../functions/package.json', import.meta.url))('typescript');
 function compile(path, imports) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8');
   const js = ts.transpileModule(source, {

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const ts = require('typescript');
+const ts = createRequire(new URL('../functions/package.json', import.meta.url))('typescript');
 const read = file => readFileSync(new URL('../functions/src/privacy/' + file, import.meta.url), 'utf8');
 const composition = read('lifeMovieTrustedAdmission.ts');
 const sourceRights = read('lifeMovieFirebaseSourceRightsAdapter.ts');

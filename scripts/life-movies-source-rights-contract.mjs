@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import vm from 'node:vm';
 
 const require = createRequire(import.meta.url);
-const ts = require('typescript');
+const ts = createRequire(new URL('../functions/package.json', import.meta.url))('typescript');
 const source = readFileSync(new URL('../functions/src/privacy/lifeMovieSourceRightsVerifier.ts', import.meta.url), 'utf8');
 const module = { exports: {} };
 const js = ts.transpileModule(source, { compilerOptions: {
