@@ -291,7 +291,7 @@ function parsePayload(job) {
     if (!Number.isInteger(startMs) || !Number.isInteger(endMs) || startMs < 0 || endMs <= startMs) {
       throw new Error(`invalid_audio_cue_range:${index}`);
     }
-    if (!Number.isInteger(sourceStartMs) || sourceStartMs < 0) throw new Error(`invalid_audio_cue_source_start:${index}`);
+    if (!Number.isSafeInteger(sourceStartMs) || sourceStartMs < 0 || sourceStartMs > 45 * 60 * 1000) throw new Error(`invalid_audio_cue_source_start:${index}`);
     if (!Number.isFinite(gainDb) || gainDb < -60 || gainDb > 12) throw new Error(`invalid_audio_cue_gain:${index}`);
     if (endMs > totalTimelineMs) throw new Error(`audio_cue_outside_timeline:${index}`);
     return { sourceId, role, startMs, endMs, sourceStartMs, gainDb };
