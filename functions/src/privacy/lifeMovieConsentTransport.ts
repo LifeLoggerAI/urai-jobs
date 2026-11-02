@@ -39,21 +39,44 @@ const DENIED = 'life_movie_consent_decision_denied';
 const UNAVAILABLE = 'life_movie_consent_transport_unavailable';
 const IDENTITY_UNAVAILABLE = 'life_movie_consent_jobs_identity_unavailable';
 
-function validExpectation(expected: ExpectedLifeMovieDecision): boolean {
-  if (!expected || typeof expected !== 'object') return false;
-  const scope = expected.renderScope;
-  return typeof expected.subjectUid === 'string' && IDENTIFIER.test(expected.subjectUid) &&
-    typeof expected.tenantId === 'string' && IDENTIFIER.test(expected.tenantId) &&
-    typeof expected.correlationId === 'string' && expected.correlationId.length >= 8 && expected.correlationId.length <= 160 &&
-    typeof expected.decisionReceiptId === 'string' && HASH.test(expected.decisionReceiptId) &&
-    !!scope && typeof scope === 'object' && !Array.isArray(scope) &&
-    Reflect.ownKeys(scope).length === 3 &&
-    Object.prototype.hasOwnProperty.call(scope, 'projectId') &&
-    Object.prototype.hasOwnProperty.call(scope, 'renderPlanDigest') &&
-    Object.prototype.hasOwnProperty.call(scope, 'sourceSetDigest') &&
-    typeof scope.projectId === 'string' && IDENTIFIER.test(scope.projectId) &&
-    typeof scope.renderPlanDigest === 'string' && HASH.test(scope.renderPlanDigest) &&
-    typeof scope.sourceSetDigest === 'string' && HASH.test(scope.sourceSetDigest);
+/** Pin the authority selection before awaiting a token or crossing the network.
+ * Reading own data descriptors avoids executing getters supplied by another
+ * in-process caller, and prevents mutable input from changing its authority
+ * scope between validation, Privacy transport and response verification.
+ */
+function ownDataField(source: object, key: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(source, key);
+  return descriptor && Object.prototype.hasOwnProperty.call(descriptor, 'value')
+    ? descriptor.value : undefined;
+}
+
+function pinExpectation(expected: ExpectedLifeMovieDecision): ExpectedLifeMovieDecision | null {
+  if (!expected || typeof expected !== 'object' || Array.isArray(expected)) return null;
+  try {
+    const subjectUid = ownDataField(expected, 'subjectUid');
+    const tenantId = ownDataField(expected, 'tenantId');
+    const correlationId = ownDataField(expected, 'correlationId');
+    const decisionReceiptId = ownDataField(expected, 'decisionReceiptId');
+    const scope = ownDataField(expected, 'renderScope');
+    if (!scope || typeof scope !== 'object' || Array.isArray(scope) ||
+        Reflect.ownKeys(scope).length !== 3) return null;
+    const projectId = ownDataField(scope, 'projectId');
+    const renderPlanDigest = ownDataField(scope, 'renderPlanDigest');
+    const sourceSetDigest = ownDataField(scope, 'sourceSetDigest');
+    if (typeof subjectUid !== 'string' || !IDENTIFIER.test(subjectUid) ||
+        typeof tenantId !== 'string' || !IDENTIFIER.test(tenantId) ||
+        typeof correlationId !== 'string' || correlationId.length < 8 || correlationId.length > 160 ||
+        typeof decisionReceiptId !== 'string' || !HASH.test(decisionReceiptId) ||
+        typeof projectId !== 'string' || !IDENTIFIER.test(projectId) ||
+        typeof renderPlanDigest !== 'string' || !HASH.test(renderPlanDigest) ||
+        typeof sourceSetDigest !== 'string' || !HASH.test(sourceSetDigest)) return null;
+    return {
+      subjectUid, tenantId, correlationId, decisionReceiptId,
+      renderScope: { projectId, renderPlanDigest, sourceSetDigest },
+    };
+  } catch {
+    return null;
+  }
 }
 
 function validDedicatedJobsIdToken(
@@ -109,7 +132,8 @@ export function createLifeMoviePrivacyTransport(
   const clock = dependencies.nowMs ?? Date.now;
 
   return async (expected) => {
-    if (!validExpectation(expected)) throw new Error('life_movie_consent_decision_invalid_expectation');
+    const pinned = pinExpectation(expected);
+    if (!pinned) throw new Error('life_movie_consent_decision_invalid_expectation');
     const now = clock();
     if (!Number.isSafeInteger(now) || now <= 0) throw new Error(UNAVAILABLE);
 
@@ -122,15 +146,15 @@ export function createLifeMoviePrivacyTransport(
     if (!validDedicatedJobsIdToken(token, config, now)) throw new Error(IDENTITY_UNAVAILABLE);
 
     const data = {
-      subjectUid: expected.subjectUid,
-      tenantId: expected.tenantId,
-      correlationId: expected.correlationId,
-      decisionReceiptId: expected.decisionReceiptId,
+      subjectUid: pinned.subjectUid,
+      tenantId: pinned.tenantId,
+      correlationId: pinned.correlationId,
+      decisionReceiptId: pinned.decisionReceiptId,
       policyVersion: '1.1.0',
       renderScope: {
-        projectId: expected.renderScope.projectId,
-        renderPlanDigest: expected.renderScope.renderPlanDigest,
-        sourceSetDigest: expected.renderScope.sourceSetDigest,
+        projectId: pinned.renderScope.projectId,
+        renderPlanDigest: pinned.renderScope.renderPlanDigest,
+        sourceSetDigest: pinned.renderScope.sourceSetDigest,
       },
     };
     let response: Response;
@@ -174,7 +198,7 @@ export function createLifeMoviePrivacyTransport(
     const decision = (envelope as { result: unknown }).result;
     // Strictly bind Privacy's result to exactly this movie/source selection,
     // tenant, user, correlation, policy, receipt and freshness window.
-    assertLifeMovieConsentDecision(decision, expected, clock());
+    assertLifeMovieConsentDecision(decision, pinned, clock());
     const proof = decision as { decisionEventId: string; evaluatedAt: string };
     return { decisionEventId: proof.decisionEventId, evaluatedAt: proof.evaluatedAt };
   };
