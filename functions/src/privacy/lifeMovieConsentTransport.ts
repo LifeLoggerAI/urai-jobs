@@ -75,8 +75,12 @@ function validDedicatedJobsIdToken(
       payload.consumerId === 'urai-jobs' &&
       payload.firebase?.sign_in_provider === 'custom' &&
       Number.isSafeInteger(payload.iat) && payload.iat <= nowSeconds + 30 &&
+      // A token with an ancient iat and a fabricated distant expiry is not
+      // a credible one-hour Firebase ID token, even before signature checking.
+      payload.iat >= nowSeconds - 3600 - 30 &&
       Number.isSafeInteger(payload.exp) && payload.exp > nowSeconds + 5 &&
-      payload.exp <= nowSeconds + 2 * 3600;
+      payload.exp <= nowSeconds + 2 * 3600 &&
+      payload.exp > payload.iat && payload.exp - payload.iat <= 3600 + 30;
   } catch {
     return false;
   }
