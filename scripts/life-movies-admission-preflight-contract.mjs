@@ -8,11 +8,16 @@ const source = readFileSync(new URL('../functions/src/privacy/lifeMovieAdmission
 const js = ts.transpileModule(source, {compilerOptions: {module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const time=Date.parse('2026-11-01T13:00:00Z');
 const scope={projectId:'movie-1',renderPlanDigest:'a'.repeat(64),sourceSetDigest:'b'.repeat(64)};
-const selection={projectId:scope.projectId,renderPlanDigest:scope.renderPlanDigest,sources:[{id:'a',generation:'1793378565000001',ownerOrRightsRef:'rights-1'}]};
+const selection={projectId:scope.projectId,renderPlanDigest:scope.renderPlanDigest,sources:[{id:'a',bucket:'urai-test-media',objectPath:'tenants/tenant-1/media/a.jpg',generation:'1793378565000001',mimeType:'image/jpeg',provenance:'original-source',sourceRefs:['source-1'],consentRef:'consent-1',ownerOrRightsRef:'rights-1'}]};
 const input={ownerUid:'owner-1',tenantId:'tenant-1',consent:{purpose:'life-movie.render',policyVersion:'1.1.0',decisionReceiptId:'c'.repeat(64)},selection};
 const functions={};
 const module={exports:{}};
-vm.runInNewContext(js,{module,exports:module.exports,require(name){if(name==='node:crypto') return {randomUUID:()=> 'corr-12345678'};if(name==='../jobs/studioLifeMovieContract.js') return {deriveStudioLifeMovieRenderScope(payload){assert.equal(payload,selection);return scope;}};throw Error(name)},Date,Number,Array,Reflect,Object,Error}, {filename:'lifeMovieAdmissionPreflight.js'});
+vm.runInNewContext(js,{module,exports:module.exports,require(name){if(name==='node:crypto') return {randomUUID:()=> 'corr-12345678'};if(name==='../jobs/studioLifeMovieContract.js') return {deriveStudioLifeMovieRenderScope(payload){assert.notEqual(payload,selection, 'derivation must use the immutable data-only snapshot');
+  assert.deepEqual(JSON.parse(JSON.stringify(payload)),JSON.parse(JSON.stringify(selection)));
+  assert.equal(Object.isFrozen(payload),true);assert.equal(Object.isFrozen(payload.sources),true);
+  assert.equal(Object.isFrozen(payload.sources[0]),true);
+  assert.equal(Object.isFrozen(payload.sources[0].sourceRefs),true);
+  return scope;}};throw Error(name)},Date,Number,Array,Reflect,Object,Error}, {filename:'lifeMovieAdmissionPreflight.js'});
 const create=module.exports.createLifeMovieAdmissionPreflight;
 let cases=0;
 assert.throws(()=>create({}),/life_movie_admission_authority_unavailable/);cases++;
@@ -149,4 +154,40 @@ for(const field of ['generation','ownerOrRightsRef']){
   cases++;
 }
 
+// Provenance of the computed scope must come from the captured immutable
+// selection, never a second read from the untrusted caller's original object.
+// Array custom map/toJSON methods are ignored by the safe snapshot. We reject
+// noncanonical own fields rather than executing caller-supplied code.
+for (const name of ['sources.map','sourceRefs.toJSON']) {
+  let calls=0;
+  const alteredSource={...selection.sources[0],sourceRefs:[...selection.sources[0].sourceRefs]};
+  const alteredSelection={...selection,sources:[alteredSource]};
+  if(name==='sources.map') Object.defineProperty(alteredSelection.sources,'map',{
+    get(){calls++;throw Error('attacker code ran');}
+  });
+  else Object.defineProperty(alteredSource.sourceRefs,'toJSON',{
+    get(){calls++;throw Error('attacker code ran');}
+  });
+  await assert.rejects(configured()({...input,selection:alteredSelection}),
+    /life_movie_admission_authority_unavailable/);
+  assert.equal(calls,0,'untrusted custom array method must never be executed');cases++;
+}
+for(const field of ['bucket','objectPath','mimeType','provenance','sourceRefs','consentRef']){
+  const item={...selection.sources[0]};delete item[field];
+  await assert.rejects(configured()({...input,selection:{...selection,sources:[item]}}),
+    /life_movie_admission_authority_unavailable/);
+  cases++;
+}
+for (const [kind,modified] of [
+  ['unexpected field',{...selection.sources[0],extraConsentAuthority:true}],
+  ['inherited field',Object.assign(Object.create({sourceRightsElevated:true}),selection.sources[0])],
+]) {
+  await assert.rejects(configured()({...input,selection:{...selection,sources:[modified]}}),
+    /life_movie_admission_authority_unavailable/);
+  cases++;
+}
+{
+  const augmented={...input,bonusConsentAuthority:true};
+  await assert.rejects(configured()(augmented),/life_movie_admission_authority_unavailable/);cases++;
+}
 console.log('[PASS] ' + cases + ' synthetic preflight contract cases; no network, credentials, grants or rendering');

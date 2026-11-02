@@ -64,29 +64,46 @@ const SOURCE_FIELDS = [
   'sourceRefs', 'consentRef', 'ownerOrRightsRef',
 ] as const;
 
-function snapshotAdmissionRequest(raw: LifeMovieAdmissionRequest): LifeMovieAdmissionRequest {
-  const consent = ownData(raw, 'consent');
-  const originalSelection = ownData(raw, 'selection');
-  const originalSources = ownData(originalSelection, 'sources');
-  if (!Array.isArray(originalSources) || originalSources.length < 1 || originalSources.length > 12) {
-    throw new Error(UNAVAILABLE);
+function exactOwnKeys(value: unknown, keys: readonly string[]): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  try {
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return false;
+    const actual = Reflect.ownKeys(value);
+    return actual.length === keys.length && actual.every(key =>
+      typeof key === 'string' && keys.includes(key));
+  } catch {
+    return false;
   }
-  const sources = Array.from({length: originalSources.length}, (_, i) => {
-    const item = Object.getOwnPropertyDescriptor(originalSources, String(i));
-    if (!item || !Object.prototype.hasOwnProperty.call(item, 'value')) throw new Error(UNAVAILABLE);
+}
+
+function checkedOwnArray(value: unknown, max: number): readonly unknown[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > max ||
+      Reflect.ownKeys(value).length !== value.length + 1) throw new Error(UNAVAILABLE);
+  return Object.freeze(Array.from({ length: value.length }, (_, i) => {
+    const entry = Object.getOwnPropertyDescriptor(value, String(i));
+    if (!entry || !Object.prototype.hasOwnProperty.call(entry, 'value')) throw new Error(UNAVAILABLE);
+    return entry.value;
+  }));
+}
+
+function snapshotAdmissionRequest(raw: LifeMovieAdmissionRequest): LifeMovieAdmissionRequest {
+  if (!exactOwnKeys(raw, ['ownerUid', 'tenantId', 'consent', 'selection'])) throw new Error(UNAVAILABLE);
+  const consent = ownData(raw, 'consent');
+  if (!exactOwnKeys(consent, ['purpose', 'policyVersion', 'decisionReceiptId'])) throw new Error(UNAVAILABLE);
+  const originalSelection = ownData(raw, 'selection');
+  if (!exactOwnKeys(originalSelection, ['projectId', 'renderPlanDigest', 'sources'])) throw new Error(UNAVAILABLE);
+  const originalSources = checkedOwnArray(ownData(originalSelection, 'sources'), 12);
+  const sources = originalSources.map((item) => {
+    if (!exactOwnKeys(item, SOURCE_FIELDS)) throw new Error(UNAVAILABLE);
     const source: Record<string, unknown> = {};
     for (const key of SOURCE_FIELDS) {
-      const value = ownData(item.value, key);
-      if (value === undefined) continue;
+      const value = ownData(item, key);
+      if (value === undefined) throw new Error(UNAVAILABLE);
       if (key === 'sourceRefs') {
-        if (!Array.isArray(value) || value.length < 1 || value.length > 32) throw new Error(UNAVAILABLE);
-        const refs = Array.from({length: value.length}, (_, j) => {
-          const field = Object.getOwnPropertyDescriptor(value, String(j));
-          if (!field || !Object.prototype.hasOwnProperty.call(field, 'value') ||
-              typeof field.value !== 'string') throw new Error(UNAVAILABLE);
-          return field.value;
-        });
-        source.sourceRefs = Object.freeze(refs);
+        const refs = checkedOwnArray(value, 32);
+        if (refs.some(ref => typeof ref !== 'string' || ref.length < 1 || ref.length > 512)) throw new Error(UNAVAILABLE);
+        source.sourceRefs = refs;
       } else {
         if (typeof value !== 'string') throw new Error(UNAVAILABLE);
         source[key] = value;
@@ -158,9 +175,9 @@ export function createLifeMovieAdmissionPreflight(deps: LifeMovieAdmissionDepend
     // cannot supply its own sourceSetDigest in the authorization expectation.
     let scope: LifeMovieRenderScope;
     try {
-      // The trusted canonical derivation runs synchronously; the validated
-      // immutable copy is used at every subsequent asynchronous boundary.
-      scope = deriveStudioLifeMovieRenderScope(rawInput.selection);
+      // Derive from the same immutable, data-only source set that is passed to
+      // both independent rights checks. NEVER re-read caller-owned data here.
+      scope = deriveStudioLifeMovieRenderScope(input.selection);
       if (!HASH.test(scope.sourceSetDigest) || scope.projectId !== input.selection.projectId ||
           scope.renderPlanDigest !== input.selection.renderPlanDigest) throw new Error(UNAVAILABLE);
     } catch {
