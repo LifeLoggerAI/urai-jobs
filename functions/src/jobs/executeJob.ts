@@ -246,9 +246,21 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
 
 async function appendJobLog(jobId: string, input: { level: string; message: string; source: string; metadata?: Record<string, unknown> }) {
   try {
-    await jobDoc(jobId).collection('logs').add({
-      ...input,
-      createdAt: FieldValue.serverTimestamp(),
+    const db = getFirestore();
+    const jobRef = jobDoc(jobId);
+    // A late worker must never recreate a private log after a deletion
+    // tombstone. Read the master and create the log in one transaction.
+    await db.runTransaction(async transaction => {
+      const snapshot = await transaction.get(jobRef);
+      if (!snapshot.exists) return;
+      const job = snapshot.data();
+      if (!job || typeof job.ownerUid !== 'string' || !job.ownerUid ||
+          job.ownerUid.startsWith('deleted:') ||
+          Object.prototype.hasOwnProperty.call(job, 'deletionReceipt')) return;
+      transaction.create(jobRef.collection('logs').doc(), {
+        ...input,
+        createdAt: FieldValue.serverTimestamp(),
+      });
     });
   } catch (logError) {
     console.error(`Failed to append job log for ${jobId}:`, logError);
