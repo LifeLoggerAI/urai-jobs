@@ -13,6 +13,12 @@ const start = content.indexOf('  const request = await db.runTransaction(async (
 const stop = content.indexOf('  if (request.replay) return { replay: true, receipt: request.replay };', start);
 assert.ok(start >= 0 && stop > start, 'Original protected-staging transaction must remain source-bound');
 const fragment = content.slice(start, stop);
+// Execute the original source constant in the isolated VM; never silently
+// substitute an undefined binding or accept a changed limit without review.
+const logCapMatch = content.match(/^const MAX_LOGS_PER_DELETE_BATCH = (\d+);$/m);
+assert.ok(logCapMatch, 'Bounded log-cap constant must remain in original source');
+const sourceLogCap = Number(logCapMatch[1]);
+assert.equal(sourceLogCap, 496, 'Changing the conservative deletion cap requires explicit test review');
 const requireFn = createRequire(new URL('../functions/package.json', import.meta.url));
 const ts = requireFn('typescript');
 const digestStart = content.indexOf('function canonicalDigest(value: unknown) {');
@@ -35,6 +41,7 @@ runInNewContext(compiled.outputText, {
   FieldValue: { serverTimestamp: () => 'SYNTHETIC_SERVER_TIMESTAMP' },
   process: {env: {GCS_BUCKET_NAME: 'synthetic-bucket'}},
   EXECUTION_SCHEMA: 'urai-jobs-data-rights-execution-v1', MAX_OWNED_JOBS: 2000,
+  MAX_LOGS_PER_DELETE_BATCH: sourceLogCap,
   httpsError: (code, message) => Object.assign(new Error(message), { code }),
 }, {filename: 'JobsDataRightsTransaction.js', timeout: 2000});
 const transactionFromSource = module.exports.transactionFromSource;
