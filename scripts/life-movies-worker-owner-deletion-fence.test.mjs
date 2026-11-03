@@ -16,7 +16,8 @@ const present=value=>({exists:true,data:()=>value});
 function fixture(type='studio.render.video'){
  const job={jobId:'synthetic-job',jobType:type,tenantId:'synthetic-tenant',ownerUid:'synthetic-owner',leaseToken:'synthetic-lease',payload:{id:'synthetic'}};
  const current={...job,status:'RUNNING',execution:{leaseToken:job.leaseToken},consent:{purpose:'life-movie.render',policyVersion:'1.1.0',decisionReceiptId:'c'.repeat(64)}};
- let owner=present({dataRightsDeletionPendingCentralPrivacy:false}),block={exists:false},failed=null;
+ let owner=present({dataRightsDeletionPendingCentralPrivacy:false}),block={exists:false},failed=null,stalled=null;
+ const env={};
  const reads={jobs:0,users:0,jobConsentBlocks:0};
  const admin={firestore:()=>({collection:name=>({doc:id=>({async get(){
    assert.ok(Object.hasOwn(reads,name));reads[name]++;
@@ -24,16 +25,17 @@ function fixture(type='studio.render.video'){
    if(name==='jobs')assert.equal(id,job.jobId);
    if(name==='jobConsentBlocks')assert.equal(id,createHash('sha256').update(job.ownerUid+'\nlife-movie.render').digest('hex'));
    if(name===failed)throw Error('synthetic_firestore_failure');
+   if(name===stalled)return new Promise(()=>{});
    return name==='jobs'?present(current):name==='users'?owner:block;
  }})})})};
  const module={exports:{}};
  vm.runInNewContext(worker.slice(start,end)+'\nmodule.exports={createRenderControl,checkedStudioOwnerDeletionFenceState};',{
   module,admin,Buffer,Object,Array,Promise,Error,AbortController,setTimeout,clearTimeout,
-  process:{env:{}},crypto:{createHash},
+  process:{env},crypto:{createHash},
   safeSegment:x=>x,canonicalJson:JSON.stringify,
  },{timeout:2000,filename:'worker-guard-exact-source.js'});
  return {job,current,reads,make:()=>module.exports.createRenderControl(job),state:module.exports.checkedStudioOwnerDeletionFenceState,
-  owner:x=>owner=x,block:x=>block=x,fail:x=>failed=x};
+  owner:x=>owner=x,block:x=>block=x,fail:x=>failed=x,stall:x=>stalled=x,env};
 }
 
 test('worker state matches authoritative owner fence and never runs getters',()=>{
@@ -92,4 +94,39 @@ for(const [label,block,expected] of [
 ])test('worker rejects '+label+' consent block',async()=>{
  const f=fixture();f.block(block);const c=f.make();
  try{await assert.rejects(c.check(),new RegExp(expected));assert.equal(f.reads.users,1)}finally{c.stop()}
+});
+
+// Additional synthetic race, binding and deadline regressions for R424.
+for(const [label,change,expected] of [
+ ['revoked lease',v=>v.execution.leaseToken='stale-lease','render_lease_revoked'],
+ ['cross-tenant',v=>v.tenantId='wrong-tenant','render_job_binding_mismatch'],
+ ['altered payload',v=>v.payload={...v.payload,id:'replaced'},'render_job_binding_mismatch'],
+])test('worker rejects '+label+' before private media authority reads',async()=>{
+ const f=fixture();change(f.current);const c=f.make();
+ try{await assert.rejects(c.check(),new RegExp(expected));assert.equal(f.reads.users,0);assert.equal(f.reads.jobConsentBlocks,0);assert.equal(c.signal.aborted,true)}finally{c.stop()}
+});
+
+test('worker rejects Firestore consent backend failure after owner clears',async()=>{
+ const f=fixture();f.fail('jobConsentBlocks');const c=f.make();
+ try{await assert.rejects(c.check(),/render_authority_unavailable/);assert.equal(f.reads.users,1);assert.equal(c.signal.aborted,true)}finally{c.stop()}
+});
+
+test('worker revocation between polls aborts future media access',async()=>{
+ const f=fixture(),c=f.make();try{
+  await c.check();assert.equal(f.reads.users,1);
+  f.block(present({active:true}));
+  await assert.rejects(c.check(),/render_consent_revoked/);
+  assert.equal(c.signal.aborted,true);
+  await assert.rejects(c.check(),/render_consent_revoked/);
+ }finally{c.stop()}
+});
+
+test('worker deadline aborts stalled owner backend before consent or media read',async()=>{
+ const f=fixture();f.env.URAI_STUDIO_RENDER_TIMEOUT_MS='20';f.stall('users');
+ const c=f.make();try{
+  await assert.rejects(c.check(),/render_deadline_exceeded/);
+  assert.equal(c.signal.aborted,true);
+  assert.equal(f.reads.users,1);
+  assert.equal(f.reads.jobConsentBlocks,0);
+ }finally{c.stop()}
 });
