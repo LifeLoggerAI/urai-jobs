@@ -289,7 +289,13 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
       policyVersion: input.consent.policyVersion!,
       decisionReceiptId: input.consent.decisionReceiptId!,
     },
-    selection: payload,
+    // Do not pass the whole render payload: only this exact source selection
+    // is accepted by the immutable admission snapshot.
+    selection: {
+      projectId: payload.projectId,
+      renderPlanDigest: payload.renderPlanDigest,
+      sources: payload.sources,
+    },
   });
   const consentRef = consentBlockRef(input.userId, input.consent.purpose);
   const consentSnapshot = await consentRef.get();
@@ -510,6 +516,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
   const plan = await loadPlan(planId, tenantId, userId);
   assertPlanStructure(plan, planId);
   if (plan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
+  if (plan.status !== 'PENDING') throw new Error('longform_plan_changed');
   await assertPlanConsentActive(plan);
 
   const db = getFirestore();
@@ -587,6 +594,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
     const currentPlan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
     assertPlanStructure(currentPlan, planId);
     if (currentPlan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
+    if (currentPlan.status !== 'PENDING') throw new Error('longform_plan_changed');
     if (!isDeepStrictEqual(currentPlan.childJobIds, plan.childJobIds)
       || !isDeepStrictEqual(currentPlan.segments, plan.segments)
       || !isDeepStrictEqual(currentPlan.consent, plan.consent)

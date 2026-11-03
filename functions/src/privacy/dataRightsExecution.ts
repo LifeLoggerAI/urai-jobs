@@ -8,6 +8,9 @@ import { uploadToGcs } from '../core/gcs.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
 const MAX_OWNED_JOBS = 2_000;
+// One job update, optional queue delete and two serverTimestamp transforms
+// must fit alongside the log deletions in a 500-write Firestore batch.
+const MAX_LOGS_PER_DELETE_BATCH = 496;
 const EXECUTION_MODE = 'protected-staging';
 const EXECUTION_SCHEMA = 'urai-jobs-data-rights-execution-v1';
 
@@ -20,6 +23,8 @@ const ExecuteSchema = z.object({
 type RequestRecord = {
   ownerUid?: string;
   requestType?: 'EXPORT' | 'DELETE';
+  requestId?: string;
+  retentionDecisionReceiptId?: string;
   status?: string;
   executionState?: string;
   requestedFormat?: 'json' | 'csv' | null;
@@ -135,8 +140,8 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
   let jobsAnonymized = 0;
 
   for (const document of jobs) {
-    const logs = await document.ref.collection('logs').limit(500).get();
-    if (logs.size >= 500) {
+    const logs = await document.ref.collection('logs').limit(MAX_LOGS_PER_DELETE_BATCH + 1).get();
+    if (logs.size > MAX_LOGS_PER_DELETE_BATCH) {
       throw httpsError('resource-exhausted', `Job ${document.id} has too many logs for bounded deletion; reconcile before retry.`);
     }
     const batch = db.batch();
@@ -206,11 +211,75 @@ const handler = async (data: unknown, _context: CallableContext) => {
       transaction.get(executionRef),
     ]);
     if (!requestSnap.exists) throw httpsError('not-found', 'Data-rights request was not found.');
-    if (priorExecution.exists) return { replay: priorExecution.data(), record: requestSnap.data() as RequestRecord };
-
     const record = requestSnap.data() as RequestRecord;
-    if (!record.ownerUid || !['EXPORT', 'DELETE'].includes(String(record.requestType))) {
+    if (!record?.ownerUid || !['EXPORT', 'DELETE'].includes(String(record.requestType))) {
       throw httpsError('failed-precondition', 'Data-rights request schema requires reconciliation.');
+    }
+    // A caller-provided receipt ID is not proof of Privacy approval. It must
+    // match the same request's server-persisted retention-decision binding,
+    // before either a new execution or an existing receipt can be replayed.
+    if (record.requestId !== parsed.data.requestId ||
+        typeof record.retentionDecisionReceiptId !== 'string' ||
+        record.retentionDecisionReceiptId !== parsed.data.retentionDecisionReceiptId) {
+      throw httpsError('failed-precondition', 'Persisted retention-decision authorization requires reconciliation.');
+    }
+    if (priorExecution.exists) {
+      const prior = priorExecution.data();
+      const expectedTerminal = record.requestType === 'EXPORT'
+        ? 'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'
+        : 'PROTECTED_STAGING_JOBS_SCOPE_APPLIED_CENTRAL_PRIVACY_REQUIRED';
+      const expectedOwner = createHash('sha256').update(record.ownerUid).digest('hex');
+      // A STARTED/FAILED audit is not completion evidence. Never turn an
+      // interrupted or partly destructive execution into a successful replay,
+      // and never blindly re-run it without an independent reconciliation.
+      if (!prior || prior.schemaVersion !== EXECUTION_SCHEMA ||
+          prior.ownerHash !== expectedOwner || prior.requestType !== record.requestType ||
+          prior.retentionDecisionReceiptId !== parsed.data.retentionDecisionReceiptId) {
+        throw httpsError('failed-precondition', 'Data-rights execution receipt identity requires reconciliation.');
+      }
+      // A finished label and a valid digest are not enough: the actual result
+      // must still prove this is only a Jobs-scope export/deletion, with the
+      // expected owner, request and unresolved external data-rights domains.
+      const result = prior.result as Record<string, unknown> | null;
+      const unresolved = [
+        'firebase-auth-account', 'provider-side-derivatives',
+        'external-artifacts-not-bound-to-jobs-storage',
+        'cross-system-data-owned-by-other-urai-services',
+      ];
+      const hasUnresolved = (value: unknown): boolean => Array.isArray(value)
+        && unresolved.every(domain => value.includes(domain))
+        && value.every(entry => typeof entry === 'string');
+      const validCounts = (value: unknown): boolean => typeof value === 'number'
+        && Number.isSafeInteger(value) && value >= 0;
+      const validDelete = record.requestType === 'DELETE' && result &&
+        validCounts(result.jobsAnonymized) && validCounts(result.queueDeletes) &&
+        validCounts(result.logDeletes) && (result.jobsAnonymized as number) <= MAX_OWNED_JOBS &&
+        (result.queueDeletes as number) <= (result.jobsAnonymized as number) &&
+        (result.logDeletes as number) <= (result.jobsAnonymized as number) * MAX_LOGS_PER_DELETE_BATCH &&
+        hasUnresolved(result.unresolvedDomains) && result.completeEcosystemExport !== true;
+      const exportPayload = result?.payload as Record<string, unknown> | undefined;
+      const validExport = record.requestType === 'EXPORT' && result && exportPayload &&
+        exportPayload.schemaVersion === EXECUTION_SCHEMA &&
+        exportPayload.scope === 'urai-jobs-proven-owner-data' &&
+        exportPayload.completeEcosystemExport === false &&
+        exportPayload.ownerUid === record.ownerUid &&
+        exportPayload.requestId === parsed.data.requestId &&
+        Array.isArray(exportPayload.jobs) && exportPayload.jobs.length <= MAX_OWNED_JOBS &&
+        hasUnresolved(exportPayload.unresolvedDomains) &&
+        validCounts(result.recordCount) &&
+        result.recordCount === exportPayload.jobs.length + (exportPayload.user === null ? 0 : 1) &&
+        typeof result.sha256 === 'string' && result.sha256 === canonicalDigest(exportPayload) &&
+        typeof result.gcsRef === 'string' && /^gs:\/\/[^/]+\/privacy\/data-rights\//.test(result.gcsRef);
+      if (prior.event !== 'DATA_RIGHTS_EXECUTION_FINISHED' ||
+          prior.terminalState !== expectedTerminal ||
+          !timestamp(prior.completedAt) ||
+          typeof prior.resultDigest !== 'string' || !/^[a-f0-9]{64}$/.test(prior.resultDigest) ||
+          !result || typeof result !== 'object' || Array.isArray(result) ||
+          !validDelete && !validExport ||
+          prior.resultDigest !== canonicalDigest(result)) {
+        throw httpsError('failed-precondition', 'Data-rights execution is not verifiably complete; reconciliation is required.');
+      }
+      return { replay: prior, record };
     }
     if (record.status !== 'APPROVED') {
       throw httpsError('failed-precondition', 'Only an explicitly APPROVED request can enter protected staging execution.');

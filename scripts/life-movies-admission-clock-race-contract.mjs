@@ -9,12 +9,12 @@ const source = readFileSync(sourceFile, 'utf8');
 const {outputText,diagnostics} = ts.transpileModule(source, {fileName:'lifeMovieAdmissionPreflight.ts',reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
 assert.equal((diagnostics || []).filter(d=>d.category===ts.DiagnosticCategory.Error).length, 0);
 const scope = {projectId:'film-1',renderPlanDigest:'a'.repeat(64),sourceSetDigest:'b'.repeat(64)};
-const selection = {projectId:scope.projectId,renderPlanDigest:scope.renderPlanDigest,sources:[{id:'source-1',generation:'1793378565000001'}]};
+const selection = {projectId:scope.projectId,renderPlanDigest:scope.renderPlanDigest,sources:[{id:'source-1',bucket:'urai-test-media',objectPath:'tenants/tenant-1/media/source-1.jpg',generation:'1793378565000001',mimeType:'image/jpeg',provenance:'original-source',sourceRefs:['source-1'],consentRef:'consent-1',ownerOrRightsRef:'rights-1'}]};
 const request={ownerUid:'owner-1',tenantId:'tenant-1',consent:{purpose:'life-movie.render',policyVersion:'1.1.0',decisionReceiptId:'c'.repeat(64)},selection};
 const module={exports:{}};
 vm.runInNewContext(outputText, {module,exports:module.exports,Date,Number,Array,Object,Reflect,Error,Promise,require(specifier){
   if(specifier==='node:crypto') return {randomUUID:()=> 'clock-race-correlation'};
-  if(specifier==='../jobs/studioLifeMovieContract.js') return {deriveStudioLifeMovieRenderScope(value){assert.equal(value,selection);return scope}};
+  if(specifier==='../jobs/studioLifeMovieContract.js') return {deriveStudioLifeMovieRenderScope(value){assert.notEqual(value,selection, 'scope must derive from immutable snapshot');assert.deepEqual(JSON.parse(JSON.stringify(value)), JSON.parse(JSON.stringify(selection)));assert.equal(Object.isFrozen(value),true);assert.equal(Object.isFrozen(value.sources),true);assert.equal(Object.isFrozen(value.sources[0]),true);assert.equal(Object.isFrozen(value.sources[0].sourceRefs),true);return scope}};
   throw Error('Unexpected import '+specifier);
 }}, {filename:'lifeMovieAdmissionPreflight.js'});
 const create = module.exports.createLifeMovieAdmissionPreflight;

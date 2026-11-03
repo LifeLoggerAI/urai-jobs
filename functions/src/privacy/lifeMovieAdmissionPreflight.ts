@@ -44,8 +44,92 @@ export type LifeMovieAdmissionDependencies = Readonly<{
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const HASH = /^[0-9a-f]{64}$/;
 const MAX_RIGHTS_AGE_MS = 30_000;
+// Long-form plans allow up to 128 distinct immutable sources. The short-form
+// bridge independently Zod-limits its source list to 12 before this preflight.
+const MAX_ADMISSION_SOURCES = 128;
 const UNAVAILABLE = 'life_movie_admission_authority_unavailable';
 const RIGHTS_DENIED = 'life_movie_source_rights_unverified';
+
+/** Make a data-only, immutable copy of the exact media authorization input.
+ * Never keep references to a caller-owned selection across await boundaries.
+ * Upstream Zod parsing remains mandatory; this is an independent race fence.
+ */
+function ownData(value: unknown, key: string): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(UNAVAILABLE);
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  if (!descriptor) return undefined;
+  if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) throw new Error(UNAVAILABLE);
+  return descriptor.value;
+}
+
+const SOURCE_FIELDS = [
+  'id', 'bucket', 'objectPath', 'generation', 'mimeType', 'provenance',
+  'sourceRefs', 'consentRef', 'ownerOrRightsRef',
+] as const;
+
+function exactOwnKeys(value: unknown, keys: readonly string[]): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  try {
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return false;
+    const actual = Reflect.ownKeys(value);
+    return actual.length === keys.length && actual.every(key =>
+      typeof key === 'string' && keys.includes(key));
+  } catch {
+    return false;
+  }
+}
+
+function checkedOwnArray(value: unknown, max: number): readonly unknown[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > max ||
+      Reflect.ownKeys(value).length !== value.length + 1) throw new Error(UNAVAILABLE);
+  return Object.freeze(Array.from({ length: value.length }, (_, i) => {
+    const entry = Object.getOwnPropertyDescriptor(value, String(i));
+    if (!entry || !Object.prototype.hasOwnProperty.call(entry, 'value')) throw new Error(UNAVAILABLE);
+    return entry.value;
+  }));
+}
+
+function snapshotAdmissionRequest(raw: LifeMovieAdmissionRequest): LifeMovieAdmissionRequest {
+  if (!exactOwnKeys(raw, ['ownerUid', 'tenantId', 'consent', 'selection'])) throw new Error(UNAVAILABLE);
+  const consent = ownData(raw, 'consent');
+  if (!exactOwnKeys(consent, ['purpose', 'policyVersion', 'decisionReceiptId'])) throw new Error(UNAVAILABLE);
+  const originalSelection = ownData(raw, 'selection');
+  if (!exactOwnKeys(originalSelection, ['projectId', 'renderPlanDigest', 'sources'])) throw new Error(UNAVAILABLE);
+  const originalSources = checkedOwnArray(ownData(originalSelection, 'sources'), MAX_ADMISSION_SOURCES);
+  const sources = originalSources.map((item) => {
+    if (!exactOwnKeys(item, SOURCE_FIELDS)) throw new Error(UNAVAILABLE);
+    const source: Record<string, unknown> = {};
+    for (const key of SOURCE_FIELDS) {
+      const value = ownData(item, key);
+      if (value === undefined) throw new Error(UNAVAILABLE);
+      if (key === 'sourceRefs') {
+        const refs = checkedOwnArray(value, 32);
+        if (refs.some(ref => typeof ref !== 'string' || ref.length < 1 || ref.length > 512)) throw new Error(UNAVAILABLE);
+        source.sourceRefs = refs;
+      } else {
+        if (typeof value !== 'string') throw new Error(UNAVAILABLE);
+        source[key] = value;
+      }
+    }
+    return Object.freeze(source);
+  });
+  const selection: Selection = Object.freeze({
+    projectId: ownData(originalSelection, 'projectId') as string,
+    renderPlanDigest: ownData(originalSelection, 'renderPlanDigest') as string,
+    sources: Object.freeze(sources) as Selection['sources'],
+  });
+  return Object.freeze({
+    ownerUid: ownData(raw, 'ownerUid') as string,
+    tenantId: ownData(raw, 'tenantId') as string,
+    consent: Object.freeze({
+      purpose: ownData(consent, 'purpose') as string,
+      policyVersion: ownData(consent, 'policyVersion') as string,
+      decisionReceiptId: ownData(consent, 'decisionReceiptId') as string,
+    }),
+    selection,
+  });
+}
 
 const matchesScope = (a: LifeMovieRenderScope, b: LifeMovieRenderScope): boolean =>
   !!a && typeof a === 'object' && !Array.isArray(a) &&
@@ -71,7 +155,13 @@ export function createLifeMovieAdmissionPreflight(deps: LifeMovieAdmissionDepend
     throw new Error(UNAVAILABLE);
   }
   const clock = deps.nowMs ?? Date.now;
-  return async (input: LifeMovieAdmissionRequest) => {
+  return async (rawInput: LifeMovieAdmissionRequest) => {
+    let input: LifeMovieAdmissionRequest;
+    try {
+      input = snapshotAdmissionRequest(rawInput);
+    } catch {
+      throw new Error(UNAVAILABLE);
+    }
     if (!input || typeof input.ownerUid !== 'string' || !ID.test(input.ownerUid) ||
         typeof input.tenantId !== 'string' || !ID.test(input.tenantId) ||
         input.consent?.purpose !== 'life-movie.render' ||
@@ -88,12 +178,15 @@ export function createLifeMovieAdmissionPreflight(deps: LifeMovieAdmissionDepend
     // cannot supply its own sourceSetDigest in the authorization expectation.
     let scope: LifeMovieRenderScope;
     try {
+      // Derive from the same immutable, data-only source set that is passed to
+      // both independent rights checks. NEVER re-read caller-owned data here.
       scope = deriveStudioLifeMovieRenderScope(input.selection);
       if (!HASH.test(scope.sourceSetDigest) || scope.projectId !== input.selection.projectId ||
           scope.renderPlanDigest !== input.selection.renderPlanDigest) throw new Error(UNAVAILABLE);
     } catch {
       throw new Error(UNAVAILABLE);
     }
+    Object.freeze(scope);
     const now = clock();
     if (!Number.isSafeInteger(now) || now <= 0) throw new Error(UNAVAILABLE);
 
@@ -128,13 +221,13 @@ export function createLifeMovieAdmissionPreflight(deps: LifeMovieAdmissionDepend
         rightsCheckedAt - now > MAX_RIGHTS_AGE_MS) throw new Error(RIGHTS_DENIED);
     const rightsMs = validRights(rights, rightsCheckedAt);
 
-    const expected: ExpectedLifeMovieDecision = {
+    const expected: ExpectedLifeMovieDecision = Object.freeze({
       subjectUid: input.ownerUid,
       tenantId: input.tenantId,
       correlationId: randomUUID(),
       decisionReceiptId: input.consent.decisionReceiptId,
       renderScope: scope,
-    };
+    });
     let decision: { decisionEventId: string; evaluatedAt: string };
     try {
       decision = await deps.getCurrentPrivacyDecision(expected);

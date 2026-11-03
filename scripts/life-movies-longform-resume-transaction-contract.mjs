@@ -39,12 +39,26 @@ const actualConsent = moduleBlock.exports.assertJobConsentBlockClear;
 assert.equal(typeof actualConsent,'function');
 const planId = 'lmp_' + 'A'.repeat(26), owner = 'owner01', tenant = 'tenant01';
 const childId=shape.makeChildId(planId,0);
-const base = {planId, tenantId: tenant, ownerUid: owner, status: 'FAILED', childJobIds: [childId],
+const base = {planId, schemaVersion:'urai-life-movie-longform-plan-v1', tenantId: tenant, ownerUid: owner, status: 'PENDING', childJobIds: [childId],
   segments: [{ jobId: childId, index: 0, startMs:0, endMs:1000 }], projectId: 'project1', sceneTruthReceiptRef: 'scene01', width:640, height:360, fps:24,
   renderPlanDigest: 'a'.repeat(64),sceneTruthDigest:'b'.repeat(64),
-  consent:{purpose:'life-movie.render',policyVersion:'1.1.0',decisionReceiptId:'c'.repeat(64)}};
-const fingerprint=(kind,payload)=>createHash('sha256').update(JSON.stringify([kind,payload])).digest('hex');
-const payload={projectId:base.projectId,renderPlanDigest:'f'.repeat(64),sceneTruthDigest:base.sceneTruthDigest};
+  consent:{purpose:'life-movie.render',policyVersion:'1.1.0',decisionReceiptId:'c'.repeat(64)},
+  sourceSystem:'urai-studio',publicReleaseAuthorized:false,providerGenerationAuthorized:false};
+// Load the production fingerprint from the actual source. Test-only hashing
+// once used JSON.stringify([kind,payload]), which is not the canonical contract.
+const hashSource=readFileSync(new URL('../functions/src/core/jobsReliability.ts', import.meta.url),'utf8');
+const hashExports={};
+vm.runInNewContext(ts.transpileModule(hashSource,{
+ compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
+}).outputText,{
+ exports:hashExports,
+ require:(name)=>{assert.equal(name,'node:crypto');return{createHash};},
+ Object,Array,JSON,String,
+});
+const fingerprint=hashExports.buildRequestFingerprint;
+assert.equal(typeof fingerprint,'function');
+const childDigest=createHash('sha256').update(`urai-life-movie-longform-segment-v1\n${base.renderPlanDigest}\n0\n0\n1000`).digest('hex');
+const payload={projectId:base.projectId,renderPlanDigest:childDigest,sceneTruthDigest:base.sceneTruthDigest};
 base.segments[0].childDigest=payload.renderPlanDigest;
 base.segments[0].childPayloadFingerprint=fingerprint('studio.render.video',payload);
 const assemblyId=shape.makeAssemblyJobId(planId);
@@ -173,3 +187,36 @@ for(const phase of ['child-owner','child-tenant','child-id','child-parent','chil
   assert.equal(h.calls.writes.length,0,'no job requeue after changed ownership or source');
  });
 }
+
+test('resume fixture binds canonical production request fingerprint',()=>{
+ const expected=createHash('sha256').update(hashExports.stableStringify({jobType:'studio.render.video',payload})).digest('hex');
+ assert.equal(fingerprint('studio.render.video',payload),expected);
+ const oldFixture=createHash('sha256').update(JSON.stringify(['studio.render.video',payload])).digest('hex');
+ assert.notEqual(expected,oldFixture,'must not silently return to the earlier synthetic algorithm');
+});
+test('canonical fingerprint ignores payload property insertion order',()=>{
+ const reordered=Object.fromEntries(Object.entries(payload).reverse());
+ assert.equal(fingerprint('studio.render.video',payload),fingerprint('studio.render.video',reordered));
+});
+
+
+test('resume fixture is a canonical pending plan and source-derived child',()=>{
+ assert.equal(base.schemaVersion,'urai-life-movie-longform-plan-v1');
+ assert.equal(base.status,'PENDING');
+ assert.equal(base.sourceSystem,'urai-studio');
+ assert.equal(base.publicReleaseAuthorized,false);
+ assert.equal(base.childJobIds[0],shape.makeChildId(planId,0));
+ assert.equal(base.segments[0].childDigest,childDigest);
+ assert.equal(base.segments[0].childPayloadFingerprint,fingerprint('studio.render.video',payload));
+ assert.doesNotThrow(()=>shape.assertPlanStructure(base,planId));
+});
+
+test('consent classifier refuses malformed or inaccessible server block',()=>{
+ const deny='life_movie_longform_consent_revoked';
+ assert.doesNotThrow(()=>actualConsent({exists:false},deny));
+ for(const bad of [null,{exists:true,data:()=>({})},{exists:true,data:()=>({active:'false'})},
+   {exists:true,data:()=>{throw Error('synthetic_firestore_failure')}}]){
+  assert.throws(()=>actualConsent(bad,deny),/life_movie_consent_block_unverified/);
+ }
+ assert.throws(()=>actualConsent({exists:true,data:()=>({active:true})},deny),/life_movie_longform_consent_revoked/);
+});

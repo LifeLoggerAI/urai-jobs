@@ -23,6 +23,22 @@ const shortMovieContract = read("functions/src/jobs/studioLifeMovieContract.ts")
 const longMovieBridge = read("functions/src/jobs/studioLifeMovieLongformBridge.ts");
 const ownerDeletion = read("functions/src/jobs/lifeMovieOwnerDeletion.ts");
 const index = read("functions/src/index.ts");
+// Release integrity: never let indexOf(-1) turn a missing receipt/transaction
+// anchor into a false PASS. This is supplemental source verification only;
+// authenticated Firebase emulator behavior remains a separate requirement.
+function revocationCompletionOrderIsSafe(source) {
+  const markers = [
+    'const outcome = await db.runTransaction(async (transaction) => {',
+    'if (outcome.conflict) {',
+    'const ack = outcome.ack;',
+    'const derivativeInvalidation = await invalidateLifeMovieDerivativesForConsent(lifeMovieRevocationEvent);',
+    'await receiptRef.set({',
+    'response.status(200).json({',
+  ].map((token) => source.indexOf(token));
+  return markers.every((value) => value >= 0)
+    && markers.every((value, index) => index === 0 || markers[index - 1] < value);
+}
+
 
 ok("shared Job contract includes consent context", shared.includes("JobConsentContext") && shared.includes("consent?: JobConsentContext"));
 ok("createJob accepts canonical consent context", createJob.includes("decisionReceiptId") && createJob.includes("policyVersion") && createJob.includes("purpose"));
@@ -47,9 +63,22 @@ ok("revocation returns integrity acknowledgement", endpoint.includes("integrityH
 ok(
   "revocation retries derivative invalidation even when the event receipt already exists",
   endpoint.includes("invalidateLifeMovieDerivativesForConsent(lifeMovieRevocationEvent)")
-    && endpoint.indexOf("invalidateLifeMovieDerivativesForConsent(lifeMovieRevocationEvent)") > endpoint.indexOf("const ack = await db.runTransaction")
+    && revocationCompletionOrderIsSafe(endpoint)
     && endpoint.includes("const lifeMovieRevocationEvent: LifeMovieRevocationEvent = { eventId, ownerUid, purpose, revokedAt }")
     && endpoint.includes("derivative-invalidation-failed")
+);
+ok(
+  "revocation ordering source guard denies missing or reordered receipt/cleanup steps",
+  !revocationCompletionOrderIsSafe(endpoint.replace(
+    'const outcome = await db.runTransaction(async (transaction) => {',
+    ''))
+    && !revocationCompletionOrderIsSafe(endpoint.replace(
+      'const derivativeInvalidation = await invalidateLifeMovieDerivativesForConsent(lifeMovieRevocationEvent);',
+      '').replace(
+        'const outcome = await db.runTransaction(async (transaction) => {',
+        'const derivativeInvalidation = await invalidateLifeMovieDerivativesForConsent(lifeMovieRevocationEvent);\\n'
+        + 'const outcome = await db.runTransaction(async (transaction) => {'))
+    && !revocationCompletionOrderIsSafe(endpoint.replace('await receiptRef.set({', ''))
 );
 ok(
   "Life Movie derivative invalidation deletes governed Storage objects and scrubs both persisted output aliases",

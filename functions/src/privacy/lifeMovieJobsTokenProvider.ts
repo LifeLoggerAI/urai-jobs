@@ -1,4 +1,5 @@
 import type { Auth } from 'firebase-admin/auth';
+import { readLifeMovieBoundedJson } from './lifeMovieBoundedResponse.js';
 
 /** Server-only acquisition of a Firebase ID token for the dedicated Jobs
  * identity in the *Privacy* Firebase project. Never forward inbound Studio,
@@ -75,15 +76,10 @@ export function createDedicatedJobsFirebaseIdTokenProvider(
         !/^application\/json(?:;|$)/i.test(response.headers.get('content-type') || '')) {
       throw new Error(UNAVAILABLE);
     }
-    const length = response.headers.get('content-length');
-    if (length !== null && (!/^[0-9]+$/.test(length) || Number(length) > MAX_RESPONSE_BYTES)) {
-      throw new Error(UNAVAILABLE);
-    }
     let data: unknown;
     try {
-      const body = await response.text();
-      if (Buffer.byteLength(body, 'utf8') > MAX_RESPONSE_BYTES) throw new Error('oversize');
-      data = JSON.parse(body);
+      // Never read an untrusted Identity Toolkit response unbounded.
+      data = await readLifeMovieBoundedJson(response, MAX_RESPONSE_BYTES);
     } catch {
       throw new Error(UNAVAILABLE);
     }

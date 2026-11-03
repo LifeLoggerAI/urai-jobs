@@ -138,7 +138,18 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
     throw new Error('life_movie_consent_missing');
   }
   const consent: JobConsentContext = { purpose, policyVersion, decisionReceiptId };
-  await requireLifeMovieCreationAdmission({ ownerUid: input.userId, tenantId: input.tenantId, consent, selection: payload });
+  // Project only the immutable source authority fields; the preflight deliberately
+  // rejects surplus caller payload fields before checking rights or consent.
+  await requireLifeMovieCreationAdmission({
+    ownerUid: input.userId,
+    tenantId: input.tenantId,
+    consent,
+    selection: {
+      projectId: payload.projectId,
+      renderPlanDigest: payload.renderPlanDigest,
+      sources: payload.sources,
+    },
+  });
   const sceneTruthReceipt = verifySceneTruthReceipt(payload.projectId, payload.sceneTruthDigest, input.userId, payload.sceneTruthReceiptRef);
   const consentRef = consentBlockRef(input.userId, consent.purpose);
   const consentSnapshot = await consentRef.get();
