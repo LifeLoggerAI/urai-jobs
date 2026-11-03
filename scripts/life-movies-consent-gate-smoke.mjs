@@ -107,6 +107,7 @@ const mocks = {
   './sceneTruthReceipt.js': receipt,
   '../privacy/consentBlocks.js': { consentBlockRef: () => ref('synthetic-block/missing'), isConsentContext: () => false },
   '../privacy/lifeMovieConsentGate.js': gate,
+  '../privacy/ownerDeletionFence.js': { assertOwnerDeletionFenceClear: () => { throw new Error('owner_deletion_state_unavailable_in_test'); } },
   '../privacy/lifeMovieCreationAdmission.js': { requireLifeMovieCreationAdmission: async () => { throw new Error('life_movie_consent_authority_unavailable'); } },
   './lifeMoviePrivateDeliveryContract.js': { parseLifeMoviePrivateDeliveryRequest: () => { throw new Error('life_movie_private_delivery_request_invalid'); } },
   '../privacy/lifeMovieOutputGeneration.js': { requirePinnedOutputGeneration: async () => { throw new Error('generation_unavailable_in_test'); }, signedMovieAccessForPinnedGeneration: async () => { throw new Error('generation_unavailable_in_test'); } },
