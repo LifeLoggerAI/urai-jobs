@@ -138,7 +138,8 @@ function make(phase){
   update(r,obj){calls.writes.push({verb:'update',path:r.path,obj})},
   set(r,obj){calls.writes.push({verb:'set',path:r.path,obj})}
  };
- const db={async runTransaction(cb){calls.started=true;return cb(transaction)}};
+ const db={collection(name){assert.equal(name,'users');return {doc:id=>ref('users/'+id)};},
+  async runTransaction(cb){calls.started=true;return cb(transaction)}};
  const module={exports:{}};
  const env = {module,Error,Promise,Date,Set,String,Array, Number,
   getFirestore:()=>db,
