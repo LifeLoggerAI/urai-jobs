@@ -8,8 +8,8 @@ import { uploadToGcs } from '../core/gcs.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
 const MAX_OWNED_JOBS = 2_000;
-// One job update, optional queue delete and two serverTimestamp transforms
-// must fit alongside the log deletions in a 500-write Firestore batch.
+// Conservative maximum: leave room for job update, queue deletion and
+// timestamp transforms inside Firestore's 500-write transaction limit.
 const MAX_LOGS_PER_DELETE_BATCH = 496;
 const EXECUTION_MODE = 'protected-staging';
 const EXECUTION_SCHEMA = 'urai-jobs-data-rights-execution-v1';
@@ -28,6 +28,7 @@ type RequestRecord = {
   status?: string;
   executionState?: string;
   requestedFormat?: 'json' | 'csv' | null;
+  executionReceiptPath?: string;
 };
 
 function executionAdmission() {
@@ -60,7 +61,10 @@ function redact(value: unknown): unknown {
   if (!value || typeof value !== 'object') return value;
   const output: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-    if (/secret|password|token|authorization|cookie|signedurl|serviceurl/i.test(key)) continue;
+    // Never turn an owner export into a credential-delivery channel.
+    // These aliases occur in nested provider and worker payloads.
+    if (/(?:secret|password|token|authorization|cookie|signed[_-]?url|service[_-]?url|credential|api[_-]?key|private[_-]?key|access[_-]?key|signing[_-]?key|webhook[_-]?key|bearer)/i.test(key) ||
+        key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
     output[key] = redact(entry);
   }
   return output;
@@ -132,6 +136,9 @@ async function buildExport(db: Firestore, requestId: string, ownerUid: string) {
   return { payload, recordCount: exportedJobs.length + (userSnap.exists ? 1 : 0), sha256, gcsRef };
 }
 
+const TERMINAL_DELETE_JOB = new Set(['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED', 'COMPLETED']);
+const TERMINAL_DELETE_QUEUE = new Set(['DONE', 'DEAD', 'CANCELLED']);
+
 async function executeDelete(db: Firestore, requestId: string, ownerUid: string) {
   const jobs = await ownedJobs(db, ownerUid);
   const ownerHash = createHash('sha256').update(ownerUid).digest('hex');
@@ -139,43 +146,61 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
   let logDeletes = 0;
   let jobsAnonymized = 0;
 
+  // Do not start partly destructive execution while any selected job is active.
   for (const document of jobs) {
-    const logs = await document.ref.collection('logs').limit(MAX_LOGS_PER_DELETE_BATCH + 1).get();
-    if (logs.size > MAX_LOGS_PER_DELETE_BATCH) {
-      throw httpsError('resource-exhausted', `Job ${document.id} has too many logs for bounded deletion; reconcile before retry.`);
+    if (!TERMINAL_DELETE_JOB.has(String(document.data().status || ''))) {
+      throw httpsError('failed-precondition', 'Active or unknown Jobs work requires reconciliation before deletion.');
     }
-    const batch = db.batch();
-    for (const log of logs.docs) {
-      batch.delete(log.ref);
-      logDeletes += 1;
-    }
+  }
+  for (const document of jobs) {
     const queueRef = db.collection('jobQueue').doc(document.id);
-    const queueSnap = await queueRef.get();
-    if (queueSnap.exists) {
-      batch.delete(queueRef);
-      queueDeletes += 1;
-    }
-    batch.set(document.ref, {
-      ownerUid: `deleted:${ownerHash}`,
-      payload: FieldValue.delete(),
-      output: FieldValue.delete(),
-      consent: FieldValue.delete(),
-      consents: FieldValue.delete(),
-      error: FieldValue.delete(),
-      deletionReceipt: {
-        schemaVersion: EXECUTION_SCHEMA,
-        requestId,
-        ownerHash,
-        deletedAt: FieldValue.serverTimestamp(),
-      },
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    await batch.commit();
-    jobsAnonymized += 1;
+    // Recheck current owner, worker state, queue and logs in the same atomic
+    // Firestore transaction. A previously selected snapshot is not authority.
+    const deleted = await db.runTransaction(async transaction => {
+      const [current, queueSnap, logs] = await Promise.all([
+        transaction.get(document.ref),
+        transaction.get(queueRef),
+        transaction.get(document.ref.collection('logs').limit(MAX_LOGS_PER_DELETE_BATCH + 1)),
+      ]);
+      if (!current.exists || current.data()?.ownerUid !== ownerUid) {
+        throw httpsError('failed-precondition', 'Jobs owner changed after selection; deletion requires reconciliation.');
+      }
+      if (!TERMINAL_DELETE_JOB.has(String(current.data()?.status || ''))) {
+        throw httpsError('failed-precondition', 'Active or unknown Jobs worker state blocks deletion.');
+      }
+      if (queueSnap.exists) {
+        const queue = queueSnap.data();
+        if (!queue || queue.jobId !== document.id ||
+            !TERMINAL_DELETE_QUEUE.has(String(queue.status || ''))) {
+          throw httpsError('failed-precondition', 'Active or unbound Jobs queue blocks deletion.');
+        }
+      }
+      // Firestore permits at most 500 document writes per transaction. Reserve
+      // one for the job tombstone and one for an existing queue record.
+      if (logs.size > MAX_LOGS_PER_DELETE_BATCH) {
+        throw httpsError('resource-exhausted', 'Job logs exceed the bounded atomic deletion limit; reconcile before retry.');
+      }
+      for (const log of logs.docs) transaction.delete(log.ref);
+      if (queueSnap.exists) transaction.delete(queueRef);
+      transaction.set(document.ref, {
+        ownerUid: `deleted:${ownerHash}`,
+        deletionReceipt: {
+          schemaVersion: EXECUTION_SCHEMA,
+          requestId,
+          ownerHash,
+          deletedAt: FieldValue.serverTimestamp(),
+        },
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { logDeletes: logs.size, queueDeletes: queueSnap.exists ? 1 : 0 };
+    });
+    jobsAnonymized++;
+    logDeletes += deleted.logDeletes;
+    queueDeletes += deleted.queueDeletes;
   }
 
-  // Jobs does not own Firebase Auth deletion, external provider derivatives, or
-  // every cross-system artifact. Never mark the user's request globally complete.
+  // Jobs does not own Firebase Auth deletion, provider derivatives or the
+  // rest of the ecosystem. Never claim global privacy completion.
   await db.collection('users').doc(ownerUid).set({
     dataRightsDeletionPendingCentralPrivacy: true,
     dataRightsDeletionRequestId: requestId,
@@ -229,6 +254,16 @@ const handler = async (data: unknown, _context: CallableContext) => {
         ? 'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'
         : 'PROTECTED_STAGING_JOBS_SCOPE_APPLIED_CENTRAL_PRIVACY_REQUIRED';
       const expectedOwner = createHash('sha256').update(record.ownerUid).digest('hex');
+      // A FINISHED child audit by itself is not a completed request: the
+      // parent write can fail, be superseded or be explicitly rejected.
+      // Require the request's matching terminal state and exact receipt path
+      // before any completed receipt may be replayed.
+      if (record.status !== 'IN_REVIEW' ||
+          record.executionState !== expectedTerminal ||
+          record.executionReceiptPath !== executionRef.path) {
+        throw httpsError('failed-precondition',
+          'Data-rights request and execution receipt require terminal-state reconciliation.');
+      }
       // A STARTED/FAILED audit is not completion evidence. Never turn an
       // interrupted or partly destructive execution into a successful replay,
       // and never blindly re-run it without an independent reconciliation.
@@ -257,6 +292,13 @@ const handler = async (data: unknown, _context: CallableContext) => {
         (result.queueDeletes as number) <= (result.jobsAnonymized as number) &&
         (result.logDeletes as number) <= (result.jobsAnonymized as number) * MAX_LOGS_PER_DELETE_BATCH &&
         hasUnresolved(result.unresolvedDomains) && result.completeEcosystemExport !== true;
+      // Bind the export pointer to the exact configured bucket, owner hash
+      // and request object. This checks receipt identity, not GCS existence.
+      const exportBucket = process.env.GCS_BUCKET_NAME;
+      const expectedExportRef = typeof exportBucket === 'string' &&
+        /^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$/.test(exportBucket)
+        ? `gs://${exportBucket}/privacy/data-rights/${expectedOwner}/${parsed.data.requestId}/export.json`
+        : null;
       const exportPayload = result?.payload as Record<string, unknown> | undefined;
       const validExport = record.requestType === 'EXPORT' && result && exportPayload &&
         exportPayload.schemaVersion === EXECUTION_SCHEMA &&
@@ -269,7 +311,7 @@ const handler = async (data: unknown, _context: CallableContext) => {
         validCounts(result.recordCount) &&
         result.recordCount === exportPayload.jobs.length + (exportPayload.user === null ? 0 : 1) &&
         typeof result.sha256 === 'string' && result.sha256 === canonicalDigest(exportPayload) &&
-        typeof result.gcsRef === 'string' && /^gs:\/\/[^/]+\/privacy\/data-rights\//.test(result.gcsRef);
+        expectedExportRef !== null && result.gcsRef === expectedExportRef;
       if (prior.event !== 'DATA_RIGHTS_EXECUTION_FINISHED' ||
           prior.terminalState !== expectedTerminal ||
           !timestamp(prior.completedAt) ||
@@ -283,6 +325,29 @@ const handler = async (data: unknown, _context: CallableContext) => {
     }
     if (record.status !== 'APPROVED') {
       throw httpsError('failed-precondition', 'Only an explicitly APPROVED request can enter protected staging execution.');
+    }
+    if (record.requestType === 'DELETE') {
+      // Atomic owner fence with STARTED audit. It remains closed if a later
+      // deletion step fails and blocks concurrent canonical job creation.
+      const ownerRef = db.collection('users').doc(record.ownerUid);
+      const ownerSnap = await transaction.get(ownerRef);
+      if (!ownerSnap.exists) {
+        throw httpsError('failed-precondition',
+          'Owner record missing; deletion requires reconciliation.');
+      }
+      const owner = ownerSnap.data() || {};
+      const pending = owner.dataRightsDeletionPendingCentralPrivacy;
+      if (Object.prototype.hasOwnProperty.call(owner, 'dataRightsDeletionPendingCentralPrivacy') &&
+          pending !== false &&
+          !(pending === true && owner.dataRightsDeletionRequestId === parsed.data.requestId)) {
+        throw httpsError('failed-precondition',
+          'An unrelated or malformed deletion fence must be reconciled before execution.');
+      }
+      transaction.set(ownerRef, {
+        dataRightsDeletionPendingCentralPrivacy: true,
+        dataRightsDeletionRequestId: parsed.data.requestId,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
     }
     transaction.create(executionRef, {
       event: 'DATA_RIGHTS_EXECUTION_STARTED',
