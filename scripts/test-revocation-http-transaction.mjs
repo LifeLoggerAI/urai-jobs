@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { mayApplyNewConsentRevocation } from '../functions/src/privacy/consentRevocationOrder.ts';
-const require = createRequire(import.meta.url);
+const require = createRequire(new URL('../functions/package.json', import.meta.url));
 const ts = require('typescript');
 const source = fs.readFileSync(new URL('../functions/src/privacy/consentRevocation.ts', import.meta.url), 'utf8');
 const sf = ts.createSourceFile('consentRevocation.ts', source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
