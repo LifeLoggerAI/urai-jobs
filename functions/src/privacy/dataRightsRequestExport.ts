@@ -54,10 +54,24 @@ export async function prepareDataRightsRequestExport(db: Firestore, ownerUid: st
       countRecord();
       auditCount++;
       const event = eventDocument.data();
-      if (event.event !== 'DATA_RIGHTS_REQUEST_SUBMITTED' || !STATES.has(event.status)) {
+      const submitted = eventDocument.id === 'submitted'
+        && event.event === 'DATA_RIGHTS_REQUEST_SUBMITTED' && STATES.has(event.status);
+      // Protected-staging execution uses a deterministic execution-* audit id.
+      // The current executor stores STARTED, then replaces the event label with
+      // FINISHED/FAILED while retaining its original owner/type audit binding.
+      // Never export execution results or errors from the private audit record.
+      const execution = /^execution-[a-f0-9]{24}$/.test(eventDocument.id)
+        && ['DATA_RIGHTS_EXECUTION_STARTED', 'DATA_RIGHTS_EXECUTION_FINISHED',
+          'DATA_RIGHTS_EXECUTION_FAILED'].includes(String(event.event))
+        && event.ownerHash === createHash('sha256').update(ownerUid).digest('hex')
+        && event.requestType === record.requestType && event.status === undefined;
+      if (!submitted && !execution) {
         throw httpsError('failed-precondition', 'Unregistered data-rights audit event requires reconciliation.');
       }
-      audit.push({ eventId: eventDocument.id, event: event.event, status: event.status, createdAt: timestamp(event.createdAt) });
+      const createdAt = timestamp(event.createdAt);
+      if (execution && !createdAt) throw httpsError('failed-precondition', 'Execution audit timestamp requires reconciliation.');
+      audit.push({ eventId: eventDocument.id, event: event.event,
+        status: submitted ? event.status : null, createdAt });
     }
     requests.push({
       requestId: document.id,

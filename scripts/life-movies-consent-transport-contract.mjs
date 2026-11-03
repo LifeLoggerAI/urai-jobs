@@ -143,6 +143,70 @@ assert.throws(() => createLifeMoviePrivacyTransport({ ...config, firebaseProject
   getDedicatedJobsFirebaseIdToken: async () => jwt(validClaims),
 }), /life_movie_consent_jobs_identity_unavailable/);
 pass();
+// The authority input must be pinned before service-token retrieval. Neither
+// an in-process getter nor an async mutation can change the requested movie.
+for (const key of ['subjectUid', 'tenantId', 'correlationId', 'decisionReceiptId', 'renderScope']) {
+  let reads = 0;
+  const accessor = { ...expected };
+  Object.defineProperty(accessor, key, { enumerable: true,
+    get() { reads++; return expected[key]; } });
+  let tokens = 0;
+  let requests = 0;
+  await rejects(createLifeMoviePrivacyTransport(config, {
+    getDedicatedJobsFirebaseIdToken: async () => { tokens++; return jwt(validClaims); },
+    nowMs: () => fixedNow,
+    fetchImpl: async () => { requests++; return response({ result: allowed }); },
+  }), 'life_movie_consent_decision_invalid_expectation', accessor);
+  assert.equal(reads, 0, `expected ${key} getter must not execute`);
+  assert.equal(tokens, 0, 'invalid selection must not request a service token');
+  assert.equal(requests, 0, 'invalid selection must not reach Privacy');
+}
+for (const key of Object.keys(renderScope)) {
+  let reads = 0;
+  const accessorScope = { ...renderScope };
+  Object.defineProperty(accessorScope, key, { enumerable: true,
+    get() { reads++; return renderScope[key]; } });
+  let tokens = 0;
+  let requests = 0;
+  await rejects(createLifeMoviePrivacyTransport(config, {
+    getDedicatedJobsFirebaseIdToken: async () => { tokens++; return jwt(validClaims); },
+    nowMs: () => fixedNow,
+    fetchImpl: async () => { requests++; return response({ result: allowed }); },
+  }), 'life_movie_consent_decision_invalid_expectation', { ...expected, renderScope: accessorScope });
+  assert.equal(reads, 0, `nested ${key} getter must not execute`);
+  assert.equal(tokens, 0);
+  assert.equal(requests, 0);
+}
+// After the token await, the caller can mutate its original object. The
+// actual request AND the response validator must use the pinned first scope.
+const mutatedOnToken = { ...expected, renderScope: { ...renderScope } };
+let postedSourceDigest = '';
+await succeeds(createLifeMoviePrivacyTransport(config, {
+  getDedicatedJobsFirebaseIdToken: async () => {
+    mutatedOnToken.renderScope.sourceSetDigest = 'f'.repeat(64);
+    return jwt(validClaims);
+  },
+  nowMs: () => fixedNow,
+  fetchImpl: async (_url, options) => {
+    const data = JSON.parse(options.body).data;
+    postedSourceDigest = data.renderScope.sourceSetDigest;
+    return response({ result: allowed });
+  },
+}), mutatedOnToken);
+assert.equal(postedSourceDigest, renderScope.sourceSetDigest, 'request must be pinned before token await');
+assert.equal(mutatedOnToken.renderScope.sourceSetDigest, 'f'.repeat(64));
+// Likewise, mutation during the HTTPS call cannot rewrite the expectation used
+// to verify the result. A reply for the original source set must still bind.
+const mutatedOnNetwork = { ...expected, renderScope: { ...renderScope } };
+await succeeds(createLifeMoviePrivacyTransport(config, {
+  getDedicatedJobsFirebaseIdToken: async () => jwt(validClaims),
+  nowMs: () => fixedNow,
+  fetchImpl: async () => {
+    mutatedOnNetwork.renderScope.sourceSetDigest = 'e'.repeat(64);
+    return response({ result: allowed });
+  },
+}), mutatedOnNetwork);
+assert.equal(mutatedOnNetwork.renderScope.sourceSetDigest, 'e'.repeat(64));
 const gate = readFileSync(new URL('../functions/src/privacy/lifeMovieConsentGate.ts', import.meta.url), 'utf8');
 assert.match(gate, /function lifeMovieConsentAuthorityAvailable\(\): boolean \{\s*return false;/);
 assert.doesNotMatch(gate, /process\.env\.[A-Z_]+_ENABLED/);

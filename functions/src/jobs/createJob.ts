@@ -89,6 +89,16 @@ function isCommunicationsJobType(jobType: string): boolean {
 function userRecord(user: unknown): Record<string, unknown> {
   return user && typeof user === 'object' ? (user as Record<string, unknown>) : {};
 }
+function assertOwnerJobsNotDeleting(user: unknown): void {
+  const record = userRecord(user);
+  // No legacy flag means normal admission. Present non-false values must
+  // fail closed until Privacy has reconciled deletion.
+  if (Object.prototype.hasOwnProperty.call(record, 'dataRightsDeletionPendingCentralPrivacy') &&
+      record.dataRightsDeletionPendingCentralPrivacy !== false) {
+    throw httpsError('failed-precondition',
+      'Jobs creation is blocked while owner data-rights deletion requires central Privacy reconciliation.');
+  }
+}
 
 function userOrgId(user: unknown): string | null {
   const raw = userRecord(user).orgId;
@@ -144,6 +154,9 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   if (!hasJobCreatePermission(user)) {
     throw httpsError('permission-denied', 'User is not allowed to create runtime jobs.');
   }
+
+  // Fast fail before idempotency readback when the authenticated owner is fenced.
+  assertOwnerJobsNotDeleting(user);
 
   const validationResult = CreateJobSchema.safeParse(data);
   if (!validationResult.success) {
@@ -275,6 +288,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   }
 
   const db = getFirestore();
+  const ownerRef = db.collection('users').doc(uid);
   const fingerprintPayload = communicationsJob
     ? { payload, tenantId }
     : jobType === 'memory.private-source.reconstruct-place'
@@ -325,6 +339,13 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
 
   try {
     return await db.runTransaction(async (transaction) => {
+      // The same owner document is written by the approved deletion
+      // transaction; this read makes concurrent job creation conflict/retry.
+      const ownerSnap = await transaction.get(ownerRef);
+      if (!ownerSnap.exists) {
+        throw httpsError('failed-precondition', 'Owner record missing during Jobs admission.');
+      }
+      assertOwnerJobsNotDeleting(ownerSnap.data());
       if (bindingRef) {
         const existing = await transaction.get(bindingRef);
         if (existing.exists) {
