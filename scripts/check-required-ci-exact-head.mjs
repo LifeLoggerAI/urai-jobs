@@ -68,6 +68,21 @@ for (const path of requiredWorkflows) {
   }
 }
 
+// A trusted post-deploy workflow has a different checkout trust model from PR CI,
+// but must verify the exact deployed SHA with a frozen dependency graph.
+const postDeployPath = '.github/workflows/post-deploy-verify.yml';
+if (!fs.existsSync(postDeployPath)) {
+  failures.push(postDeployPath + ': required post-deploy verification workflow is missing');
+} else {
+  const source = fs.readFileSync(postDeployPath, 'utf8');
+  requireText(postDeployPath, source, 'git merge-base --is-ancestor "$TARGET_SHA" refs/remotes/origin/main', 'post-deploy target must derive from trusted main');
+  requireText(postDeployPath, source, 'test "$(git rev-parse HEAD)" = "$TARGET_SHA"', 'post-deploy checks must bind the exact deployed revision');
+  requireText(postDeployPath, source, 'pnpm install --frozen-lockfile', 'post-deploy verification must preserve reviewed dependencies');
+  requireText(postDeployPath, source, 'git diff --exit-code -- package.json pnpm-lock.yaml pnpm-workspace.yaml', 'post-deploy verification must prove lockfiles were not rewritten by install');
+  rejectText(postDeployPath, source, 'pnpm install --no-frozen-lockfile', 'post-deploy verification must never mutate the dependency graph');
+  rejectText(postDeployPath, source, 'npm ci', 'post-deploy verification must use the canonical pnpm workspace lock, not the stale npm lock');
+}
+
 const pullRequestCodeExecutionWorkflows = [
   '.github/workflows/career-surfaces-ci.yml',
   '.github/workflows/production-verification.yml',
