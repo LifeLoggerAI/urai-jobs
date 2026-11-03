@@ -40,7 +40,8 @@ const transactionFromSource = module.exports.transactionFromSource;
 
 const ownerUid = 'synthetic-owner-01';
 const ownerHash = createHash('sha256').update(ownerUid).digest('hex');
-const request = { ownerUid, requestType: 'DELETE', status: 'IN_REVIEW' };
+const request = { ownerUid, requestType: 'DELETE', status: 'IN_REVIEW',
+  requestId: 'synthetic-request-01', retentionDecisionReceiptId: 'synthetic-retention-decision-0001' };
 const receiptId = 'synthetic-retention-decision-0001';
 const unresolvedDomains = [
   'firebase-auth-account', 'provider-side-derivatives',
@@ -175,5 +176,25 @@ for (const [label, receipt, record] of [
     const h=setup({record,prior:receipt});
     await assert.rejects(h.invoke(),/execution|receipt|reconciliation|complete/i);
     assert.equal(h.creates.length,0); assert.equal(h.sets.length,0);
+  });
+}
+
+// Authority is stored on the private request; caller-supplied receipt strings
+// must not stand in for a centrally reviewed retention decision.
+for (const [label, record, prior] of [
+  ['missing bound retention receipt during initial execution',
+    {...request, status: 'APPROVED', retentionDecisionReceiptId: undefined}, null],
+  ['mismatched bound retention receipt during initial execution',
+    {...request, status: 'APPROVED', retentionDecisionReceiptId: 'other-synthetic-decision'}, null],
+  ['missing bound retention receipt during completed replay',
+    {...request, retentionDecisionReceiptId: undefined}, completed],
+  ['mismatched request record identity during completed replay',
+    {...request, requestId:'foreign-synthetic-request'}, completed],
+]) {
+  test(label + ' denies authority before writes', async()=>{
+    const h = setup({record,prior});
+    await assert.rejects(h.invoke(), /retention|approval|reconciliation|identity/i);
+    assert.equal(h.creates.length,0);
+    assert.equal(h.sets.length,0);
   });
 }

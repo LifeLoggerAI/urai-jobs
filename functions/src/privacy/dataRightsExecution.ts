@@ -20,6 +20,8 @@ const ExecuteSchema = z.object({
 type RequestRecord = {
   ownerUid?: string;
   requestType?: 'EXPORT' | 'DELETE';
+  requestId?: string;
+  retentionDecisionReceiptId?: string;
   status?: string;
   executionState?: string;
   requestedFormat?: 'json' | 'csv' | null;
@@ -209,6 +211,14 @@ const handler = async (data: unknown, _context: CallableContext) => {
     const record = requestSnap.data() as RequestRecord;
     if (!record?.ownerUid || !['EXPORT', 'DELETE'].includes(String(record.requestType))) {
       throw httpsError('failed-precondition', 'Data-rights request schema requires reconciliation.');
+    }
+    // A caller-provided receipt ID is not proof of Privacy approval. It must
+    // match the same request's server-persisted retention-decision binding,
+    // before either a new execution or an existing receipt can be replayed.
+    if (record.requestId !== parsed.data.requestId ||
+        typeof record.retentionDecisionReceiptId !== 'string' ||
+        record.retentionDecisionReceiptId !== parsed.data.retentionDecisionReceiptId) {
+      throw httpsError('failed-precondition', 'Persisted retention-decision authorization requires reconciliation.');
     }
     if (priorExecution.exists) {
       const prior = priorExecution.data();
