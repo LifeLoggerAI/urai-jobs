@@ -204,3 +204,149 @@ for (const [label, record, prior] of [
     assert.equal(h.sets.length,0);
   });
 }
+
+
+// Execute the maintained DELETE function itself with an in-memory Firestore
+// double: replay-only testing cannot detect private fields surviving merge.
+const deleteStart = content.indexOf('async function executeDelete(db: Firestore, requestId: string, ownerUid: string) {');
+const deleteEnd = content.indexOf('\n}\n\nconst handler', deleteStart) + 2;
+assert.ok(deleteStart >= 0 && deleteEnd > deleteStart,
+  'Original Jobs deletion function must remain source-bound');
+const deleteModuleText = content.slice(deleteStart, deleteEnd)
+  + '\nmodule.exports.executeDeleteFromSource = executeDelete;';
+const deleteCompiled = ts.transpileModule(deleteModuleText, {
+  fileName: 'JobsDataRightsDelete.ts', reportDiagnostics: true,
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+});
+assert.equal(deleteCompiled.diagnostics?.length ?? 0, 0, 'Source-bound deletion transpiles');
+const deletedSentinel = Symbol('synthetic-FieldValue-delete');
+const deletionModule = { exports: {} };
+runInNewContext(deleteCompiled.outputText, {
+  module: deletionModule, exports: deletionModule.exports, Promise, createHash,
+  ownedJobs: async db => db.syntheticOwnedJobs,
+  FieldValue: {
+    delete: () => deletedSentinel,
+    serverTimestamp: () => 'SYNTHETIC_SERVER_TIMESTAMP',
+  },
+  EXECUTION_SCHEMA: 'urai-jobs-data-rights-execution-v1',
+  httpsError: (code, message) => Object.assign(new Error(message), { code }),
+}, { filename: 'JobsDataRightsDelete.js', timeout: 2000 });
+const executeDeleteFromSource = deletionModule.exports.executeDeleteFromSource;
+
+function deletionHarness({ logCount = 2, hasQueue = true, jobCount = 1 } = {}) {
+  const jobs = Array.from({ length: jobCount }, (_, i) => ({
+    ownerUid, type: 'private-movie', status: 'DONE',
+    payload: { privateNarration: 'synthetic secret' },
+    output: { privatePreview: 'synthetic-video-path' },
+    consent: {privateGrant: 'synthetic-grant'},
+    customPrivateMetadata: { sensitive: 'must-not-survive' },
+    providerAuth: 'synthetic-provider-private-id',
+    unrestrictedFutureField: { private: true },
+    id: i,
+  }));
+  const deletedRefs = [], writes = [], userPatches = [];
+  let committed = 0;
+  const docs = jobs.map((_, i) => {
+    const jobRef = {
+      type: 'job', i,
+      collection(name) {
+        assert.equal(name, 'logs');
+        return {
+          limit: bound => {
+            assert.equal(bound, 500);
+            return {get: async () => ({
+              size: logCount,
+              docs: Array.from({length:logCount}, (_, j) =>
+                ({ref:{type:'log',job:i,log:j}})),
+            })};
+          },
+        };
+      },
+    };
+    return {id:'synthetic-job-' + i, ref:jobRef};
+  });
+  const db = {
+    syntheticOwnedJobs: docs,
+    batch() {
+      const operations = [];
+      return {
+        delete(ref) {operations.push({kind:'delete',ref});},
+        set(ref, data, opts) {operations.push({kind:'set',ref,data,opts});},
+        async commit() {
+          committed++;
+          for (const op of operations) {
+            if (op.kind === 'delete') {deletedRefs.push(op.ref); continue;}
+            writes.push(op);
+            const current = jobs[op.ref.i];
+            const next = op.opts?.merge ? {...current, ...op.data} : {...op.data};
+            for (const [key,value] of Object.entries(next)) {
+              if (value === deletedSentinel) delete next[key];
+            }
+            jobs[op.ref.i] = next;
+          }
+        },
+      };
+    },
+    collection(name) {
+      if (name === 'jobQueue') return {
+        doc: id => ({
+          type: 'queue', id,
+          get: async () => ({exists: hasQueue}),
+        }),
+      };
+      if (name === 'users') return {
+        doc: id => {
+          assert.equal(id, ownerUid);
+          return {set: async (data,opts) => userPatches.push({data,opts})};
+        },
+      };
+      throw new Error('unexpected private collection ' + name);
+    },
+  };
+  return {db,jobs,deletedRefs,writes,userPatches,get commits(){return committed;}};
+}
+
+test('DELETE replaces each owner job with a receipt-only tombstone, never retains unknown private fields', async () => {
+  const h=deletionHarness({jobCount:2});
+  const result=await executeDeleteFromSource(h.db,'synthetic-request-01',ownerUid);
+  assert.equal(result.jobsAnonymized,2);
+  assert.equal(result.queueDeletes,2);
+  assert.equal(result.logDeletes,4);
+  assert.equal(h.commits,2);
+  for (const job of h.jobs) {
+    assert.deepEqual(Object.keys(job).sort(),['ownerUid','deletionReceipt','updatedAt'].sort());
+    assert.equal(job.ownerUid,'deleted:'+ownerHash);
+    assert.equal(job.deletionReceipt.requestId,'synthetic-request-01');
+    assert.equal(job.deletionReceipt.ownerHash,ownerHash);
+  }
+  assert.ok(h.writes.every(write => write.opts?.merge !== true),
+    'an anonymization receipt must never be merged with private original fields');
+  assert.equal(h.deletedRefs.length,6);
+  assert.equal(h.userPatches.length,1);
+  assert.equal(h.userPatches[0].data.dataRightsDeletionPendingCentralPrivacy,true);
+  assert.equal(h.userPatches[0].opts.merge,true);
+  assert.ok(result.unresolvedDomains.includes('cross-system-data-owned-by-other-urai-services'));
+});
+
+test('DELETE refuses 500 logs before job tombstone, cannot claim bounded job deletion', async () => {
+  const h=deletionHarness({logCount:500});
+  await assert.rejects(
+    executeDeleteFromSource(h.db,'synthetic-request-01',ownerUid),
+    /too many logs|bounded deletion/i
+  );
+  assert.equal(h.commits,0);
+  assert.equal(h.userPatches.length,0);
+  assert.equal(h.writes.length,0);
+});
+
+test('DELETE with zero owned jobs reports central privacy pending, not ecosystem completion', async () => {
+  const h=deletionHarness({jobCount:0});
+  const r=await executeDeleteFromSource(h.db,'synthetic-request-01',ownerUid);
+  assert.equal(r.jobsAnonymized,0);
+  assert.equal(r.queueDeletes,0);
+  assert.equal(r.logDeletes,0);
+  assert.equal(h.writes.length,0);
+  assert.equal(h.userPatches.length,1);
+  assert.equal(h.userPatches[0].data.dataRightsDeletionPendingCentralPrivacy,true);
+  assert.ok(!Object.prototype.hasOwnProperty.call(r,'crossSystemComplete'));
+});

@@ -152,13 +152,12 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
       batch.delete(queueRef);
       queueDeletes += 1;
     }
+    // Replace the whole job document. A merge/tombstone with field deletes
+    // leaves unrecognized and future private metadata behind and must not
+    // be counted as an anonymized job. Firestore set without merge removes
+    // every old field while retaining only the minimal deletion receipt.
     batch.set(document.ref, {
       ownerUid: `deleted:${ownerHash}`,
-      payload: FieldValue.delete(),
-      output: FieldValue.delete(),
-      consent: FieldValue.delete(),
-      consents: FieldValue.delete(),
-      error: FieldValue.delete(),
       deletionReceipt: {
         schemaVersion: EXECUTION_SCHEMA,
         requestId,
@@ -166,7 +165,7 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
         deletedAt: FieldValue.serverTimestamp(),
       },
       updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    });
     await batch.commit();
     jobsAnonymized += 1;
   }
