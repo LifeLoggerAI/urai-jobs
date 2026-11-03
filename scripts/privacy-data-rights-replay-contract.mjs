@@ -42,7 +42,9 @@ const transactionFromSource = module.exports.transactionFromSource;
 const ownerUid = 'synthetic-owner-01';
 const ownerHash = createHash('sha256').update(ownerUid).digest('hex');
 const request = { ownerUid, requestType: 'DELETE', status: 'IN_REVIEW',
-  requestId: 'synthetic-request-01', retentionDecisionReceiptId: 'synthetic-retention-decision-0001' };
+  requestId: 'synthetic-request-01', retentionDecisionReceiptId: 'synthetic-retention-decision-0001',
+  executionState: 'PROTECTED_STAGING_JOBS_SCOPE_APPLIED_CENTRAL_PRIVACY_REQUIRED',
+  executionReceiptPath: 'dataRightsRequests/synthetic-request-01/audit/execution-synthetic' };
 const receiptId = 'synthetic-retention-decision-0001';
 const unresolvedDomains = [
   'firebase-auth-account', 'provider-side-derivatives',
@@ -58,7 +60,7 @@ const completed = {
   completedAt: {toDate: () => new Date('2026-11-02T16:00:00.000Z')},
 };
 const requestRef = {tag:'request'};
-const executionRef = {tag:'execution'};
+const executionRef = {tag:'execution',path:'dataRightsRequests/synthetic-request-01/audit/execution-synthetic'};
 function setup({ prior = completed, record = request, exists = true } = {}) {
   const creates = [], sets = [], gets = [];
   const db = {
@@ -152,8 +154,27 @@ const validExportReceipt = {
 function reseal(result, base=completed) {
   return {...base, result, resultDigest:createHash('sha256').update(JSON.stringify(result)).digest('hex')};
 }
+
+for (const [label, changed] of [
+  ['rejected request status', {status:'REJECTED'}],
+  ['pending request status', {status:'PENDING'}],
+  ['approved but nonterminal request status', {status:'APPROVED'}],
+  ['globally completed request status without current Jobs reconciliation', {status:'COMPLETED'}],
+  ['unrelated execution terminal state', {executionState:'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE'}],
+  ['missing request execution receipt pointer', {executionReceiptPath:undefined}],
+  ['foreign request execution receipt pointer',
+    {executionReceiptPath:'dataRightsRequests/foreign/audit/execution-synthetic'}],
+]) {
+  test('completed receipt with ' + label + ' denies replay before writes',async()=>{
+    const h=setup({record:{...request,...changed}});
+    await assert.rejects(h.invoke(),/terminal-state|reconciliation|execution receipt/i);
+    assert.equal(h.creates.length,0);
+    assert.equal(h.sets.length,0);
+  });
+}
+
 test('valid scoped export receipt still replays only its owner data', async () => {
-  const h=setup({record:{...request,requestType:'EXPORT'},prior:validExportReceipt});
+  const h=setup({record:{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'},prior:validExportReceipt});
   const result=await h.invoke();
   assert.equal(result.replay.event,'DATA_RIGHTS_EXECUTION_FINISHED');
   assert.equal(h.creates.length,0); assert.equal(h.sets.length,0);
@@ -167,16 +188,16 @@ for (const [label, receipt, record] of [
   ['negative deleted job count', reseal({...completeResult,jobsAnonymized:-1}),request],
   ['fractional deleted job count', reseal({...completeResult,jobsAnonymized:0.5}),request],
   ['queue deletes exceed jobs anonymized', reseal({...completeResult,queueDeletes:2}),request],
-  ['export missing payload', reseal({recordCount:0,gcsRef:exportResult.gcsRef},validExportReceipt),{...request,requestType:'EXPORT'}],
-  ['export owner mismatch', reseal({...exportResult,payload:{...exportPayload,ownerUid:'foreign-owner'}},validExportReceipt),{...request,requestType:'EXPORT'}],
-  ['export claims complete ecosystem', reseal({...exportResult,payload:{...exportPayload,completeEcosystemExport:true}},validExportReceipt),{...request,requestType:'EXPORT'}],
-  ['export wrong GCS bucket despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://foreign-bucket/privacy/data-rights/${ownerHash}/synthetic-request-01/export.json`},validExportReceipt),{...request,requestType:'EXPORT'}],
-  ['export wrong owner hash despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/${'f'.repeat(64)}/synthetic-request-01/export.json`},validExportReceipt),{...request,requestType:'EXPORT'}],
-  ['export wrong request directory despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/${ownerHash}/other-synthetic-request/export.json`},validExportReceipt),{...request,requestType:'EXPORT'}],
-  ['export extra unbound directory despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/extra/${ownerHash}/synthetic-request-01/export.json`},validExportReceipt),{...request,requestType:'EXPORT'}],
-  ['export wrong object name despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/${ownerHash}/synthetic-request-01/export.json.bak`},validExportReceipt),{...request,requestType:'EXPORT'}],
-  ['export GCS location unbound', reseal({...exportResult,gcsRef:'https://foreign.invalid/export'},validExportReceipt),{...request,requestType:'EXPORT'}],
-  ['export payload SHA mismatch', reseal({...exportResult,sha256:'0'.repeat(64)},validExportReceipt),{...request,requestType:'EXPORT'}],
+  ['export missing payload', reseal({recordCount:0,gcsRef:exportResult.gcsRef},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export owner mismatch', reseal({...exportResult,payload:{...exportPayload,ownerUid:'foreign-owner'}},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export claims complete ecosystem', reseal({...exportResult,payload:{...exportPayload,completeEcosystemExport:true}},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export wrong GCS bucket despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://foreign-bucket/privacy/data-rights/${ownerHash}/synthetic-request-01/export.json`},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export wrong owner hash despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/${'f'.repeat(64)}/synthetic-request-01/export.json`},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export wrong request directory despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/${ownerHash}/other-synthetic-request/export.json`},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export extra unbound directory despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/extra/${ownerHash}/synthetic-request-01/export.json`},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export wrong object name despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/${ownerHash}/synthetic-request-01/export.json.bak`},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export GCS location unbound', reseal({...exportResult,gcsRef:'https://foreign.invalid/export'},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export payload SHA mismatch', reseal({...exportResult,sha256:'0'.repeat(64)},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
 ]) {
   test('finished receipt ' + label + ' requires reconciliation',async()=>{
     const h=setup({record,prior:receipt});

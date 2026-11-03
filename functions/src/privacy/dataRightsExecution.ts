@@ -25,6 +25,7 @@ type RequestRecord = {
   status?: string;
   executionState?: string;
   requestedFormat?: 'json' | 'csv' | null;
+  executionReceiptPath?: string;
 };
 
 function executionAdmission() {
@@ -228,6 +229,16 @@ const handler = async (data: unknown, _context: CallableContext) => {
         ? 'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'
         : 'PROTECTED_STAGING_JOBS_SCOPE_APPLIED_CENTRAL_PRIVACY_REQUIRED';
       const expectedOwner = createHash('sha256').update(record.ownerUid).digest('hex');
+      // A FINISHED child audit by itself is not a completed request: the
+      // parent write can fail, be superseded or be explicitly rejected.
+      // Require the request's matching terminal state and exact receipt path
+      // before any completed receipt may be replayed.
+      if (record.status !== 'IN_REVIEW' ||
+          record.executionState !== expectedTerminal ||
+          record.executionReceiptPath !== executionRef.path) {
+        throw httpsError('failed-precondition',
+          'Data-rights request and execution receipt require terminal-state reconciliation.');
+      }
       // A STARTED/FAILED audit is not completion evidence. Never turn an
       // interrupted or partly destructive execution into a successful replay,
       // and never blindly re-run it without an independent reconciliation.
