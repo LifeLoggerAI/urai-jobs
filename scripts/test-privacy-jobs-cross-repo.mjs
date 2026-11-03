@@ -88,7 +88,7 @@ function harness({existingBlock=null,failOnce=false,tamperAck=false}={}) {
   }};
   const exports={};
   const context={exports,console:{error:()=>{}},process,Error,Set,String,Promise,Date,Object,createHash,timingSafeEqual,
-    onRequest:(_opts,callback)=>callback, expectedBearer:()=>TOKEN, getFirestore:()=>firestore,
+    onRequest:(_opts,callback)=>callback, privacyEventToken:{value:()=>TOKEN}, expectedBearer:()=>TOKEN, getFirestore:()=>firestore,
     consentBlockRef:()=>({id:'block'}),consentEventReceiptRef:()=>receiptRef,
     canonicalSourceRevocationAckHash:digest,canonicalConsentAckHash:digest,
     mayApplyNewConsentRevocation:order.mayApplyNewConsentRevocation,
