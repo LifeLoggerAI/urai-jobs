@@ -186,3 +186,42 @@ for (const [label, corrupt] of malformedStoredContexts) {
     assert.equal(f.state.queue.dispatch?.blockedReason, 'job_consent_context_unverified');
   });
 }
+
+// Multi-purpose consent: a revoked purpose must cancel even if another
+// purpose's block is malformed. Unknown authority still never dispatches.
+function withSecondConsent(f){
+ f.state.job.consents=[{purpose:'camera.capture',policyVersion:'1',decisionReceiptId:'receipt-two'}];
+ return f;
+}
+for(const [mode,fnName] of [['manual','processQueueNow'],['scheduled','processQueueTick']]){
+ for(const [order,blocks] of [
+  ['unknown-first',[present({active:'false'}),present({active:true})]],
+  ['revoked-first',[present({active:true}),present({active:'false'})]],
+ ]){
+  test(`${mode}: explicit revocation cancels even with ${order} additional consent`,async()=>{
+   const f=withSecondConsent(setup(blocks));
+   const fn=f.load(fnName);
+   if(mode==='manual')await fn.processQueueNow({auth:{token:{role:'operator'}},data:{limit:1}});
+   else await fn.processQueueTick();
+   assert.equal(f.state.job.status,'CANCELLED');
+   assert.equal(f.state.queue.status,'CANCELLED');
+   assert.equal(f.state.published,0);
+  });
+ }
+}
+for(const [label,blocks] of [
+ ['at execution start',[present({active:'false'}),present({active:true})]],
+ ['immediately before worker',[present({active:false}),present({active:false}),
+    present({active:'false'}),present({active:true})]],
+]){
+ test(`executor: multi-purpose revocation ${label} cancels instead of retrying`,async()=>{
+  const f=withSecondConsent(setup(blocks));
+  f.state.job.status='LEASED';f.state.job.lease={leaseToken:'synthetic-lease'};
+  f.state.job.execution={attemptCount:0,maxAttempts:2};
+  f.state.queue.status='LEASED';f.state.queue.lease={leaseToken:'synthetic-lease'};
+  await f.load('executeJob').executeJob({data:{message:{json:{jobId:'synthetic-one',leaseToken:'synthetic-lease'}}}});
+  assert.equal(f.state.job.status,'CANCELLED');
+  assert.equal(f.state.queue.status,'CANCELLED');
+  assert.equal(f.state.workerCalls,0);
+ });
+}

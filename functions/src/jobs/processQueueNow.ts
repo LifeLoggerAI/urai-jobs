@@ -177,9 +177,11 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
         const blockSnapshots = await Promise.all(
           consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
         );
-        const blocked = blockSnapshots
-          .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: consentContexts[index].purpose }))
-          .find(({ state }) => state !== 'clear');
+        const blockStates = blockSnapshots
+          .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: consentContexts[index].purpose }));
+        // Revocation is conclusive even when another block is malformed.
+        const blocked = blockStates.find(({ state }) => state === 'revoked')
+          ?? blockStates.find(({ state }) => state === 'unverified');
         if (blocked?.state === 'unverified') {
           transaction.update(queueRef, {
             availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),

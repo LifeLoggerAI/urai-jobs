@@ -452,9 +452,11 @@ export const executeJob = onMessagePublished({
       const blockSnapshots = await Promise.all(
         consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
       );
-      const blocked = blockSnapshots
-        .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: consentContexts[index].purpose }))
-        .find(({ state }) => state !== 'clear');
+      const blockStates = blockSnapshots
+        .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: consentContexts[index].purpose }));
+      // Revocation is conclusive even when another block is malformed.
+      const blocked = blockStates.find(({ state }) => state === 'revoked')
+        ?? blockStates.find(({ state }) => state === 'unverified');
       if (blocked?.state === 'unverified') {
         // A malformed/unreadable block must never admit a worker attempt.
         const queueSnapshot = await transaction.get(queueRef);
@@ -559,9 +561,11 @@ export const executeJob = onMessagePublished({
         const blockSnapshots = await Promise.all(
           dispatchConsentContexts.map((context) => consentBlockRef(job.ownerUid!, context.purpose).get())
         );
-        const blocked = blockSnapshots
-          .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: dispatchConsentContexts[index].purpose }))
-          .find(({ state }) => state !== 'clear');
+        const blockStates = blockSnapshots
+          .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: dispatchConsentContexts[index].purpose }));
+        // Revocation is conclusive even when another block is malformed.
+        const blocked = blockStates.find(({ state }) => state === 'revoked')
+          ?? blockStates.find(({ state }) => state === 'unverified');
         if (blocked?.state === 'unverified') {
           // A block can become corrupt after the execution lease was granted.
           // Never cross the external worker boundary on unknown authority.

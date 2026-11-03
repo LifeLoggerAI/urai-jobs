@@ -301,9 +301,11 @@ export const processQueueTick = onSchedule('every 1 minutes', async () => {
         const blockSnapshots = await Promise.all(
           consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
         );
-        const blocked = blockSnapshots
-          .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: consentContexts[index].purpose }))
-          .find(({ state }) => state !== 'clear');
+        const blockStates = blockSnapshots
+          .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: consentContexts[index].purpose }));
+        // Revocation is conclusive even when another block is malformed.
+        const blocked = blockStates.find(({ state }) => state === 'revoked')
+          ?? blockStates.find(({ state }) => state === 'unverified');
         if (blocked?.state === 'unverified') {
           // A malformed/unreadable block is not proof of consent. Leave both
           // job and queue unleased, then retry after central reconciliation.
