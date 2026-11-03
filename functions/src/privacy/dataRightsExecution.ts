@@ -8,6 +8,9 @@ import { uploadToGcs } from '../core/gcs.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
 const MAX_OWNED_JOBS = 2_000;
+// One job update, optional queue delete and two serverTimestamp transforms
+// must fit alongside the log deletions in a 500-write Firestore batch.
+const MAX_LOGS_PER_DELETE_BATCH = 496;
 const EXECUTION_MODE = 'protected-staging';
 const EXECUTION_SCHEMA = 'urai-jobs-data-rights-execution-v1';
 
@@ -137,8 +140,8 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
   let jobsAnonymized = 0;
 
   for (const document of jobs) {
-    const logs = await document.ref.collection('logs').limit(500).get();
-    if (logs.size >= 500) {
+    const logs = await document.ref.collection('logs').limit(MAX_LOGS_PER_DELETE_BATCH + 1).get();
+    if (logs.size > MAX_LOGS_PER_DELETE_BATCH) {
       throw httpsError('resource-exhausted', `Job ${document.id} has too many logs for bounded deletion; reconcile before retry.`);
     }
     const batch = db.batch();
@@ -252,6 +255,7 @@ const handler = async (data: unknown, _context: CallableContext) => {
         validCounts(result.jobsAnonymized) && validCounts(result.queueDeletes) &&
         validCounts(result.logDeletes) && (result.jobsAnonymized as number) <= MAX_OWNED_JOBS &&
         (result.queueDeletes as number) <= (result.jobsAnonymized as number) &&
+        (result.logDeletes as number) <= (result.jobsAnonymized as number) * MAX_LOGS_PER_DELETE_BATCH &&
         hasUnresolved(result.unresolvedDomains) && result.completeEcosystemExport !== true;
       const exportPayload = result?.payload as Record<string, unknown> | undefined;
       const validExport = record.requestType === 'EXPORT' && result && exportPayload &&

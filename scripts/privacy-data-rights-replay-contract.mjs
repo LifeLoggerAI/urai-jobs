@@ -166,6 +166,8 @@ for (const [label, receipt, record] of [
   ['negative deleted job count', reseal({...completeResult,jobsAnonymized:-1}),request],
   ['fractional deleted job count', reseal({...completeResult,jobsAnonymized:0.5}),request],
   ['queue deletes exceed jobs anonymized', reseal({...completeResult,queueDeletes:2}),request],
+  ['rehashed log count exceeds per-job deletion capacity', reseal({...completeResult,logDeletes:497}),request],
+  ['rehashed logs with zero anonymized jobs', reseal({...completeResult,jobsAnonymized:0,queueDeletes:0,logDeletes:1}),request],
   ['export missing payload', reseal({recordCount:0,gcsRef:exportResult.gcsRef},validExportReceipt),{...request,requestType:'EXPORT'}],
   ['export owner mismatch', reseal({...exportResult,payload:{...exportPayload,ownerUid:'foreign-owner'}},validExportReceipt),{...request,requestType:'EXPORT'}],
   ['export claims complete ecosystem', reseal({...exportResult,payload:{...exportPayload,completeEcosystemExport:true}},validExportReceipt),{...request,requestType:'EXPORT'}],
@@ -198,3 +200,89 @@ for (const [label, record, prior] of [
     assert.equal(h.sets.length,0);
   });
 }
+
+
+// Execute the original protected-staging delete implementation in a bounded
+// synthetic Firestore double. This is NOT a deletion or Firebase emulator run.
+const deleteSourceStart = content.indexOf('async function executeDelete(db: Firestore, requestId: string, ownerUid: string) {');
+const deleteSourceStop = content.indexOf('\n}\n\nconst handler =',deleteSourceStart);
+assert.ok(deleteSourceStart >= 0 && deleteSourceStop > deleteSourceStart,'Original delete routine must be source-bound');
+const maxLogsMatch = content.match(/const MAX_LOGS_PER_DELETE_BATCH = ([0-9]+);/);
+assert.ok(maxLogsMatch,'Exact bounded per-job deletion constant must exist');
+assert.equal(Number(maxLogsMatch[1]),496,'The batch must reserve operations for job, queue and transforms');
+const deleteModuleText = maxLogsMatch[0] + '\n' + content.slice(deleteSourceStart,deleteSourceStop+2)
+  + '\nmodule.exports.executeDelete = executeDelete;';
+const deleteCompiled = ts.transpileModule(deleteModuleText,{
+  fileName:'JobsDataRightsDelete.ts',reportDiagnostics:true,
+  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
+});
+assert.equal(deleteCompiled.diagnostics?.length??0,0);
+const deleteModule={exports:{}};
+let currentDeleteJobs=[];
+const serverTimestampMarker=Symbol('server-timestamp');
+runInNewContext(deleteCompiled.outputText,{
+  module:deleteModule,exports:deleteModule.exports,createHash,
+  EXECUTION_SCHEMA:'urai-jobs-data-rights-execution-v1',
+  FieldValue:{delete:()=>Symbol('delete'),serverTimestamp:()=>serverTimestampMarker},
+  httpsError:(code,message)=>Object.assign(new Error(message),{code}),
+  ownedJobs:async()=>currentDeleteJobs,
+},{filename:'JobsDataRightsDelete.js',timeout:2000});
+const countServerTimestamps=value=>value===serverTimestampMarker?1
+  :!value||typeof value!=='object'?0
+  :Object.values(value).reduce((n,item)=>n+countServerTimestamps(item),0);
+function deletionBudgetFixture(logCount,queueExists=true){
+  const budget={batches:0,commits:0,writeCount:0,userMarkers:0};
+  const logs=Array.from({length:logCount},(_,id)=>({ref:{id}}));
+  const job={id:'synthetic-owned-job',ref:{collection:(name)=>{
+    assert.equal(name,'logs');
+    return {limit:n=>({get:async()=>({size:Math.min(n,logCount),docs:logs.slice(0,n)})})};
+  }}};
+  currentDeleteJobs=[job];
+  const db={
+    batch(){
+      budget.batches++;
+      let writes=0;
+      return {
+        delete(){writes++},
+        set(_ref,data){writes+=1+countServerTimestamps(data)},
+        async commit(){
+          budget.writeCount=writes;
+          if(writes>500)throw Error('synthetic-firestore-batch-overflow');
+          budget.commits++;
+        },
+      };
+    },
+    collection(name){
+      if(name==='jobQueue')return{doc:()=>({get:async()=>({exists:queueExists})})};
+      if(name==='users')return{doc:()=>({set:async()=>{budget.userMarkers++}})};
+      throw Error('unexpected-collection:'+name);
+    },
+  };
+  return {run:()=>deleteModule.exports.executeDelete(db,'synthetic-request','synthetic-owner'),budget};
+}
+test('protected staging job deletion stays within 500 Firestore writes with 496 logs',async()=>{
+  const f=deletionBudgetFixture(496,true);
+  const result=await f.run();
+  assert.equal(result.logDeletes,496);
+  assert.equal(result.jobsAnonymized,1);
+  assert.deepEqual(f.budget,{batches:1,commits:1,writeCount:500,userMarkers:1});
+  assert.equal(result.unresolvedDomains.length,4);
+});
+test('497 logs with queue are refused before constructing any deletion batch',async()=>{
+  const f=deletionBudgetFixture(497,true);
+  await assert.rejects(f.run(),/too many logs|bounded deletion/);
+  assert.deepEqual(f.budget,{batches:0,commits:0,writeCount:0,userMarkers:0});
+});
+test('497 logs without queue also fail conservatively before any writes',async()=>{
+  const f=deletionBudgetFixture(497,false);
+  await assert.rejects(f.run(),/too many logs|bounded deletion/);
+  assert.deepEqual(f.budget,{batches:0,commits:0,writeCount:0,userMarkers:0});
+});
+test('small legitimate deletion still retains pending central privacy obligation',async()=>{
+  const f=deletionBudgetFixture(3,false);
+  const result=await f.run();
+  assert.equal(result.logDeletes,3);
+  assert.equal(result.jobsAnonymized,1);
+  assert.equal(result.queueDeletes,0);
+  assert.deepEqual(f.budget,{batches:1,commits:1,writeCount:6,userMarkers:1});
+});
