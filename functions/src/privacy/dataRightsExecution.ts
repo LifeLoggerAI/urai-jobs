@@ -133,6 +133,9 @@ async function buildExport(db: Firestore, requestId: string, ownerUid: string) {
   return { payload, recordCount: exportedJobs.length + (userSnap.exists ? 1 : 0), sha256, gcsRef };
 }
 
+const TERMINAL_DELETE_JOB = new Set(['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED', 'COMPLETED']);
+const TERMINAL_DELETE_QUEUE = new Set(['DONE', 'DEAD', 'CANCELLED']);
+
 async function executeDelete(db: Firestore, requestId: string, ownerUid: string) {
   const jobs = await ownedJobs(db, ownerUid);
   const ownerHash = createHash('sha256').update(ownerUid).digest('hex');
@@ -140,42 +143,61 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
   let logDeletes = 0;
   let jobsAnonymized = 0;
 
+  // Do not start partly destructive execution while any selected job is active.
   for (const document of jobs) {
-    const logs = await document.ref.collection('logs').limit(500).get();
-    if (logs.size >= 500) {
-      throw httpsError('resource-exhausted', `Job ${document.id} has too many logs for bounded deletion; reconcile before retry.`);
+    if (!TERMINAL_DELETE_JOB.has(String(document.data().status || ''))) {
+      throw httpsError('failed-precondition', 'Active or unknown Jobs work requires reconciliation before deletion.');
     }
-    const batch = db.batch();
-    for (const log of logs.docs) {
-      batch.delete(log.ref);
-      logDeletes += 1;
-    }
+  }
+  for (const document of jobs) {
     const queueRef = db.collection('jobQueue').doc(document.id);
-    const queueSnap = await queueRef.get();
-    if (queueSnap.exists) {
-      batch.delete(queueRef);
-      queueDeletes += 1;
-    }
-    // Replace the whole job document. A merge/tombstone with field deletes
-    // leaves unrecognized and future private metadata behind and must not
-    // be counted as an anonymized job. Firestore set without merge removes
-    // every old field while retaining only the minimal deletion receipt.
-    batch.set(document.ref, {
-      ownerUid: `deleted:${ownerHash}`,
-      deletionReceipt: {
-        schemaVersion: EXECUTION_SCHEMA,
-        requestId,
-        ownerHash,
-        deletedAt: FieldValue.serverTimestamp(),
-      },
-      updatedAt: FieldValue.serverTimestamp(),
+    // Recheck current owner, worker state, queue and logs in the same atomic
+    // Firestore transaction. A previously selected snapshot is not authority.
+    const deleted = await db.runTransaction(async transaction => {
+      const [current, queueSnap, logs] = await Promise.all([
+        transaction.get(document.ref),
+        transaction.get(queueRef),
+        transaction.get(document.ref.collection('logs').limit(500)),
+      ]);
+      if (!current.exists || current.data()?.ownerUid !== ownerUid) {
+        throw httpsError('failed-precondition', 'Jobs owner changed after selection; deletion requires reconciliation.');
+      }
+      if (!TERMINAL_DELETE_JOB.has(String(current.data()?.status || ''))) {
+        throw httpsError('failed-precondition', 'Active or unknown Jobs worker state blocks deletion.');
+      }
+      if (queueSnap.exists) {
+        const queue = queueSnap.data();
+        if (!queue || queue.jobId !== document.id ||
+            !TERMINAL_DELETE_QUEUE.has(String(queue.status || ''))) {
+          throw httpsError('failed-precondition', 'Active or unbound Jobs queue blocks deletion.');
+        }
+      }
+      // Firestore permits at most 500 document writes per transaction. Reserve
+      // one for the job tombstone and one for an existing queue record.
+      if (logs.size > (queueSnap.exists ? 498 : 499)) {
+        throw httpsError('resource-exhausted', 'Job logs exceed the bounded atomic deletion limit; reconcile before retry.');
+      }
+      for (const log of logs.docs) transaction.delete(log.ref);
+      if (queueSnap.exists) transaction.delete(queueRef);
+      transaction.set(document.ref, {
+        ownerUid: `deleted:${ownerHash}`,
+        deletionReceipt: {
+          schemaVersion: EXECUTION_SCHEMA,
+          requestId,
+          ownerHash,
+          deletedAt: FieldValue.serverTimestamp(),
+        },
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { logDeletes: logs.size, queueDeletes: queueSnap.exists ? 1 : 0 };
     });
-    await batch.commit();
-    jobsAnonymized += 1;
+    jobsAnonymized++;
+    logDeletes += deleted.logDeletes;
+    queueDeletes += deleted.queueDeletes;
   }
 
-  // Jobs does not own Firebase Auth deletion, external provider derivatives, or
-  // every cross-system artifact. Never mark the user's request globally complete.
+  // Jobs does not own Firebase Auth deletion, provider derivatives or the
+  // rest of the ecosystem. Never claim global privacy completion.
   await db.collection('users').doc(ownerUid).set({
     dataRightsDeletionPendingCentralPrivacy: true,
     dataRightsDeletionRequestId: requestId,

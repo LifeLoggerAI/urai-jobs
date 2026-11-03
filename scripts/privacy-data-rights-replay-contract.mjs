@@ -233,7 +233,9 @@ const deleteStart = content.indexOf('async function executeDelete(db: Firestore,
 const deleteEnd = content.indexOf('\n}\n\nconst handler', deleteStart) + 2;
 assert.ok(deleteStart >= 0 && deleteEnd > deleteStart,
   'Original Jobs deletion function must remain source-bound');
-const deleteModuleText = content.slice(deleteStart, deleteEnd)
+const deletionConstantsStart=content.indexOf('const TERMINAL_DELETE_JOB = new Set(');
+assert.ok(deletionConstantsStart>=0 && deletionConstantsStart<deleteStart, 'Deletion terminal-state source binding is present');
+const deleteModuleText = content.slice(deletionConstantsStart, deleteEnd)
   + '\nmodule.exports.executeDeleteFromSource = executeDelete;';
 const deleteCompiled = ts.transpileModule(deleteModuleText, {
   fileName: 'JobsDataRightsDelete.ts', reportDiagnostics: true,
@@ -254,74 +256,74 @@ runInNewContext(deleteCompiled.outputText, {
 }, { filename: 'JobsDataRightsDelete.js', timeout: 2000 });
 const executeDeleteFromSource = deletionModule.exports.executeDeleteFromSource;
 
-function deletionHarness({ logCount = 2, hasQueue = true, jobCount = 1 } = {}) {
-  const jobs = Array.from({ length: jobCount }, (_, i) => ({
-    ownerUid, type: 'private-movie', status: 'DONE',
-    payload: { privateNarration: 'synthetic secret' },
-    output: { privatePreview: 'synthetic-video-path' },
-    consent: {privateGrant: 'synthetic-grant'},
-    customPrivateMetadata: { sensitive: 'must-not-survive' },
-    providerAuth: 'synthetic-provider-private-id',
-    unrestrictedFutureField: { private: true },
-    id: i,
+function deletionHarness({
+  logCount = 2, hasQueue = true, jobCount = 1,
+  jobStatus = 'SUCCESS', queueStatus = 'DONE', currentOwnerOverride = null,
+} = {}) {
+  const jobs = Array.from({length:jobCount}, (_,i)=>({
+    ownerUid, status:jobStatus, type:'private-movie',
+    payload:{privateNarration:'synthetic secret'},
+    output:{privatePreview:'synthetic-video-path'},
+    customPrivateMetadata:{sensitive:'must-not-survive'},
+    providerAuth:'synthetic-provider-private-id',
+    unrestrictedFutureField:{private:true},
+    id:i,
   }));
-  const deletedRefs = [], writes = [], userPatches = [];
-  let committed = 0;
-  const docs = jobs.map((_, i) => {
-    const jobRef = {
-      type: 'job', i,
+  const deletedRefs=[],writes=[],userPatches=[];
+  let committed=0;
+  const docs=jobs.map((_,i)=>{
+    const jobRef={type:'job',i,
       collection(name) {
-        assert.equal(name, 'logs');
-        return {
-          limit: bound => {
-            assert.equal(bound, 500);
-            return {get: async () => ({
-              size: logCount,
-              docs: Array.from({length:logCount}, (_, j) =>
-                ({ref:{type:'log',job:i,log:j}})),
-            })};
-          },
-        };
+        assert.equal(name,'logs');
+        return {limit:bound=>({type:'logs',i,bound})};
       },
     };
-    return {id:'synthetic-job-' + i, ref:jobRef};
+    return {id:'synthetic-job-'+i,ref:jobRef,data:()=>jobs[i]};
   });
-  const db = {
-    syntheticOwnedJobs: docs,
-    batch() {
-      const operations = [];
-      return {
-        delete(ref) {operations.push({kind:'delete',ref});},
-        set(ref, data, opts) {operations.push({kind:'set',ref,data,opts});},
-        async commit() {
-          committed++;
-          for (const op of operations) {
-            if (op.kind === 'delete') {deletedRefs.push(op.ref); continue;}
-            writes.push(op);
-            const current = jobs[op.ref.i];
-            const next = op.opts?.merge ? {...current, ...op.data} : {...op.data};
-            for (const [key,value] of Object.entries(next)) {
-              if (value === deletedSentinel) delete next[key];
-            }
-            jobs[op.ref.i] = next;
-          }
-        },
-      };
+  const db={
+    syntheticOwnedJobs:docs,
+    collection(name){
+      if(name==='jobQueue')return {doc:id=>({type:'queue',id})};
+      if(name==='users')return {doc:id=>{
+        assert.equal(id,ownerUid);
+        return {set:async(data,opts)=>userPatches.push({data,opts})};
+      }};
+      throw new Error('unexpected private collection '+name);
     },
-    collection(name) {
-      if (name === 'jobQueue') return {
-        doc: id => ({
-          type: 'queue', id,
-          get: async () => ({exists: hasQueue}),
-        }),
-      };
-      if (name === 'users') return {
-        doc: id => {
-          assert.equal(id, ownerUid);
-          return {set: async (data,opts) => userPatches.push({data,opts})};
+    async runTransaction(fn){
+      const changes=[];
+      const transaction={
+        async get(ref){
+          if(ref.type==='job')return {exists:true,
+            data:()=>({...jobs[ref.i],ownerUid:currentOwnerOverride||jobs[ref.i].ownerUid})};
+          if(ref.type==='queue')return {exists:hasQueue,
+            data:()=>({jobId:ref.id,status:queueStatus})};
+          if(ref.type==='logs'){
+            assert.equal(ref.bound,500);
+            return {size:logCount,
+              docs:Array.from({length:logCount},(_,j)=>({ref:{type:'log',i:ref.i,j}}))};
+          }
+          throw new Error('unexpected Firestore read');
         },
+        delete(ref){changes.push({kind:'delete',ref});},
+        set(ref,data,opts){changes.push({kind:'set',ref,data,opts});},
       };
-      throw new Error('unexpected private collection ' + name);
+      const result=await fn(transaction);
+      assert.ok(changes.length<=500,'Firestore transaction must stay within 500 document writes');
+      if(changes.length>0){
+        committed++;
+        for(const change of changes){
+          if(change.kind==='delete'){deletedRefs.push(change.ref);continue;}
+          writes.push(change);
+          const current=jobs[change.ref.i];
+          const next=change.opts?.merge?{...current,...change.data}:{...change.data};
+          for(const [key,value] of Object.entries(next)) {
+            if(value===deletedSentinel)delete next[key];
+          }
+          jobs[change.ref.i]=next;
+        }
+      }
+      return result;
     },
   };
   return {db,jobs,deletedRefs,writes,userPatches,get commits(){return committed;}};
@@ -353,7 +355,7 @@ test('DELETE refuses 500 logs before job tombstone, cannot claim bounded job del
   const h=deletionHarness({logCount:500});
   await assert.rejects(
     executeDeleteFromSource(h.db,'synthetic-request-01',ownerUid),
-    /too many logs|bounded deletion/i
+    /logs exceed|bounded.*deletion/i
   );
   assert.equal(h.commits,0);
   assert.equal(h.userPatches.length,0);
@@ -473,4 +475,47 @@ test('source-bound governed EXPORT writes credential-free GCS bytes',async()=>{
     'privacy/data-rights/'+ownerHash+'/synthetic-request-01/export.json');
   assert.equal(storedExports[0].mime,'application/json');
   assert.equal(result.sha256,createHash('sha256').update(Buffer.from(storedExports[0].bytes,'utf8')).digest('hex'));
+});
+
+
+test('DELETE rejects running or pending owner jobs before mutation',async()=>{
+  for(const status of ['RUNNING','PENDING','LEASED','UNKNOWN']){
+    const h=deletionHarness({jobStatus:status});
+    await assert.rejects(executeDeleteFromSource(h.db,'synthetic-request-01',ownerUid),
+      /active|unknown|reconciliation/i);
+    assert.equal(h.commits,0);
+    assert.equal(h.userPatches.length,0);
+    assert.equal(h.writes.length,0);
+  }
+});
+test('DELETE rechecks latest owner and refuses reassigned documents',async()=>{
+  const h=deletionHarness({currentOwnerOverride:'other-synthetic-owner'});
+  await assert.rejects(executeDeleteFromSource(h.db,'synthetic-request-01',ownerUid),
+    /owner changed|reconciliation/i);
+  assert.equal(h.commits,0);
+  assert.equal(h.userPatches.length,0);
+});
+test('DELETE refuses an active queue even if master job is terminal',async()=>{
+  const h=deletionHarness({queueStatus:'PENDING'});
+  await assert.rejects(executeDeleteFromSource(h.db,'synthetic-request-01',ownerUid),
+    /active|queue/i);
+  assert.equal(h.commits,0);
+  assert.equal(h.userPatches.length,0);
+});
+test('DELETE respects Firestore 500-write maximum with or without a queue',async()=>{
+  const tooMany=deletionHarness({logCount:499,hasQueue:true});
+  await assert.rejects(executeDeleteFromSource(tooMany.db,'synthetic-request-01',ownerUid),
+    /logs exceed|bounded/i);
+  assert.equal(tooMany.commits,0);
+  const withQueue=deletionHarness({logCount:498,hasQueue:true});
+  const a=await executeDeleteFromSource(withQueue.db,'synthetic-request-01',ownerUid);
+  assert.equal(a.logDeletes,498);
+  assert.equal(a.queueDeletes,1);
+  assert.equal(withQueue.deletedRefs.length,499);
+  const withoutQueue=deletionHarness({logCount:499,hasQueue:false});
+  const b=await executeDeleteFromSource(withoutQueue.db,'synthetic-request-01',ownerUid);
+  assert.equal(b.logDeletes,499);
+  assert.equal(b.queueDeletes,0);
+  assert.equal(withoutQueue.deletedRefs.length,499);
+  assert.equal(withoutQueue.commits,1);
 });
