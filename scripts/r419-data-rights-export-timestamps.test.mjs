@@ -83,7 +83,7 @@ test('private export strips recovery and verification credentials without erasin
     ownerUid: 'synthetic-owner', status: 'SUCCESS',
     payload: {
       title: 'Synthetic memory', notes: 'Keep this ordinary memory text',
-      credentials: {
+      details: {
         recoveryCode: 'secret-recovery', verification_code: 'secret-verification',
         oneTimeCode: 'secret-one-time', mfaCode: 'secret-mfa',
         totp_code: 'secret-totp', otp: 'secret-otp',
@@ -97,7 +97,7 @@ test('private export strips recovery and verification credentials without erasin
   assert.equal(payload.notes, 'Keep this ordinary memory text');
   for (const key of ['recoveryCode', 'verification_code', 'oneTimeCode', 'mfaCode',
     'totp_code', 'otp', 'access_token', 'password']) {
-    assert.equal(payload.credentials[key], undefined, `Sensitive ${key} must not be exported`);
+    assert.equal(payload.details[key], undefined, `Sensitive ${key} must not be exported`);
   }
   assert.equal(uploads.length, 1);
   const uploaded = JSON.parse(uploads[0].bytes.toString('utf8'));
