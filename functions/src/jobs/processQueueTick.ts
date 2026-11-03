@@ -34,6 +34,16 @@ function terminalQueueStatus(status: unknown): JobQueueStatus {
 }
 
 function jobConsentContexts(job: Job) {
+  // Existing documents can be malformed even when createJob validated the original request.
+  // Never silently discard an invalid consent context and treat it as unblocked.
+  const consentValue = (job as unknown as Record<string, unknown>).consent;
+  const consentsValue = (job as unknown as Record<string, unknown>).consents;
+  if (consentValue !== undefined && !isConsentContext(consentValue)) return null;
+  if (consentsValue !== undefined &&
+      (!Array.isArray(consentsValue) || consentsValue.length === 0 ||
+       consentsValue.some((entry) => !isConsentContext(entry)))) return null;
+  if ((consentValue !== undefined || consentsValue !== undefined) &&
+      (typeof job.ownerUid !== 'string' || !job.ownerUid.trim())) return null;
   const contexts = [
     ...(isConsentContext(job.consent) ? [job.consent] : []),
     ...(Array.isArray(job.consents) ? job.consents.filter(isConsentContext) : []),
@@ -279,6 +289,14 @@ export const processQueueTick = onSchedule('every 1 minutes', async () => {
       }
 
       const consentContexts = jobConsentContexts(job);
+      if (consentContexts === null) {
+        transaction.update(queueRef, {
+          availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+          updatedAt: now,
+          'dispatch.blockedReason': 'job_consent_context_unverified',
+        });
+        return null;
+      }
       if (job.ownerUid && consentContexts.length > 0) {
         const blockSnapshots = await Promise.all(
           consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))

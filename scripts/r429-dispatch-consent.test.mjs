@@ -146,3 +146,43 @@ for(const [label,blocks,expectStatus,expectCalls] of [
   assert.equal(f.state.queue.status,expectStatus==='SUCCESS'?'DONE':expectStatus);
  });
 }
+
+
+const malformedStoredContexts = [
+  ['incomplete single consent', job => { job.consent = {purpose:'voice.synthesis',policyVersion:'1',decisionReceiptId:''}; }],
+  ['invalid plural consent', job => { delete job.consent; job.consents = [{purpose:'voice.synthesis',policyVersion:'1',decisionReceiptId:''}]; }],
+  ['valid single mixed with invalid plural', job => { job.consents = [{purpose:'other',policyVersion:'1',decisionReceiptId:''}]; }],
+  ['missing owner with populated consent', job => { job.ownerUid = ''; }],
+];
+
+for (const [label, corrupt] of malformedStoredContexts) {
+  for (const mode of ['manual','scheduled']) {
+    test(mode + ': stored job with malformed consent ' + label + ' cannot lease', async () => {
+      const f = setup(absent);
+      corrupt(f.state.job);
+      const fn = f.load(mode === 'manual' ? 'processQueueNow' : 'processQueueTick');
+      if (mode === 'manual') await fn.processQueueNow({auth:{token:{role:'operator'}},data:{limit:1}});
+      else await fn.processQueueTick();
+      assert.equal(f.state.published, 0);
+      assert.equal(f.state.job.status, 'PENDING');
+      assert.equal(f.state.queue.status, 'PENDING');
+      assert.equal(f.state.queue.dispatch?.blockedReason, 'job_consent_context_unverified');
+    });
+  }
+  test('executor: stored job with malformed consent ' + label + ' cannot start', async () => {
+    const f = setup(absent);
+    corrupt(f.state.job);
+    f.state.job.status = 'LEASED';
+    f.state.job.lease = {leaseToken:'synthetic-lease'};
+    f.state.job.execution = {attemptCount:0,maxAttempts:2};
+    f.state.queue.status = 'LEASED';
+    f.state.queue.lease = {leaseToken:'synthetic-lease'};
+    await f.load('executeJob').executeJob({data:{message:{json:{
+      jobId:'synthetic-one',leaseToken:'synthetic-lease',
+    }}}});
+    assert.equal(f.state.workerCalls, 0);
+    assert.equal(f.state.job.status, 'PENDING');
+    assert.equal(f.state.queue.status, 'PENDING');
+    assert.equal(f.state.queue.dispatch?.blockedReason, 'job_consent_context_unverified');
+  });
+}

@@ -43,6 +43,16 @@ const JobExecutionMessageSchema = z.object({
 });
 
 function jobConsentContexts(job: Job) {
+  // Existing documents can be malformed even when createJob validated the original request.
+  // Never silently discard an invalid consent context and treat it as unblocked.
+  const consentValue = (job as unknown as Record<string, unknown>).consent;
+  const consentsValue = (job as unknown as Record<string, unknown>).consents;
+  if (consentValue !== undefined && !isConsentContext(consentValue)) return null;
+  if (consentsValue !== undefined &&
+      (!Array.isArray(consentsValue) || consentsValue.length === 0 ||
+       consentsValue.some((entry) => !isConsentContext(entry)))) return null;
+  if ((consentValue !== undefined || consentsValue !== undefined) &&
+      (typeof job.ownerUid !== 'string' || !job.ownerUid.trim())) return null;
   const contexts = [
     ...(isConsentContext(job.consent) ? [job.consent] : []),
     ...(Array.isArray(job.consents) ? job.consents.filter(isConsentContext) : []),
@@ -420,6 +430,24 @@ export const executeJob = onMessagePublished({
     }
 
     const consentContexts = jobConsentContexts(job);
+    if (consentContexts === null) {
+      const queueSnapshot = await transaction.get(queueRef);
+      const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+      if (!queue || queue.status !== 'LEASED' || queue.lease?.leaseToken !== leaseToken) {
+        return { action: 'ignore' as const, reason: 'queue-lease-mismatch' as const };
+      }
+      const now = FieldValue.serverTimestamp();
+      transaction.update(jobRef, {
+        status: 'PENDING', lease: FieldValue.delete(), updatedAt: now,
+      });
+      transaction.update(queueRef, {
+        status: 'PENDING',
+        availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+        lease: FieldValue.delete(), updatedAt: now,
+        'dispatch.blockedReason': 'job_consent_context_unverified',
+      });
+      return { action: 'ignore' as const, reason: 'consent-context-unverified' as const };
+    }
     if (job.ownerUid && consentContexts.length > 0) {
       const blockSnapshots = await Promise.all(
         consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
@@ -526,6 +554,7 @@ export const executeJob = onMessagePublished({
       result = await executeTinyFishJob(jobType, getPayloadRecord(job));
     } else if (target) {
       const dispatchConsentContexts = jobConsentContexts(job);
+      if (dispatchConsentContexts === null) throw new Error('job_consent_context_unverified');
       if (job.ownerUid && dispatchConsentContexts.length > 0) {
         const blockSnapshots = await Promise.all(
           dispatchConsentContexts.map((context) => consentBlockRef(job.ownerUid!, context.purpose).get())
