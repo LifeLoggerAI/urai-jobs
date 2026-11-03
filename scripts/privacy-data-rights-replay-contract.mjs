@@ -350,3 +350,106 @@ test('DELETE with zero owned jobs reports central privacy pending, not ecosystem
   assert.equal(h.userPatches[0].data.dataRightsDeletionPendingCentralPrivacy,true);
   assert.ok(!Object.prototype.hasOwnProperty.call(r,'crossSystemComplete'));
 });
+
+
+// The maintained executor source is used, not a duplicate implementation.
+const redactStart = content.indexOf('function redact(value: unknown): unknown {');
+const redactEnd = content.indexOf('\n}\n\nasync function ownedJobs',redactStart)+2;
+assert.ok(redactStart>=0&&redactEnd>redactStart,'source-bound redactor found');
+const redactSource=content.slice(redactStart,redactEnd);
+const redactCompiled=ts.transpileModule(redactSource+'\nmodule.exports.redact=redact;',{
+  fileName:'JobsRedact.ts',reportDiagnostics:true,
+  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
+});
+assert.equal(redactCompiled.diagnostics?.length??0,0);
+const redactModule={exports:{}};
+runInNewContext(redactCompiled.outputText,{module:redactModule,exports:redactModule.exports},
+  {filename:'JobsRedact.js',timeout:2000});
+const redactFromSource=redactModule.exports.redact;
+
+test('source-bound credential redaction protects nested owner exports',()=>{
+  const original={
+    title:'Synthetic Owner Memory',apiKey:'synthetic-sensitive',api_key:'synthetic-sensitive',
+    privateKey:'synthetic-sensitive',access_key:'synthetic-sensitive',
+    credentials:'synthetic-sensitive',bearer:'synthetic-sensitive',
+    webhookKey:'synthetic-sensitive',password:'synthetic-sensitive',
+    events:[{scene:'synthetic-scene',provider:{credential:'synthetic-sensitive',apiKey:'synthetic-sensitive'}}],
+  };
+  const sanitized=redactFromSource(original);
+  for(const key of ['apiKey','api_key','privateKey','access_key','credentials','bearer','webhookKey','password'])
+    assert.equal(Object.prototype.hasOwnProperty.call(sanitized,key),false,key);
+  assert.equal(Object.prototype.hasOwnProperty.call(sanitized.events[0].provider,'apiKey'),false);
+  assert.equal(Object.prototype.hasOwnProperty.call(sanitized.events[0].provider,'credential'),false);
+  assert.equal(sanitized.title,'Synthetic Owner Memory');
+  assert.equal(sanitized.events[0].scene,'synthetic-scene');
+});
+test('source-bound credential redaction blocks special prototype properties',()=>{
+  const raw=JSON.parse('{"__proto__":{"isAdmin":true},"title":"safe"}');
+  const sanitized=redactFromSource(raw);
+  assert.equal('isAdmin' in sanitized,false);
+  assert.equal(Object.prototype.hasOwnProperty.call(sanitized,'__proto__'),false);
+  assert.equal(sanitized.title,'safe');
+});
+const exportStart=content.indexOf('async function buildExport(db: Firestore, requestId: string, ownerUid: string) {');
+const exportStop=content.indexOf('\n}\n\nasync function executeDelete(',exportStart)+2;
+assert.ok(exportStart>=0&&exportStop>exportStart,'source-bound buildExport found');
+const exportScript=redactSource+'\n'+timestampSource+'\n'+content.slice(exportStart,exportStop)
+  +'\nmodule.exports.buildExport=buildExport;';
+const exportCompiled=ts.transpileModule(exportScript,{
+  fileName:'JobsExport.ts',reportDiagnostics:true,
+  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
+});
+assert.equal(exportCompiled.diagnostics?.length??0,0);
+const exportModule={exports:{}};
+const storedExports=[];
+runInNewContext(exportCompiled.outputText,{
+  module:exportModule,exports:exportModule.exports,Promise,Buffer,createHash,
+  EXECUTION_SCHEMA:'urai-jobs-data-rights-execution-v1',
+  ownedJobs:async(db,uid)=>{
+    assert.equal(uid,ownerUid);
+    return [{id:'synthetic-job-1',data:()=>({
+      jobType:'private-movie',status:'DONE',
+      payload:{scene:'Synthetic Family',apiKey:'synthetic-sensitive',source:{privateKey:'synthetic-sensitive',label:'my photo'}},
+      output:{sceneUrl:'private-owner-path',credential:'synthetic-sensitive',nested:[{bearer:'synthetic-sensitive',frame:5}]},
+    })}];
+  },
+  uploadToGcs:async(bytes,path,mime)=>{
+    storedExports.push({bytes:bytes.toString('utf8'),path,mime});
+    return 'gs://synthetic-bucket/'+path;
+  },
+},{filename:'JobsExport.js',timeout:2000});
+const buildExportFromSource=exportModule.exports.buildExport;
+test('source-bound governed EXPORT writes credential-free GCS bytes',async()=>{
+  const db={collection:name=>{
+    assert.equal(name,'users');
+    return {doc:id=>{
+      assert.equal(id,ownerUid);
+      return {get:async()=>({exists:true,data:()=>({
+        displayName:'synthetic-owner',credentials:{clientSecret:'synthetic-sensitive'},
+        apiKey:'synthetic-sensitive',settings:{plan:'free',webhookKey:'synthetic-sensitive'},
+      })})};
+    }};
+  }};
+  const result=await buildExportFromSource(db,'synthetic-request-01',ownerUid);
+  assert.equal(storedExports.length,1);
+  const stored=JSON.parse(storedExports[0].bytes);
+  assert.equal(result.recordCount,2);
+  assert.equal(stored.completeEcosystemExport,false);
+  assert.equal(stored.scope,'urai-jobs-proven-owner-data');
+  assert.equal(stored.user.displayName,'synthetic-owner');
+  assert.equal(stored.user.settings.plan,'free');
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.user,'credentials'),false);
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.user,'apiKey'),false);
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.user.settings,'webhookKey'),false);
+  assert.equal(stored.jobs[0].payload.scene,'Synthetic Family');
+  assert.equal(stored.jobs[0].payload.source.label,'my photo');
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.jobs[0].payload,'apiKey'),false);
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.jobs[0].payload.source,'privateKey'),false);
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.jobs[0].output,'credential'),false);
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.jobs[0].output.nested[0],'bearer'),false);
+  assert.ok(stored.unresolvedDomains.includes('cross-system-data-owned-by-other-urai-services'));
+  assert.equal(storedExports[0].path,
+    'privacy/data-rights/'+ownerHash+'/synthetic-request-01/export.json');
+  assert.equal(storedExports[0].mime,'application/json');
+  assert.equal(result.sha256,createHash('sha256').update(Buffer.from(storedExports[0].bytes,'utf8')).digest('hex'));
+});
