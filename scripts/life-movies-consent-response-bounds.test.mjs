@@ -13,7 +13,7 @@ const compiled = ts.transpileModule(helper, {
 });
 assert.equal(compiled.diagnostics?.length||0,0);
 const module={exports:{}};
-vm.runInNewContext(compiled.outputText,{module,exports:module.exports,Buffer,Error,Number,ArrayBuffer,JSON,Math});
+vm.runInNewContext(compiled.outputText,{module,exports:module.exports,Buffer,Error,Number,ArrayBuffer,JSON,Math,TextDecoder});
 const read=module.exports.readLifeMovieBoundedJson;
 assert.equal(typeof read,'function');
 const bytes = str=>new TextEncoder().encode(str);
@@ -82,6 +82,35 @@ test('invalid bytes cannot sneak past the limit or be parsed',async()=>{
 });
 test('invalid caller limits reject without reading anything',async()=>{
   for(const limit of [-1,0,16385,NaN,1.5])await assert.rejects(()=>read(reply('{}'),limit),/invalid_limit/);
+});
+test('invalid UTF-8 provider JSON is rejected without lossy replacement',async()=>{
+  const malformed=Buffer.concat([Buffer.from('{"flag":"'),Buffer.from([0xff]),Buffer.from('"}')]);
+  await rejects(new Response(malformed,{headers:{'content-type':'application/json'}}),/invalid_utf8/);
+});
+test('malformed UTF-8 across stream chunks is rejected',async()=>{
+  const response=reply('{}');
+  Object.defineProperty(response,'body',{value:new ReadableStream({start(c){
+    c.enqueue(bytes('{"x":"'));
+    c.enqueue(new Uint8Array([0xc3]));
+    c.enqueue(bytes('"}'));
+    c.close();
+  }})});
+  await rejects(response,/invalid_utf8/);
+});
+test('valid split multibyte UTF-8 remains accepted without normalization',async()=>{
+  const response=reply('{}');
+  Object.defineProperty(response,'body',{value:new ReadableStream({start(c){
+    c.enqueue(bytes('{"emoji":"'));
+    c.enqueue(new Uint8Array([0xf0,0x9f]));
+    c.enqueue(new Uint8Array([0x98,0x80]));
+    c.enqueue(bytes('"}'));
+    c.close();
+  }})});
+  assert.equal((await read(response)).emoji,'😀');
+});
+test('existing JSON BOM rejection is preserved',async()=>{
+  const payload=Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),Buffer.from('{}')]);
+  await rejects(new Response(payload),/SyntaxError|Unexpected|JSON/);
 });
 test('real provider wrappers import shared limit and never call response.text()',()=>{
   for(const name of ['lifeMovieConsentTransport.ts','lifeMovieJobsTokenProvider.ts']){

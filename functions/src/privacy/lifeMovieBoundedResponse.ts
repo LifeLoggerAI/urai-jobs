@@ -30,7 +30,17 @@ export async function readLifeMovieBoundedJson(response: Response, maxBytes = 16
       chunks.push(Buffer.from(value));
     }
     if (total === 0) throw new Error('life_movie_provider_response_empty');
-    return JSON.parse(Buffer.concat(chunks, total).toString('utf8'));
+    // Buffer.toString('utf8') silently replaces malformed bytes with U+FFFD.
+    // Consent and identity envelopes must never be altered before validation.
+    // Retain the previous JSON BOM behavior (the BOM is passed to JSON.parse).
+    let jsonText: string;
+    try {
+      jsonText = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
+        .decode(Buffer.concat(chunks, total));
+    } catch {
+      throw new Error('life_movie_provider_response_invalid_utf8');
+    }
+    return JSON.parse(jsonText);
   } finally {
     try { await reader.cancel(); } catch { /* read failed or stream already completed */ }
     reader.releaseLock();
