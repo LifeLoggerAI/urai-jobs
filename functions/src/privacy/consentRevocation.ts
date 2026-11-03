@@ -10,6 +10,7 @@ import {
   consentEventReceiptRef,
 } from './consentBlocks.js';
 import { invalidateLifeMovieDerivativesForConsent, type LifeMovieRevocationEvent } from './lifeMovieDerivativeRevocation.js';
+import { mayApplyNewConsentRevocation } from './consentRevocationOrder.js';
 
 const privacyEventToken = defineSecret('URAI_JOBS_PRIVACY_EVENT_TOKEN');
 
@@ -131,6 +132,15 @@ export const ingestConsentRevocation = onRequest({
       }
       return { conflict: false as const, ack: receipt };
     }
+
+    // First delivery of this event is not automatically the latest revocation.
+    // Check the existing consent block in the same transaction before writing.
+    // A stale or ambiguous order must not alter current enforcement state.
+    const existingBlock = await transaction.get(blockRef);
+    if (!mayApplyNewConsentRevocation(existingBlock.exists, existingBlock.data(), {
+      eventId: event.eventId, ownerUid: event.ownerUid, purpose: event.purpose,
+      revokedAt: event.revokedAt,
+    })) return { conflict: true as const };
 
     const now = FieldValue.serverTimestamp();
     const status = 'blocked';

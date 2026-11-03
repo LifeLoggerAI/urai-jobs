@@ -145,6 +145,18 @@ ok(
 );
 ok("revocation endpoint is exported", index.includes("ingestConsentRevocation"));
 
+const existingBlockRead = endpoint.indexOf("const existingBlock = await transaction.get(blockRef);");
+const revocationBlockWrite = endpoint.indexOf("transaction.set(blockRef, {");
+ok("revocation requires transaction-bound current-block ordering guard",
+  existingBlockRead >= 0 && revocationBlockWrite > existingBlockRead
+    && endpoint.includes("mayApplyNewConsentRevocation(existingBlock.exists, existingBlock.data()")
+    && endpoint.includes("return { conflict: true as const }")
+);
+ok("revocation order helper is source-present and fail-closed",
+  read("functions/src/privacy/consentRevocationOrder.ts").includes("incomingAt <= priorAt")
+    && read("functions/src/privacy/consentRevocationOrder.ts").includes("prior.active !== true")
+);
+
 if (failed) {
   throw new Error(`CONSENT_REVOCATION_CONTRACT ${failed} checks failed`);
 }
