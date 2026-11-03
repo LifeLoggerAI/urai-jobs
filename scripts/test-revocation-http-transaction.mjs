@@ -22,15 +22,23 @@ const event = {type:'consent.revoked.v2',eventId:'b'.repeat(64),ownerUid:'owner-
 const block=(overrides={})=>({active:true,eventId:'a'.repeat(64),ownerUid:event.ownerUid,purpose:event.purpose,policyVersion:'p0',revokedAt:'2026-11-03T04:00:00.000Z',...overrides});
 function instantiate(existingBlock) {
   const records=new Map();if(existingBlock!==null)records.set('block',existingBlock);
-  const touched=[];let invalidationCalls=0;
+  const DELETED=Symbol('FIRESTORE_FIELD_DELETE');
+  const touched=[];let invalidationCalls=0;let cleanupFailuresLeft=0;
   const receiptRef={id:'receipt',async set(value){touched.push({kind:'receiptSet',value});records.set('receipt',{...records.get('receipt'),...value});}};
   const db={async runTransaction(callback){
     const writes=[];
     const transaction={async get(ref){let data=records.get(ref.id);return {exists:data!==undefined,data:()=>data};},
-      set(ref,value){writes.push({kind:'set',ref,value});},
+      set(ref,value,options){writes.push({kind:'set',ref,value,options});},
       create(ref,value){writes.push({kind:'create',ref,value});}};
     const outcome=await callback(transaction);
-    for(const w of writes){touched.push(w);records.set(w.ref.id,w.value);}
+    for(const w of writes){
+      touched.push(w);
+      if(w.kind==='set'){
+        const record=w.options?.merge?{...records.get(w.ref.id),...w.value}:{...w.value};
+        for(const [key,value] of Object.entries(record)) if(value===DELETED)delete record[key];
+        records.set(w.ref.id,record);
+      }else records.set(w.ref.id,w.value);
+    }
     return outcome;
   }};
   const exp={};
@@ -39,10 +47,10 @@ function instantiate(existingBlock) {
     expectedBearer:()=> 'secret', getFirestore:()=>db,
     consentBlockRef:()=>({id:'block'}), consentEventReceiptRef:()=>receiptRef,
     canonicalSourceRevocationAckHash:()=> 'ackhash', canonicalConsentAckHash:()=> 'ackhash',
-    FieldValue:{serverTimestamp:()=> 'server-time',delete:()=> 'DELETE'},
+    FieldValue:{serverTimestamp:()=> 'server-time',delete:()=>DELETED},
     ConsentRevokedEventSchema:{safeParse:()=>({success:true,data:event})},
     mayApplyNewConsentRevocation,
-    invalidateLifeMovieDerivativesForConsent:async()=>{invalidationCalls++;return {purpose:event.purpose,jobsScanned:0,jobsInvalidated:0,plansInvalidated:0,storageObjectsDeleted:0};}
+    invalidateLifeMovieDerivativesForConsent:async()=>{invalidationCalls++;if(cleanupFailuresLeft>0){cleanupFailuresLeft--;throw new Error('synthetic cleanup failure');}return {purpose:event.purpose,jobsScanned:0,jobsInvalidated:0,plansInvalidated:0,storageObjectsDeleted:0};}
   };
   vm.runInNewContext(output.outputText,context);
   async function invoke(){
@@ -50,7 +58,7 @@ function instantiate(existingBlock) {
     await exp.endpoint({method:'POST',headers:{authorization:'Bearer secret'},body:event},result);
     return result;
   }
-  return {invoke,records,touched,get invalidationCalls(){return invalidationCalls;}};
+  return {invoke,records,touched,failNextCleanup(){cleanupFailuresLeft++;},get invalidationCalls(){return invalidationCalls;}};
 }
 test('new event cannot overwrite newer active revocation or run derivative cleanup',async()=>{
   const h=instantiate(block({eventId:'z'.repeat(64),revokedAt:'2026-11-03T06:00:00.000Z'}));
@@ -84,4 +92,31 @@ test('same-time competing event cannot replace current revocation even with diff
   assert.equal(result.statusCode,409);
   assert.equal(h.touched.length,0);
   assert.equal(h.invalidationCalls,0);
+});
+
+test('failed derivative invalidation does not claim success, replay repairs without replacing the receipt',async()=>{
+  const h=instantiate(null);h.failNextCleanup();
+  const first=await h.invoke();
+  assert.equal(first.statusCode,500);
+  assert.equal(first.body.ok,false);
+  assert.equal(first.body.error,'derivative-invalidation-failed');
+  assert.equal(h.records.get('block').active,true,'revocation veto must remain active');
+  assert.equal(h.touched.filter(x=>x.kind==='create'&&x.ref.id==='receipt').length,1);
+  const second=await h.invoke();
+  assert.equal(second.statusCode,200);
+  assert.equal(second.body.ok,true);
+  assert.equal(h.invalidationCalls,2,'cleanup must run again after a transient failure');
+  assert.equal(h.touched.filter(x=>x.kind==='create'&&x.ref.id==='receipt').length,1,'replay must not create another event receipt');
+});
+
+test('successful event replay re-runs idempotent cleanup without overwriting the block',async()=>{
+  const h=instantiate(null);
+  const first=await h.invoke();
+  assert.equal(first.statusCode,200);
+  const block=h.records.get('block');
+  const result=await h.invoke();
+  assert.equal(result.statusCode,200);
+  assert.equal(h.records.get('block'),block,'retry must keep exact existing block');
+  assert.equal(h.invalidationCalls,2,'cleanup should be retryable after a lost response');
+  assert.equal(h.touched.filter(x=>x.kind==='create'&&x.ref.id==='receipt').length,1);
 });
