@@ -40,8 +40,8 @@ for(const [label,record] of [
 ]) {
   test('owner deletion fence denies unverifiable '+label,()=>{
     const input=label==='inherited'?record:record;
-    if(label==='inherited') assert.equal(ownerDeletionFenceState(snap(input)),'clear');
-    else assert.notEqual(ownerDeletionFenceState(snap(input)),'clear');
+    assert.equal(ownerDeletionFenceState(snap(input)),'unverified');
+    assert.throws(()=>assertOwnerDeletionFenceClear(snap(input)),/owner_data_rights_authority_unavailable/);
   });
 }
 test('owner deletion fence refuses missing and unreadable Firestore docs',()=>{

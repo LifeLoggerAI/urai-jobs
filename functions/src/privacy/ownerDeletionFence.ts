@@ -14,7 +14,7 @@ export function ownerDeletionFenceState(snapshot: unknown): OwnerDeletionFenceSt
     const owner = record.data();
     if (!owner || typeof owner !== 'object' || Array.isArray(owner)) return 'unverified';
     const field = Object.getOwnPropertyDescriptor(owner, 'dataRightsDeletionPendingCentralPrivacy');
-    if (!field) return 'clear';
+    if (!field) return 'dataRightsDeletionPendingCentralPrivacy' in owner ? 'unverified' : 'clear';
     if (!Object.prototype.hasOwnProperty.call(field, 'value')) return 'unverified';
     return field.value === false ? 'clear'
       : field.value === true ? 'pending' : 'unverified';
