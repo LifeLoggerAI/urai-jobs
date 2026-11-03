@@ -822,14 +822,48 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
       || currentPlan.projectId !== plan.projectId
       || currentPlan.renderPlanDigest !== plan.renderPlanDigest
       || currentPlan.sceneTruthDigest !== plan.sceneTruthDigest
+      || currentPlan.sceneTruthReceiptRef !== plan.sceneTruthReceiptRef
+      || currentPlan.width !== plan.width || currentPlan.height !== plan.height
+      || currentPlan.fps !== plan.fps
       || !isDeepStrictEqual(currentPlan.consent, plan.consent)) {
       throw new Error('longform_plan_changed');
+    }
+    // Before re-queuing any child, verify every current job remains bound
+    // to the same owner, plan, consent, and immutable segment source.
+    if (snapshots.length !== currentPlan.childJobIds.length) throw new Error('longform_child_not_found');
+    for (const [index, snapshot] of snapshots.entries()) {
+      if (!snapshot.exists) throw new Error('longform_child_not_found');
+      const child = snapshot.data() as Job;
+      validateOwnedMovieJob(child as unknown as Record<string, unknown>,
+        boundPlanJob(currentPlan, currentPlan.childJobIds[index], 'segment'));
+      const descriptor = currentPlan.segments[index];
+      const payload = child.payload as Record<string, unknown> | undefined;
+      if (!payload || !descriptor
+        || buildRequestFingerprint('studio.render.video', payload) !== descriptor.childPayloadFingerprint
+        || payload.renderPlanDigest !== descriptor.childDigest
+        || payload.sceneTruthDigest !== currentPlan.sceneTruthDigest
+        || !isDeepStrictEqual(child.consent, currentPlan.consent)) {
+        throw new Error('longform_segment_binding_mismatch');
+      }
+    }
+    if (currentPlan.assemblyJobId) {
+      if (!assemblySnapshot?.exists) throw new Error('longform_child_not_found');
+      const assembly = assemblySnapshot.data() as Job;
+      validateOwnedMovieJob(assembly as unknown as Record<string, unknown>,
+        boundPlanJob(currentPlan, currentPlan.assemblyJobId, 'assembly'));
+      const assemblyPayload = assembly.payload as Record<string, unknown> | undefined;
+      if (!assemblyPayload || assemblyPayload.planId !== planId
+        || assemblyPayload.renderPlanDigest !== currentPlan.renderPlanDigest
+        || assemblyPayload.sceneTruthDigest !== currentPlan.sceneTruthDigest
+        || assemblyPayload.sceneTruthReceiptRef !== currentPlan.sceneTruthReceiptRef
+        || !isDeepStrictEqual(assembly.consent, currentPlan.consent)) {
+        throw new Error('longform_assembly_binding_mismatch');
+      }
     }
     const now = FieldValue.serverTimestamp();
     let resumedChildren = 0;
 
     for (const [index, snapshot] of snapshots.entries()) {
-      if (!snapshot.exists) continue;
       const child = snapshot.data() as Job;
       if (!['FAILED', 'DEAD', 'CANCELLED'].includes(String(child.status))) continue;
       const jobId = plan.childJobIds[index];
