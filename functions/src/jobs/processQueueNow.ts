@@ -6,7 +6,7 @@ import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/sh
 import { returnLeaseAfterPublishFailure } from '../core/dispatchRecovery.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { isTerminalJobStatus } from './executionGuards.js';
-import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { consentBlockRef, isConsentContext, checkedJobConsentBlockState } from '../privacy/consentBlocks.js';
 import { deferLifeMovieJob, LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS } from '../privacy/lifeMovieConsentGate.js';
 
 const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
@@ -159,9 +159,18 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
         const blockSnapshots = await Promise.all(
           consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
         );
-        const blockedPurpose = blockSnapshots
-          .map((snapshot, index) => ({ snapshot, purpose: consentContexts[index].purpose }))
-          .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
+        const blocked = blockSnapshots
+          .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: consentContexts[index].purpose }))
+          .find(({ state }) => state !== 'clear');
+        if (blocked?.state === 'unverified') {
+          transaction.update(queueRef, {
+            availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+            updatedAt: now,
+            'dispatch.blockedReason': 'job_consent_block_unverified',
+          });
+          return { lease: null, outcome: 'consent-block-unverified' as const };
+        }
+        const blockedPurpose = blocked?.state === 'revoked' ? blocked.purpose : null;
         if (blockedPurpose) {
           transaction.update(masterJobRef, {
             status: 'CANCELLED',

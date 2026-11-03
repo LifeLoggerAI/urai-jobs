@@ -5,7 +5,7 @@ import axios from 'axios';
 import { z } from 'zod';
 import type { Job, JobQueueEntry } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
-import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { consentBlockRef, isConsentContext, checkedJobConsentBlockState } from '../privacy/consentBlocks.js';
 import { deferLifeMovieJob, LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS } from '../privacy/lifeMovieConsentGate.js';
 import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJobTypes.js';
 import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
@@ -424,9 +424,29 @@ export const executeJob = onMessagePublished({
       const blockSnapshots = await Promise.all(
         consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
       );
-      const blockedPurpose = blockSnapshots
-        .map((snapshot, index) => ({ snapshot, purpose: consentContexts[index].purpose }))
-        .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
+      const blocked = blockSnapshots
+        .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: consentContexts[index].purpose }))
+        .find(({ state }) => state !== 'clear');
+      if (blocked?.state === 'unverified') {
+        // A malformed/unreadable block must never admit a worker attempt.
+        const queueSnapshot = await transaction.get(queueRef);
+        const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+        if (!queue || queue.status !== 'LEASED' || queue.lease?.leaseToken !== leaseToken) {
+          return { action: 'ignore' as const, reason: 'queue-lease-mismatch' as const };
+        }
+        const now = FieldValue.serverTimestamp();
+        transaction.update(jobRef, {
+          status: 'PENDING', lease: FieldValue.delete(), updatedAt: now,
+        });
+        transaction.update(queueRef, {
+          status: 'PENDING',
+          availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+          lease: FieldValue.delete(), updatedAt: now,
+          'dispatch.blockedReason': 'job_consent_block_unverified',
+        });
+        return { action: 'ignore' as const, reason: 'consent-block-unverified' as const };
+      }
+      const blockedPurpose = blocked?.state === 'revoked' ? blocked.purpose : null;
       if (blockedPurpose) {
         const now = FieldValue.serverTimestamp();
         transaction.update(jobRef, {
@@ -510,9 +530,15 @@ export const executeJob = onMessagePublished({
         const blockSnapshots = await Promise.all(
           dispatchConsentContexts.map((context) => consentBlockRef(job.ownerUid!, context.purpose).get())
         );
-        const blockedPurpose = blockSnapshots
-          .map((snapshot, index) => ({ snapshot, purpose: dispatchConsentContexts[index].purpose }))
-          .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
+        const blocked = blockSnapshots
+          .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: dispatchConsentContexts[index].purpose }))
+          .find(({ state }) => state !== 'clear');
+        if (blocked?.state === 'unverified') {
+          // A block can become corrupt after the execution lease was granted.
+          // Never cross the external worker boundary on unknown authority.
+          throw new Error('job_consent_block_unverified');
+        }
+        const blockedPurpose = blocked?.state === 'revoked' ? blocked.purpose : null;
         if (blockedPurpose) {
           const now = FieldValue.serverTimestamp();
           await db.runTransaction(async (transaction) => {

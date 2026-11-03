@@ -5,7 +5,7 @@ import { ulid } from 'ulid';
 import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { canRequeueUnstartedLease, isTerminalJobStatus } from './executionGuards.js';
-import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { consentBlockRef, isConsentContext, checkedJobConsentBlockState } from '../privacy/consentBlocks.js';
 import { deferLifeMovieJob, LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS } from '../privacy/lifeMovieConsentGate.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
@@ -283,9 +283,20 @@ export const processQueueTick = onSchedule('every 1 minutes', async () => {
         const blockSnapshots = await Promise.all(
           consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
         );
-        const blockedPurpose = blockSnapshots
-          .map((snapshot, index) => ({ snapshot, purpose: consentContexts[index].purpose }))
-          .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
+        const blocked = blockSnapshots
+          .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: consentContexts[index].purpose }))
+          .find(({ state }) => state !== 'clear');
+        if (blocked?.state === 'unverified') {
+          // A malformed/unreadable block is not proof of consent. Leave both
+          // job and queue unleased, then retry after central reconciliation.
+          transaction.update(queueRef, {
+            availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+            updatedAt: now,
+            'dispatch.blockedReason': 'job_consent_block_unverified',
+          });
+          return null;
+        }
+        const blockedPurpose = blocked?.state === 'revoked' ? blocked.purpose : null;
         if (blockedPurpose) {
           transaction.update(masterJobRef, {
             status: 'CANCELLED',
