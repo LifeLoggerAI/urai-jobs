@@ -77,3 +77,31 @@ test('missing original timestamps remain null', async () => {
   assert.equal(result.payload.jobs[0].updatedAt, null);
   assert.equal(result.payload.jobs[0].completedAt, null);
 });
+
+test('private export strips recovery and verification credentials without erasing ordinary memories', async () => {
+  const { run, uploads } = harness({
+    ownerUid: 'synthetic-owner', status: 'SUCCESS',
+    payload: {
+      title: 'Synthetic memory', notes: 'Keep this ordinary memory text',
+      details: {
+        recoveryCode: 'secret-recovery', verification_code: 'secret-verification',
+        oneTimeCode: 'secret-one-time', mfaCode: 'secret-mfa',
+        totp_code: 'secret-totp', otp: 'secret-otp',
+        access_token: 'secret-token', password: 'secret-password',
+      },
+    },
+  });
+  const result = await run();
+  const payload = result.payload.jobs[0].payload;
+  assert.equal(payload.title, 'Synthetic memory');
+  assert.equal(payload.notes, 'Keep this ordinary memory text');
+  for (const key of ['recoveryCode', 'verification_code', 'oneTimeCode', 'mfaCode',
+    'totp_code', 'otp', 'access_token', 'password']) {
+    assert.equal(payload.details[key], undefined, `Sensitive ${key} must not be exported`);
+  }
+  assert.equal(uploads.length, 1);
+  const uploaded = JSON.parse(uploads[0].bytes.toString('utf8'));
+  assert.equal(uploaded.jobs[0].payload.notes, 'Keep this ordinary memory text');
+  assert.equal(JSON.stringify(uploaded).includes('secret-recovery'), false);
+  assert.equal(JSON.stringify(uploaded).includes('secret-totp'), false);
+});

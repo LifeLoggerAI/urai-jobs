@@ -63,7 +63,7 @@ function redact(value: unknown): unknown {
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
     // Never turn an owner export into a credential-delivery channel.
     // These aliases occur in nested provider and worker payloads.
-    if (/(?:secret|password|token|authorization|cookie|signed[_-]?url|service[_-]?url|credential|api[_-]?key|private[_-]?key|access[_-]?key|signing[_-]?key|webhook[_-]?key|bearer)/i.test(key) ||
+    if (/(?:secret|password|token|authorization|cookie|signed[_-]?url|service[_-]?url|credential|api[_-]?key|private[_-]?key|access[_-]?key|signing[_-]?key|webhook[_-]?key|bearer|(?:recovery|backup|verification|one[_-]?time|mfa|totp|auth|reset|security|2fa)[_-]?code|recovery[_-]?phrase|security[_-]?answer|otp)/i.test(key) ||
         key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
     output[key] = redact(entry);
   }
