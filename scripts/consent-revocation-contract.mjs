@@ -47,7 +47,9 @@ ok("revocation returns integrity acknowledgement", endpoint.includes("integrityH
 ok(
   "revocation retries derivative invalidation even when the event receipt already exists",
   endpoint.includes("invalidateLifeMovieDerivativesForConsent(lifeMovieRevocationEvent)")
-    && endpoint.indexOf("invalidateLifeMovieDerivativesForConsent(lifeMovieRevocationEvent)") > endpoint.indexOf("const ack = await db.runTransaction")
+    // A missing transaction anchor has indexOf=-1; reject it explicitly.
+    && endpoint.includes("const outcome = await db.runTransaction")
+    && endpoint.indexOf("invalidateLifeMovieDerivativesForConsent(lifeMovieRevocationEvent)") > endpoint.indexOf("const outcome = await db.runTransaction")
     && endpoint.includes("const lifeMovieRevocationEvent: LifeMovieRevocationEvent = { eventId, ownerUid, purpose, revokedAt }")
     && endpoint.includes("derivative-invalidation-failed")
 );
