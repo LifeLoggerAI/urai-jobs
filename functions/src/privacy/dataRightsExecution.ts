@@ -253,6 +253,13 @@ const handler = async (data: unknown, _context: CallableContext) => {
         validCounts(result.logDeletes) && (result.jobsAnonymized as number) <= MAX_OWNED_JOBS &&
         (result.queueDeletes as number) <= (result.jobsAnonymized as number) &&
         hasUnresolved(result.unresolvedDomains) && result.completeEcosystemExport !== true;
+      // Bind the export pointer to the exact configured bucket, owner hash
+      // and request object. This checks receipt identity, not GCS existence.
+      const exportBucket = process.env.GCS_BUCKET_NAME;
+      const expectedExportRef = typeof exportBucket === 'string' &&
+        /^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$/.test(exportBucket)
+        ? `gs://${exportBucket}/privacy/data-rights/${expectedOwner}/${parsed.data.requestId}/export.json`
+        : null;
       const exportPayload = result?.payload as Record<string, unknown> | undefined;
       const validExport = record.requestType === 'EXPORT' && result && exportPayload &&
         exportPayload.schemaVersion === EXECUTION_SCHEMA &&
@@ -265,7 +272,7 @@ const handler = async (data: unknown, _context: CallableContext) => {
         validCounts(result.recordCount) &&
         result.recordCount === exportPayload.jobs.length + (exportPayload.user === null ? 0 : 1) &&
         typeof result.sha256 === 'string' && result.sha256 === canonicalDigest(exportPayload) &&
-        typeof result.gcsRef === 'string' && /^gs:\/\/[^/]+\/privacy\/data-rights\//.test(result.gcsRef);
+        expectedExportRef !== null && result.gcsRef === expectedExportRef;
       if (prior.event !== 'DATA_RIGHTS_EXECUTION_FINISHED' ||
           prior.terminalState !== expectedTerminal ||
           !timestamp(prior.completedAt) ||

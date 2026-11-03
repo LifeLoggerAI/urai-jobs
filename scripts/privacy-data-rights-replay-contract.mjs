@@ -33,6 +33,7 @@ const module = { exports: {} };
 runInNewContext(compiled.outputText, {
   module, exports: module.exports, Promise, createHash,
   FieldValue: { serverTimestamp: () => 'SYNTHETIC_SERVER_TIMESTAMP' },
+  process: {env: {GCS_BUCKET_NAME: 'synthetic-bucket'}},
   EXECUTION_SCHEMA: 'urai-jobs-data-rights-execution-v1', MAX_OWNED_JOBS: 2000,
   httpsError: (code, message) => Object.assign(new Error(message), { code }),
 }, {filename: 'JobsDataRightsTransaction.js', timeout: 2000});
@@ -140,7 +141,7 @@ const exportPayload = {
 const exportResult = {
   payload: exportPayload, recordCount:0,
   sha256:createHash('sha256').update(JSON.stringify(exportPayload)).digest('hex'),
-  gcsRef:'gs://synthetic-bucket/privacy/data-rights/synthetic-owner/synthetic-request-01/export.json',
+  gcsRef:`gs://synthetic-bucket/privacy/data-rights/${ownerHash}/synthetic-request-01/export.json`,
 };
 const validExportReceipt = {
   ...completed, requestType:'EXPORT',
@@ -169,6 +170,11 @@ for (const [label, receipt, record] of [
   ['export missing payload', reseal({recordCount:0,gcsRef:exportResult.gcsRef},validExportReceipt),{...request,requestType:'EXPORT'}],
   ['export owner mismatch', reseal({...exportResult,payload:{...exportPayload,ownerUid:'foreign-owner'}},validExportReceipt),{...request,requestType:'EXPORT'}],
   ['export claims complete ecosystem', reseal({...exportResult,payload:{...exportPayload,completeEcosystemExport:true}},validExportReceipt),{...request,requestType:'EXPORT'}],
+  ['export wrong GCS bucket despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://foreign-bucket/privacy/data-rights/${ownerHash}/synthetic-request-01/export.json`},validExportReceipt),{...request,requestType:'EXPORT'}],
+  ['export wrong owner hash despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/${'f'.repeat(64)}/synthetic-request-01/export.json`},validExportReceipt),{...request,requestType:'EXPORT'}],
+  ['export wrong request directory despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/${ownerHash}/other-synthetic-request/export.json`},validExportReceipt),{...request,requestType:'EXPORT'}],
+  ['export extra unbound directory despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/extra/${ownerHash}/synthetic-request-01/export.json`},validExportReceipt),{...request,requestType:'EXPORT'}],
+  ['export wrong object name despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/${ownerHash}/synthetic-request-01/export.json.bak`},validExportReceipt),{...request,requestType:'EXPORT'}],
   ['export GCS location unbound', reseal({...exportResult,gcsRef:'https://foreign.invalid/export'},validExportReceipt),{...request,requestType:'EXPORT'}],
   ['export payload SHA mismatch', reseal({...exportResult,sha256:'0'.repeat(64)},validExportReceipt),{...request,requestType:'EXPORT'}],
 ]) {
