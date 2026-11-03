@@ -429,7 +429,7 @@ test('source-bound credential redaction blocks special prototype properties',()=
   assert.equal(sanitized.title,'safe');
 });
 const exportStart=content.indexOf('async function buildExport(db: Firestore, requestId: string, ownerUid: string) {');
-const exportStop=content.indexOf('\n}\n\nasync function executeDelete(',exportStart)+2;
+const exportStop=content.indexOf('\n}\n\nconst TERMINAL_DELETE_JOB = new Set(',exportStart)+2;
 assert.ok(exportStart>=0&&exportStop>exportStart,'source-bound buildExport found');
 const exportScript=redactSource+'\n'+timestampSource+'\n'+content.slice(exportStart,exportStop)
   +'\nmodule.exports.buildExport=buildExport;';
