@@ -8,7 +8,7 @@ import { z } from 'zod';
 import type { Job, JobConsentContext, JobQueueEntry } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { bindingMatches, buildIdempotencyBindingId, buildRequestFingerprint, type IdempotencyBinding } from '../core/jobsReliability.js';
-import { consentBlockRef } from '../privacy/consentBlocks.js';
+import { consentBlockRef, checkedJobConsentBlockState } from '../privacy/consentBlocks.js';
 import { assertOwnerDeletionFenceClear } from '../privacy/ownerDeletionFence.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STORYTIME_JOBS_BRIDGE_TOKEN');
@@ -133,8 +133,13 @@ async function createNarratorJob(input: z.infer<typeof CreateSchema>) {
     policyVersion: input.consent.policyVersion,
     decisionReceiptId: input.consent.decisionReceiptId,
   };
-  const blocked = await consentBlockRef(input.userId, consent.purpose).get();
-  if (blocked.exists && blocked.data()?.active === true) throw new Error('storytime_voiceover_consent_revoked');
+  const consentRef = consentBlockRef(input.userId, consent.purpose);
+  const preflightConsentState = checkedJobConsentBlockState(await consentRef.get());
+  if (preflightConsentState !== 'clear') {
+    throw new Error(preflightConsentState === 'revoked'
+      ? 'storytime_voiceover_consent_revoked'
+      : 'storytime_voiceover_consent_block_unverified');
+  }
 
   const jobType = 'narrator.tts';
   const outputPrefix = `storytime/${input.userId}/${input.sessionId}/${input.narratorScriptId}`;
@@ -181,11 +186,20 @@ async function createNarratorJob(input: z.infer<typeof CreateSchema>) {
   return db.runTransaction(async (transaction) => {
     // Read deletion authority in the same transaction as job/queue creation.
     // Even idempotent retries must not bypass an active deletion fence.
-    const [inside, ownerSnapshot] = await Promise.all([
+    const [inside, ownerSnapshot, liveConsentBlock] = await Promise.all([
       transaction.get(bindingRef),
       transaction.get(ownerRef),
+      transaction.get(consentRef),
     ]);
     assertOwnerDeletionFenceClear(ownerSnapshot);
+    // The preflight read cannot authorize creation: revocation may race.
+    // A consent-block write conflicts with this same Firestore transaction.
+    const liveConsentState = checkedJobConsentBlockState(liveConsentBlock);
+    if (liveConsentState !== 'clear') {
+      throw new Error(liveConsentState === 'revoked'
+        ? 'storytime_voiceover_consent_revoked'
+        : 'storytime_voiceover_consent_block_unverified');
+    }
     if (inside.exists) {
       const binding = inside.data() as Partial<IdempotencyBinding>;
       if (!bindingMatches(binding, expectedBinding) || typeof binding.jobId !== 'string' || !binding.jobId) {
@@ -350,6 +364,7 @@ export const storytimeNarratorBridge = onRequest({
       : code === 'job_not_found' ? 404
       : code === 'storytime_narrator_boundary_mismatch' ? 403
       : code === 'storytime_voiceover_consent_revoked' ? 409
+      : code === 'storytime_voiceover_consent_block_unverified' ? 503
       : code === 'idempotency_conflict' ? 409
       : code === 'job_not_ready_for_playback' ? 409
       : code === 'narrator_artifact_boundary_mismatch' ? 403
