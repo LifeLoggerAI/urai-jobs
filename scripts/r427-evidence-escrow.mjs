@@ -57,15 +57,33 @@ export async function publishEvidence({ evidenceDir, endpoints, synthetic = fals
   const get = validatedEndpoint(endpoints.get.href, synthetic);
   const reportFile = join(evidenceDir, 'r426-report.json');
   const report = JSON.parse(readFileSync(reportFile, 'utf8'));
-  if (!Array.isArray(report.steps)) throw new Error('R427_REPORT_INVALID');
+  if (report.schema !== 'urai-r426-original-source-evidence-v1' || !Array.isArray(report.steps)) {
+    throw new Error('R428_REPORT_INVALID');
+  }
   const filenames = ['r426-report.json'];
+  const seen = new Set();
   for (const step of report.steps) {
-    if (!/^[a-z0-9-]{1,60}$/.test(step.name)) throw new Error('R427_REPORT_INVALID');
+    if (!step || !/^[a-z0-9-]{1,60}$/.test(step.name) || seen.has(step.name) ||
+        !['PASS', 'FAIL'].includes(step.status) ||
+        !/^[a-f0-9]{64}$/.test(step.logSha256) ||
+        !Number.isSafeInteger(step.logBytes) || step.logBytes < 0 ||
+        step.logBytes > 2 * 1024 * 1024 || typeof step.logTruncated !== 'boolean') {
+      throw new Error('R428_LOG_MANIFEST_INVALID');
+    }
+    seen.add(step.name);
     filenames.push(step.name + '.log');
   }
   for (const name of filenames) {
     const path = join(evidenceDir, name);
     if (!existsSync(path) || !lstatSync(path).isFile()) throw new Error('R427_EVIDENCE_FILE_MISSING');
+  }
+  // A valid remote archive is not trustworthy if the included log differs from
+  // the per-stage digest recorded when the original command completed.
+  for (const step of report.steps) {
+    const log = readFileSync(join(evidenceDir, step.name + '.log'));
+    if (log.length !== step.logBytes || sha256(log) !== step.logSha256) {
+      throw new Error('R428_LOCAL_LOG_DIGEST_MISMATCH');
+    }
   }
   const temp = mkdtempSync(join(tmpdir(), 'urai-r427-'));
   try {
