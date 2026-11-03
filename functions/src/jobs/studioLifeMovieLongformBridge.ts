@@ -289,7 +289,13 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
       policyVersion: input.consent.policyVersion!,
       decisionReceiptId: input.consent.decisionReceiptId!,
     },
-    selection: payload,
+    // Do not pass the whole render payload: only this exact source selection
+    // is accepted by the immutable admission snapshot.
+    selection: {
+      projectId: payload.projectId,
+      renderPlanDigest: payload.renderPlanDigest,
+      sources: payload.sources,
+    },
   });
   const consentRef = consentBlockRef(input.userId, input.consent.purpose);
   const consentSnapshot = await consentRef.get();

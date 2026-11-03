@@ -44,6 +44,9 @@ export type LifeMovieAdmissionDependencies = Readonly<{
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const HASH = /^[0-9a-f]{64}$/;
 const MAX_RIGHTS_AGE_MS = 30_000;
+// Long-form plans allow up to 128 distinct immutable sources. The short-form
+// bridge independently Zod-limits its source list to 12 before this preflight.
+const MAX_ADMISSION_SOURCES = 128;
 const UNAVAILABLE = 'life_movie_admission_authority_unavailable';
 const RIGHTS_DENIED = 'life_movie_source_rights_unverified';
 
@@ -93,7 +96,7 @@ function snapshotAdmissionRequest(raw: LifeMovieAdmissionRequest): LifeMovieAdmi
   if (!exactOwnKeys(consent, ['purpose', 'policyVersion', 'decisionReceiptId'])) throw new Error(UNAVAILABLE);
   const originalSelection = ownData(raw, 'selection');
   if (!exactOwnKeys(originalSelection, ['projectId', 'renderPlanDigest', 'sources'])) throw new Error(UNAVAILABLE);
-  const originalSources = checkedOwnArray(ownData(originalSelection, 'sources'), 12);
+  const originalSources = checkedOwnArray(ownData(originalSelection, 'sources'), MAX_ADMISSION_SOURCES);
   const sources = originalSources.map((item) => {
     if (!exactOwnKeys(item, SOURCE_FIELDS)) throw new Error(UNAVAILABLE);
     const source: Record<string, unknown> = {};

@@ -149,9 +149,29 @@ for(const field of ['generation','ownerOrRightsRef']){
   cases++;
 }
 {
-  const tooMany=Array.from({length:13},()=>selection.sources[0]);
+  const tooMany=Array.from({length:129},()=>selection.sources[0]);
   await assert.rejects(configured()({...input,selection:{...selection,sources:tooMany}}),/life_movie_admission_authority_unavailable/);
   cases++;
+}
+
+// Both bridges call this same preflight: short form remains capped by its own
+// Zod schema (12); long form may pass 128 real source descriptors. These
+// synthetic provider stubs only prove the exact snapshot accepts the envelope.
+{
+  const originalSources=selection.sources;
+  try {
+    for(const length of [12,13,128]){
+      selection.sources=Array.from({length},(_,index)=>({
+        ...originalSources[0],id:'source-'+index,sourceRefs:['source-'+index],
+        ownerOrRightsRef:'rights-'+index,
+      }));
+      const prior=consulted;
+      const accepted=await configured()(input);
+      assert.equal(accepted.rightsEventId,rights.rightsEventId);
+      assert.ok(consulted>=prior+2,'rights are checked before and after Privacy');
+      cases+=2;
+    }
+  } finally { selection.sources=originalSources; }
 }
 
 // Provenance of the computed scope must come from the captured immutable
