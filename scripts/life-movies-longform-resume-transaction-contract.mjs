@@ -43,7 +43,19 @@ const base = {planId, tenantId: tenant, ownerUid: owner, status: 'FAILED', child
   segments: [{ jobId: childId, index: 0, startMs:0, endMs:1000 }], projectId: 'project1', sceneTruthReceiptRef: 'scene01', width:640, height:360, fps:24,
   renderPlanDigest: 'a'.repeat(64),sceneTruthDigest:'b'.repeat(64),
   consent:{purpose:'life-movie.render',policyVersion:'1.1.0',decisionReceiptId:'c'.repeat(64)}};
-const fingerprint=(kind,payload)=>createHash('sha256').update(JSON.stringify([kind,payload])).digest('hex');
+// Load the production fingerprint from the actual source. Test-only hashing
+// once used JSON.stringify([kind,payload]), which is not the canonical contract.
+const hashSource=readFileSync(new URL('../functions/src/core/jobsReliability.ts', import.meta.url),'utf8');
+const hashExports={};
+vm.runInNewContext(ts.transpileModule(hashSource,{
+ compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
+}).outputText,{
+ exports:hashExports,
+ require:(name)=>{assert.equal(name,'node:crypto');return{createHash};},
+ Object,Array,JSON,String,
+});
+const fingerprint=hashExports.buildRequestFingerprint;
+assert.equal(typeof fingerprint,'function');
 const payload={projectId:base.projectId,renderPlanDigest:'f'.repeat(64),sceneTruthDigest:base.sceneTruthDigest};
 base.segments[0].childDigest=payload.renderPlanDigest;
 base.segments[0].childPayloadFingerprint=fingerprint('studio.render.video',payload);
@@ -173,3 +185,14 @@ for(const phase of ['child-owner','child-tenant','child-id','child-parent','chil
   assert.equal(h.calls.writes.length,0,'no job requeue after changed ownership or source');
  });
 }
+
+test('resume fixture binds canonical production request fingerprint',()=>{
+ const expected=createHash('sha256').update(hashExports.stableStringify({jobType:'studio.render.video',payload})).digest('hex');
+ assert.equal(fingerprint('studio.render.video',payload),expected);
+ const oldFixture=createHash('sha256').update(JSON.stringify(['studio.render.video',payload])).digest('hex');
+ assert.notEqual(expected,oldFixture,'must not silently return to the earlier synthetic algorithm');
+});
+test('canonical fingerprint ignores payload property insertion order',()=>{
+ const reordered=Object.fromEntries(Object.entries(payload).reverse());
+ assert.equal(fingerprint('studio.render.video',payload),fingerprint('studio.render.video',reordered));
+});
