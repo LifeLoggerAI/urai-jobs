@@ -97,7 +97,10 @@ async function buildExport(db: Firestore, requestId: string, ownerUid: string) {
     ownedJobs(db, ownerUid),
   ]);
   const exportedJobs = jobs.map((document) => {
-    const source = redact(document.data()) as Record<string, unknown>;
+    // Preserve Firestore Timestamp methods for owner-visible export dates;
+    // redact only the fields that may carry private credentials.
+    const original = document.data();
+    const source = redact(original) as Record<string, unknown>;
     return {
       jobId: document.id,
       type: source.type || source.jobType || null,
@@ -109,9 +112,9 @@ async function buildExport(db: Firestore, requestId: string, ownerUid: string) {
       consent: source.consent ?? null,
       consents: source.consents ?? null,
       output: source.output ?? null,
-      createdAt: timestamp(source.createdAt),
-      updatedAt: timestamp(source.updatedAt),
-      completedAt: timestamp(source.completedAt),
+      createdAt: timestamp(original.createdAt),
+      updatedAt: timestamp(original.updatedAt),
+      completedAt: timestamp(original.completedAt),
     };
   });
   const payload = {
