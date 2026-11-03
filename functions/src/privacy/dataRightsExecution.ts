@@ -322,6 +322,29 @@ const handler = async (data: unknown, _context: CallableContext) => {
     if (record.status !== 'APPROVED') {
       throw httpsError('failed-precondition', 'Only an explicitly APPROVED request can enter protected staging execution.');
     }
+    if (record.requestType === 'DELETE') {
+      // Atomic owner fence with STARTED audit. It remains closed if a later
+      // deletion step fails and blocks concurrent canonical job creation.
+      const ownerRef = db.collection('users').doc(record.ownerUid);
+      const ownerSnap = await transaction.get(ownerRef);
+      if (!ownerSnap.exists) {
+        throw httpsError('failed-precondition',
+          'Owner record missing; deletion requires reconciliation.');
+      }
+      const owner = ownerSnap.data() || {};
+      const pending = owner.dataRightsDeletionPendingCentralPrivacy;
+      if (Object.prototype.hasOwnProperty.call(owner, 'dataRightsDeletionPendingCentralPrivacy') &&
+          pending !== false &&
+          !(pending === true && owner.dataRightsDeletionRequestId === parsed.data.requestId)) {
+        throw httpsError('failed-precondition',
+          'An unrelated or malformed deletion fence must be reconciled before execution.');
+      }
+      transaction.set(ownerRef, {
+        dataRightsDeletionPendingCentralPrivacy: true,
+        dataRightsDeletionRequestId: parsed.data.requestId,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
     transaction.create(executionRef, {
       event: 'DATA_RIGHTS_EXECUTION_STARTED',
       schemaVersion: EXECUTION_SCHEMA,

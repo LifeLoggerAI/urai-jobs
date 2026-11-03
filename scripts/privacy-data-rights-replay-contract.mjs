@@ -61,15 +61,24 @@ const completed = {
 };
 const requestRef = {tag:'request'};
 const executionRef = {tag:'execution',path:'dataRightsRequests/synthetic-request-01/audit/execution-synthetic'};
-function setup({ prior = completed, record = request, exists = true } = {}) {
+const ownerRef = {tag:'owner'};
+function setup({ prior = completed, record = request, exists = true, ownerRecord = {role:'user'}, ownerExists = true } = {}) {
   const creates = [], sets = [], gets = [];
   const db = {
+    collection(name) {
+      assert.equal(name,'users');
+      return {doc:uid=>{
+        assert.equal(uid,ownerUid);
+        return ownerRef;
+      }};
+    },
     async runTransaction(callback) {
       const transaction = {
         async get(ref) {
           gets.push(ref.tag);
           if (ref === requestRef) return { exists, data: () => record };
           if (ref === executionRef) return { exists: prior !== null, data: () => prior };
+          if (ref === ownerRef) return {exists:ownerExists,data:()=>ownerRecord};
           throw new Error('unexpected private document read');
         },
         create(...args) { creates.push(args); },
@@ -119,9 +128,15 @@ test('new explicitly approved request creates only a protected-staging STARTED r
   const h = setup({prior:null,record:{...request,status:'APPROVED'}});
   const value = await h.invoke();
   assert.equal(value.replay,null);
-  assert.equal(h.creates.length,1); assert.equal(h.sets.length,1);
+  assert.equal(h.creates.length,1); assert.equal(h.sets.length,2);
   assert.equal(h.creates[0][1].event,'DATA_RIGHTS_EXECUTION_STARTED');
-  assert.equal(h.sets[0][1].status,'IN_REVIEW');
+  const ownerFence=h.sets.find(([ref])=>ref===ownerRef);
+  const requestUpdate=h.sets.find(([ref])=>ref===requestRef);
+  assert.ok(ownerFence);
+  assert.equal(ownerFence[1].dataRightsDeletionPendingCentralPrivacy,true);
+  assert.equal(ownerFence[1].dataRightsDeletionRequestId,'synthetic-request-01');
+  assert.equal(ownerFence[2].merge,true);
+  assert.equal(requestUpdate[1].status,'IN_REVIEW');
   assert.equal(h.creates[0][1].retentionDecisionReceiptId,receiptId);
 });
 test('new unapproved request fails before audit writes',async()=>{
@@ -518,4 +533,35 @@ test('DELETE respects Firestore 500-write maximum with or without a queue',async
   assert.equal(b.queueDeletes,0);
   assert.equal(withoutQueue.deletedRefs.length,499);
   assert.equal(withoutQueue.commits,1);
+});
+
+
+for(const [label, ownerRecord, ownerExists] of [
+  ['foreign active deletion', {dataRightsDeletionPendingCentralPrivacy:true,dataRightsDeletionRequestId:'foreign-request'},true],
+  ['malformed deletion fence', {dataRightsDeletionPendingCentralPrivacy:'false'},true],
+  ['missing owner account', null,false],
+]) {
+  test('approved DELETE refuses '+label+' before any writes',async()=>{
+    const h=setup({prior:null,record:{...request,status:'APPROVED'},ownerRecord,ownerExists});
+    await assert.rejects(h.invoke(),/owner|fence|reconciliation/i);
+    assert.equal(h.creates.length,0);
+    assert.equal(h.sets.length,0);
+  });
+}
+test('approved DELETE accepts same-request pending fence only for reconciliation',async()=>{
+  const h=setup({prior:null,record:{...request,status:'APPROVED'},
+    ownerRecord:{dataRightsDeletionPendingCentralPrivacy:true,
+      dataRightsDeletionRequestId:'synthetic-request-01'}});
+  const outcome=await h.invoke();
+  assert.equal(outcome.replay,null);
+  assert.equal(h.creates.length,1);
+  assert.equal(h.sets.length,2);
+});
+test('approved EXPORT does not acquire the owner deletion fence',async()=>{
+  const h=setup({prior:null,record:{...request,requestType:'EXPORT',status:'APPROVED'}});
+  const outcome=await h.invoke();
+  assert.equal(outcome.replay,null);
+  assert.equal(h.creates.length,1);
+  assert.equal(h.sets.length,1);
+  assert.equal(h.gets.includes('owner'),false);
 });
