@@ -224,11 +224,45 @@ const handler = async (data: unknown, _context: CallableContext) => {
           prior.retentionDecisionReceiptId !== parsed.data.retentionDecisionReceiptId) {
         throw httpsError('failed-precondition', 'Data-rights execution receipt identity requires reconciliation.');
       }
+      // A finished label and a valid digest are not enough: the actual result
+      // must still prove this is only a Jobs-scope export/deletion, with the
+      // expected owner, request and unresolved external data-rights domains.
+      const result = prior.result as Record<string, unknown> | null;
+      const unresolved = [
+        'firebase-auth-account', 'provider-side-derivatives',
+        'external-artifacts-not-bound-to-jobs-storage',
+        'cross-system-data-owned-by-other-urai-services',
+      ];
+      const hasUnresolved = (value: unknown): boolean => Array.isArray(value)
+        && unresolved.every(domain => value.includes(domain))
+        && value.every(entry => typeof entry === 'string');
+      const validCounts = (value: unknown): boolean => typeof value === 'number'
+        && Number.isSafeInteger(value) && value >= 0;
+      const validDelete = record.requestType === 'DELETE' && result &&
+        validCounts(result.jobsAnonymized) && validCounts(result.queueDeletes) &&
+        validCounts(result.logDeletes) && (result.jobsAnonymized as number) <= MAX_OWNED_JOBS &&
+        (result.queueDeletes as number) <= (result.jobsAnonymized as number) &&
+        hasUnresolved(result.unresolvedDomains) && result.completeEcosystemExport !== true;
+      const exportPayload = result?.payload as Record<string, unknown> | undefined;
+      const validExport = record.requestType === 'EXPORT' && result && exportPayload &&
+        exportPayload.schemaVersion === EXECUTION_SCHEMA &&
+        exportPayload.scope === 'urai-jobs-proven-owner-data' &&
+        exportPayload.completeEcosystemExport === false &&
+        exportPayload.ownerUid === record.ownerUid &&
+        exportPayload.requestId === parsed.data.requestId &&
+        Array.isArray(exportPayload.jobs) && exportPayload.jobs.length <= MAX_OWNED_JOBS &&
+        hasUnresolved(exportPayload.unresolvedDomains) &&
+        validCounts(result.recordCount) &&
+        result.recordCount === exportPayload.jobs.length + (exportPayload.user === null ? 0 : 1) &&
+        typeof result.sha256 === 'string' && result.sha256 === canonicalDigest(exportPayload) &&
+        typeof result.gcsRef === 'string' && /^gs:\/\/[^/]+\/privacy\/data-rights\//.test(result.gcsRef);
       if (prior.event !== 'DATA_RIGHTS_EXECUTION_FINISHED' ||
           prior.terminalState !== expectedTerminal ||
+          !timestamp(prior.completedAt) ||
           typeof prior.resultDigest !== 'string' || !/^[a-f0-9]{64}$/.test(prior.resultDigest) ||
-          !prior.result || typeof prior.result !== 'object' || Array.isArray(prior.result) ||
-          prior.resultDigest !== canonicalDigest(prior.result)) {
+          !result || typeof result !== 'object' || Array.isArray(result) ||
+          !validDelete && !validExport ||
+          prior.resultDigest !== canonicalDigest(result)) {
         throw httpsError('failed-precondition', 'Data-rights execution is not verifiably complete; reconciliation is required.');
       }
       return { replay: prior, record };
