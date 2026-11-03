@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { mayApplyNewConsentRevocation } from '../functions/src/privacy/consentRevocationOrder.ts';
 const require = createRequire(import.meta.url);
 const ts = require('typescript');
 const source = fs.readFileSync(new URL('../functions/src/privacy/consentRevocation.ts', import.meta.url), 'utf8');
@@ -40,11 +41,7 @@ function instantiate(existingBlock) {
     canonicalSourceRevocationAckHash:()=> 'ackhash', canonicalConsentAckHash:()=> 'ackhash',
     FieldValue:{serverTimestamp:()=> 'server-time',delete:()=> 'DELETE'},
     ConsentRevokedEventSchema:{safeParse:()=>({success:true,data:event})},
-    mayApplyNewConsentRevocation:(exists,value,identity)=>{
-      if(!exists)return true;
-      if(!value||value.active!==true||value.ownerUid!==identity.ownerUid||value.purpose!==identity.purpose)return false;
-      return value.revokedAt<identity.revokedAt&&value.eventId!==identity.eventId;
-    },
+    mayApplyNewConsentRevocation,
     invalidateLifeMovieDerivativesForConsent:async()=>{invalidationCalls++;return {purpose:event.purpose,jobsScanned:0,jobsInvalidated:0,plansInvalidated:0,storageObjectsDeleted:0};}
   };
   vm.runInNewContext(output.outputText,context);
@@ -72,4 +69,19 @@ test('newer event commits consent block and succeeds after derivative invalidati
 test('first event can create initial revocation block',async()=>{
   const h=instantiate(null);const result=await h.invoke();
   assert.equal(result.statusCode,200);assert.equal(h.records.get('block').active,true);
+});
+
+test('malformed prior calendar date cannot authorize a newer event through the real guard', async()=>{
+  const h=instantiate(block({revokedAt:'2026-02-31T04:00:00.000Z'}));
+  const result=await h.invoke();
+  assert.equal(result.statusCode,409);
+  assert.equal(h.touched.length,0);
+  assert.equal(h.invalidationCalls,0);
+});
+test('same-time competing event cannot replace current revocation even with different id', async()=>{
+  const h=instantiate(block({revokedAt:event.revokedAt}));
+  const result=await h.invoke();
+  assert.equal(result.statusCode,409);
+  assert.equal(h.touched.length,0);
+  assert.equal(h.invalidationCalls,0);
 });
