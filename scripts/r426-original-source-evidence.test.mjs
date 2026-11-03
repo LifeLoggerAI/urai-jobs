@@ -18,6 +18,7 @@ function setup(failOn = '') {
   writeFileSync(join(repo,'package.json'), JSON.stringify({ name:'synthetic-fixture', packageManager:'pnpm@8.15.9' }));
   writeFileSync(join(repo,'pnpm-lock.yaml'), "lockfileVersion: '6.0'\n");
   writeFileSync(join(repo,'pnpm-workspace.yaml'), "packages:\n  - '.'\n");
+  writeFileSync(join(repo,'.gitignore'),'.mock-fail-on\n');
   sh('git',['init','-q'],{cwd:repo});
   sh('git',['config','user.email','synthetic@invalid.test'],{cwd:repo});
   sh('git',['config','user.name','Synthetic Test'],{cwd:repo});
@@ -63,4 +64,21 @@ test('missing authoritative source pin never runs',()=>{
   const {result,receipt}=execute(f,'');
   assert.equal(result.status,2);
   assert.equal(receipt,null);
+});
+
+test('a real run refuses to execute without a durable evidence destination',()=>{
+  const f=setup();
+  const {result,receipt}=execute(f,f.sha,{URAI_R426_HARNESS_TEST:'0'});
+  assert.equal(result.status,1);
+  assert.equal(receipt.status,'FAIL_CLOSED');
+  assert.equal(receipt.failureCode,'R427_EVIDENCE_DESTINATION_REQUIRED');
+  assert.equal(receipt.steps.length,0);
+});
+test('untracked files fail original-source admission before install',()=>{
+  const f=setup();
+  writeFileSync(join(f.repo,'untracked-module.js'),'module.exports = { unsafe:true };');
+  const {result,receipt}=execute(f);
+  assert.equal(result.status,1);
+  assert.equal(receipt.failureCode,'CHECKOUT_NOT_CLEAN');
+  assert.equal(receipt.steps.length,0);
 });

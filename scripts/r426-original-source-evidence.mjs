@@ -5,6 +5,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from 'node:fs';
 import { isAbsolute, resolve, join } from 'node:path';
+import { evidenceAdmission, publishEvidence } from './r427-evidence-escrow.mjs';
 
 const expectedSha = String(process.env.URAI_EXACT_SOURCE_SHA || '').trim();
 const evidenceDir = String(process.env.URAI_EVIDENCE_DIR || '').trim();
@@ -72,12 +73,16 @@ function capture(command, args, log, timeoutMs) {
   });
 }
 let exitCode = 2;
+let escrowEndpoints = null;
+let executionPassed = false;
 try {
   store();
+  // No costly real-source run without an explicit external evidence destination.
+  escrowEndpoints = evidenceAdmission(process.env, syntheticHarness);
   report.observedSha = git(['rev-parse', 'HEAD']);
   report.sourceTree = git(['rev-parse', 'HEAD^{tree}']);
   if (report.observedSha !== expectedSha) throw new Error('SOURCE_SHA_MISMATCH');
-  if (git(['status', '--porcelain', '--untracked-files=no'])) throw new Error('TRACKED_SOURCE_DIRTY');
+  if (git(['status', '--porcelain', '--untracked-files=all'])) throw new Error('CHECKOUT_NOT_CLEAN');
   if (!existsSync('pnpm-lock.yaml') || !existsSync('pnpm-workspace.yaml')) throw new Error('CANONICAL_PNPM_LOCK_MISSING');
   const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
   if (packageJson.packageManager !== 'pnpm@8.15.9') throw new Error('PACKAGE_MANAGER_PIN_MISMATCH');
@@ -100,7 +105,11 @@ try {
     console.log('R426_STEP ' + JSON.stringify({name,status:ok?'PASS':'FAIL',exitCode:outcome.exitCode,timeout:outcome.timeout,logSha256:outcome.logSha256}));
     if (!ok) throw new Error('STAGE_FAILED_' + name);
   }
-  report.status = syntheticHarness ? 'TEST_ONLY' : 'PASS_NONPRODUCTION_BUILD_AND_SCOPED_CONTRACTS';
+  if (git(['rev-parse', 'HEAD']) !== expectedSha || git(['status', '--porcelain', '--untracked-files=no'])) {
+    throw new Error('BUILD_MUTATED_TRACKED_SOURCE');
+  }
+  executionPassed = true;
+  report.status = syntheticHarness ? 'TEST_ONLY' : 'PASS_PENDING_EVIDENCE_READBACK';
   exitCode = 0;
 } catch (error) {
   report.status = 'FAIL_CLOSED';
@@ -110,6 +119,26 @@ try {
 } finally {
   report.finishedUtc = new Date().toISOString();
   store();
-  console.log('R426_RECEIPT ' + JSON.stringify({status:report.status,expectedSha,observedSha:report.observedSha,steps:report.steps.length,reportPath,sha256:sha256(reportPath)}));
+  if (escrowEndpoints) {
+    try {
+      report.evidenceDelivery = await publishEvidence({ evidenceDir, endpoints: escrowEndpoints, synthetic: syntheticHarness });
+      if (executionPassed) report.status = syntheticHarness ? 'TEST_ONLY' : 'PASS_NONPRODUCTION_BUILD_AND_SCOPED_CONTRACTS';
+    } catch {
+      // Never print signed GCS URLs, sensitive query parameters, or backend errors.
+      report.evidenceDelivery = { status: 'FAILED' };
+      report.status = 'FAIL_CLOSED';
+      report.failureCode = 'R427_EVIDENCE_ESCROW_FAILED';
+      exitCode = 1;
+    }
+  } else if (syntheticHarness) {
+    report.evidenceDelivery = { status: 'TEST_ONLY_NOT_UPLOADED' };
+  } else {
+    report.evidenceDelivery = { status: 'BLOCKED_NO_EXTERNAL_DESTINATION' };
+    report.status = 'FAIL_CLOSED';
+    report.failureCode = 'R427_EVIDENCE_DESTINATION_REQUIRED';
+    exitCode = 1;
+  }
+  store();
+  console.log('R426_RECEIPT ' + JSON.stringify({status:report.status,expectedSha,observedSha:report.observedSha,steps:report.steps.length,delivery:report.evidenceDelivery.status,reportPath,sha256:sha256(reportPath)}));
   process.exitCode = exitCode;
 }
