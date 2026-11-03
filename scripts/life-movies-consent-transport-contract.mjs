@@ -15,7 +15,7 @@ function load(relativePath, imports = {}) {
   const module = { exports: {} };
   vm.runInNewContext(compiled, {
     module, exports: module.exports,
-    Buffer, ArrayBuffer, AbortSignal, Date, Error, Number, Reflect, Object, Response, URL,
+    Buffer, ArrayBuffer, AbortSignal, Date, Error, Number, Reflect, Object, Response, URL, TextDecoder,
     require(name) {
       if (name in imports) return imports[name];
       throw new Error(`Unexpected import ${name}`);
