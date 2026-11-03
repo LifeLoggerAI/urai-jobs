@@ -10,12 +10,15 @@ function load(path, imports = {}) {
   const code = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const module = { exports: {} };
   vm.runInNewContext(code, {
-    module, exports: module.exports, Buffer, console, URL, AbortSignal, encodeURIComponent,
+    module, exports: module.exports, Buffer, ArrayBuffer, console, URL, AbortSignal, encodeURIComponent,
     require(id) { if (id in imports) return imports[id]; throw new Error('Unexpected import ' + id); },
   });
   return module.exports;
 }
-const tokenModule = load('lifeMovieJobsTokenProvider.ts');
+const boundedResponse = load('lifeMovieBoundedResponse.ts');
+const tokenModule = load('lifeMovieJobsTokenProvider.ts', {
+  './lifeMovieBoundedResponse.js': boundedResponse,
+});
 const config = { firebaseProjectId: 'urai-staging', dedicatedJobsUid: 'dedicated-jobs-uid', firebaseWebApiKey: 'AIza1234567890abcdefghijklmnopqrstuvwx' };
 const jwt = 'x.y.z';
 const authorized = { app: { options: { projectId: config.firebaseProjectId } },

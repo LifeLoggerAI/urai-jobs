@@ -15,7 +15,7 @@ function load(relativePath, imports = {}) {
   const module = { exports: {} };
   vm.runInNewContext(compiled, {
     module, exports: module.exports,
-    Buffer, AbortSignal, Date, Error, Number, Reflect, Object, Response, URL,
+    Buffer, ArrayBuffer, AbortSignal, Date, Error, Number, Reflect, Object, Response, URL,
     require(name) {
       if (name in imports) return imports[name];
       throw new Error(`Unexpected import ${name}`);
@@ -24,8 +24,10 @@ function load(relativePath, imports = {}) {
   return module.exports;
 }
 const decisionModule = load('privacy/lifeMovieConsentDecision.ts');
+const boundedResponse = load('privacy/lifeMovieBoundedResponse.ts');
 const { createLifeMoviePrivacyTransport } = load('privacy/lifeMovieConsentTransport.ts', {
   './lifeMovieConsentDecision.js': decisionModule,
+  './lifeMovieBoundedResponse.js': boundedResponse,
 });
 const fixedNow = Date.parse('2026-11-01T12:00:00.000Z');
 const config = { firebaseProjectId: 'urai-staging', region: 'us-central1', dedicatedJobsUid: 'urai-jobs-service-1' };

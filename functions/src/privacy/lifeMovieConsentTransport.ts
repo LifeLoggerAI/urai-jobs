@@ -2,6 +2,7 @@ import {
   assertLifeMovieConsentDecision,
   type ExpectedLifeMovieDecision,
 } from './lifeMovieConsentDecision.js';
+import { readLifeMovieBoundedJson } from './lifeMovieBoundedResponse.js';
 
 /**
  * Jobs-only Firebase callable transport for Privacy's movie-scoped verifier.
@@ -178,15 +179,11 @@ export function createLifeMoviePrivacyTransport(
         !/^application\/json(?:;|$)/i.test(response.headers.get('content-type') || '')) {
       throw new Error(UNAVAILABLE);
     }
-    const advertisedLength = Number(response.headers.get('content-length'));
-    if ((Number.isFinite(advertisedLength) && advertisedLength > MAX_RESPONSE_BYTES)) {
-      throw new Error(UNAVAILABLE);
-    }
     let envelope: unknown;
     try {
-      const body = await response.text();
-      if (Buffer.byteLength(body, 'utf8') > MAX_RESPONSE_BYTES) throw new Error('oversize');
-      envelope = JSON.parse(body);
+      // The provider controls both Content-Length and streaming body bytes.
+      // Enforce the limit while reading, before parsing or buffering JSON.
+      envelope = await readLifeMovieBoundedJson(response, MAX_RESPONSE_BYTES);
     } catch {
       throw new Error(UNAVAILABLE);
     }
