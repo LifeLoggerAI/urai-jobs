@@ -15,7 +15,9 @@ const exactScope = ({ projectId, bucket, region }) => {
       bucket.includes('..') || !REGION.test(region || '')) throw Error('INVALID_SCOPE');
 };
 const name = value => String(value || '').split('/').at(-1);
-const identity = item => item?.spec?.template?.spec?.serviceAccountName ??
+const identity = item => item?.spec?.template?.spec?.template?.spec?.serviceAccountName ??
+  item?.template?.template?.serviceAccount ??
+  item?.spec?.template?.spec?.serviceAccountName ??
   item?.spec?.serviceAccountName ?? item?.template?.serviceAccount ??
   item?.serviceAccount ?? null;
 const policy = x => {
@@ -54,6 +56,11 @@ export function captureIamEvidence(scope, run = cloudCommand) {
   }
   const services = array(query(['run','services','list','--region',region]));
   const revisions = array(query(['run','revisions','list','--region',region]));
+  // Cloud Run Jobs have independently configured runtime service accounts and
+  // can write Storage without ever appearing in Cloud Run service/revision lists.
+  // Describe each listed Job: some list response formats omit its service identity.
+  const jobs = array(query(['run','jobs','list','--region',region]));
+  if (jobs.length > 1000) throw Error('INCOMPLETE_JOB_INVENTORY');
   const convert = x => {
     if (!isObject(x)) throw Error('INCOMPLETE_RUNTIME_IDENTITY');
     const label = name(x?.metadata?.name ?? x.name);
@@ -61,10 +68,18 @@ export function captureIamEvidence(scope, run = cloudCommand) {
     const principal = identity(x);
     return { name:label, serviceAccount: typeof principal === 'string' && principal.length ? principal : null };
   };
+  const jobNames = jobs.map(job => convert(job).name);
+  if (new Set(jobNames).size !== jobNames.length) throw Error('DUPLICATE_JOB_IDENTITY');
+  const runJobs = jobNames.map(jobName => {
+    const detail = query(['run','jobs','describe',jobName,'--region',region]);
+    const job = convert(detail);
+    if (job.name !== jobName) throw Error('JOB_DETAILS_MISMATCH');
+    return job;
+  });
   return {
     schemaVersion:SCHEMA, projectId, bucket, collectedAt:new Date().toISOString(),
     bucketPolicy, projectPolicy, ancestorPolicies,
-    runServices:services.map(convert), revisionInventory:revisions.map(convert),
+    runServices:services.map(convert), revisionInventory:revisions.map(convert), runJobs,
     collectorCoverage:'ONE_REGION_ONLY_NOT_EFFECTIVE_IAM_OR_GLOBAL_REVISION_PROOF',
     collectionRegion:region,
   };
