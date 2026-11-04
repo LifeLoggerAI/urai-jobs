@@ -115,15 +115,15 @@ test('R525: IAM bootstrap invokes neither gcloud nor gsutil under override attem
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test('R525: bootstrap veto is ordered before historical broad IAM commands', () => {
+test('R526: disabled generic IAM bootstrap has no latent cloud mutation code', () => {
   const s = source('bootstrap-managed-worker-iam.sh');
   const guard = s.indexOf('MANAGED_WORKER_BROAD_STORAGE_IAM_BOOTSTRAP_HARD_OFF');
   const exit = s.indexOf('\nexit 1\n', guard);
   assert.ok(guard > 0 && exit > guard);
-  for (const cloud of ['gcloud config set project', 'gcloud services enable',
-    'gcloud projects add-iam-policy-binding', 'gsutil iam ch']) {
-    assert.ok(s.indexOf(cloud) > exit, 'cloud command must follow unconditional exit: '+cloud);
-  }
+  assert.equal(s.slice(exit + '\nexit 1\n'.length).trim(), '',
+    'no dormant bootstrap code may remain after the terminal hard-off');
+  assert.doesNotMatch(s, /\b(?:gcloud|gsutil)\b|roles\/storage\.objectAdmin|\bservice-accounts\s+create\b/,
+    'a future edit cannot re-enable broad Storage roles by removing one exit');
   assert.doesNotMatch(s.slice(0, exit), /if .*APPROVED|if .*ALLOW|if .*VERIFIED/);
 });
 
