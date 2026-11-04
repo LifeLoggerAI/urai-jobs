@@ -76,11 +76,46 @@ export function captureIamEvidence(scope, run = cloudCommand) {
     if (job.name !== jobName) throw Error('JOB_DETAILS_MISMATCH');
     return job;
   });
+  // R584: the Job definition alone cannot reveal a running or stale
+  // execution. List retained executions per Job, with an explicit cap: hitting
+  // the cap is incomplete evidence, never an empty/complete history.
+  // This is READ-ONLY inventory, not a job execute/cancel/delete action.
+  const runJobExecutions = [];
+  const executionNames = new Set();
+  for (const jobName of jobNames) {
+    const executions = array(query(['run','jobs','executions','list',
+      '--job',jobName,'--region',region,'--limit','500']));
+    if (executions.length >= 500) throw Error('EXECUTION_HISTORY_AT_LIMIT');
+    for (const execution of executions) {
+      if (!isObject(execution)) throw Error('EXECUTION_INVENTORY_MALFORMED');
+      const executionName = name(execution?.metadata?.name ?? execution.name);
+      if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(executionName) ||
+          executionNames.has(executionName)) throw Error('EXECUTION_IDENTITY_MALFORMED');
+      const declaredJob = execution?.metadata?.labels?.['run.googleapis.com/job'] ??
+        execution?.labels?.['run.googleapis.com/job'];
+      if (declaredJob !== undefined && declaredJob !== jobName) {
+        throw Error('EXECUTION_JOB_SCOPE_MISMATCH');
+      }
+      executionNames.add(executionName);
+      const status = execution.status ?? {};
+      const finished = status.completionTime ?? execution.completionTime;
+      const conditions = status.conditions ?? execution.conditions;
+      const explicitlyCompleted = Array.isArray(conditions) &&
+        conditions.some(item => isObject(item) &&
+          item.type === 'Completed' && item.status === 'True');
+      const runningCount = status.runningCount ?? execution.runningCount;
+      const terminal = typeof finished === 'string' &&
+        Number.isFinite(Date.parse(finished)) && explicitlyCompleted &&
+        (runningCount === undefined || runningCount === 0);
+      runJobExecutions.push({ jobName, name:executionName,
+        lifecycle:terminal ? 'RECORDED_TERMINAL' : 'ACTIVE_OR_UNVERIFIED' });
+    }
+  }
   return {
     schemaVersion:SCHEMA, projectId, bucket, collectedAt:new Date().toISOString(),
     bucketPolicy, projectPolicy, ancestorPolicies,
-    runServices:services.map(convert), revisionInventory:revisions.map(convert), runJobs,
-    collectorCoverage:'ONE_REGION_ONLY_NOT_EFFECTIVE_IAM_OR_GLOBAL_REVISION_PROOF',
+    runServices:services.map(convert), revisionInventory:revisions.map(convert), runJobs, runJobExecutions,
+    collectorCoverage:'ONE_REGION_ONLY_RETAINED_EXECUTIONS_NOT_EFFECTIVE_IAM_OR_DRAIN_PROOF',
     collectionRegion:region,
   };
 }

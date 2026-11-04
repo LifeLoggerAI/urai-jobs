@@ -16,6 +16,7 @@ function mock(commands, override={}) {
     if (s.includes('get-iam-policy')) return override.policy ?? policy;
     if (s.includes('run services list')) return override.services ?? [{metadata:{name:'urai-studio-worker'},spec:{template:{spec:{serviceAccountName:'worker@urai-review-1.iam.gserviceaccount.com'}}} }];
     if (s.includes('run revisions list')) return override.revisions ?? [{metadata:{name:'urai-studio-worker-00001-a'},spec:{serviceAccountName:'worker@urai-review-1.iam.gserviceaccount.com'}}];
+    if (s.includes('run jobs executions list')) return override.executions?.[args[5]] ?? [];
     if (s.includes('run jobs list')) return override.jobs ?? [];
     if (s.includes('run jobs describe')) return override.jobDetails?.[args[3]] ?? {metadata:{name:args[3]}};
     throw Error('unexpected command');
@@ -94,7 +95,9 @@ test('R537: Cloud Run Jobs v1 and v2 independently declared principals are inven
     {name:'urai-audio-job',serviceAccount:'audio-job@urai-review-1.iam.gserviceaccount.com'}
   ]);
   assert.equal(calls.filter(x=>x.slice(0,3).join(' ')==='run jobs describe').length,2);
-  assert.equal(calls.length,9);
+  assert.equal(calls.length,11);
+  assert.deepEqual(evidence.runJobExecutions,[]);
+  assert.equal(calls.filter(x=>x.slice(0,4).join(' ')==='run jobs executions list').length,2);
 });
 test('R537: Cloud Run Job with no principal remains explicit unknown, not silently absent',()=>{
   const data=captureIamEvidence(scope,mock([],{jobs:[{metadata:{name:'unresolved-job'}}]}));
@@ -112,4 +115,49 @@ test('R537: unavailable job description fails closed before writing any raw IAM 
   const run=args => {if(args.slice(0,3).join(' ')==='run jobs describe')throw Error('read denied');
     return mock([],{jobs:[{metadata:{name:'an-app-job'}}]})(args);};
   assert.throws(()=>captureIamEvidence(scope,run),/read denied/);
+});
+test('R584: execution history is listed for each Job with project, region, bounded read-only flags',()=>{
+  const commands=[];
+  const evidence=captureIamEvidence(scope,mock(commands,{
+    jobs:[{metadata:{name:'urai-life-movie-job'}}],
+    jobDetails:{'urai-life-movie-job':{metadata:{name:'urai-life-movie-job'},spec:{template:{spec:{serviceAccountName:'job@urai-review-1.iam.gserviceaccount.com'}}}}},
+    executions:{'urai-life-movie-job':[
+      {metadata:{name:'urai-life-movie-job-00001',labels:{'run.googleapis.com/job':'urai-life-movie-job'}},
+       status:{completionTime:'2026-11-03T12:00:00Z',runningCount:0,conditions:[{type:'Completed',status:'True'}]}},
+      {metadata:{name:'urai-life-movie-job-00002'},status:{runningCount:1}}
+    ]}
+  }));
+  assert.deepEqual(evidence.runJobExecutions,[
+    {jobName:'urai-life-movie-job',name:'urai-life-movie-job-00001',lifecycle:'RECORDED_TERMINAL'},
+    {jobName:'urai-life-movie-job',name:'urai-life-movie-job-00002',lifecycle:'ACTIVE_OR_UNVERIFIED'}
+  ]);
+  const query=commands.find(x=>x.slice(0,4).join(' ')==='run jobs executions list');
+  assert.ok(query);assert.ok(query.includes('--limit'));assert.ok(query.includes('500'));
+  assert.ok(query.includes('--project'));assert.ok(query.includes('--region'));
+  assert.doesNotMatch(query.join(' '),/\b(?:execute|cancel|delete|deploy)\b/);
+});
+test('R584: unresolved or malformed execution identities cannot become clean snapshots',()=>{
+  const job=[{metadata:{name:'urai-life-movie-job'}}];
+  const details={'urai-life-movie-job':{metadata:{name:'urai-life-movie-job'}}};
+  for (const executions of [
+    [null], [{}], [{metadata:{name:'invalid name'}}],
+    [{metadata:{name:'exec1',labels:{'run.googleapis.com/job':'other-job'}}}],
+    [{metadata:{name:'exec1'}},{metadata:{name:'exec1'}}]
+  ]) {
+    assert.throws(()=>captureIamEvidence(scope,mock([],
+      {jobs:job,jobDetails:details,executions:{'urai-life-movie-job':executions}})),
+      /EXECUTION_(?:INVENTORY|IDENTITY|JOB_SCOPE)/);
+  }
+});
+test('R584: execution limit and denied history API fail closed before evidence is saved',()=>{
+  const name='urai-life-movie-job';
+  const jobs=[{metadata:{name}}],jobDetails={[name]:{metadata:{name}}};
+  const excessive=Array.from({length:500},(_,i)=>({metadata:{name:'exec-'+i}}));
+  assert.throws(()=>captureIamEvidence(scope,mock([],
+    {jobs,jobDetails,executions:{[name]:excessive}})),/EXECUTION_HISTORY_AT_LIMIT/);
+  const run=args=>{
+    if (args.slice(0,4).join(' ')==='run jobs executions list') throw Error('forbidden execution listing');
+    return mock([],{jobs,jobDetails})(args);
+  };
+  assert.throws(()=>captureIamEvidence(scope,run),/forbidden execution listing/);
 });
