@@ -29,7 +29,7 @@ test('R536: project/bucket/inherited IAM plus Cloud Run identities are captured 
   assert.equal(r.ancestorPolicies.length,1); assert.equal(r.ancestorPolicies[0].level,'organization');
   assert.equal(r.runServices[0].serviceAccount,'worker@urai-review-1.iam.gserviceaccount.com');
   assert.equal(r.revisionInventory[0].name,'urai-studio-worker-00001-a');
-  assert.match(r.collectorCoverage,/ONE_REGION_ONLY/);assert.equal(cmds.length,7);assert.deepEqual(r.runJobs,[]);
+  assert.equal(r.collectionRegion,scope.region);assert.equal(r.collectorCoverage,'ONE_REGION_ONLY_RETAINED_EXECUTIONS_NOT_EFFECTIVE_IAM_OR_DRAIN_PROOF');assert.equal(cmds.length,7);assert.deepEqual(r.runJobs,[]);
 });
 test('R536: every command is read-only and explicitly scoped to project',()=>{
   const commands=[];captureIamEvidence(scope,mock(commands));
@@ -161,4 +161,16 @@ test('R584: execution limit and denied history API fail closed before evidence i
     return mock([],{jobs,jobDetails})(args);
   };
   assert.throws(()=>captureIamEvidence(scope,run),/forbidden execution listing/);
+});
+
+
+test('R586: collected single-region executions pair with the offline auditor but never yield GO',async()=>{
+  const {auditStudioStorageIamSnapshot}=await import('./review-only/studio-storage-iam-snapshot-audit.mjs');
+  const evidence=captureIamEvidence(scope,mock([],{jobs:[{metadata:{name:'urai-life-movie-job'}}],jobDetails:{'urai-life-movie-job':{metadata:{name:'urai-life-movie-job'}}},executions:{'urai-life-movie-job':[{metadata:{name:'urai-life-movie-job-001'},status:{runningCount:1}}]}}));
+  const result=auditStudioStorageIamSnapshot(evidence,{projectId:scope.projectId,bucket:scope.bucket,region:scope.region,now:new Date()});
+  assert.equal(result.verdict,'HOLD');assert.equal(result.productionAuthorized,false);assert.equal(result.revokeAckPermitted,false);
+  assert.ok(result.findings.includes('CLOUD_RUN_EXECUTION_ACTIVE_OR_UNVERIFIED'));
+  assert.ok(!result.findings.includes('COLLECTOR_COVERAGE_UNVERIFIED'));
+  assert.ok(!result.findings.includes('EVIDENCE_REGION_MISMATCH_OR_MISSING'));
+  assert.equal(result.totals.cloudRunExecutions,1);
 });
