@@ -56,6 +56,7 @@ WORKER_BUILD_POLL_SECONDS="${WORKER_BUILD_POLL_SECONDS:-10}"
 DEPLOY_RECEIPT_PATH="${DEPLOY_RECEIPT_PATH:-docs/release-evidence/worker-deploy-receipt.json}"
 ROLLBACK_CONFIG_RECEIPT_PATH="${ROLLBACK_CONFIG_RECEIPT_PATH:-docs/release-evidence/worker-rollback-config-receipt.json}"
 WORKERS_CSV="${URAI_JOBS_DEPLOY_WORKERS:-narrator-worker,asset-worker}"
+WORKERS_CSV="$WORKERS_CSV" node scripts/studio-worker-deploy-veto.mjs
 IFS=',' read -r -a WORKERS <<< "$WORKERS_CSV"
 
 for command in gcloud curl node; do
