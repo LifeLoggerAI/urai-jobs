@@ -131,7 +131,22 @@ export function auditStudioStorageIamSnapshot(snapshot, expected) {
       return invalidResult('ANCESTOR_POLICY_MALFORMED', snapshot);
     }
   }
-  const counters = { bindings: 0, members: 0, cloudRunServices: snapshot.runServices.length };
+  const counters = { bindings: 0, members: 0, cloudRunServices: snapshot.runServices.length, cloudRunJobs: 0 };
+  // Missing historical evidence never becomes proof of absence or release GO.
+  if (snapshot.runJobs === undefined) {
+    findings.add('CLOUD_RUN_JOB_INVENTORY_MISSING');
+  } else if (!Array.isArray(snapshot.runJobs) || snapshot.runJobs.length > 1000 ||
+      !snapshot.runJobs.every(j => object(j) && SERVICE.test(String(j.name ?? '')) &&
+        (j.serviceAccount === null || SA.test(String(j.serviceAccount ?? '')))) ||
+      new Set(snapshot.runJobs.map(j => j.name)).size !== snapshot.runJobs.length) {
+    return invalidResult('CLOUD_RUN_JOB_INVENTORY_MALFORMED', snapshot);
+  } else {
+    counters.cloudRunJobs = snapshot.runJobs.length;
+    if (snapshot.runJobs.some(j => !j.serviceAccount))
+      findings.add('CLOUD_RUN_JOB_PRINCIPAL_UNVERIFIED');
+    if (snapshot.runJobs.some(j => /@(?:developer|appspot)\.gserviceaccount\.com$/.test(j.serviceAccount ?? '')))
+      findings.add('DEFAULT_SHARED_RUNTIME_IDENTITY_REQUIRES_REVIEW');
+  }
   collectPolicy(snapshot.projectPolicy, 'PROJECT', findings, counters);
   collectPolicy(snapshot.bucketPolicy, 'BUCKET', findings, counters);
   if (Array.isArray(snapshot.ancestorPolicies)) {
