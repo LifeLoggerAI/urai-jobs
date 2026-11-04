@@ -99,6 +99,63 @@ function observedGeneration(value: unknown): string {
   return generation;
 }
 
+/**
+ * A worker may have uploaded an attempt output before persisting job.output.
+ * Reference-based deletion alone cannot certify absence of those unrecorded
+ * derivatives. Inventory the canonical tenant+project output prefixes using
+ * the real server-owned job/plan records; do not infer scope from caller paths.
+ *
+ * This intentionally NEVER deletes an unknown object. Any unknown path,
+ * missing List permission, malformed authority or excessive scope denies the
+ * revocation-completed acknowledgement and requires reconciliation.
+ * A successful listing is a point-in-time check, not a future-write fence.
+ */
+async function assertNoUnattributedLifeMovieOutputs(
+  jobs: ReadonlyArray<{ data: Record<string, unknown> }>,
+  plans: ReadonlyArray<{ data(): Record<string, unknown> }>,
+  buckets: Set<string>,
+): Promise<void> {
+  const scopes = new Set<string>();
+  const include = (record: Record<string, unknown>) => {
+    const tenantId = record.tenantId;
+    const payload = record.payload;
+    const projectId = payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>).projectId : record.projectId;
+    if (typeof tenantId !== 'string' || !SAFE_SEGMENT.test(tenantId)
+      || typeof projectId !== 'string' || !SAFE_SEGMENT.test(projectId)) {
+      throw new Error('life_movie_revocation_output_scope_unverified');
+    }
+    scopes.add(`tenants/${tenantId}/life-movies/${projectId}/`);
+    if (scopes.size > 64) throw new Error('life_movie_revocation_output_scope_limit_exceeded');
+  };
+  for (const { data } of jobs) include(data);
+  for (const snapshot of plans) {
+    const record = snapshot.data();
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      throw new Error('life_movie_revocation_output_scope_unverified');
+    }
+    include(record);
+  }
+  if (scopes.size === 0) return;
+  if (buckets.size === 0 || buckets.size > 8) {
+    throw new Error('life_movie_revocation_output_bucket_authority_unavailable');
+  }
+  const pairs = [...scopes].flatMap(prefix => [...buckets].map(bucket => ({ bucket, prefix })));
+  await mapInBatches(pairs, async ({ bucket, prefix }) => {
+    // One object is sufficient to withhold cleanup success. Do not enumerate
+    // private names in logs/receipts or use an unbounded bucket listing.
+    const result = await getStorage().bucket(bucket).getFiles({
+      prefix, autoPaginate: false, maxResults: 1,
+    });
+    if (!Array.isArray(result) || !Array.isArray(result[0])) {
+      throw new Error('life_movie_revocation_output_inventory_unverified');
+    }
+    if (result[0].length > 0) {
+      throw new Error('life_movie_revocation_unattributed_output_unresolved');
+    }
+  });
+}
+
 export async function invalidateLifeMovieDerivativesForConsent(
   event: LifeMovieRevocationEvent,
 ): Promise<LifeMovieDerivativeInvalidationSummary> {
@@ -287,6 +344,15 @@ export async function invalidateLifeMovieDerivativesForConsent(
   if (fencedJobs.some((job) => job.inFlightUnresolved)) {
     throw new Error('life_movie_revocation_inflight_unresolved');
   }
+
+  // A worker can upload a private attempt object before saving its generation
+  // into Firestore. Do not clear known references or claim revocation complete
+  // while an unattributed object remains under an affected project prefix.
+  await assertNoUnattributedLifeMovieOutputs(
+    fencedJobs.map(({ data }) => ({ data })),
+    affectedPlans,
+    buckets,
+  );
 
   // A writer that changed outputs after fencing must not lose its references.
   // The caller returns a failure so the same event can retry the fresh outputs.
