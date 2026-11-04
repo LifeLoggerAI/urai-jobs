@@ -49,9 +49,13 @@ function allowedOutputBuckets(): Set<string> {
 }
 
 function isAffectedJob(job: Record<string, unknown>, event: LifeMovieRevocationEvent): boolean {
-  const jobType = String(job.jobType || job.type || '');
   if (job.ownerUid !== event.ownerUid || job.sourceSystem !== 'urai-studio') return false;
-  if (jobType !== 'studio.render.video' && jobType !== 'studio.assemble.video') return false;
+  // Both fields occur in legacy/worker records. A conflicting non-movie alias
+  // must not hide an extant rendered derivative from owner revocation. Scope
+  // and exact output path/generation checks below still govern deletion.
+  const movieType = (value: unknown) =>
+    value === 'studio.render.video' || value === 'studio.assemble.video';
+  if (!movieType(job.jobType) && !movieType(job.type)) return false;
   // Both job types are Life Movie work even if a legacy or malformed record
   // omitted or mislabeled its consent. The owner and source still must match.
   return true;
