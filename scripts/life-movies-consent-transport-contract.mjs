@@ -148,6 +148,29 @@ assert.throws(() =>
   decisionModule.assertLifeMovieConsentDecision(crossRealmMarked, expected, fixedNow),
   (error) => error && error.message === 'life_movie_consent_decision_denied');
 pass();
+// A decision's data descriptors may be legitimate even when an in-process
+// Proxy changes every subsequent property read. The validator must pin all
+// decision values from descriptors and NEVER execute that get trap.
+let decisionReadTraps = 0;
+const unstableDecision = new Proxy({ ...allowed, renderScope: { ...renderScope } }, {
+  get(target, key, receiver) {
+    decisionReadTraps++;
+    return Reflect.get(target, key, receiver);
+  },
+});
+assert.doesNotThrow(() =>
+  decisionModule.assertLifeMovieConsentDecision(unstableDecision, expected, fixedNow));
+assert.equal(decisionReadTraps, 0, 'authority must be read from descriptors, not re-read on Proxy');
+pass();
+
+// No nested selection scope with attacker-defined inherited authority may
+// pass the current Jobs consent decision—even when own values appear correct.
+const inheritedScope = Object.assign(Object.create({ hiddenRightsApproval: true }), renderScope);
+assert.throws(() =>
+  decisionModule.assertLifeMovieConsentDecision({ ...allowed, renderScope: inheritedScope }, expected, fixedNow),
+  (error) => error && error.message === 'life_movie_consent_decision_denied');
+pass();
+
 for (const forged of [
   Object.assign(Object.create({ inheritedAuthority: true }), allowed),
   Object.assign({ ...allowed }, { [Symbol('synthetic-grant')]: true }),
