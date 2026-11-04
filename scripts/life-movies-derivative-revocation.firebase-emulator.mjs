@@ -149,27 +149,35 @@ function originalSourceWithPostDeleteReplacement(targetObjectPath) {
       };
     },
   };
-  const exports = {};
-  vm.runInNewContext(compiled.outputText, {
-    module: { exports }, exports, Buffer, console, process, Date, Promise, Error,
-    require(name) {
-      if (name === 'node:crypto') return requireFunctions('node:crypto');
-      if (name === 'node:util') return requireFunctions('node:util');
-      if (name === 'firebase-admin/firestore') return { ...firestoreModule, getFirestore: () => db };
-      if (name === 'firebase-admin/storage') return { getStorage: () => wrappedStorage };
-      if (name === '../core/firestore-paths.js') return {
-        jobQueueEntryDoc: id => db.collection('jobQueue').doc(id),
-      };
-      if (name === './consentBlocks.js') return {
-        consentEventReceiptRef: id => db.collection('jobConsentEventReceipts').doc(
-          createHash('sha256').update(id).digest('hex')),
-      };
-      if (name === './lifeMovieArtifactRefs.js') return { lifeMovieArtifactBindings };
-      throw Error('unexpected original-source import: ' + name);
-    },
-  }, { filename: 'lifeMovieDerivativeRevocation.actual.ts' });
-  assert.equal(typeof exports.invalidateLifeMovieDerivativesForConsent, 'function');
-  return { invalidate: exports.invalidateLifeMovieDerivativesForConsent,
+  // Firebase's Firestore SDK requires the transaction callback to return a
+  // Promise from the same JavaScript realm. Compiling the ORIGINAL source
+  // into a new VM context creates realm-local async Promises that the SDK
+  // rejects before the Storage race can be tested. Evaluate a CommonJS
+  // wrapper in THIS realm, injecting only the test-controlled dependencies;
+  // never change the original verifier or weaken its generation fencing.
+  const module = { exports: {} };
+  const runOriginalSource = vm.runInThisContext(
+    '(function (require, module, exports) {\n' + compiled.outputText + '\n})',
+    { filename: 'lifeMovieDerivativeRevocation.actual.ts' },
+  );
+  function testRequire(name) {
+    if (name === 'node:crypto') return requireFunctions('node:crypto');
+    if (name === 'node:util') return requireFunctions('node:util');
+    if (name === 'firebase-admin/firestore') return { ...firestoreModule, getFirestore: () => db };
+    if (name === 'firebase-admin/storage') return { getStorage: () => wrappedStorage };
+    if (name === '../core/firestore-paths.js') return {
+      jobQueueEntryDoc: id => db.collection('jobQueue').doc(id),
+    };
+    if (name === './consentBlocks.js') return {
+      consentEventReceiptRef: id => db.collection('jobConsentEventReceipts').doc(
+        createHash('sha256').update(id).digest('hex')),
+    };
+    if (name === './lifeMovieArtifactRefs.js') return { lifeMovieArtifactBindings };
+    throw Error('unexpected original-source import: ' + name);
+  }
+  runOriginalSource(testRequire, module, module.exports);
+  assert.equal(typeof module.exports.invalidateLifeMovieDerivativesForConsent, 'function');
+  return { invalidate: module.exports.invalidateLifeMovieDerivativesForConsent,
     replacements: () => replacementCount };
 }
 
