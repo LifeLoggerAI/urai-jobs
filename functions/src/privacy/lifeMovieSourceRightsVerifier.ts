@@ -22,7 +22,8 @@ export type RightsBackend = Readonly<{
   selectedGeneration: (bucket: string, objectPath: string, generation: string) => Promise<Record<string, unknown>>;
   /** Durable server-side audit. Failure must deny admission. */
   recordDecision: (event: Readonly<{ id: string; ownerUid: string; tenantId: string;
-    projectId: string; sourceSetDigest: string; checkedAt: string; sourceCount: number }>) => Promise<void>;
+    projectId: string; renderPlanDigest: string; sourceSetDigest: string;
+    renderScope: LifeMovieRenderScope; checkedAt: string; sourceCount: number }>) => Promise<void>;
   allowedBuckets: readonly string[];
   nowMs?: () => number;
 }>;
@@ -35,6 +36,84 @@ const MAX_SOURCES = 128;
 const MAX_ISSUANCE_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 const hasOwn = (record: Record<string, unknown>, key: string) =>
   Object.prototype.hasOwnProperty.call(record, key);
+
+// Snapshot all authority-bearing inputs before the first asynchronous read.
+// Never authorize a movie based on source/generation fields subsequently
+// mutated by an in-process caller or getter/proxy-backed claims. Plain JSON
+// may arrive from a different JS realm, so compare own data descriptors rather
+// than equating the prototype to this module's Object.prototype.
+const SELECTION_FIELDS = ['projectId', 'renderPlanDigest', 'sources'] as const;
+const SOURCE_FIELDS = [
+  'id', 'bucket', 'objectPath', 'generation', 'mimeType', 'provenance',
+  'sourceRefs', 'consentRef', 'ownerOrRightsRef',
+] as const;
+const SCOPE_FIELDS = ['projectId', 'renderPlanDigest', 'sourceSetDigest'] as const;
+const REQUEST_FIELDS = ['ownerUid', 'tenantId', 'selection', 'renderScope'] as const;
+function plainOwnRecord(value: unknown, fields: readonly string[]): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(DENIED);
+  const proto = Object.getPrototypeOf(value);
+  const currentKeys = Reflect.ownKeys(Object.prototype);
+  const plain = proto === null || proto === Object.prototype ||
+    (typeof proto === 'object' && proto !== null &&
+      Object.getPrototypeOf(proto) === null &&
+      Reflect.ownKeys(proto).length === currentKeys.length &&
+      currentKeys.every(key => Object.prototype.hasOwnProperty.call(proto, key)));
+  if (!plain) throw new Error(DENIED);
+  const keys = Reflect.ownKeys(value);
+  if (keys.length !== fields.length ||
+      keys.some(key => typeof key !== 'string' || !fields.includes(key))) throw new Error(DENIED);
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const pinned: Record<string, unknown> = Object.create(null);
+  for (const field of fields) {
+    const descriptor = descriptors[field];
+    if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+      throw new Error(DENIED);
+    }
+    pinned[field] = descriptor.value;
+  }
+  return pinned;
+}
+function ownDataArray(value: unknown, max: number): readonly unknown[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > max ||
+      Reflect.ownKeys(value).length !== value.length + 1) throw new Error(DENIED);
+  const result: unknown[] = [];
+  for (let i = 0; i < value.length; i++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(i));
+    if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) throw new Error(DENIED);
+    result.push(descriptor.value);
+  }
+  return result;
+}
+function snapshotRightsRequest(raw: Request): Request {
+  const r = plainOwnRecord(raw, REQUEST_FIELDS);
+  const selection = plainOwnRecord(r.selection, SELECTION_FIELDS);
+  const scope = plainOwnRecord(r.renderScope, SCOPE_FIELDS);
+  const sourceInputs = ownDataArray(selection.sources, MAX_SOURCES);
+  const sources = sourceInputs.map((input) => {
+    const src = plainOwnRecord(input, SOURCE_FIELDS);
+    const refs = ownDataArray(src.sourceRefs, 32);
+    if (refs.some(x => typeof x !== 'string' || !x || x.length > 512)) throw new Error(DENIED);
+    const copy: Record<string, unknown> = Object.create(null);
+    for (const field of SOURCE_FIELDS) {
+      if (field === 'sourceRefs') copy.sourceRefs = Object.freeze([...refs]);
+      else if (typeof src[field] !== 'string') throw new Error(DENIED);
+      else copy[field] = src[field];
+    }
+    return Object.freeze(copy);
+  });
+  const selectionSnapshot = Object.freeze({
+    projectId: selection.projectId, renderPlanDigest: selection.renderPlanDigest,
+    sources: Object.freeze(sources),
+  });
+  const scopeSnapshot = Object.freeze({
+    projectId: scope.projectId, renderPlanDigest: scope.renderPlanDigest,
+    sourceSetDigest: scope.sourceSetDigest,
+  });
+  return Object.freeze({
+    ownerUid: r.ownerUid, tenantId: r.tenantId,
+    selection: selectionSnapshot, renderScope: scopeSnapshot,
+  }) as unknown as Request;
+}
 
 function validSource(source: Source): boolean {
   return !!source && typeof source === 'object' && !Array.isArray(source) &&
@@ -113,9 +192,10 @@ export function createLifeMovieSourceRightsVerifier(backend: RightsBackend) {
   }
   const bucketAllowlist = new Set(backend.allowedBuckets);
   const clock = backend.nowMs ?? Date.now;
-  return async (request: Request): Promise<LifeMovieSourceRightsEvidence> => {
+  return async (raw: Request): Promise<LifeMovieSourceRightsEvidence> => {
     try {
-      const sources = request?.selection?.sources;
+      const request = snapshotRightsRequest(raw);
+      const sources = request.selection.sources;
       const now = clock();
       if (!Number.isSafeInteger(now) || now <= 0 ||
           typeof request.ownerUid !== 'string' || !ID.test(request.ownerUid) ||
@@ -158,7 +238,12 @@ export function createLifeMovieSourceRightsVerifier(backend: RightsBackend) {
       const id = randomUUID();
       await backend.recordDecision({
         id, ownerUid: request.ownerUid, tenantId: request.tenantId,
-        projectId: request.selection.projectId, sourceSetDigest: request.renderScope.sourceSetDigest,
+        projectId: request.selection.projectId,
+        renderPlanDigest: request.renderScope.renderPlanDigest,
+        sourceSetDigest: request.renderScope.sourceSetDigest,
+        // Server-derived, snapshot-stable full scope. An audit alone is NEVER
+        // a permission or proof of source-rights issuance.
+        renderScope: request.renderScope,
         checkedAt: new Date(checkedAt).toISOString(), sourceCount: sources.length,
       });
       return Object.freeze({ ownerUid: request.ownerUid, tenantId: request.tenantId,

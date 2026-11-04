@@ -43,7 +43,7 @@ const sourceItem = {
   sourceRefs: ['library-item-1'],
 };
 const baseSelection = { projectId: 'movie-1', renderPlanDigest: 'a'.repeat(64), sources: [sourceItem] };
-const makeRequest = (selection = baseSelection) => ({ ownerUid: 'owner-1', tenantId: 'tenant-1',
+const makeRequest = (selection = structuredClone(baseSelection)) => ({ ownerUid: 'owner-1', tenantId: 'tenant-1',
   selection, renderScope: deriveScope(selection) });
 const makeRecord = (s = sourceItem) => ({
   schemaVersion: 'urai-life-movie-source-rights-v1', issuer: 'trusted-server-source-rights-v1',
@@ -95,6 +95,11 @@ function fixture(overrides = {}) {
       actions.push('audit');
       assert.equal(event.ownerUid, 'owner-1'); assert.equal(event.tenantId, 'tenant-1');
       assert.equal(event.sourceCount, 1); assert.equal(event.projectId, 'movie-1');
+      assert.equal(event.renderPlanDigest, baseSelection.renderPlanDigest);
+      assert.equal(event.sourceSetDigest, makeRequest().renderScope.sourceSetDigest);
+      assert.equal(event.renderScope.projectId, baseSelection.projectId);
+      assert.equal(event.renderScope.renderPlanDigest, baseSelection.renderPlanDigest);
+      assert.equal(event.renderScope.sourceSetDigest, makeRequest().renderScope.sourceSetDigest);
       if (overrides.auditError) throw Error('audit unavailable');
     },
   };
@@ -177,4 +182,60 @@ for (const override of [
   assert.equal(f.actions.includes('audit'), false);
   checks++;
 }
+
+// Auth-binding regression: caller can change mutable selection while the
+// owner verifier awaits. Those changes may not change source identity or the
+// audit's plan fingerprint after admission has begun.
+{
+  const original = makeRequest();
+  const mutable = structuredClone(original);
+  const f = fixture();
+  const baseAssert = f.backend.assertCurrentOwner;
+  let mutated = false;
+  f.backend.assertCurrentOwner = async (uid, tenant) => {
+    if (!mutated) {
+      mutated = true;
+      mutable.selection.sources[0].generation = '2000000000000001';
+      mutable.selection.sources[0].objectPath = 'tenants/tenant-1/replaced.mp4';
+      mutable.selection.sources[0].sourceRefs[0] = 'forged-ref';
+      mutable.renderScope.sourceSetDigest = 'f'.repeat(64);
+    }
+    await baseAssert(uid, tenant);
+  };
+  const admitted = await createLifeMovieSourceRightsVerifier(f.backend)(mutable);
+  assert.equal(admitted.renderScope.sourceSetDigest, original.renderScope.sourceSetDigest);
+  assert.deepEqual(f.actions, ['rights', 'live', 'pinned', 'rights', 'audit']);
+  checks++;
+}
+for (const field of ['ownerUid', 'tenantId', 'selection', 'renderScope']) {
+  const raw = makeRequest();
+  let reads = 0;
+  Object.defineProperty(raw, field, {
+    enumerable: true, get() { reads++; return field === 'ownerUid' ? 'owner-1' : raw[field]; },
+  });
+  const f = fixture();
+  await assert.rejects(() => createLifeMovieSourceRightsVerifier(f.backend)(raw), deny);
+  assert.equal(reads, 0, 'authority getter must never run');
+  assert.deepEqual(f.actions, []);
+  checks++;
+}
+{
+  const raw = makeRequest();
+  Object.defineProperty(raw.selection.sources[0], 'generation', {
+    enumerable: true, get() { throw Error('unsafe getter invoked'); },
+  });
+  const f = fixture();
+  await assert.rejects(() => createLifeMovieSourceRightsVerifier(f.backend)(raw), deny);
+  assert.deepEqual(f.actions, []);
+  checks++;
+}
+{
+  const raw = makeRequest();
+  raw.selection.sources[0].unexpectedAuthority = true;
+  const f = fixture();
+  await assert.rejects(() => createLifeMovieSourceRightsVerifier(f.backend)(raw), deny);
+  assert.deepEqual(f.actions, []);
+  checks++;
+}
+
 console.log('[PASS] ' + checks + ' synthetic source-rights verifier scenarios; no Firebase, grants or rendering.');
