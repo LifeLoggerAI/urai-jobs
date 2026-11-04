@@ -54,9 +54,15 @@ function reviewedOnly(): void {
     || getApp().options.projectId !== PROJECT) {
     throw new Error('life_movie_review_write_emulator_only');
   }
-  for (const name of ['GOOGLE_APPLICATION_CREDENTIALS', 'GOOGLE_CLOUD_PROJECT',
-    'GCLOUD_PROJECT', 'FIREBASE_TOKEN', 'GITHUB_TOKEN', 'RUNPOD_API_KEY']) {
+  for (const name of ['GOOGLE_APPLICATION_CREDENTIALS',
+    'FIREBASE_TOKEN', 'GITHUB_TOKEN', 'RUNPOD_API_KEY']) {
     if (process.env[name]) throw new Error('life_movie_review_write_cloud_credentials_forbidden');
+  }
+  // firebase emulators:exec sets GCLOUD_PROJECT to its disposable project.
+  for (const name of ['GCLOUD_PROJECT', 'GOOGLE_CLOUD_PROJECT']) {
+    if (process.env[name] && process.env[name] !== PROJECT) {
+      throw new Error('life_movie_review_write_cloud_project_forbidden');
+    }
   }
 }
 export function reviewOnlyScopeId(scope: ReviewOutputScope): string {
