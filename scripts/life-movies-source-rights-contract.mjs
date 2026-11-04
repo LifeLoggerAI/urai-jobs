@@ -43,8 +43,13 @@ const sourceItem = {
   sourceRefs: ['library-item-1'],
 };
 const baseSelection = { projectId: 'movie-1', renderPlanDigest: 'a'.repeat(64), sources: [sourceItem] };
-const makeRequest = (selection = baseSelection) => ({ ownerUid: 'owner-1', tenantId: 'tenant-1',
-  selection, renderScope: deriveScope(selection) });
+// Each synthetic request owns a fresh source tree. Adversarial tests mutate
+// source descriptors and must not poison fixtures used by later cases.
+const makeRequest = (selection = baseSelection) => {
+  const isolatedSelection = structuredClone(selection);
+  return { ownerUid: 'owner-1', tenantId: 'tenant-1',
+    selection: isolatedSelection, renderScope: deriveScope(isolatedSelection) };
+};
 const makeRecord = (s = sourceItem) => ({
   schemaVersion: 'urai-life-movie-source-rights-v1', issuer: 'trusted-server-source-rights-v1',
   status: 'approved', purpose: 'life-movie.render', ownerUid: 'owner-1', tenantId: 'tenant-1',
