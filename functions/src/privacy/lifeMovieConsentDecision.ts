@@ -102,10 +102,26 @@ export function assertLifeMovieConsentDecision(
     throw new Error('life_movie_consent_decision_denied');
   }
   const value = decision as Record<string, unknown>;
-  if (!REQUIRED_DECISION_FIELDS.every(key => {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return descriptor !== undefined && Object.prototype.hasOwnProperty.call(descriptor, 'value');
-  })) {
+  // Authenticated Privacy results are evidence, not extensible JSON.
+  // Reject reviewOnlyEmulator/productionAuthorized markers, unexpected claims,
+  // inherited authority, accessors, symbols, or throwing property traps.
+  // The real Privacy callable returns exactly these 13 own data fields.
+  let exactDecision = false;
+  try {
+    const keys = Reflect.ownKeys(value);
+    const prototype = Object.getPrototypeOf(value);
+    exactDecision = (prototype === Object.prototype || prototype === null) &&
+      keys.length === REQUIRED_DECISION_FIELDS.length &&
+      keys.every(key => typeof key === 'string' &&
+        (REQUIRED_DECISION_FIELDS as readonly string[]).includes(key)) &&
+      REQUIRED_DECISION_FIELDS.every(key => {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        return descriptor !== undefined && Object.prototype.hasOwnProperty.call(descriptor, 'value');
+      });
+  } catch {
+    exactDecision = false;
+  }
+  if (!exactDecision) {
     throw new Error('life_movie_consent_decision_denied');
   }
   const time = typeof value.evaluatedAt === 'string' ? Date.parse(value.evaluatedAt) : NaN;
