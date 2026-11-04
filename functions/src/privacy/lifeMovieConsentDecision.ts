@@ -110,7 +110,15 @@ export function assertLifeMovieConsentDecision(
   try {
     const keys = Reflect.ownKeys(value);
     const prototype = Object.getPrototypeOf(value);
-    exactDecision = (prototype === Object.prototype || prototype === null) &&
+    // JSON.parse in a separate VM/test realm has its own Object.prototype.
+    // Accept an ordinary cross-realm Object prototype, but not custom
+    // inherited authority or caller-defined prototype metadata.
+    const plainPrototype = prototype === null ||
+      (Object.getPrototypeOf(prototype) === null &&
+        Reflect.ownKeys(prototype).length === Reflect.ownKeys(Object.prototype).length &&
+        Reflect.ownKeys(Object.prototype).every(key =>
+          Object.prototype.hasOwnProperty.call(prototype, key)));
+    exactDecision = plainPrototype &&
       keys.length === REQUIRED_DECISION_FIELDS.length &&
       keys.every(key => typeof key === 'string' &&
         (REQUIRED_DECISION_FIELDS as readonly string[]).includes(key)) &&
