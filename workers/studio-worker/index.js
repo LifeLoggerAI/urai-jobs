@@ -7,6 +7,7 @@ const { setTimeout, clearTimeout } = require('node:timers');
 const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { cleanupPinnedPrivateOutputs } = require('./private-output-cleanup');
+const { assertPrivateOutputWriteAuthority, privateOutputWriteAuthorityAvailable } = require('./private-output-write-authority');
 const express = require('express');
 const admin = require('firebase-admin');
 
@@ -695,6 +696,7 @@ async function assembleLifeMovie(job) {
   }
 
   async function uploadPrivateFile(localPath, destination, contentType, expectedHash) {
+    assertPrivateOutputWriteAuthority();
     await control.check();
     pendingUnfencedOutputWrite = true;
     const file = bucket.file(destination);
@@ -963,6 +965,7 @@ async function renderLifeMovie(job) {
       manifest: `${attemptPrefix}/life-movie.render-manifest.json`,
     };
     async function uploadPrivateFile(localPath, destination, contentType, expectedHash) {
+      assertPrivateOutputWriteAuthority();
       await control.check();
       pendingUnfencedOutputWrite = true;
       const file = bucket.file(destination);
@@ -1027,6 +1030,7 @@ function readiness() {
     ffmpeg: ffmpeg.status === 0,
     ffprobe: ffprobe.status === 0,
     storageConfigured: Boolean(process.env.GCS_BUCKET_NAME),
+    storageEnforcedWriteAuthority: privateOutputWriteAuthorityAvailable(),
     sourceBucketsConfigured: Boolean(process.env.URAI_STUDIO_SOURCE_BUCKETS || process.env.GCS_BUCKET_NAME),
     sourceShaExact: /^[0-9a-f]{40}$/.test(sourceSha),
     revisionPresent: Boolean(process.env.K_REVISION) || ['local', 'test'].includes(String(process.env.URAI_ENV || '').toLowerCase()),
