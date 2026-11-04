@@ -13,7 +13,9 @@ const bucket = 'urai-review-private-bucket';
 const privatePrincipal = 'some-private-principal@example.com';
 const baseline = () => ({
   schemaVersion: SCHEMA,
-  projectId, bucket, collectedAt: '2026-11-04T04:58:00.000Z',
+  projectId, bucket, collectionRegion: 'us-central1',
+  collectorCoverage: 'ONE_REGION_ONLY_RETAINED_EXECUTIONS_NOT_EFFECTIVE_IAM_OR_DRAIN_PROOF',
+  collectedAt: '2026-11-04T04:58:00.000Z',
   bucketPolicy: { version: 3, bindings: [] },
   projectPolicy: { version: 3, bindings: [] },
   ancestorPolicies: [
@@ -26,7 +28,7 @@ const baseline = () => ({
     { name: 'urai-studio-worker-00001-x', serviceAccount: 'worker@urai-review-1.iam.gserviceaccount.com' },
   ],
 });
-const run = input => audit(input, { projectId, bucket, now });
+const run = input => audit(input, { projectId, bucket, region: 'us-central1', now });
 const has = (result, code) => assert.ok(result.findings.includes(code),
   'expected finding: ' + code + ', got ' + JSON.stringify(result.findings));
 const denied = x => {
@@ -238,7 +240,7 @@ test('R526: CLI reads an offline snapshot and never gives exit zero or prints pr
     });
     writeFileSync(path,JSON.stringify(s));
     const script=fileURLToPath(new URL('./review-only/studio-storage-iam-snapshot-audit.mjs',import.meta.url));
-    const result=spawnSync(process.execPath,[script,'--snapshot',path,'--project',projectId,'--bucket',bucket],
+    const result=spawnSync(process.execPath,[script,'--snapshot',path,'--project',projectId,'--bucket',bucket,'--region','us-central1'],
       {encoding:'utf8',timeout:10000});
     assert.equal(result.status,2,result.stderr);
     assert.match(result.stdout,/"verdict": "HOLD"/);
@@ -251,7 +253,7 @@ test('R526: malformed JSON CLI is hold, not a release GO', () => {
   try {
     const path=join(dir,'invalid.json');writeFileSync(path,'{ secret-but-invalid');
     const script=fileURLToPath(new URL('./review-only/studio-storage-iam-snapshot-audit.mjs',import.meta.url));
-    const r=spawnSync(process.execPath,[script,'--snapshot',path,'--project',projectId,'--bucket',bucket],
+    const r=spawnSync(process.execPath,[script,'--snapshot',path,'--project',projectId,'--bucket',bucket,'--region','us-central1'],
       {encoding:'utf8',timeout:10000});
     assert.equal(r.status,3);
     assert.doesNotMatch(r.stderr,/secret-but-invalid/);
@@ -376,4 +378,49 @@ test('R584: forged, malformed, cross-job and duplicate execution evidence denied
   const s=baseline();s.runJobs=[{name:'urai-job',serviceAccount:'job@urai-review-1.iam.gserviceaccount.com'}];
   s.runJobExecutions=[{jobName:'unrelated-job',name:'unrelated-job-001',lifecycle:'RECORDED_TERMINAL'}];
   const r=run(s);denied(r);has(r,'CLOUD_RUN_EXECUTION_JOB_OUTSIDE_INVENTORY');
+});
+
+// R586: original regional validation tests, combined with retained execution checks.
+test('R584: wrong-region collection cannot stand in for approved region',()=>{
+  const s=baseline();s.collectionRegion='us-east1';const r=run(s);denied(r);has(r,'EVIDENCE_REGION_MISMATCH_OR_MISSING');
+});
+test('R584: missing region in snapshot or expected scope fails closed',()=>{
+  const s=baseline();delete s.collectionRegion;let r=run(s);denied(r);has(r,'EVIDENCE_REGION_MISMATCH_OR_MISSING');
+  r=audit(baseline(),{projectId,bucket,now});denied(r);has(r,'EXPECTED_REGION_REQUIRED');
+});
+test('R584: fabricated global collection coverage cannot pass a regional audit',()=>{
+  const s=baseline();s.collectorCoverage='ALL_REGIONS_EFFECTIVE_IAM_VERIFIED';
+  const r=run(s);denied(r);has(r,'COLLECTOR_COVERAGE_UNVERIFIED');
+});
+test('R584: duplicate Cloud Run services and revisions are denied',()=>{
+  const s=baseline();s.runServices.push({...s.runServices[0]});let r=run(s);denied(r);has(r,'DUPLICATE_CLOUD_RUN_SERVICE_INVENTORY');
+  const t=baseline();t.revisionInventory.push({...t.revisionInventory[0]});r=run(t);denied(r);has(r,'DUPLICATE_HISTORIC_REVISION_INVENTORY');
+});
+test('R584: correctly bound region still cannot approve effective IAM',()=>{
+  const r=run(baseline());denied(r);
+  has(r,'REGIONAL_CAPTURE_CANNOT_PROVE_GLOBAL_RUNTIME_OR_IAM');
+  has(r,'AFTER_REVOKE_OLD_IDENTITY_NEGATIVE_GCS_TEST_REQUIRED');
+});
+test('R584: region-required CLI never returns success for fake evidence',()=>{
+  const dir=mkdtempSync(join(tmpdir(),'urai-r584-'));
+  try{
+    const path=join(dir,'snapshot.json');writeFileSync(path,JSON.stringify(baseline()));
+    const script=fileURLToPath(new URL('./review-only/studio-storage-iam-snapshot-audit.mjs',import.meta.url));
+    const missing=spawnSync(process.execPath,[script,'--snapshot',path,'--project',projectId,'--bucket',bucket],{encoding:'utf8'});
+    assert.equal(missing.status,2);assert.match(missing.stderr,/--region/);
+    const wrong=spawnSync(process.execPath,[script,'--snapshot',path,'--project',projectId,'--bucket',bucket,'--region','us-east1'],{encoding:'utf8'});
+    assert.equal(wrong.status,2);assert.match(wrong.stdout,/EVIDENCE_REGION_MISMATCH_OR_MISSING/);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+
+test('R586: actual retained-execution collector marker with matching region is recognized but never authorizes',()=>{
+ const s=baseline(); s.runJobs=[{name:'urai-job',serviceAccount:'job@urai-review-1.iam.gserviceaccount.com'}];
+ s.runJobExecutions=[{jobName:'urai-job',name:'urai-job-00001',lifecycle:'ACTIVE_OR_UNVERIFIED'}];
+ const r=run(s);denied(r);
+ has(r,'CLOUD_RUN_EXECUTION_ACTIVE_OR_UNVERIFIED');
+ has(r,'REGIONAL_CAPTURE_CANNOT_PROVE_GLOBAL_RUNTIME_OR_IAM');
+ has(r,'RETAINED_JOB_EXECUTIONS_NOT_FULL_HISTORICAL_OR_UPLOAD_DRAIN_PROOF');
+ assert.equal(r.totals.cloudRunExecutions,1);
+ assert.ok(!r.findings.includes('COLLECTOR_COVERAGE_UNVERIFIED'));
 });
