@@ -33,6 +33,7 @@ const {
   revokeReviewOnlyOutputScope,
   cancelUnstartedReviewOnlyAttempt,
   reviewOnlyDrainStatus,
+  reviewOnlyScopeId,
 } = require('../functions/lib/functions/privacy/lifeMovieWriteReservationsReview.js');
 
 const token = randomUUID().replaceAll('-', '').slice(0, 16);
@@ -85,10 +86,14 @@ try {
   await check('revocation increments epoch and rejects new reservations', async () => {
     const r = await revokeReviewOnlyOutputScope(s, 'event-a');
     assert.equal(r.epoch, 2);
+    assert.equal(r.alreadyFenced, false);
+    assert.equal(r.revocationAcknowledgementPermitted, false);
+    assert.equal((await reviewOnlyDrainStatus(s)).state, 'FENCING');
     await denied(reserveReviewOnlyOutputAttempt({ ...b, attemptId: 'attempt-late' }, 1), 'revoked_or_stale');
     await denied(beginReviewOnlySimulatedUpload(b), 'revoked_or_stale');
     const retry = await revokeReviewOnlyOutputScope(s, 'event-a');
-    assert.equal(retry.alreadyRevoked, true);
+    assert.equal(retry.alreadyFenced, true);
+    assert.equal(retry.revocationAcknowledgementPermitted, false);
     await denied(revokeReviewOnlyOutputScope(s, 'event-other'), 'revocation_conflict');
   });
   await check('unstarted attempts can reconcile but never authorize ACK', async () => {
@@ -96,8 +101,22 @@ try {
     await cancelUnstartedReviewOnlyAttempt(b);
     const x = await reviewOnlyDrainStatus(s);
     assert.equal(x.activeOrUnproven, 0);
+    assert.equal(x.state, 'FENCING');
+    assert.equal(x.withdrawalFenced, true);
+    assert.equal(x.revocationComplete, false);
     assert.equal(x.revocationAcknowledgementPermitted, false);
     assert.equal(x.storageWriteFenceVerified, false);
+  });
+
+  await check('same-event retry after simulated drain cannot mark deletion complete', async () => {
+    const retry = await revokeReviewOnlyOutputScope(s, 'event-a');
+    assert.equal(retry.alreadyFenced, true);
+    assert.equal(retry.revocationAcknowledgementPermitted, false);
+    const x = await reviewOnlyDrainStatus(s);
+    assert.equal(x.state, 'FENCING');
+    assert.equal(x.activeOrUnproven, 0);
+    assert.equal(x.revocationComplete, false);
+    assert.equal(x.revocationAcknowledgementPermitted, false);
   });
 
   const s2 = scope('b'), c = ident(s2, 'c'), d = ident(s2, 'd');
@@ -111,6 +130,8 @@ try {
     await denied(cancelUnstartedReviewOnlyAttempt(c), 'cannot_reconcile');
     const x = await reviewOnlyDrainStatus(s2);
     assert.equal(x.activeOrUnproven, 1);
+    assert.equal(x.state, 'FENCING');
+    assert.equal(x.revocationComplete, false);
     assert.equal(x.revocationAcknowledgementPermitted, false);
   });
   await check('independent tenant remains isolated', async () => {
@@ -120,7 +141,7 @@ try {
     await seedReviewOnlyOutputScope(s3);
     await reserveReviewOnlyOutputAttempt(e, 1);
     assert.equal((await reviewOnlyDrainStatus(s3)).state, 'OPEN');
-    assert.equal((await reviewOnlyDrainStatus(s2)).state, 'REVOKED');
+    assert.equal((await reviewOnlyDrainStatus(s2)).state, 'FENCING');
   });
 
   const s4 = scope('d'), f = ident(s4, 'f');
@@ -133,14 +154,25 @@ try {
     await db.collection('jobs').doc(f.jobId).update({ status: 'CANCELLED' });
     await denied(reserveReviewOnlyOutputAttempt(f, 1), 'job_unverified');
   });
+  await check('forged completed REVOKED state fails closed without cloud proof', async () => {
+    const forged = scope('forged');
+    await seedReviewOnlyOutputScope(forged);
+    await db.collection('lifeMovieWriteFencesReviewOnly')
+      .doc(reviewOnlyScopeId(forged))
+      .update({ state: 'REVOKED', revocationEventId: 'forged-ack' });
+    await denied(reviewOnlyDrainStatus(forged), 'fence_unverified');
+    await denied(revokeReviewOnlyOutputScope(forged, 'forged-ack'), 'fence_unverified');
+  });
   await check('review model never returns production grants or Storage write permission', async () => {
     for (const x of [await reviewOnlyDrainStatus(s), await reviewOnlyDrainStatus(s2)]) {
       assert.equal(x.productionAuthorized, false);
       assert.equal(x.revocationAcknowledgementPermitted, false);
       assert.equal(x.storageWriteFenceVerified, false);
+      assert.equal(x.revocationComplete, false);
     }
   });
-  console.log('R520_REVIEW_ONLY_FIRESTORE_EMULATOR_PASS checks=' + results.length);
+  console.log('R523_REVIEW_ONLY_FENCING_EMULATOR_PASS checks=' + results.length
+    + ' productionAuthorized=false deletionAck=false');
 } finally {
   await deleteApp(app);
 }
