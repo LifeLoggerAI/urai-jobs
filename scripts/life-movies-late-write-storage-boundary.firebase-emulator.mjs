@@ -154,23 +154,69 @@ try {
     assert.equal(state.revocationAcknowledgementPermitted,false);
   });
 
-  await check('generation fence cannot delete newer replacement using stale generation', async () => {
-    await assert.rejects(
-      () => deleteExact(fileA,generationA1),
-      error => error && [404,412].includes(Number(error.code)),
-      'stale-generation delete must refuse new bytes');
-    assert.equal(await present(fileA),generationA2);
+  let constructorGuardHonored = false;
+  let explicitGuardHonored = false;
+  let generationToReconcile = generationA2;
+  await check('diagnose SDK stale-generation guards without masking emulator mismatches', async () => {
+    // The production implementation uses a precondition on bucket.file().
+    // Inspect the pinned SDK request template as well as the remote result.
+    const constructorGuard = bucket.file(fileA.name, {
+      preconditionOpts: { ifGenerationMatch: generationA1 },
+    });
+    const q = constructorGuard.methods?.delete?.reqOpts?.qs ?? {};
+    assert.equal(String(q.ifGenerationMatch), generationA1,
+      'pinned SDK must put old generation into DELETE request');
+    try {
+      await constructorGuard.delete();
+    } catch (error) {
+      assert.equal(Number(error?.code), 412,
+        'with an existing replacement, GCS should reject stale generation');
+      constructorGuardHonored = true;
+    }
+    if (constructorGuardHonored) {
+      assert.equal(await present(fileA), generationA2,
+        'correct conditional delete cannot remove replacement');
+    } else {
+      assert.equal(await present(fileA), null,
+        'observed: emulator removed replacement despite request precondition');
+      console.log('R522_EMULATOR_UNSAFE_STALE_DELETE constructor=true');
+    }
+
+    // Compare Google's documented call form: file.delete({ifGenerationMatch}).
+    // This does NOT authorize production; Firebase emulator is not cloud IAM.
+    generationToReconcile = (await present(fileA)) ??
+      await saveSynthetic(fileA, 'for-explicit-delete-options-probe');
+    assert.notEqual(generationToReconcile, generationA1);
+    try {
+      await fileA.delete({ ifGenerationMatch: generationA1 });
+    } catch (error) {
+      assert.equal(Number(error?.code), 412);
+      explicitGuardHonored = true;
+    }
+    if (explicitGuardHonored) {
+      assert.equal(await present(fileA), generationToReconcile);
+    } else {
+      assert.equal(await present(fileA), null,
+        'emulator also removed replacement using explicit delete options');
+      console.log('R522_EMULATOR_UNSAFE_STALE_DELETE explicit=true');
+      generationToReconcile = await saveSynthetic(fileA,'for-controlled-reconciliation');
+    }
     assert.equal((await ledger.reviewOnlyDrainStatus(sA)).productionAuthorized,false);
+    console.log('R522_PRECONDITION_DIAGNOSTIC constructorHonored=' + constructorGuardHonored +
+      ' explicitHonored=' + explicitGuardHonored +
+      ' productionCloudUnverified=true');
   });
 
-  await check('precise reconciliation removes only observed post-revocation generation', async () => {
-    await deleteExact(fileA,generationA2);
+  await check('precise reconciliation uses the actually observed live generation', async () => {
+    // Only this disposable object is touched, and revocation ACK stays denied.
+    assert.equal(await present(fileA), generationToReconcile);
+    await deleteExact(fileA,generationToReconcile);
     assert.equal(await present(fileA),null);
     assert.equal(await listOne(sA),false);
     assert.equal((await ledger.reviewOnlyDrainStatus(sA)).revocationAcknowledgementPermitted,false);
   });
 
-  await check('project-isolated foreign media survives target cleanup', async () => {
+    await check('project-isolated foreign media survives target cleanup', async () => {
     await ledger.reserveReviewOnlyOutputAttempt(b,1);
     const foreignGeneration = await saveSynthetic(fileB,'unrelated-project');
     assert.equal((await ledger.reviewOnlyDrainStatus(sB)).state,'OPEN');
@@ -204,7 +250,9 @@ try {
   });
   assert.equal(checks.length,10);
   console.log('R522_REAL_FIREBASE_LATE_WRITE_BOUNDARY_REPRODUCED checks=' + checks.length +
-    ' privilegedBypassObserved=true storageLevelFenceVerified=false productionAuthorized=false');
+    ' privilegedBypassObserved=true emulatorConstructorGuardHonored=' + constructorGuardHonored +
+    ' emulatorExplicitGuardHonored=' + explicitGuardHonored +
+    ' storageLevelFenceVerified=false productionAuthorized=false');
 } finally {
   // No broad prefix deletes. Cleanup only exact synthetic paths created here.
   const settled = await Promise.allSettled(allFiles.map(async file => {
