@@ -1,0 +1,177 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { auditStudioStorageIamSnapshot as audit, SCHEMA } from './review-only/studio-storage-iam-snapshot-audit.mjs';
+
+const now = new Date('2026-11-04T05:00:00.000Z');
+const projectId = 'urai-review-1';
+const bucket = 'urai-review-private-bucket';
+const privatePrincipal = 'some-private-principal@example.com';
+const baseline = () => ({
+  schemaVersion: SCHEMA,
+  projectId, bucket, collectedAt: '2026-11-04T04:58:00.000Z',
+  bucketPolicy: { version: 3, bindings: [] },
+  projectPolicy: { version: 3, bindings: [] },
+  ancestorPolicies: [
+    { level: 'organization', policy: { version: 3, bindings: [] } },
+  ],
+  runServices: [
+    { name: 'urai-studio-worker', serviceAccount: 'worker@urai-review-1.iam.gserviceaccount.com' },
+  ],
+  revisionInventory: [
+    { name: 'urai-studio-worker-00001-x', serviceAccount: 'worker@urai-review-1.iam.gserviceaccount.com' },
+  ],
+});
+const run = input => audit(input, { projectId, bucket, now });
+const has = (result, code) => assert.ok(result.findings.includes(code),
+  'expected finding: ' + code + ', got ' + JSON.stringify(result.findings));
+const denied = x => {
+  assert.equal(x.verdict, 'HOLD');
+  assert.equal(x.productionAuthorized, false);
+  assert.equal(x.liveEffectiveIamVerified, false);
+  assert.equal(x.revokeAckPermitted, false);
+};
+
+test('R526: missing evidence cannot produce release authorization', () => {
+  const r = run(null);
+  denied(r);
+  has(r, 'EVIDENCE_MALFORMED');
+});
+
+test('R526: empty direct policies still never imply safe effective Cloud IAM', () => {
+  const r = run(baseline());
+  denied(r);
+  has(r, 'LIVE_EFFECTIVE_IAM_NOT_VERIFIED');
+  has(r, 'AFTER_REVOKE_OLD_IDENTITY_NEGATIVE_GCS_TEST_REQUIRED');
+  has(r, 'EXISTING_CREDENTIALS_AND_SIGNED_URLS_NOT_REVOKED');
+});
+
+test('R526: storage objectAdmin in bucket policy is a blocker', () => {
+  const s = baseline();
+  s.bucketPolicy.bindings.push({
+    role:'roles/storage.objectAdmin',
+    members:['serviceAccount:old-writer@urai-review-1.iam.gserviceaccount.com'],
+  });
+  const r = run(s);
+  denied(r); has(r, 'POTENTIAL_DIRECT_STORAGE_WRITE_BUCKET');
+  assert.equal(r.totals.bindings, 1);
+});
+
+test('R526: project-wide storage.admin and inherited owner are unsafe', () => {
+  const s=baseline();
+  s.projectPolicy.bindings.push({
+    role:'roles/storage.admin',
+    members:['serviceAccount:deployer@urai-review-1.iam.gserviceaccount.com'],
+  });
+  s.ancestorPolicies[0].policy.bindings.push({
+    role:'roles/owner',members:['group:infra@example.net'],
+  });
+  const r=run(s); denied(r);
+  has(r,'POTENTIAL_DIRECT_STORAGE_WRITE_PROJECT');
+  has(r,'POTENTIAL_DIRECT_STORAGE_WRITE_ANCESTOR');
+  has(r,'INDIRECT_GROUP_OR_FEDERATION_MEMBERSHIP_ANCESTOR');
+});
+
+test('R526: token impersonation and workload federation remain unresolved', () => {
+  const s=baseline();
+  s.projectPolicy.bindings.push({
+    role:'roles/iam.serviceAccountTokenCreator',
+    members:['principalSet://iam.googleapis.com/projects/000/locations/global/workloadIdentityPools/reviewer/*'],
+  });
+  const r=run(s); denied(r);
+  has(r,'IAM_IMPERSONATION_OR_ADMIN_REVIEW_PROJECT');
+  has(r,'INDIRECT_GROUP_OR_FEDERATION_MEMBERSHIP_PROJECT');
+});
+
+test('R526: custom role permissions and conditional bindings require separate review', () => {
+  const s=baseline();
+  s.bucketPolicy.bindings.push({
+    role:'projects/urai-review-1/roles/mysteryStorageWriter',
+    members:['serviceAccount:worker@urai-review-1.iam.gserviceaccount.com'],
+    condition:{title:'conditional',expression:'request.time < timestamp("2099-01-01T00:00:00Z")'},
+  });
+  const r=run(s);denied(r);
+  has(r,'CUSTOM_ROLE_PERMISSIONS_UNRESOLVED_BUCKET');
+  has(r,'CONDITIONAL_POLICY_EFFECTIVENESS_UNVERIFIED_BUCKET');
+});
+
+test('R526: allUsers and allAuthenticatedUsers cannot be ignored', () => {
+  const s=baseline();s.bucketPolicy.bindings.push({
+    role:'roles/storage.objectViewer',members:['allUsers','allAuthenticatedUsers'],
+  });
+  const r=run(s);denied(r);
+  has(r,'PUBLIC_OR_DOMAIN_WIDE_MEMBER_BUCKET');
+});
+
+test('R526: missing project or bucket evidence and mismatched scope fail closed', () => {
+  const s=baseline();delete s.projectPolicy;
+  let r=run(s);denied(r);has(r,'PROJECT_OR_BUCKET_POLICY_MISSING');
+  const t=baseline();t.bucket='another-private-bucket';
+  r=run(t);denied(r);has(r,'EVIDENCE_SCOPE_MISMATCH');
+});
+
+test('R526: missing ancestor policies cannot constitute an effective IAM inventory', () => {
+  const s=baseline();delete s.ancestorPolicies;
+  const r=run(s);denied(r);has(r,'ANCESTOR_EFFECTIVE_IAM_MISSING');
+});
+
+test('R526: stale and future evidence is flagged', () => {
+  for (const collectedAt of ['2026-10-30T01:00:00Z','2099-01-01T00:00:00Z','not-a-date']) {
+    const s=baseline();s.collectedAt=collectedAt;
+    const r=run(s);denied(r);has(r,'EVIDENCE_STALE_MISSING_OR_FUTURE');
+  }
+});
+
+test('R526: missing Studio service and revision histories must not certify absence', () => {
+  const s=baseline();s.runServices=[];
+  s.revisionInventory=[];
+  const r=run(s);denied(r);
+  has(r,'STUDIO_SERVICE_ABSENCE_NOT_PROVEN');
+  has(r,'HISTORIC_STUDIO_REVISION_IDENTITIES_MISSING');
+});
+
+test('R526: reviewer output contains only counts/digests, never principal identities', () => {
+  const s=baseline();
+  s.projectPolicy.bindings.push({
+    role:'roles/storage.admin',members:['user:'+privatePrincipal],
+  });
+  const r=run(s);denied(r);
+  assert.match(r.inputDigestSha256,/^[a-f0-9]{64}$/);
+  assert.ok(!JSON.stringify(r).includes(privatePrincipal));
+  assert.ok(!JSON.stringify(r).includes('worker@urai-review-1'));
+});
+
+test('R526: CLI reads an offline snapshot and never gives exit zero or prints principals', () => {
+  const dir=mkdtempSync(join(tmpdir(),'urai-r526-'));
+  try {
+    const path=join(dir,'iam-private.json');
+    const s=baseline();s.bucketPolicy.bindings.push({
+      role:'roles/storage.objectAdmin',members:['user:'+privatePrincipal],
+    });
+    writeFileSync(path,JSON.stringify(s));
+    const script=fileURLToPath(new URL('./review-only/studio-storage-iam-snapshot-audit.mjs',import.meta.url));
+    const result=spawnSync(process.execPath,[script,'--snapshot',path,'--project',projectId,'--bucket',bucket],
+      {encoding:'utf8',timeout:10000});
+    assert.equal(result.status,2,result.stderr);
+    assert.match(result.stdout,/"verdict": "HOLD"/);
+    assert.doesNotMatch(result.stdout, new RegExp(privatePrincipal.replaceAll('.','\\.')));
+  } finally {rmSync(dir,{recursive:true,force:true});}
+});
+
+test('R526: malformed JSON CLI is hold, not a release GO', () => {
+  const dir=mkdtempSync(join(tmpdir(),'urai-r526-corrupt-'));
+  try {
+    const path=join(dir,'invalid.json');writeFileSync(path,'{ secret-but-invalid');
+    const script=fileURLToPath(new URL('./review-only/studio-storage-iam-snapshot-audit.mjs',import.meta.url));
+    const r=spawnSync(process.execPath,[script,'--snapshot',path,'--project',projectId,'--bucket',bucket],
+      {encoding:'utf8',timeout:10000});
+    assert.equal(r.status,3);
+    assert.doesNotMatch(r.stderr,/secret-but-invalid/);
+  } finally {rmSync(dir,{recursive:true,force:true});}
+});
+
+console.log('R526_OFFLINE_IAM_AUDIT_TESTS_REGISTERED productionAuthorized=false cloudCalls=0');
