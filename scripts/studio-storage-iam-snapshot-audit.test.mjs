@@ -258,4 +258,22 @@ test('R526: malformed JSON CLI is hold, not a release GO', () => {
   } finally {rmSync(dir,{recursive:true,force:true});}
 });
 
+
+test('R535: malformed or whitespace-padded IAM roles cannot disappear from review diagnostics', () => {
+  for (const role of [' roles/storage.objectAdmin', 'roles/storage.objectAdmin ', '\troles/storage.objectAdmin', 'not-a-role', '']) {
+    const s=baseline();s.projectPolicy.bindings.push({role,members:['serviceAccount:worker@urai-review-1.iam.gserviceaccount.com']});
+    const r=run(s);denied(r);has(r,'IAM_ROLE_SYNTAX_UNVERIFIED_PROJECT');
+  }
+});
+test('R535: empty or malformed IAM member identifiers are rejected from evidence', () => {
+  for (const member of ['serviceAccount:', 'group:', 'user: ', 'serviceAccount:invalid member']) {
+    const s=baseline();s.bucketPolicy.bindings.push({role:'roles/storage.objectViewer',members:[member]});
+    const r=run(s);denied(r);has(r,'UNRECOGNIZED_IAM_MEMBER_FORMAT_BUCKET');
+  }
+});
+test('R535: well-formed custom role remains unresolved without spurious syntax finding', () => {
+  const s=baseline();s.bucketPolicy.bindings.push({role:'projects/urai-review-1/roles/mysteryStorageWriter',members:['serviceAccount:worker@urai-review-1.iam.gserviceaccount.com']});
+  const r=run(s);denied(r);has(r,'CUSTOM_ROLE_PERMISSIONS_UNRESOLVED_BUCKET');
+  assert.ok(!r.findings.includes('IAM_ROLE_SYNTAX_UNVERIFIED_BUCKET'));
+});
 console.log('R526_OFFLINE_IAM_AUDIT_TESTS_REGISTERED productionAuthorized=false cloudCalls=0');
