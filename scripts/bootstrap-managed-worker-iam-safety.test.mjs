@@ -31,7 +31,9 @@ exit 0
   const env = { ...baseEnv, ...overrides,
     PATH: dir + ':' + process.env.PATH,
     R524_FAKE_LOG: log, R524_BUCKET_EXISTS: overrides.R524_BUCKET_EXISTS ?? '1' };
-  if (overrides.GCS_BUCKET_NAME === null) delete env.GCS_BUCKET_NAME;
+  for (const key of ['GCS_BUCKET_NAME', 'GCLOUD_PROJECT', 'GOOGLE_CLOUD_PROJECT', 'FIREBASE_PROJECT_ID']) {
+    if (overrides[key] === null) delete env[key];
+  }
   const result = spawnSync('bash', ['scripts/bootstrap-managed-worker-iam.sh'],
     { cwd: root, env, encoding: 'utf8', timeout: 10000 });
   const lines = (() => { try { return readFileSync(log, 'utf8').trim().split('\n').filter(Boolean); }
@@ -90,5 +92,24 @@ test('R524: malformed worker selections fail before first cloud operation', () =
     const p = simulate({ URAI_JOBS_DEPLOY_WORKERS: workers });
     assert.notEqual(p.status, 0);
     assert.deepEqual(p.calls, []);
+  }
+});
+
+
+test('R524: implicit or conflicting project IDs fail before cloud access', () => {
+  const missing = simulate({ FIREBASE_PROJECT_ID: null, GCLOUD_PROJECT: null, GOOGLE_CLOUD_PROJECT: null });
+  assert.notEqual(missing.status, 0);
+  assert.deepEqual(missing.calls, []);
+  const mismatch = simulate({ GOOGLE_CLOUD_PROJECT: 'wrong-project' });
+  assert.notEqual(mismatch.status, 0);
+  assert.match(mismatch.stderr, /Conflicting project IDs/);
+  assert.deepEqual(mismatch.calls, []);
+});
+
+test('R524: bucket path, wildcard, URI, and malformed names fail before cloud access', () => {
+  for (const bucket of ['*', 'gs://synthetic-bucket', 'bucket/other', 'two..dots', 'with space', 'a']) {
+    const p = simulate({ GCS_BUCKET_NAME: bucket });
+    assert.notEqual(p.status, 0, bucket);
+    assert.deepEqual(p.calls, [], bucket);
   }
 });
