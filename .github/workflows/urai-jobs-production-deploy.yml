@@ -89,6 +89,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # P0 Jobs #252: Studio cannot reach protected mutation while Storage
+          # still permits old direct writers and the broker is unapproved.
+          if [ "${INPUT_INCLUDE_STUDIO_WORKER:-}" != 'false' ]; then
+            echo 'STUDIO_WORKER_PROTECTED_RELEASE_HARD_OFF: Jobs #252' >&2
+            exit 1
+          fi
           [[ "$INPUT_EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$INPUT_ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$GITHUB_REF" = 'refs/heads/main'
