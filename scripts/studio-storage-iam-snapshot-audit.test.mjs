@@ -76,6 +76,56 @@ test('R526: project-wide storage.admin and inherited owner are unsafe', () => {
   has(r,'INDIRECT_GROUP_OR_FEDERATION_MEMBERSHIP_ANCESTOR');
 });
 
+test('R529: folderAdmin and Express Mode roles can write private objects', () => {
+  const s = baseline();
+  s.bucketPolicy.bindings.push({
+    role:'roles/storage.folderAdmin',
+    members:['serviceAccount:folder-writer@urai-review-1.iam.gserviceaccount.com'],
+  });
+  s.projectPolicy.bindings.push({
+    role:'roles/storage.expressModeUserAccess',
+    members:['serviceAccount:express-writer@urai-review-1.iam.gserviceaccount.com'],
+  });
+  const r = run(s); denied(r);
+  has(r,'POTENTIAL_DIRECT_STORAGE_WRITE_BUCKET');
+  has(r,'POTENTIAL_DIRECT_STORAGE_WRITE_PROJECT');
+});
+
+test('R529: service account key and IAM admin roles need credential review', () => {
+  const s = baseline();
+  s.projectPolicy.bindings.push({
+    role:'roles/iam.serviceAccountKeyAdmin',
+    members:['group:credential-operators@example.test'],
+  });
+  s.ancestorPolicies[0].policy.bindings.push({
+    role:'roles/iam.serviceAccountAdmin',
+    members:['group:account-operators@example.test'],
+  });
+  const r = run(s); denied(r);
+  has(r,'IAM_IMPERSONATION_OR_ADMIN_REVIEW_PROJECT');
+  has(r,'IAM_IMPERSONATION_OR_ADMIN_REVIEW_ANCESTOR');
+});
+
+test('R529: HMAC key creation and broad IAM admins cannot be ignored', () => {
+  const s = baseline();
+  s.projectPolicy.bindings.push({
+    role:'roles/storage.hmacKeyAdmin',
+    members:['user:synthetic-hmac-admin@example.test'],
+  });
+  s.bucketPolicy.bindings.push({
+    role:'roles/iam.admin',
+    members:['group:synthetic-iam-admins@example.test'],
+  });
+  s.ancestorPolicies[0].policy.bindings.push({
+    role:'roles/iam.editor',
+    members:['group:synthetic-iam-editors@example.test'],
+  });
+  const r = run(s); denied(r);
+  has(r,'IAM_IMPERSONATION_OR_ADMIN_REVIEW_PROJECT');
+  has(r,'IAM_IMPERSONATION_OR_ADMIN_REVIEW_BUCKET');
+  has(r,'IAM_IMPERSONATION_OR_ADMIN_REVIEW_ANCESTOR');
+});
+
 test('R526: token impersonation and workload federation remain unresolved', () => {
   const s=baseline();
   s.projectPolicy.bindings.push({
