@@ -63,7 +63,7 @@ const job = (tenantId = 'tenantA', projectId = 'projectA') => ({
 const run = (jobs = [job()], plans = [], buckets = new Set(['private-bucket'])) =>
   assertNoUnattributed(jobs, plans, buckets);
 
-test('original-source bounded private output inventory: 15 adversarial cases', async () => {
+test('original-source bounded private output inventory: 19 adversarial cases', async () => {
   let passed = 0;
   const checked = () => { passed++; };
   const scoped = 'tenants/tenantA/life-movies/projectA/';
@@ -125,6 +125,48 @@ test('original-source bounded private output inventory: 15 adversarial cases', a
   assert.equal(calls[0].prefix, 'tenants/tenantB/life-movies/planB/');
   checked();
 
+  // A longform plan can exist without any Jobs output references. Its
+  // unrecorded attempt object must still stop a completed-cleanup claim.
+  const planOnly = { data: () => ({ tenantId: 'tenantB', projectId: 'planB' }) };
+  calls = [];
+  response = [[{ name: 'private-plan-only-orphan.mp4' }]];
+  await assert.rejects(run([], [planOnly]), (error) => {
+    assert.equal(error.message, 'life_movie_revocation_unattributed_output_unresolved');
+    assert.ok(!error.message.includes('private-plan-only-orphan.mp4'),
+      'do not disclose private object names');
+    return true;
+  });
+  assert.deepEqual(calls, [{
+    bucket: 'private-bucket', prefix: 'tenants/tenantB/life-movies/planB/',
+    autoPaginate: false, maxResults: 1,
+  }]);
+  checked();
+
+  // A later read with no orphan can pass without granting consent or
+  // clearing any application state inside this isolated helper test.
+  response = [[]];
+  calls = [];
+  await run([], [planOnly]);
+  assert.equal(calls.length, 1);
+  checked();
+
+  // Inspect every affected project and every approved output bucket, never
+  // collapsing distinct boundaries into a single implicit storage scope.
+  calls = [];
+  await run([job(), job('tenantB', 'projectB')], [],
+    new Set(['private-bucket', 'secondary-bucket']));
+  assert.equal(calls.length, 4);
+  assert.equal(new Set(calls.map(({ bucket, prefix }) => `${bucket}:${prefix}`)).size, 4);
+  assert.ok(calls.every(({ autoPaginate, maxResults }) =>
+    autoPaginate === false && maxResults === 1));
+  checked();
+
+  // An identical project observed in a Job and a longform plan is one scope.
+  calls = [];
+  await run([job()], [{ data: () => ({ tenantId: 'tenantA', projectId: 'projectA' }) }]);
+  assert.equal(calls.length, 1);
+  checked();
+
   await assert.rejects(run([], [{ data: () => null }]),
     /life_movie_revocation_output_scope_unverified/);
   checked();
@@ -140,7 +182,7 @@ test('original-source bounded private output inventory: 15 adversarial cases', a
   assert.equal(calls[0].prefix, scoped);
   checked();
 
-  assert.equal(passed, 15);
-  console.log('R512_ORIGINAL_SOURCE_INVENTORY_ISOLATED_PASS checks=' + passed +
+  assert.equal(passed, 19);
+  console.log('R516_ORIGINAL_SOURCE_INVENTORY_ISOLATED_PASS checks=' + passed +
     ' source-backed=true cloudAccess=false productionAuthorized=false');
 });
