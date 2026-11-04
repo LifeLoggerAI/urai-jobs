@@ -276,4 +276,33 @@ test('R535: well-formed custom role remains unresolved without spurious syntax f
   const r=run(s);denied(r);has(r,'CUSTOM_ROLE_PERMISSIONS_UNRESOLVED_BUCKET');
   assert.ok(!r.findings.includes('IAM_ROLE_SYNTAX_UNVERIFIED_BUCKET'));
 });
+
+test('R537: missing Cloud Run Job inventory is explicit review blocker', () => {
+  const r=run(baseline());denied(r);has(r,'CLOUD_RUN_JOB_INVENTORY_MISSING');
+});
+test('R537: malformed or duplicate Job identities fail closed', () => {
+  for (const runJobs of [[{}],[null],[{name:'job1'}],
+    [{name:'job1',serviceAccount:'invalid'}],
+    [{name:'same-job',serviceAccount:null},{name:'same-job',serviceAccount:null}]]) {
+    const s=baseline();s.runJobs=runJobs;const r=run(s);denied(r);
+    has(r,'CLOUD_RUN_JOB_INVENTORY_MALFORMED');
+  }
+});
+test('R537: unknown Cloud Run Job principal cannot be silently ignored', () => {
+  const s=baseline();s.runJobs=[{name:'urai-job',serviceAccount:null}];
+  const r=run(s);denied(r);has(r,'CLOUD_RUN_JOB_PRINCIPAL_UNVERIFIED');
+  assert.equal(r.totals.cloudRunJobs,1);
+});
+test('R537: shared default Cloud Run Job principal still requires review', () => {
+  const s=baseline();s.runJobs=[{name:'urai-job',serviceAccount:'123456789-compute@developer.gserviceaccount.com'}];
+  const r=run(s);denied(r);has(r,'DEFAULT_SHARED_RUNTIME_IDENTITY_REQUIRES_REVIEW');
+});
+test('R537: valid Cloud Run Job identity is counted but not cloud permission proof', () => {
+  const s=baseline();s.runJobs=[{name:'urai-job',serviceAccount:'job@urai-review-1.iam.gserviceaccount.com'}];
+  const r=run(s);denied(r);
+  assert.equal(r.totals.cloudRunJobs,1);
+  assert.ok(!r.findings.includes('CLOUD_RUN_JOB_INVENTORY_MISSING'));
+  has(r,'LIVE_EFFECTIVE_IAM_NOT_VERIFIED');
+});
+
 console.log('R526_OFFLINE_IAM_AUDIT_TESTS_REGISTERED productionAuthorized=false cloudCalls=0');
