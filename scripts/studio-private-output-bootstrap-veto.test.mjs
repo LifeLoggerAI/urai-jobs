@@ -145,4 +145,33 @@ test('R525: all three modified shell scripts remain parseable', () => {
   });
   assert.equal(result.status, 0, result.stderr);
 });
+test('R526: protected release preflight blocks Studio before SHA/cloud preflight', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/urai-jobs-production-deploy.yml'), 'utf8');
+  const stepStart = workflow.indexOf('      - name: Validate exact inputs and clean source');
+  const shellStart = workflow.indexOf('          set -euo pipefail', stepStart);
+  const guardStart = workflow.indexOf('          if [ "${INPUT_INCLUDE_STUDIO_WORKER:-}" != \'false\' ]; then', shellStart);
+  const shaCheck = workflow.indexOf('          [[ "$INPUT_EXPECTED_SHA" =~', shellStart);
+  const authStep = workflow.indexOf('name: Authenticate to Google Cloud with workload identity');
+  assert.ok(stepStart >= 0 && shellStart > stepStart &&
+    guardStart > shellStart && shaCheck > guardStart && authStep > shaCheck,
+    'Studio veto must precede exact-SHA checks and protected authentication');
+  assert.equal(workflow.match(/STUDIO_WORKER_PROTECTED_RELEASE_HARD_OFF/g)?.length, 1);
+  // Run the actual YAML-owned guard body as isolated shell, never the entire
+  // workflow. No checkout, secrets, authenticated cloud CLI, or IAM is used.
+  const guard = workflow.slice(guardStart, shaCheck).trimEnd().split('\n')
+    .map((line) => line.slice(10)).join('\n');
+  for (const selection of ['true', '', 'True', '1']) {
+    const result = spawnSync('bash', ['-c', 'set -euo pipefail\n' + guard + '\necho SHOULD_NOT_RUN'], {
+      encoding: 'utf8', env: { ...process.env, INPUT_INCLUDE_STUDIO_WORKER: selection },
+    });
+    denied(result, 'STUDIO_WORKER_PROTECTED_RELEASE_HARD_OFF');
+    assert.doesNotMatch(result.stdout, /SHOULD_NOT_RUN/);
+  }
+  const safe = spawnSync('bash', ['-c', 'set -euo pipefail\n' + guard + '\necho NONSTUDIO_ONLY'], {
+    encoding: 'utf8', env: { ...process.env, INPUT_INCLUDE_STUDIO_WORKER: 'false' },
+  });
+  assert.equal(safe.status, 0, safe.stderr);
+  assert.match(safe.stdout, /NONSTUDIO_ONLY/);
+});
+
 console.log('R525_EARLY_STUDIO_AND_STORAGE_IAM_VETO_TESTS_REGISTERED cloud=false');
