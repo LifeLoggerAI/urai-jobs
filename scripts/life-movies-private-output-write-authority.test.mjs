@@ -65,4 +65,4 @@ test('R518: neither permission nor revocation is represented as cleared', () => 
   assert.doesNotMatch(authoritySource, /return true;|Boolean\(process\.env/);
 });
 
-console.log('R518_DIRECT_PRIVATE_OUTPUT_WRITE_FENCE_TEST_ONLY checks=3 hardOff=true cloud=false');
+console.log('R520_DIRECT_PRIVATE_OUTPUT_WRITE_FENCE_TEST_ONLY checks=4 hardOff=true cloud=false');
