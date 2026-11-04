@@ -129,6 +129,7 @@ export function auditStudioStorageIamSnapshot(snapshot, expected) {
     'AFTER_REVOKE_OLD_IDENTITY_NEGATIVE_GCS_TEST_REQUIRED',
     'ACTUAL_UPLOAD_DRAIN_AND_GCS_GENERATION_PROOF_REQUIRED',
     'INDEPENDENT_REVIEW_AND_FOUNDER_RELEASE_APPROVAL_REQUIRED',
+    'RETAINED_JOB_EXECUTIONS_NOT_FULL_HISTORICAL_OR_UPLOAD_DRAIN_PROOF',
   ]);
   const now = expected.now instanceof Date ? expected.now : new Date();
   const timestamp = Date.parse(String(snapshot.collectedAt ?? ''));
@@ -143,7 +144,7 @@ export function auditStudioStorageIamSnapshot(snapshot, expected) {
       return invalidResult('ANCESTOR_POLICY_MALFORMED', snapshot);
     }
   }
-  const counters = { bindings: 0, members: 0, cloudRunServices: snapshot.runServices.length, cloudRunJobs: 0 };
+  const counters = { bindings: 0, members: 0, cloudRunServices: snapshot.runServices.length, cloudRunJobs: 0, cloudRunExecutions: 0 };
   // Missing historical evidence never becomes proof of absence or release GO.
   if (snapshot.runJobs === undefined) {
     findings.add('CLOUD_RUN_JOB_INVENTORY_MISSING');
@@ -158,6 +159,30 @@ export function auditStudioStorageIamSnapshot(snapshot, expected) {
       findings.add('CLOUD_RUN_JOB_PRINCIPAL_UNVERIFIED');
     if (snapshot.runJobs.some(j => /@(?:developer|appspot)\.gserviceaccount\.com$/.test(j.serviceAccount ?? '')))
       findings.add('DEFAULT_SHARED_RUNTIME_IDENTITY_REQUIRES_REVIEW');
+  }
+  // R584: the retained execution list is separate from Jobs definitions.
+  // Anything missing, malformed, unknown, or currently non-terminal remains
+  // an explicit blocker. Even a terminal list cannot certify an old stream
+  // is drained or that an unlisted legacy credential cannot write to GCS.
+  if (snapshot.runJobExecutions === undefined) {
+    findings.add('CLOUD_RUN_EXECUTION_INVENTORY_MISSING');
+  } else if (!Array.isArray(snapshot.runJobExecutions) ||
+      snapshot.runJobExecutions.length > 4000 ||
+      !snapshot.runJobExecutions.every(entry => object(entry) &&
+        SERVICE.test(String(entry.name ?? '')) &&
+        SERVICE.test(String(entry.jobName ?? '')) &&
+        ['RECORDED_TERMINAL','ACTIVE_OR_UNVERIFIED'].includes(entry.lifecycle)) ||
+      new Set(snapshot.runJobExecutions.map(entry => entry.name)).size !== snapshot.runJobExecutions.length) {
+    return invalidResult('CLOUD_RUN_EXECUTION_INVENTORY_MALFORMED', snapshot);
+  } else {
+    if (Array.isArray(snapshot.runJobs) &&
+        snapshot.runJobExecutions.some(entry => !snapshot.runJobs.some(j => j.name === entry.jobName))) {
+      return invalidResult('CLOUD_RUN_EXECUTION_JOB_OUTSIDE_INVENTORY', snapshot);
+    }
+    counters.cloudRunExecutions = snapshot.runJobExecutions.length;
+    if (snapshot.runJobExecutions.some(entry => entry.lifecycle === 'ACTIVE_OR_UNVERIFIED')) {
+      findings.add('CLOUD_RUN_EXECUTION_ACTIVE_OR_UNVERIFIED');
+    }
   }
   collectPolicy(snapshot.projectPolicy, 'PROJECT', findings, counters);
   collectPolicy(snapshot.bucketPolicy, 'BUCKET', findings, counters);
