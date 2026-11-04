@@ -134,6 +134,14 @@ test('R526: missing Studio service and revision histories must not certify absen
   has(r,'HISTORIC_STUDIO_REVISION_IDENTITIES_MISSING');
 });
 
+test('R526: default shared Cloud Run identity is recognized but never treated as safe', () => {
+  const s=baseline();
+  s.runServices[0].serviceAccount='123456789-compute@developer.gserviceaccount.com';
+  const r=run(s);
+  denied(r);
+  has(r,'DEFAULT_SHARED_RUNTIME_IDENTITY_REQUIRES_REVIEW');
+});
+
 test('R526: reviewer output contains only counts/digests, never principal identities', () => {
   const s=baseline();
   s.projectPolicy.bindings.push({
