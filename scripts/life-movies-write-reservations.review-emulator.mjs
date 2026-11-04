@@ -12,9 +12,13 @@ const PROJECT = 'urai-staging-test';
 assert.equal(process.env.URAI_EMULATOR_PROJECT, PROJECT);
 assert.equal(process.env.FIRESTORE_EMULATOR_HOST, '127.0.0.1:8080');
 assert.equal(process.env.FIREBASE_STORAGE_EMULATOR_HOST, '127.0.0.1:9199');
-for (const name of ['GOOGLE_APPLICATION_CREDENTIALS', 'GOOGLE_CLOUD_PROJECT',
-  'GCLOUD_PROJECT', 'FIREBASE_TOKEN', 'GITHUB_TOKEN', 'RUNPOD_API_KEY']) {
+for (const name of ['GOOGLE_APPLICATION_CREDENTIALS',
+  'FIREBASE_TOKEN', 'GITHUB_TOKEN', 'RUNPOD_API_KEY']) {
   assert.equal(process.env[name] || '', '', name + ' must be absent');
+}
+for (const name of ['GCLOUD_PROJECT', 'GOOGLE_CLOUD_PROJECT']) {
+  if (process.env[name]) assert.equal(process.env[name], PROJECT,
+    name + ' must identify only the disposable emulator project');
 }
 
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
