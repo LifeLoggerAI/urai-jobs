@@ -2,7 +2,7 @@
 
 **Status:** REVIEW-ONLY DESIGN / NOT IMPLEMENTED / GENESIS NO-GO.
 
-**Owner:** URAI security and privacy release review. Linked P0: Jobs issue #252. Based on Jobs review #251 and the separate draft #253 hard-off Studio output-write guard. This file and its test companion are an implementation *oracle*, not deployment code or an authorization to write media.
+**Owner:** URAI security and privacy release review. Linked P0: Jobs issue #252. Based on Jobs review #251 and the separate draft #253 hard-off Studio output-write guard. This RFC is an implementation acceptance contract, not deployment code or authorization to write media. The separate review-only test models are tracked in Jobs #254 and #255.
 
 ## 1. Why the existing green tests are not enough
 
@@ -54,7 +54,7 @@ The Firestore transaction can serialize **reservations and revocation state**, b
 
 ## 5. Evidence and release gate mapping
 
-`node --test scripts/life-movies-storage-write-broker-reference.test.mjs` executes **only a deterministic Node reference model**. Its 17 green scenario tests demonstrate what a proposed broker implementation should satisfy, **not** that the real Jobs worker, Firebase Rules, GCS IAM or Privacy issuer does satisfy it. The test-only model uses a synthetic identity symbol and in-memory Storage objects; those are not signed workload identity or cloud object-generation evidence.
+Implementation evidence is deliberately split across independent draft review branches: [Jobs #254](https://github.com/LifeLoggerAI/urai-jobs/pull/254) contains the **9/9 disposable Firebase emulator reservation/epoch review model**, while [Jobs #255](https://github.com/LifeLoggerAI/urai-jobs/pull/255) contains a **17/17 deterministic Node race-model** (both source-scoped to their own review SHAs). Neither proves production GCS IAM or physical stream draining. **This PR #256 is documentation-only**, and contains no new executable broker, test suite, IAM policy, C6 issuer, real cloud negative test, worker activation or release authority.
 
 **P0 #252 remains OPEN until all of the following are supplied:** approved broker implementation; secure migration that removes every direct writer's Storage IAM; source-bound and independently approved owner-noticed C6 rights authority; authenticated service workload identity; executable direct cloud API denial before and after revocation, active-upload draining across process crashes, generation-bound cleanup and multi-bucket inventory; genuine private H.264/SRT delivery in Spatial Replay with revocation/deletion; protected exact-head CI, hosted staging, rollback and independent security review. Explicit Founder Steward release authorization is still separate.
 
