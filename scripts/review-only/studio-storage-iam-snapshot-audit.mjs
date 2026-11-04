@@ -36,7 +36,8 @@ const PROJECT = /^[a-z][a-z0-9-]{4,62}$/;
 const BUCKET = /^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$/;
 const SERVICE = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const SA = /^[a-z0-9._+-]+@(?:[a-z0-9._-]+\.)?gserviceaccount\.com$/;
-const MEMBER = /^(?:serviceAccount:|user:|group:|domain:|principal:|principalSet:|allUsers$|allAuthenticatedUsers$)/;
+const MEMBER = /^(?:(?:serviceAccount|user|group|domain|principal|principalSet):\S+|allUsers|allAuthenticatedUsers)$/;
+const IAM_ROLE = /^(?:roles\/[A-Za-z0-9_.]+|(?:projects|organizations)\/[A-Za-z0-9._-]+\/roles\/[A-Za-z0-9_]+)$/;
 
 function object(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -55,6 +56,7 @@ function collectPolicy(policyObject, scope, findings, counters) {
     counters.bindings += 1;
     counters.members += binding.members.length;
     const { role } = binding;
+    if (!IAM_ROLE.test(role)) findings.add('IAM_ROLE_SYNTAX_UNVERIFIED_' + scope);
     if (WRITE_ROLES.has(role)) findings.add('POTENTIAL_DIRECT_STORAGE_WRITE_' + scope);
     if (IMPERSONATION_ROLES.has(role)) findings.add('IAM_IMPERSONATION_OR_ADMIN_REVIEW_' + scope);
     if (/^(?:projects|organizations)\/[^/]+\/roles\//.test(role)) findings.add('CUSTOM_ROLE_PERMISSIONS_UNRESOLVED_' + scope);
