@@ -115,16 +115,13 @@ test('R525: IAM bootstrap invokes neither gcloud nor gsutil under override attem
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test('R525: bootstrap veto is ordered before historical broad IAM commands', () => {
+test('R526: historical IAM bootstrap contains no cloud mutation code even after denial', () => {
   const s = source('bootstrap-managed-worker-iam.sh');
-  const guard = s.indexOf('MANAGED_WORKER_BROAD_STORAGE_IAM_BOOTSTRAP_HARD_OFF');
-  const exit = s.indexOf('\nexit 1\n', guard);
-  assert.ok(guard > 0 && exit > guard);
-  for (const cloud of ['gcloud config set project', 'gcloud services enable',
-    'gcloud projects add-iam-policy-binding', 'gsutil iam ch']) {
-    assert.ok(s.indexOf(cloud) > exit, 'cloud command must follow unconditional exit: '+cloud);
-  }
-  assert.doesNotMatch(s.slice(0, exit), /if .*APPROVED|if .*ALLOW|if .*VERIFIED/);
+  assert.match(s, /MANAGED_WORKER_BROAD_STORAGE_IAM_BOOTSTRAP_HARD_OFF/);
+  assert.match(s, /\nexit 1\n/);
+  assert.doesNotMatch(s, /\\bgcloud\\b|\\bgsutil\\b|roles\\/storage\\.objectAdmin|\\biam ch\\b|\\biam-policy-binding\\b/);
+  // Reject replacement code paths that might be placed behind environment flags.
+  assert.doesNotMatch(s, /\\beval\\b|\\bsource\\b|\\bexec\\b|\\bcurl\\b|\\bwget\\b/);
 });
 
 test('R525: each deploy wrapper has exactly one early Studio veto', () => {
