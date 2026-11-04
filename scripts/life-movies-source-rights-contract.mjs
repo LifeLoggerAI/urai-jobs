@@ -43,7 +43,7 @@ const sourceItem = {
   sourceRefs: ['library-item-1'],
 };
 const baseSelection = { projectId: 'movie-1', renderPlanDigest: 'a'.repeat(64), sources: [sourceItem] };
-const makeRequest = (selection = baseSelection) => ({ ownerUid: 'owner-1', tenantId: 'tenant-1',
+const makeRequest = (selection = structuredClone(baseSelection)) => ({ ownerUid: 'owner-1', tenantId: 'tenant-1',
   selection, renderScope: deriveScope(selection) });
 const makeRecord = (s = sourceItem) => ({
   schemaVersion: 'urai-life-movie-source-rights-v1', issuer: 'trusted-server-source-rights-v1',
