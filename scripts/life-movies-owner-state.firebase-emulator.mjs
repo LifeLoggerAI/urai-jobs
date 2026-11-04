@@ -42,7 +42,7 @@ const { initializeApp, deleteApp, getApps } = requireFunctions('firebase-admin/a
 const { getAuth } = requireFunctions('firebase-admin/auth');
 const { getFirestore } = requireFunctions('firebase-admin/firestore');
 assert.equal(getApps().length, 0, 'No other Firebase Admin app may be active');
-const app = initializeApp({ projectId: PROJECT }, 'jobs-owner-state-emulator-only');
+const app = initializeApp({ projectId: PROJECT }); // the original verifier uses getApp() (default)
 const auth = getAuth(app);
 const db = getFirestore(app);
 const uid = 'synthetic-owner-' + randomUUID();
