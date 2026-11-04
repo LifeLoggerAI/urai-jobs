@@ -47,6 +47,18 @@ test('R518: both render and assembly paths enforce hard-off before first byte', 
   assert.match(worker, /consentAuthorityConnected: lifeMovieConsentAuthorityAvailable\(\)/);
 });
 
+test('R519: direct Storage writer count cannot expand without explicit review', () => {
+  // Verify all direct worker write APIs, not just the two known helpers.
+  // This source tripwire is NOT a substitute for authenticated Storage IAM.
+  assert.equal((worker.match(/\.createWriteStream\s*\(/g) ?? []).length, 4,
+    'exactly two local file writes and two guarded GCS file writes expected');
+  assert.equal((worker.match(/\bfs\.createWriteStream\s*\(/g) ?? []).length, 2);
+  assert.equal((worker.match(/\bfile\.createWriteStream\s*\(/g) ?? []).length, 2);
+  assert.equal((worker.match(/\bbucket\.file\(destination\);/g) ?? []).length, 2);
+  assert.doesNotMatch(worker, /\b(?:bucket|file)\.(?:upload|save|compose|copy|rewrite)\s*\(/,
+    'alternate direct GCS write API requires explicit independent review');
+});
+
 test('R518: neither permission nor revocation is represented as cleared', () => {
   assert.match(worker, /function lifeMovieConsentAuthorityAvailable\(\) \{\s*return false;\s*\}/);
   assert.match(authoritySource, /durable|revocation epochs/);
