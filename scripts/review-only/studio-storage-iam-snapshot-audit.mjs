@@ -19,11 +19,17 @@ const WRITE_ROLES = new Set([
   'roles/storage.objectCreator', 'roles/storage.objectUser',
   'roles/storage.legacyBucketOwner', 'roles/storage.legacyBucketWriter',
   'roles/storage.legacyObjectOwner', 'roles/storage.legacyObjectWriter',
+  // Folder and Express roles can create private objects without objectAdmin.
+  'roles/storage.folderAdmin', 'roles/storage.expressModeUserAccess',
   'roles/owner', 'roles/editor',
 ]);
 const IMPERSONATION_ROLES = new Set([
   'roles/iam.serviceAccountTokenCreator', 'roles/iam.serviceAccountUser',
   'roles/iam.workloadIdentityUser', 'roles/iam.securityAdmin',
+  'roles/iam.serviceAccountKeyAdmin', 'roles/iam.serviceAccountAdmin',
+  'roles/iam.admin', 'roles/iam.editor',
+  // HMAC key issuance can create credentials for Storage XML API callers.
+  'roles/storage.hmacKeyAdmin',
   'roles/resourcemanager.projectIamAdmin',
 ]);
 const PROJECT = /^[a-z][a-z0-9-]{4,62}$/;
