@@ -176,6 +176,32 @@ test('R526: stale and future evidence is flagged', () => {
   }
 });
 
+test('R532: nonempty placeholders are not historical Cloud Run identity evidence', () => {
+  for (const revisionInventory of [[{}], [null], [{name:'urai-studio-worker-00001-x'}],
+    [{name:'urai-studio-worker-00001-x',serviceAccount:'not-a-service-account'}]]) {
+    const s=baseline();s.revisionInventory=revisionInventory;
+    const r=run(s);denied(r);has(r,'HISTORIC_REVISION_INVENTORY_MALFORMED');
+    assert.equal(r.liveEffectiveIamVerified,false);
+  }
+});
+
+test('R532: unknown alternate runtime and revision principal are separately flagged', () => {
+  const s=baseline();
+  s.runServices.push({name:'urai-alt-writer',serviceAccount:null});
+  s.revisionInventory[0].serviceAccount=null;
+  const r=run(s);denied(r);
+  has(r,'CLOUD_RUN_RUNTIME_PRINCIPAL_UNVERIFIED');
+  has(r,'HISTORIC_REVISION_PRINCIPAL_UNVERIFIED');
+});
+
+test('R532: historical non-Studio-only entries cannot imply Studio history complete', () => {
+  const s=baseline();
+  s.revisionInventory=[{name:'urai-alt-worker-00001-x',
+    serviceAccount:'other@urai-review-1.iam.gserviceaccount.com'}];
+  const r=run(s);denied(r);
+  has(r,'HISTORIC_STUDIO_REVISION_IDENTITIES_MISSING');
+});
+
 test('R526: missing Studio service and revision histories must not certify absence', () => {
   const s=baseline();s.runServices=[];
   s.revisionInventory=[];
