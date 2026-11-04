@@ -112,7 +112,7 @@ function snapshotRightsRequest(raw: Request): Request {
   return Object.freeze({
     ownerUid: r.ownerUid, tenantId: r.tenantId,
     selection: selectionSnapshot, renderScope: scopeSnapshot,
-  }) as Request;
+  }) as unknown as Request;
 }
 
 function validSource(source: Source): boolean {
