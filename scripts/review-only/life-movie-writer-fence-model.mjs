@@ -5,6 +5,8 @@
  * reserved, storage-enforced Life Movie output broker. NO GCS, Firestore,
  * signatures, IAM, consent grants or worker writes are performed here.
  * Importing this module must never enable the hard-off worker write guard.
+ * FENCING is never equivalent to REVOKED or a deletion acknowledgement.
+ * A test caller cannot supply the missing real-cloud IAM and upload evidence.
  */
 const VALID_ID = /^[A-Za-z0-9_-]{1,128}$/;
 const PURPOSE = 'life-movie.render';
@@ -27,9 +29,13 @@ function requiredScope(scope) {
   };
 }
 function requireSnapshot(snapshot) {
-  if (!snapshot || !sameScope(snapshot.scope, requiredScope(snapshot.scope)) ||
-      !['OPEN','REVOKING','REVOKED'].includes(snapshot.phase) ||
+  if (!snapshot || snapshot.schemaVersion !== 'urai-review-only-output-writer-fence-r573-v2' ||
+      !sameScope(snapshot.scope, requiredScope(snapshot.scope)) ||
+      !['OPEN','FENCING'].includes(snapshot.phase) ||
+      snapshot.acknowledged !== false ||
       !Number.isSafeInteger(snapshot.epoch) || snapshot.epoch < 1 ||
+      (snapshot.phase === 'OPEN' && (snapshot.revokedBy !== null || snapshot.epoch !== 1)) ||
+      (snapshot.phase === 'FENCING' && (!validId(snapshot.revokedBy) || snapshot.epoch < 2)) ||
       !Array.isArray(snapshot.attempts) || snapshot.attempts.length > MAX_ATTEMPTS) deny();
 }
 function requireAttempt(state, attemptId) {
@@ -38,7 +44,7 @@ function requireAttempt(state, attemptId) {
   return attempt;
 }
 function newReviewSnapshot(scope) {
-  return { schemaVersion:'urai-review-only-output-writer-fence-r521-v1',
+  return { schemaVersion:'urai-review-only-output-writer-fence-r573-v2',
     scope: requiredScope(scope), epoch: 1, phase:'OPEN',
     revokedBy: null, attempts: [], acknowledged: false };
 }
@@ -90,7 +96,7 @@ function advanceReviewSnapshot(snapshot, event) {
         return next; // same-event retry never reopens or increments epoch
       }
       if(next.phase !== 'OPEN' || next.epoch >= Number.MAX_SAFE_INTEGER) deny();
-      next.phase='REVOKING';
+      next.phase='FENCING';
       next.revokedBy=event.eventId;
       next.epoch++;
       // Any old attempt could have bytes inflight or persisted. Retain all
@@ -99,27 +105,24 @@ function advanceReviewSnapshot(snapshot, event) {
       break;
     }
     case 'settle-attempt': {
-      if (next.phase !== 'REVOKING' || expected !== next.epoch) deny();
+      if (next.phase !== 'FENCING' || expected !== next.epoch) deny();
       const a=requireAttempt(next,event.attemptId);
       const proof=event.reviewOnlyProof;
       if (a.phase !== 'RECONCILE_REQUIRED' || !proof ||
           proof.attemptId !== a.id || proof.epoch !== next.epoch ||
           proof.writerStopped !== true || proof.storageGenerationAbsent !== true ||
           proof.noPendingNetworkFinalize !== true || proof.timeoutOnly === true) deny();
-      a.phase='SETTLED_ABSENT';
+      // This is a synthetic bookkeeping result, not physical GCS absence.
+      a.phase='REVIEW_ONLY_SETTLED';
       break;
     }
     case 'acknowledge': {
-      if (next.phase !== 'REVOKING' || expected !== next.epoch ||
-          next.attempts.some(a=>a.phase!=='SETTLED_ABSENT')) deny();
-      const proof=event.reviewOnlyProof;
-      if (!proof || !sameScope(next.scope,proof.scope) ||
-          proof.epoch !== next.epoch || proof.storageAllApprovedBucketsEmpty !== true ||
-          proof.oldWriterIamDenied !== true || proof.brokerOldEpochDenied !== true ||
-          proof.noOutstandingUploadTokens !== true || proof.independentlyVerified !== true) deny();
-      next.phase='REVOKED';
-      next.acknowledged=true;
-      break;
+      // R573: caller-supplied "all green" flags and synthetic settlement have
+      // no issuer signatures, provider-originated GCS IAM denies, active stream
+      // drain attestation or exact generation absence evidence. A review model
+      // MUST NEVER generate an affirmative deletion ACK, even with zero attempts.
+      // A distinct production implementation requires independent formal review.
+      deny();
     }
     default: deny();
   }
