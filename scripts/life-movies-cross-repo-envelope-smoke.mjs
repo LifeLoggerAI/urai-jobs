@@ -29,11 +29,20 @@ const privacy=checkout(process.env.URAI_PRIVACY_DIR,process.env.URAI_PRIVACY_SHA
 function source(path) {
   const js=ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const m={exports:{}};
-  runInNewContext(js,{module:m,exports:m.exports,Buffer,URL,Error,require(n) {
+  const realm={module:m,exports:m.exports,Buffer,URL,Error,require(n) {
     if (n==='node:crypto') return requireFn(n);
     if (n==='zod') return zod;
     throw Error('unexpected import '+n);
-  }},{filename:path,timeout:5000});
+  }};
+  runInNewContext(js,realm,{filename:path,timeout:5000});
+  // The production boundary deserializes JSON in Privacy's own JavaScript
+  // realm. The strict receipt verifier intentionally rejects foreign-realm
+  // prototypes, so simulate that actual wire boundary rather than passing
+  // a foreign in-process fixture as though it were a Firestore object.
+  if(path.endsWith('/life-movie-scoped-receipt.ts')) {
+    runInNewContext('module.exports.parseWireData = text => JSON.parse(text)',realm,
+      {filename:path,timeout:5000});
+  }
   return m.exports;
 }
 const S=source(join(studio,'apps/studio/lib/studio-life-movie-jobs-bridge.ts'));
@@ -70,20 +79,25 @@ const receipt={
 };
 const receiptHash=P.hashLifeMovieScopedReceipt(receipt),stored={...receipt,receiptHash};
 const expected={subjectUid:receipt.uid,tenantId:receipt.tenantId,decisionReceiptId:receiptHash,renderScope:jobsScope};
-test('Privacy validates Jobs-parsed Studio scope',()=>assert.equal(P.verifiesLifeMovieScopedReceipt(stored,expected),true));
+const wire = value => P.parseWireData(JSON.stringify(value));
+const privacyStored=wire(stored);
+test('Privacy validates JSON-deserialized Studio+Jobs scope',()=>assert.equal(
+ P.verifiesLifeMovieScopedReceipt(privacyStored,wire(expected)),true));
+test('Privacy rejects foreign-realm in-process objects',()=>assert.equal(
+ P.verifiesLifeMovieScopedReceipt(stored,expected),false));
 for(const field of ['generation','objectPath','consentRef','ownerOrRightsRef','provenance']) {
  const altered=structuredClone(payload);altered.sources[0][field]+='x';
  test(field+' mutation invalidates plan digest',()=>assert.throws(()=>J.assertStudioLifeMovieRenderPlanDigest(altered),/digest_mismatch/));
- test(field+' mutation invalidates Privacy receipt',()=>assert.equal(P.verifiesLifeMovieScopedReceipt(stored,{
+ test(field+' mutation invalidates Privacy receipt',()=>assert.equal(P.verifiesLifeMovieScopedReceipt(privacyStored,wire({
  ...expected,renderScope:J.deriveStudioLifeMovieRenderScope(altered)
- }),false));
+ })),false));
 }
 test('cross-tenant output denied',()=>assert.throws(()=>J.assertLifeMovieTenantPaths(payload,'tenant-2'),/outside_tenant/));
 for(const [label,change] of [
  ['owner mismatch',{subjectUid:'owner-2'}],['tenant mismatch',{tenantId:'tenant-2'}],
  ['receipt mismatch',{decisionReceiptId:'0'.repeat(64)}],
  ['source mismatch',{renderScope:{...jobsScope,sourceSetDigest:'0'.repeat(64)}}]
-]) test(label+' rejected',()=>assert.equal(P.verifiesLifeMovieScopedReceipt(stored,{...expected,...change}),false));
+]) test(label+' rejected',()=>assert.equal(P.verifiesLifeMovieScopedReceipt(privacyStored,wire({...expected,...change})),false));
 test('Jobs consent authority remains off',()=>assert.equal(G.lifeMovieConsentAuthorityAvailable(),false));
 test('Jobs life movie stays deferred',()=>assert.equal(G.deferLifeMovieJob({jobType:'studio.render.video'}),true));
 console.log('R345_CROSS_REPO_ENVELOPE_PASS '+n+'/'+n);
