@@ -29,7 +29,7 @@ const IMPERSONATION_ROLES = new Set([
 const PROJECT = /^[a-z][a-z0-9-]{4,62}$/;
 const BUCKET = /^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$/;
 const SERVICE = /^[a-z0-9][a-z0-9-]{0,62}$/;
-const SA = /^[a-z0-9-]+@[a-z0-9-]+\.iam\.gserviceaccount\.com$/;
+const SA = /^[a-z0-9._+-]+@(?:[a-z0-9._-]+\.)?gserviceaccount\.com$/;
 const MEMBER = /^(?:serviceAccount:|user:|group:|domain:|principal:|principalSet:|allUsers$|allAuthenticatedUsers$)/;
 
 function object(value) {
@@ -134,6 +134,10 @@ export function auditStudioStorageIamSnapshot(snapshot, expected) {
   }
   if (snapshot.runServices.some(s => /studio/i.test(s.name) && !s.serviceAccount)) {
     findings.add('STUDIO_RUNTIME_PRINCIPAL_UNVERIFIED');
+  }
+  if (snapshot.runServices.some(s => typeof s.serviceAccount === 'string' &&
+      /@(?:developer|appspot)\.gserviceaccount\.com$/.test(s.serviceAccount))) {
+    findings.add('DEFAULT_SHARED_RUNTIME_IDENTITY_REQUIRES_REVIEW');
   }
   if (!Array.isArray(snapshot.revisionInventory) || !snapshot.revisionInventory.length) {
     findings.add('HISTORIC_STUDIO_REVISION_IDENTITIES_MISSING');
