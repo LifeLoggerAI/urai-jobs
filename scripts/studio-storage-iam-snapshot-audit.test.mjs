@@ -306,3 +306,32 @@ test('R537: valid Cloud Run Job identity is counted but not cloud permission pro
 });
 
 console.log('R526_OFFLINE_IAM_AUDIT_TESTS_REGISTERED productionAuthorized=false cloudCalls=0');
+
+test('R544: well-formed but unclassified Firebase role gets explicit permissions review finding', () => {
+  const s = baseline();
+  s.bucketPolicy.bindings.push({role:'roles/firebase.admin', members:['serviceAccount:synthetic@urai-review-1.iam.gserviceaccount.com']});
+  const r=run(s); denied(r);
+  has(r, 'PREDEFINED_ROLE_PERMISSIONS_UNRESOLVED_BUCKET');
+  assert.ok(!r.findings.includes('IAM_ROLE_SYNTAX_UNVERIFIED_BUCKET'));
+});
+
+test('R544: unclassified predefined roles on project and ancestors are never silently omitted', () => {
+  const s=baseline();
+  s.projectPolicy.bindings.push({role:'roles/cloudfunctions.admin', members:['group:synthetic@example.test']});
+  s.ancestorPolicies[0].policy.bindings.push({role:'roles/unknownservice.unknownRole', members:['group:synthetic@example.test']});
+  const r=run(s); denied(r);
+  has(r, 'PREDEFINED_ROLE_PERMISSIONS_UNRESOLVED_PROJECT');
+  has(r, 'PREDEFINED_ROLE_PERMISSIONS_UNRESOLVED_ANCESTOR');
+});
+
+test('R544: known storage and impersonation roles keep specific findings without generic noise', () => {
+  const s=baseline();
+  s.bucketPolicy.bindings.push({role:'roles/storage.objectViewer', members:['serviceAccount:synthetic@urai-review-1.iam.gserviceaccount.com']});
+  s.projectPolicy.bindings.push({role:'roles/storage.objectAdmin', members:['serviceAccount:synthetic@urai-review-1.iam.gserviceaccount.com']});
+  s.ancestorPolicies[0].policy.bindings.push({role:'roles/iam.serviceAccountTokenCreator', members:['group:synthetic@example.test']});
+  const r=run(s); denied(r);
+  has(r, 'POTENTIAL_DIRECT_STORAGE_WRITE_PROJECT');
+  has(r, 'IAM_IMPERSONATION_OR_ADMIN_REVIEW_ANCESTOR');
+  assert.ok(!r.findings.some(x=>x.startsWith('PREDEFINED_ROLE_PERMISSIONS_UNRESOLVED_')),
+    'known role meanings should not produce generic unknown-role diagnostics');
+});

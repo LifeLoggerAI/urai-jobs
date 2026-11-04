@@ -32,6 +32,11 @@ const IMPERSONATION_ROLES = new Set([
   'roles/storage.hmacKeyAdmin',
   'roles/resourcemanager.projectIamAdmin',
 ]);
+// Exact reviewed predefined roles; unknown predefined IAM roles can hide
+// Storage writes or credential issuance and must not silently disappear.
+const REVIEWED_READ_ONLY_ROLES = new Set([
+  'roles/storage.objectViewer', 'roles/storage.legacyBucketReader',
+]);
 const PROJECT = /^[a-z][a-z0-9-]{4,62}$/;
 const BUCKET = /^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$/;
 const SERVICE = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -59,6 +64,13 @@ function collectPolicy(policyObject, scope, findings, counters) {
     if (!IAM_ROLE.test(role)) findings.add('IAM_ROLE_SYNTAX_UNVERIFIED_' + scope);
     if (WRITE_ROLES.has(role)) findings.add('POTENTIAL_DIRECT_STORAGE_WRITE_' + scope);
     if (IMPERSONATION_ROLES.has(role)) findings.add('IAM_IMPERSONATION_OR_ADMIN_REVIEW_' + scope);
+    // The names of unrelated predefined roles are not sufficient to prove their
+    // underlying permissions cannot grant Storage writes or impersonation.
+    if (IAM_ROLE.test(role) && role.startsWith('roles/') &&
+        !WRITE_ROLES.has(role) && !IMPERSONATION_ROLES.has(role) &&
+        !REVIEWED_READ_ONLY_ROLES.has(role)) {
+      findings.add('PREDEFINED_ROLE_PERMISSIONS_UNRESOLVED_' + scope);
+    }
     if (/^(?:projects|organizations)\/[^/]+\/roles\//.test(role)) findings.add('CUSTOM_ROLE_PERMISSIONS_UNRESOLVED_' + scope);
     if (/^roles\/storage\./.test(role) && !WRITE_ROLES.has(role) &&
         !['roles/storage.objectViewer','roles/storage.legacyBucketReader'].includes(role)) {
