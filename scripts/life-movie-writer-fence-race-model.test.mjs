@@ -29,4 +29,4 @@ test('clean model state can ACK only with all review-only external proofs',()=>{
 test('failed cross-project identity cannot settle a different attempt',()=>{let s=withdraw(reserve(initial()));denied(()=>advanceReviewSnapshot(s,{...evt('settle-attempt',s.epoch,{attemptId:'attempt-1',reviewOnlyProof:{attemptId:'attempt-1',epoch:s.epoch,writerStopped:true,storageGenerationAbsent:true,noPendingNetworkFinalize:true}}),scope:{...scope,tenantId:'tenant-2'}}));});
 test('multiple attempts must all reconcile before ACK',()=>{let s=reserve(reserve(initial(),'one'),'two');s=withdraw(s);s=settle(s,'one');denied(()=>ack(s));s=settle(s,'two');assert.equal(ack(s).phase,'REVOKED');});
 test('no timeout or stale epoch can re-open completed revocation',()=>{let s=ack(withdraw(initial()));denied(()=>reserve(s));denied(()=>advanceReviewSnapshot(s,evt('begin-upload',1,{attemptId:'a'})));assert.equal(withdraw(s).phase,'REVOKED');});
-console.log('R521_REVIEW_ONLY_REVOCATION_RACE_MODEL PASS modelOnly=true storageAuthority=false');
+console.log('R521_REVIEW_ONLY_REVOCATION_RACE_MODEL_REGISTERED modelOnly=true storageAuthority=false');
