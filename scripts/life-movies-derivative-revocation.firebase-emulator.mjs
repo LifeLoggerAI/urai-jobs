@@ -12,7 +12,6 @@ import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import vm from 'node:vm';
 
 const PROJECT = 'urai-staging-test';
 const REQUIRED = {
@@ -149,10 +148,11 @@ function originalSourceWithPostDeleteReplacement(targetObjectPath) {
       };
     },
   };
-  const exports = {};
-  vm.runInNewContext(compiled.outputText, {
-    module: { exports }, exports, Buffer, console, process, Date, Promise, Error,
-    require(name) {
+  // The Firestore SDK requires a transaction callback returning a Promise
+  // from the SAME Node realm. Use a test-only CJS loader in this realm rather
+  // than a vm context, and inject only the Storage wrapper for the race.
+  const loaded = { exports: {} };
+  const testRequire = (name) => {
       if (name === 'node:crypto') return requireFunctions('node:crypto');
       if (name === 'node:util') return requireFunctions('node:util');
       if (name === 'firebase-admin/firestore') return { ...firestoreModule, getFirestore: () => db };
@@ -166,10 +166,12 @@ function originalSourceWithPostDeleteReplacement(targetObjectPath) {
       };
       if (name === './lifeMovieArtifactRefs.js') return { lifeMovieArtifactBindings };
       throw Error('unexpected original-source import: ' + name);
-    },
-  }, { filename: 'lifeMovieDerivativeRevocation.actual.ts' });
-  assert.equal(typeof exports.invalidateLifeMovieDerivativesForConsent, 'function');
-  return { invalidate: exports.invalidateLifeMovieDerivativesForConsent,
+  };
+  const executeOriginalCjs = new Function('module', 'exports', 'require',
+    compiled.outputText + '\n//# sourceURL=lifeMovieDerivativeRevocation.actual.ts');
+  executeOriginalCjs(loaded, loaded.exports, testRequire);
+  assert.equal(typeof loaded.exports.invalidateLifeMovieDerivativesForConsent, 'function');
+  return { invalidate: loaded.exports.invalidateLifeMovieDerivativesForConsent,
     replacements: () => replacementCount };
 }
 
