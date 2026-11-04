@@ -119,9 +119,9 @@ test('R526: historical IAM bootstrap contains no cloud mutation code even after 
   const s = source('bootstrap-managed-worker-iam.sh');
   assert.match(s, /MANAGED_WORKER_BROAD_STORAGE_IAM_BOOTSTRAP_HARD_OFF/);
   assert.match(s, /\nexit 1\n/);
-  assert.doesNotMatch(s, /\\bgcloud\\b|\\bgsutil\\b|roles\\/storage\\.objectAdmin|\\biam ch\\b|\\biam-policy-binding\\b/);
+  assert.doesNotMatch(s, /\bgcloud\b|\bgsutil\b|roles\/storage\.objectAdmin|\biam ch\b|\biam-policy-binding\b/);
   // Reject replacement code paths that might be placed behind environment flags.
-  assert.doesNotMatch(s, /\\beval\\b|\\bsource\\b|\\bexec\\b|\\bcurl\\b|\\bwget\\b/);
+  assert.doesNotMatch(s, /\beval\b|\bsource\b|\bexec\b|\bcurl\b|\bwget\b/);
 });
 
 test('R525: each deploy wrapper has exactly one early Studio veto', () => {
