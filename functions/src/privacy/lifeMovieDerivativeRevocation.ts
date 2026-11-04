@@ -49,9 +49,12 @@ function allowedOutputBuckets(): Set<string> {
 }
 
 function isAffectedJob(job: Record<string, unknown>, event: LifeMovieRevocationEvent): boolean {
-  const jobType = String(job.jobType || job.type || '');
   if (job.ownerUid !== event.ownerUid || job.sourceSystem !== 'urai-studio') return false;
-  if (jobType !== 'studio.render.video' && jobType !== 'studio.assemble.video') return false;
+  // Revocation must conservatively fence any possible Studio Life Movie
+  // derivative, even if legacy jobType/type aliases disagree. Dispatch
+  // admission is governed separately and must remain strict.
+  if (![job.jobType, job.type].some((type) =>
+    type === 'studio.render.video' || type === 'studio.assemble.video')) return false;
   // Both job types are Life Movie work even if a legacy or malformed record
   // omitted or mislabeled its consent. The owner and source still must match.
   return true;
