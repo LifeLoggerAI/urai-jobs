@@ -58,7 +58,7 @@ async function missingFile(path) {
   try { await bucket.file(path).getMetadata(); return false; }
   catch (error) { if (missing(error)) return true; throw error; }
 }
-async function seed(kind) {
+async function seed(kind, typeFields = { jobType: 'studio.render.video' }) {
   const ownerUid = 'synthetic-owner-' + token + '-' + kind;
   const tenantId = 'tenant-1';
   const projectId = 'movie-' + token + '-' + kind;
@@ -82,8 +82,7 @@ async function seed(kind) {
   const jobRef = db.collection('jobs').doc(jobId);
   await jobRef.set({
     jobId, ownerUid, tenantId, sourceSystem: 'urai-studio',
-    jobType: 'studio.render.video', status: 'SUCCESS',
-    payload: { projectId }, output,
+    status: 'SUCCESS', payload: { projectId }, output, ...typeFields,
   });
   const receiptRef = db.collection('jobConsentEventReceipts').doc(
     createHash('sha256').update(eventId).digest('hex'));
@@ -188,6 +187,37 @@ try {
   assert.equal(state?.output, undefined);
   assert.ok(state?.outputDeletedAt != null);
   checks.push('actual-storage-generation-deleted-before-job-output-clear');
+
+  // Legacy/malformed job records can contain divergent aliases. Cleanup must
+  // conservatively fence recognized Studio render/assemble work in EITHER
+  // alias (without broadening ownerUid, sourceSystem or GCS deletion scope).
+  for (const [kind, typeFields] of [
+    ['legacy-jobtype-render', { jobType: 'legacy-other', type: 'studio.render.video' }],
+    ['legacy-jobtype-assemble', { jobType: 'legacy-other', type: 'studio.assemble.video' }],
+    ['legacy-type-assemble', { jobType: 'studio.assemble.video', type: 'legacy-other' }],
+  ]) {
+    const divergent = await seed(kind, typeFields);
+    const summary = await invalidateLifeMovieDerivativesForConsent(divergent.event);
+    assert.equal(summary.jobsScanned, 1);
+    assert.equal(summary.jobsInvalidated, 1);
+    assert.equal(summary.storageObjectsDeleted, 1);
+    assert.equal(await missingFile(divergent.objectPath), true);
+    const cleaned = (await divergent.jobRef.get()).data();
+    assert.equal(cleaned?.derivativeAccessState, 'REVOKED');
+    assert.equal(cleaned?.output, undefined);
+    assert.ok(cleaned?.outputDeletedAt != null);
+    checks.push('conflicting-job-type-alias-fenced-' + kind);
+  }
+  const unrelatedSource = await seed('foreign-source',
+    { jobType: 'studio.render.video', type: 'studio.assemble.video' });
+  await unrelatedSource.jobRef.update({ sourceSystem: 'unrelated-worker' });
+  const unrelatedResult = await invalidateLifeMovieDerivativesForConsent(unrelatedSource.event);
+  assert.equal(unrelatedResult.jobsScanned, 1);
+  assert.equal(unrelatedResult.jobsInvalidated, 0);
+  assert.equal(unrelatedResult.storageObjectsDeleted, 0);
+  assert.equal(await missingFile(unrelatedSource.objectPath), false);
+  assert.ok((await unrelatedSource.jobRef.get()).data()?.output);
+  checks.push('non-studio-job-remains-outside-derivative-cleanup');
 
   // Original job output records an immutable generation. An object replaced
   // BEFORE the first metadata read must refuse the selected old generation.
