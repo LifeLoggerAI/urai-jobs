@@ -219,6 +219,44 @@ try {
   assert.ok((await unrelatedSource.jobRef.get()).data()?.output);
   checks.push('non-studio-job-remains-outside-derivative-cleanup');
 
+  // A crashed worker may have successfully uploaded an attempt object
+  // before writing its generation into job.output. Generation-bound cleanup
+  // deletes the recorded file, but MUST NOT mark revocation complete while
+  // any other file still exists under that owner's tenant+project prefix.
+  const orphan = await seed('orphan');
+  const unknownPath = orphan.objectPath.replace(/\/render\/[^/]+$/, '/attempt-unrecorded/private.mp4');
+  assert.notEqual(unknownPath, orphan.objectPath);
+  await bucket.file(unknownPath).save(Buffer.from('synthetic-unrecorded-worker-output'), {
+    resumable: false, metadata: { contentType: 'video/mp4' },
+  });
+  activeCases.add(unknownPath);
+  await assert.rejects(
+    () => invalidateLifeMovieDerivativesForConsent(orphan.event),
+    /life_movie_revocation_unattributed_output_unresolved/,
+  );
+  assert.equal(await missingFile(orphan.objectPath), true,
+    'documented original generation may be safely deleted');
+  assert.equal(await missingFile(unknownPath), false,
+    'unrecorded source stays for explicit reconciliation, not broad delete');
+  await checkReferencesRetained(orphan.jobRef);
+  checks.push('unrecorded-attempt-output-denies-revocation-complete');
+
+  await bucket.file(unknownPath).delete();
+  const retried = await invalidateLifeMovieDerivativesForConsent(orphan.event);
+  assert.equal(retried.jobsInvalidated, 1);
+  assert.equal((await orphan.jobRef.get()).data()?.output, undefined);
+  checks.push('same-event-retry-after-orphan-reconciliation-succeeds');
+
+  // Files in a different tenant/project are NOT eligible for destructive
+  // cleanup by another owner's revocation.
+  const otherProject = await seed('other-project');
+  const scoped = await seed('scoped');
+  const scopedResult = await invalidateLifeMovieDerivativesForConsent(scoped.event);
+  assert.equal(scopedResult.jobsInvalidated, 1);
+  assert.equal(await missingFile(scoped.objectPath), true);
+  assert.equal(await missingFile(otherProject.objectPath), false);
+  checks.push('unrelated-project-objects-not-scanned-or-deleted');
+
   // Original job output records an immutable generation. An object replaced
   // BEFORE the first metadata read must refuse the selected old generation.
   const stale = await seed('stale');
