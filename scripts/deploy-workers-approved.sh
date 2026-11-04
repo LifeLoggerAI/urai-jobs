@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# R525: deny Studio before credentials, secrets, filesystem preparation or cloud access.
+WORKERS_CSV="${URAI_JOBS_DEPLOY_WORKERS:-narrator-worker,asset-worker}"
+WORKERS_CSV="$WORKERS_CSV" node scripts/studio-worker-deploy-veto.mjs
+
 : "${DEPLOY_TARGET_SECRET_VERSIONS_JSON:?DEPLOY_TARGET_SECRET_VERSIONS_JSON is required}"
 : "${GCLOUD_PROJECT:?GCLOUD_PROJECT is required}"
 : "${GITHUB_SHA:?GITHUB_SHA is required for exact worker source provenance}"
 : "${GITHUB_RUN_ID:?GITHUB_RUN_ID is required for exact worker source provenance}"
-
-WORKERS_CSV="${URAI_JOBS_DEPLOY_WORKERS:-narrator-worker,asset-worker}"
-WORKERS_CSV="$WORKERS_CSV" node scripts/studio-worker-deploy-veto.mjs
 
 REAL_GCLOUD="$(command -v gcloud)"
 [ -n "$REAL_GCLOUD" ] || { echo "[FAIL] gcloud is required" >&2; exit 1; }
