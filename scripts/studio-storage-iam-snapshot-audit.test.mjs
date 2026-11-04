@@ -14,7 +14,7 @@ const privatePrincipal = 'some-private-principal@example.com';
 const baseline = () => ({
   schemaVersion: SCHEMA,
   projectId, bucket, collectionRegion: 'us-central1',
-  collectorCoverage: 'ONE_REGION_ONLY_NOT_EFFECTIVE_IAM_OR_GLOBAL_REVISION_PROOF',
+  collectorCoverage: 'ONE_REGION_ONLY_RETAINED_EXECUTIONS_NOT_EFFECTIVE_IAM_OR_DRAIN_PROOF',
   collectedAt: '2026-11-04T04:58:00.000Z',
   bucketPolicy: { version: 3, bindings: [] },
   projectPolicy: { version: 3, bindings: [] },
@@ -368,4 +368,45 @@ test('R584: region-required CLI never returns success for fake evidence',()=>{
     const wrong=spawnSync(process.execPath,[script,'--snapshot',path,'--project',projectId,'--bucket',bucket,'--region','us-east1'],{encoding:'utf8'});
     assert.equal(wrong.status,2);assert.match(wrong.stdout,/EVIDENCE_REGION_MISMATCH_OR_MISSING/);
   }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('R584: missing execution inventory is explicitly incomplete, not a job drain receipt',()=>{
+  const s=baseline();
+  s.runJobs=[{name:'urai-job',serviceAccount:'job@urai-review-1.iam.gserviceaccount.com'}];
+  const r=run(s);denied(r);
+  has(r,'CLOUD_RUN_EXECUTION_INVENTORY_MISSING');
+  has(r,'RETAINED_JOB_EXECUTIONS_NOT_FULL_HISTORICAL_OR_UPLOAD_DRAIN_PROOF');
+});
+test('R584: retained active and unknown executions are explicit blockers',()=>{
+  const s=baseline();
+  s.runJobs=[{name:'urai-job',serviceAccount:'job@urai-review-1.iam.gserviceaccount.com'}];
+  s.runJobExecutions=[
+    {jobName:'urai-job',name:'urai-job-00001',lifecycle:'RECORDED_TERMINAL'},
+    {jobName:'urai-job',name:'urai-job-00002',lifecycle:'ACTIVE_OR_UNVERIFIED'}
+  ];
+  const r=run(s);denied(r);has(r,'CLOUD_RUN_EXECUTION_ACTIVE_OR_UNVERIFIED');
+  assert.equal(r.totals.cloudRunExecutions,2);
+  assert.ok(!JSON.stringify(r).includes('urai-job-00002'));
+});
+test('R584: terminal-only retained history never becomes completed GCS drain',()=>{
+  const s=baseline();
+  s.runJobs=[{name:'urai-job',serviceAccount:'job@urai-review-1.iam.gserviceaccount.com'}];
+  s.runJobExecutions=[{jobName:'urai-job',name:'urai-job-00001',lifecycle:'RECORDED_TERMINAL'}];
+  const r=run(s);denied(r);
+  assert.equal(r.totals.cloudRunExecutions,1);
+  assert.ok(!r.findings.includes('CLOUD_RUN_EXECUTION_ACTIVE_OR_UNVERIFIED'));
+  has(r,'ACTUAL_UPLOAD_DRAIN_AND_GCS_GENERATION_PROOF_REQUIRED');
+});
+test('R584: forged, malformed, cross-job and duplicate execution evidence denied',()=>{
+  for(const executions of [
+    null,[{}],[{jobName:'urai-job',name:'invalid name',lifecycle:'RECORDED_TERMINAL'}],
+    [{jobName:'urai-job',name:'run1',lifecycle:'COMPLETE'}],
+    [{jobName:'urai-job',name:'run1',lifecycle:'RECORDED_TERMINAL'},
+     {jobName:'urai-job',name:'run1',lifecycle:'ACTIVE_OR_UNVERIFIED'}]
+  ]){
+    const s=baseline();s.runJobs=[{name:'urai-job',serviceAccount:'job@urai-review-1.iam.gserviceaccount.com'}];s.runJobExecutions=executions;
+    const r=run(s);denied(r);has(r,'CLOUD_RUN_EXECUTION_INVENTORY_MALFORMED');
+  }
+  const s=baseline();s.runJobs=[{name:'urai-job',serviceAccount:'job@urai-review-1.iam.gserviceaccount.com'}];
+  s.runJobExecutions=[{jobName:'unrelated-job',name:'unrelated-job-001',lifecycle:'RECORDED_TERMINAL'}];
+  const r=run(s);denied(r);has(r,'CLOUD_RUN_EXECUTION_JOB_OUTSIDE_INVENTORY');
 });
