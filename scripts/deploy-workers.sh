@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# R525: deny Studio before any other preflight and before cloud mutations.
+WORKERS_CSV="${URAI_JOBS_DEPLOY_WORKERS:-narrator-worker,asset-worker}"
+WORKERS_CSV="$WORKERS_CSV" node scripts/studio-worker-deploy-veto.mjs
+
 : "${GCLOUD_PROJECT:?GCLOUD_PROJECT is required}"
 : "${GCP_REGION:=us-central1}"
 : "${GCS_BUCKET_NAME:?GCS_BUCKET_NAME is required}"
@@ -55,8 +59,6 @@ WORKER_BUILD_TIMEOUT_SECONDS="${WORKER_BUILD_TIMEOUT_SECONDS:-900}"
 WORKER_BUILD_POLL_SECONDS="${WORKER_BUILD_POLL_SECONDS:-10}"
 DEPLOY_RECEIPT_PATH="${DEPLOY_RECEIPT_PATH:-docs/release-evidence/worker-deploy-receipt.json}"
 ROLLBACK_CONFIG_RECEIPT_PATH="${ROLLBACK_CONFIG_RECEIPT_PATH:-docs/release-evidence/worker-rollback-config-receipt.json}"
-WORKERS_CSV="${URAI_JOBS_DEPLOY_WORKERS:-narrator-worker,asset-worker}"
-WORKERS_CSV="$WORKERS_CSV" node scripts/studio-worker-deploy-veto.mjs
 IFS=',' read -r -a WORKERS <<< "$WORKERS_CSV"
 
 for command in gcloud curl node; do
