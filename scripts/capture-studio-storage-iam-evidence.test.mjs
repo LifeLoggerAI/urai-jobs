@@ -16,6 +16,8 @@ function mock(commands, override={}) {
     if (s.includes('get-iam-policy')) return override.policy ?? policy;
     if (s.includes('run services list')) return override.services ?? [{metadata:{name:'urai-studio-worker'},spec:{template:{spec:{serviceAccountName:'worker@urai-review-1.iam.gserviceaccount.com'}}} }];
     if (s.includes('run revisions list')) return override.revisions ?? [{metadata:{name:'urai-studio-worker-00001-a'},spec:{serviceAccountName:'worker@urai-review-1.iam.gserviceaccount.com'}}];
+    if (s.includes('run jobs list')) return override.jobs ?? [];
+    if (s.includes('run jobs describe')) return override.jobDetails?.[args[3]] ?? {metadata:{name:args[3]}};
     throw Error('unexpected command');
   };
 }
@@ -26,7 +28,7 @@ test('R536: project/bucket/inherited IAM plus Cloud Run identities are captured 
   assert.equal(r.ancestorPolicies.length,1); assert.equal(r.ancestorPolicies[0].level,'organization');
   assert.equal(r.runServices[0].serviceAccount,'worker@urai-review-1.iam.gserviceaccount.com');
   assert.equal(r.revisionInventory[0].name,'urai-studio-worker-00001-a');
-  assert.match(r.collectorCoverage,/ONE_REGION_ONLY/);assert.equal(cmds.length,6);
+  assert.match(r.collectorCoverage,/ONE_REGION_ONLY/);assert.equal(cmds.length,7);assert.deepEqual(r.runJobs,[]);
 });
 test('R536: every command is read-only and explicitly scoped to project',()=>{
   const commands=[];captureIamEvidence(scope,mock(commands));
@@ -66,7 +68,7 @@ test('R536: CLI mocked Google reads produce private 0600 snapshot without leakin
     const bin=join(dir,'bin'),work=join(dir,'workspace'),secure=join(dir,'private');
     mkdirSync(bin,{mode:0o700});mkdirSync(work,{mode:0o700});mkdirSync(secure,{mode:0o700});
     const fake=join(bin,'gcloud');
-    writeFileSync(fake,`#!/usr/bin/env node\nconst s=process.argv.slice(2).join(' ');\nlet r;\nif(s.includes('get-ancestors'))r=[{type:'organization',id:'1234'}];\nelse if(s.includes('run services list'))r=[{metadata:{name:'urai-studio-worker'},spec:{template:{spec:{serviceAccountName:'synthetic@urai-review-1.iam.gserviceaccount.com'}}}}];\nelse if(s.includes('run revisions list'))r=[{metadata:{name:'urai-studio-worker-00001-a'},spec:{serviceAccountName:'synthetic@urai-review-1.iam.gserviceaccount.com'}}];\nelse r={version:3,bindings:[]};\nprocess.stdout.write(JSON.stringify(r));\n`);chmodSync(fake,0o700);
+    writeFileSync(fake,`#!/usr/bin/env node\nconst s=process.argv.slice(2).join(' ');\nlet r;\nif(s.includes('get-ancestors'))r=[{type:'organization',id:'1234'}];\nelse if(s.includes('run services list'))r=[{metadata:{name:'urai-studio-worker'},spec:{template:{spec:{serviceAccountName:'synthetic@urai-review-1.iam.gserviceaccount.com'}}}}];\nelse if(s.includes('run revisions list'))r=[{metadata:{name:'urai-studio-worker-00001-a'},spec:{serviceAccountName:'synthetic@urai-review-1.iam.gserviceaccount.com'}}];\nelse if(s.includes('run jobs list'))r=[];\nelse r={version:3,bindings:[]};\nprocess.stdout.write(JSON.stringify(r));\n`);chmodSync(fake,0o700);
     const script=fileURLToPath(new URL('./review-only/capture-studio-storage-iam-evidence.mjs',import.meta.url));
     const out=join(secure,'evidence.json');
     const x=spawnSync(process.execPath,[script,'--project',scope.projectId,'--bucket',scope.bucket,'--region',scope.region,'--out',out],{cwd:work,encoding:'utf8',env:{...process.env,PATH:bin+':'+process.env.PATH},timeout:15000});
@@ -77,4 +79,37 @@ test('R536: CLI mocked Google reads produce private 0600 snapshot without leakin
     const retry=spawnSync(process.execPath,[script,'--project',scope.projectId,'--bucket',scope.bucket,'--region',scope.region,'--out',out],{cwd:work,encoding:'utf8',env:{...process.env,PATH:bin+':'+process.env.PATH},timeout:15000});
     assert.equal(retry.status,1,'must refuse overwriting private snapshot');
   }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('R537: Cloud Run Jobs v1 and v2 independently declared principals are inventoried',()=>{
+  const calls=[];
+  const jobs=[{metadata:{name:'urai-life-movie-job'}},{name:'projects/urai-review-1/locations/us-central1/jobs/urai-audio-job'}];
+  const jobDetails={
+    'urai-life-movie-job':{metadata:{name:'urai-life-movie-job'},spec:{template:{spec:{template:{spec:{serviceAccountName:'legacy-job@urai-review-1.iam.gserviceaccount.com'}}}}}},
+    'urai-audio-job':{name:'projects/urai-review-1/locations/us-central1/jobs/urai-audio-job',template:{template:{serviceAccount:'audio-job@urai-review-1.iam.gserviceaccount.com'}}}
+  };
+  const evidence=captureIamEvidence(scope,mock(calls,{jobs,jobDetails}));
+  assert.deepEqual(evidence.runJobs,[
+    {name:'urai-life-movie-job',serviceAccount:'legacy-job@urai-review-1.iam.gserviceaccount.com'},
+    {name:'urai-audio-job',serviceAccount:'audio-job@urai-review-1.iam.gserviceaccount.com'}
+  ]);
+  assert.equal(calls.filter(x=>x.slice(0,3).join(' ')==='run jobs describe').length,2);
+  assert.equal(calls.length,9);
+});
+test('R537: Cloud Run Job with no principal remains explicit unknown, not silently absent',()=>{
+  const data=captureIamEvidence(scope,mock([],{jobs:[{metadata:{name:'unresolved-job'}}]}));
+  assert.deepEqual(data.runJobs,[{name:'unresolved-job',serviceAccount:null}]);
+});
+test('R537: duplicate job identity cannot create misleading completeness',()=>{
+  assert.throws(()=>captureIamEvidence(scope,mock([],{jobs:[{metadata:{name:'same-job'}},{name:'same-job'}]})),/DUPLICATE_JOB_IDENTITY/);
+});
+test('R537: unknown or mismatched job description fails closed',()=>{
+  const jobs=[{metadata:{name:'listed-job'}}];
+  assert.throws(()=>captureIamEvidence(scope,mock([],{jobs,jobDetails:{'listed-job':{metadata:{name:'different-job'}}}})),/JOB_DETAILS_MISMATCH/);
+  assert.throws(()=>captureIamEvidence(scope,mock([],{jobs,jobDetails:{'listed-job':{}}})),/INCOMPLETE_RUNTIME_IDENTITY/);
+});
+test('R537: unavailable job description fails closed before writing any raw IAM snapshot',()=>{
+  const run=args => {if(args.slice(0,3).join(' ')==='run jobs describe')throw Error('read denied');
+    return mock([],{jobs:[{metadata:{name:'an-app-job'}}]})(args);};
+  assert.throws(()=>captureIamEvidence(scope,run),/read denied/);
 });
