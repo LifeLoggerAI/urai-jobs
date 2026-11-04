@@ -6,12 +6,14 @@ set -euo pipefail
 : "${GITHUB_SHA:?GITHUB_SHA is required for exact worker source provenance}"
 : "${GITHUB_RUN_ID:?GITHUB_RUN_ID is required for exact worker source provenance}"
 
+WORKERS_CSV="${URAI_JOBS_DEPLOY_WORKERS:-narrator-worker,asset-worker}"
+WORKERS_CSV="$WORKERS_CSV" node scripts/studio-worker-deploy-veto.mjs
+
 REAL_GCLOUD="$(command -v gcloud)"
 [ -n "$REAL_GCLOUD" ] || { echo "[FAIL] gcloud is required" >&2; exit 1; }
 command -v tar >/dev/null 2>&1 || { echo "[FAIL] tar is required" >&2; exit 1; }
 command -v gzip >/dev/null 2>&1 || { echo "[FAIL] gzip is required" >&2; exit 1; }
 
-WORKERS_CSV="${URAI_JOBS_DEPLOY_WORKERS:-narrator-worker,asset-worker}"
 URAI_JOBS_WORKER_TOKEN_SECRET="${URAI_JOBS_WORKER_TOKEN_SECRET:-urai-jobs-worker-token}"
 URAI_WHEEL_GITHUB_TOKEN_SECRET="${URAI_WHEEL_GITHUB_TOKEN_SECRET:-urai-wheel-github-token}"
 URAI_JOBS_CALLBACK_SECRET_NAME="${URAI_JOBS_CALLBACK_SECRET_NAME:-urai-jobs-callback-secret}"
