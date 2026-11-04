@@ -416,10 +416,17 @@ jobs:
             console.error(`Worker runtime service account lacks an unconditional project-level roles/datastore.user grant: ${expectedMember}`);
             process.exit(1);
           }
-          if (!hasUnconditionalRole(bucketPolicy, 'roles/storage.objectAdmin')) {
-            console.error(`Worker runtime service account lacks an unconditional bucket-level roles/storage.objectAdmin grant: ${expectedMember}`);
+          // Jobs #252: a bucket-wide objectAdmin grant is NOT proof of
+          // approved broker-only private-media writes. Deny rather than ask
+          // an operator to grant the dangerous role as a way to pass CI.
+          if (hasUnconditionalRole(bucketPolicy, 'roles/storage.objectAdmin')) {
+            console.error('WORKER_SHARED_BUCKET_OBJECTADMIN_HOLD: broad artifact Storage write authority cannot approve this release');
             process.exit(1);
           }
+          // No approved scoped writer/identity and actual after-revocation
+          // Cloud Storage denial evidence is connected to this workflow yet.
+          console.error('WORKER_PRIVATE_STORAGE_BROKER_IAM_UNVERIFIED: refuse worker deployment until independent broker IAM acceptance');
+          process.exit(1);
           NODE
 
           if [ "$INCLUDE_STUDIO_WORKER" = "true" ]; then
@@ -433,7 +440,7 @@ jobs:
               POLICY_JSON="$source_policy" EXPECTED_MEMBER="$worker_member" SOURCE_BUCKET="$source_bucket" node <<'NODE'
               const policy = JSON.parse(process.env.POLICY_JSON || '{}');
               const member = process.env.EXPECTED_MEMBER;
-              const allowed = new Set(['roles/storage.objectViewer', 'roles/storage.objectAdmin']);
+              const allowed = new Set(['roles/storage.objectViewer']);
               const ok = (policy.bindings || []).some((entry) =>
                 allowed.has(entry?.role) &&
                 !entry.condition &&
