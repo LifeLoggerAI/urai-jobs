@@ -28,7 +28,7 @@ test('R536: project/bucket/inherited IAM plus Cloud Run identities are captured 
   assert.equal(r.ancestorPolicies.length,1); assert.equal(r.ancestorPolicies[0].level,'organization');
   assert.equal(r.runServices[0].serviceAccount,'worker@urai-review-1.iam.gserviceaccount.com');
   assert.equal(r.revisionInventory[0].name,'urai-studio-worker-00001-a');
-  assert.match(r.collectorCoverage,/ONE_REGION_ONLY/);assert.equal(cmds.length,7);assert.deepEqual(r.runJobs,[]);
+  assert.equal(r.collectionRegion,scope.region);assert.match(r.collectorCoverage,/ONE_REGION_ONLY/);assert.equal(cmds.length,7);assert.deepEqual(r.runJobs,[]);
 });
 test('R536: every command is read-only and explicitly scoped to project',()=>{
   const commands=[];captureIamEvidence(scope,mock(commands));
