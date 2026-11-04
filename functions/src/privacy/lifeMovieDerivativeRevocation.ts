@@ -49,9 +49,12 @@ function allowedOutputBuckets(): Set<string> {
 }
 
 function isAffectedJob(job: Record<string, unknown>, event: LifeMovieRevocationEvent): boolean {
-  const jobType = String(job.jobType || job.type || '');
   if (job.ownerUid !== event.ownerUid || job.sourceSystem !== 'urai-studio') return false;
-  if (jobType !== 'studio.render.video' && jobType !== 'studio.assemble.video') return false;
+  // Revocation must conservatively fence any possible Studio Life Movie
+  // derivative, even if legacy jobType/type aliases disagree. Dispatch
+  // admission is governed separately and must remain strict.
+  if (![job.jobType, job.type].some((type) =>
+    type === 'studio.render.video' || type === 'studio.assemble.video')) return false;
   // Both job types are Life Movie work even if a legacy or malformed record
   // omitted or mislabeled its consent. The owner and source still must match.
   return true;
@@ -263,6 +266,24 @@ export async function invalidateLifeMovieDerivativesForConsent(
     if (failed?.status === 'rejected') throw failed.reason;
     summary.storageObjectsDeleted += results.filter((result) => result.status === 'fulfilled' && result.value).length;
   }
+
+  // A successful generation-fenced delete (or a 404 for an already-missing
+  // generation) does not prove that the PATH remains empty. A concurrent
+  // upload can replace that generation immediately. Re-read every location
+  // before clearing the job's only durable output references, and retain
+  // those references for reconciliation whenever any replacement or
+  // unexpected storage error is observed. This is a point-in-time absence
+  // check, NOT a substitute for blocking future writes and private delivery.
+  await mapInBatches(guardedLocations, async ({ bucket, objectPath }) => {
+    try {
+      await getStorage().bucket(bucket).file(objectPath).getMetadata();
+    } catch (error) {
+      if ((error as { code?: unknown })?.code === 404) return;
+      throw error;
+    }
+    throw new Error('life_movie_revocation_output_generation_changed');
+  });
+
   if (fencedJobs.some((job) => job.inFlightUnresolved)) {
     throw new Error('life_movie_revocation_inflight_unresolved');
   }
