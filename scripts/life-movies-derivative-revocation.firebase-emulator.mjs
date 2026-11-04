@@ -58,7 +58,7 @@ async function missingFile(path) {
   try { await bucket.file(path).getMetadata(); return false; }
   catch (error) { if (missing(error)) return true; throw error; }
 }
-async function seed(kind) {
+async function seed(kind, jobAliases = {}) {
   const ownerUid = 'synthetic-owner-' + token + '-' + kind;
   const tenantId = 'tenant-1';
   const projectId = 'movie-' + token + '-' + kind;
@@ -83,6 +83,7 @@ async function seed(kind) {
   await jobRef.set({
     jobId, ownerUid, tenantId, sourceSystem: 'urai-studio',
     jobType: 'studio.render.video', status: 'SUCCESS',
+    ...jobAliases,
     payload: { projectId }, output,
   });
   const receiptRef = db.collection('jobConsentEventReceipts').doc(
@@ -188,6 +189,31 @@ try {
   assert.equal(state?.output, undefined);
   assert.ok(state?.outputDeletedAt != null);
   checks.push('actual-storage-generation-deleted-before-job-output-clear');
+
+  // Conflict between historical jobType/type must never let a rendered
+  // derivative escape the owner revocation scan. The required owner,
+  // sourceSystem, tenant/project and storage generation remain independently
+  // validated by the original implementation.
+  for (const [kind, aliases] of [
+    ['type-render', { jobType: 'legacy-other', type: 'studio.render.video' }],
+    ['jobtype-assemble', { jobType: 'studio.assemble.video', type: 'legacy-other' }],
+  ]) {
+    const conflicting = await seed(kind, aliases);
+    const removed = await invalidateLifeMovieDerivativesForConsent(conflicting.event);
+    assert.equal(removed.jobsInvalidated, 1, kind + ' must be fenced');
+    assert.equal(removed.storageObjectsDeleted, 1, kind + ' output deleted');
+    assert.equal(await missingFile(conflicting.objectPath), true);
+    assert.equal((await conflicting.jobRef.get()).data()?.output, undefined);
+    checks.push('conflicting-type-alias-' + kind + '-deleted');
+  }
+
+  const unrelated = await seed('unrelated', { jobType: 'other-job', type: 'other-job' });
+  const unrelatedResult = await invalidateLifeMovieDerivativesForConsent(unrelated.event);
+  assert.equal(unrelatedResult.jobsInvalidated, 0);
+  assert.equal(unrelatedResult.storageObjectsDeleted, 0);
+  assert.equal(await missingFile(unrelated.objectPath), false);
+  assert.ok((await unrelated.jobRef.get()).data()?.output);
+  checks.push('unrelated-job-type-not-deleted');
 
   // Original job output records an immutable generation. An object replaced
   // BEFORE the first metadata read must refuse the selected old generation.
