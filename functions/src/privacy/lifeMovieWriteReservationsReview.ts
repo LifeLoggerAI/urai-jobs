@@ -94,9 +94,11 @@ function checkedFence(data: unknown, scope: ReviewOutputScope) {
     r.reviewOnlyEmulator !== true || r.productionAuthorized !== false ||
     !Number.isSafeInteger(r.epoch) || Number(r.epoch) <= 0 ||
     Number(r.epoch) >= Number.MAX_SAFE_INTEGER ||
-    (r.state !== 'OPEN' && r.state !== 'REVOKED') ||
+    // Only a withdrawal fence can be modeled here. No actual GCS IAM, transfer
+    // drain or generation proof exists to authorize completed REVOKED state.
+    (r.state !== 'OPEN' && r.state !== 'FENCING') ||
     (r.state === 'OPEN' && r.revocationEventId !== null) ||
-    (r.state === 'REVOKED' &&
+    (r.state === 'FENCING' &&
       (typeof r.revocationEventId !== 'string' || !SAFE.test(r.revocationEventId)))) {
     throw new Error('life_movie_review_write_fence_unverified');
   }
@@ -223,7 +225,7 @@ export async function beginReviewOnlySimulatedUpload(identity: ReviewAttemptIden
   });
 }
 
-/** First commit of the revocation fence blocks all future reservations. */
+/** Records withdrawal by fencing admissions; NEVER acknowledges media deletion. */
 export async function revokeReviewOnlyOutputScope(scope: ReviewOutputScope, eventId: string) {
   reviewedOnly();
   const s = checkedScope(scope);
@@ -233,16 +235,22 @@ export async function revokeReviewOnlyOutputScope(scope: ReviewOutputScope, even
     const snapshot = await transaction.get(fence);
     if (!snapshot.exists) throw new Error('life_movie_review_write_fence_missing');
     const current = checkedFence(snapshot.data(), s);
-    if (current.state === 'REVOKED') {
+    if (current.state === 'FENCING') {
       if (current.revocationEventId !== event) throw new Error('life_movie_review_write_revocation_conflict');
-      return { epoch: current.epoch, alreadyRevoked: true, productionAuthorized: false };
+      return {
+        epoch: current.epoch, alreadyFenced: true,
+        revocationAcknowledgementPermitted: false, productionAuthorized: false,
+      };
     }
     const next = current.epoch + 1;
     transaction.update(fence, {
-      epoch: next, state: 'REVOKED', revocationEventId: event,
-      revokedAt: FieldValue.serverTimestamp(),
+      epoch: next, state: 'FENCING', revocationEventId: event,
+      fencedAt: FieldValue.serverTimestamp(),
     });
-    return { epoch: next, alreadyRevoked: false, productionAuthorized: false };
+    return {
+      epoch: next, alreadyFenced: false,
+      revocationAcknowledgementPermitted: false, productionAuthorized: false,
+    };
   });
 }
 
@@ -262,7 +270,7 @@ export async function cancelUnstartedReviewOnlyAttempt(identity: ReviewAttemptId
     if (!fenceSnap.exists) throw new Error('life_movie_review_write_fence_missing');
     const current = checkedFence(fenceSnap.data(), s);
     const attempt = checkedAttempt(itemSnap.data(), s, jobId, attemptId);
-    if (current.state !== 'REVOKED' || current.epoch <= attempt.epoch ||
+    if (current.state !== 'FENCING' || current.epoch <= attempt.epoch ||
       attempt.state !== 'RESERVED') {
       throw new Error('life_movie_review_write_attempt_cannot_reconcile');
     }
@@ -294,7 +302,8 @@ export async function reviewOnlyDrainStatus(scope: ReviewOutputScope) {
   }, 0);
   return {
     state: current.state, epoch: current.epoch, activeOrUnproven: unresolved,
-    simulatedOnly: true, storageWriteFenceVerified: false,
+    withdrawalFenced: current.state === 'FENCING',
+    revocationComplete: false, simulatedOnly: true, storageWriteFenceVerified: false,
     revocationAcknowledgementPermitted: false, productionAuthorized: false,
   };
 }
