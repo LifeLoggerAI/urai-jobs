@@ -66,6 +66,22 @@ function checkedStudioConsentBlockState(snapshot) {
   } catch { return 'unverified'; }
 }
 
+// Keep in parity with functions/src/privacy/ownerDeletionFence.ts. A missing
+// legacy flag is clear, but a missing owner or unreadable authority is not.
+// This check is a veto, never positive approval to render a Life Movie.
+function checkedStudioOwnerDeletionFenceState(snapshot) {
+  try {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return 'unverified';
+    if (snapshot.exists !== true || typeof snapshot.data !== 'function') return 'unverified';
+    const owner = snapshot.data();
+    if (!owner || typeof owner !== 'object' || Array.isArray(owner)) return 'unverified';
+    const field = Object.getOwnPropertyDescriptor(owner, 'dataRightsDeletionPendingCentralPrivacy');
+    if (!field) return 'dataRightsDeletionPendingCentralPrivacy' in owner ? 'unverified' : 'clear';
+    if (!Object.prototype.hasOwnProperty.call(field, 'value')) return 'unverified';
+    return field.value === false ? 'clear' : field.value === true ? 'pending' : 'unverified';
+  } catch { return 'unverified'; }
+}
+
 function createRenderControl(job) {
   const jobId = safeSegment(String(job.jobId || ''), 'job_id');
   const jobType = String(job.jobType || job.type || '');
@@ -110,16 +126,29 @@ function createRenderControl(job) {
           || canonicalJson(current.payload) !== canonicalJson(job.payload)) {
           throw new Error('render_job_binding_mismatch');
         }
-        if (current.ownerUid && current.consent?.purpose) {
-          const id = crypto.createHash('sha256').update(`${current.ownerUid}\n${current.consent.purpose}`).digest('hex');
-          const block = await wait(admin.firestore().collection('jobConsentBlocks').doc(id).get());
-          const consentBlockState = checkedStudioConsentBlockState(block);
+        // The dispatcher and creator already check owner deletion. An owner can
+        // request deletion AFTER dispatch, so every rendering/assembly poll must
+        // re-read the canonical owner document before accessing private media.
+        if (typeof current.ownerUid !== 'string' || !current.ownerUid ||
+            !current.consent || current.consent.purpose !== 'life-movie.render' ||
+            current.consent.policyVersion !== '1.1.0' ||
+            typeof current.consent.decisionReceiptId !== 'string' ||
+            !/^[a-f0-9]{64}$/.test(current.consent.decisionReceiptId)) {
+          throw new Error('render_authority_unavailable');
+        }
+        const ownerSnapshot = await wait(admin.firestore().collection('users').doc(current.ownerUid).get());
+        const ownerState = checkedStudioOwnerDeletionFenceState(ownerSnapshot);
+        if (ownerState !== 'clear') {
+          throw new Error(ownerState === 'pending' ? 'render_owner_deletion_pending' : 'render_authority_unavailable');
+        }
+        const id = crypto.createHash('sha256').update(`${current.ownerUid}\n${current.consent.purpose}`).digest('hex');
+        const block = await wait(admin.firestore().collection('jobConsentBlocks').doc(id).get());
+        const consentBlockState = checkedStudioConsentBlockState(block);
         if (consentBlockState !== 'clear') {
           throw new Error(consentBlockState === 'revoked' ? 'render_consent_revoked' : 'render_authority_unavailable');
         }
-        }
       })().catch((error) => {
-        const allowed = ['render_lease_revoked', 'render_job_binding_mismatch', 'render_consent_revoked', 'render_deadline_exceeded'];
+        const allowed = ['render_lease_revoked', 'render_job_binding_mismatch', 'render_consent_revoked', 'render_owner_deletion_pending', 'render_deadline_exceeded'];
         abort(allowed.includes(error?.message) ? error.message : 'render_authority_unavailable');
         throw controller.signal.reason;
       }).finally(() => { checking = undefined; });

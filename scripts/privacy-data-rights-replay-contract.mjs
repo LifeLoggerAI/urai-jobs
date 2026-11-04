@@ -13,6 +13,12 @@ const start = content.indexOf('  const request = await db.runTransaction(async (
 const stop = content.indexOf('  if (request.replay) return { replay: true, receipt: request.replay };', start);
 assert.ok(start >= 0 && stop > start, 'Original protected-staging transaction must remain source-bound');
 const fragment = content.slice(start, stop);
+// Execute the original source constant in the isolated VM; never silently
+// substitute an undefined binding or accept a changed limit without review.
+const logCapMatch = content.match(/^const MAX_LOGS_PER_DELETE_BATCH = (\d+);$/m);
+assert.ok(logCapMatch, 'Bounded log-cap constant must remain in original source');
+const sourceLogCap = Number(logCapMatch[1]);
+assert.equal(sourceLogCap, 496, 'Changing the conservative deletion cap requires explicit test review');
 const requireFn = createRequire(new URL('../functions/package.json', import.meta.url));
 const ts = requireFn('typescript');
 const digestStart = content.indexOf('function canonicalDigest(value: unknown) {');
@@ -33,7 +39,9 @@ const module = { exports: {} };
 runInNewContext(compiled.outputText, {
   module, exports: module.exports, Promise, createHash,
   FieldValue: { serverTimestamp: () => 'SYNTHETIC_SERVER_TIMESTAMP' },
+  process: {env: {GCS_BUCKET_NAME: 'synthetic-bucket'}},
   EXECUTION_SCHEMA: 'urai-jobs-data-rights-execution-v1', MAX_OWNED_JOBS: 2000,
+  MAX_LOGS_PER_DELETE_BATCH: sourceLogCap,
   httpsError: (code, message) => Object.assign(new Error(message), { code }),
 }, {filename: 'JobsDataRightsTransaction.js', timeout: 2000});
 const transactionFromSource = module.exports.transactionFromSource;
@@ -41,7 +49,9 @@ const transactionFromSource = module.exports.transactionFromSource;
 const ownerUid = 'synthetic-owner-01';
 const ownerHash = createHash('sha256').update(ownerUid).digest('hex');
 const request = { ownerUid, requestType: 'DELETE', status: 'IN_REVIEW',
-  requestId: 'synthetic-request-01', retentionDecisionReceiptId: 'synthetic-retention-decision-0001' };
+  requestId: 'synthetic-request-01', retentionDecisionReceiptId: 'synthetic-retention-decision-0001',
+  executionState: 'PROTECTED_STAGING_JOBS_SCOPE_APPLIED_CENTRAL_PRIVACY_REQUIRED',
+  executionReceiptPath: 'dataRightsRequests/synthetic-request-01/audit/execution-synthetic' };
 const receiptId = 'synthetic-retention-decision-0001';
 const unresolvedDomains = [
   'firebase-auth-account', 'provider-side-derivatives',
@@ -57,16 +67,25 @@ const completed = {
   completedAt: {toDate: () => new Date('2026-11-02T16:00:00.000Z')},
 };
 const requestRef = {tag:'request'};
-const executionRef = {tag:'execution'};
-function setup({ prior = completed, record = request, exists = true } = {}) {
+const executionRef = {tag:'execution',path:'dataRightsRequests/synthetic-request-01/audit/execution-synthetic'};
+const ownerRef = {tag:'owner'};
+function setup({ prior = completed, record = request, exists = true, ownerRecord = {role:'user'}, ownerExists = true } = {}) {
   const creates = [], sets = [], gets = [];
   const db = {
+    collection(name) {
+      assert.equal(name,'users');
+      return {doc:uid=>{
+        assert.equal(uid,ownerUid);
+        return ownerRef;
+      }};
+    },
     async runTransaction(callback) {
       const transaction = {
         async get(ref) {
           gets.push(ref.tag);
           if (ref === requestRef) return { exists, data: () => record };
           if (ref === executionRef) return { exists: prior !== null, data: () => prior };
+          if (ref === ownerRef) return {exists:ownerExists,data:()=>ownerRecord};
           throw new Error('unexpected private document read');
         },
         create(...args) { creates.push(args); },
@@ -116,9 +135,15 @@ test('new explicitly approved request creates only a protected-staging STARTED r
   const h = setup({prior:null,record:{...request,status:'APPROVED'}});
   const value = await h.invoke();
   assert.equal(value.replay,null);
-  assert.equal(h.creates.length,1); assert.equal(h.sets.length,1);
+  assert.equal(h.creates.length,1); assert.equal(h.sets.length,2);
   assert.equal(h.creates[0][1].event,'DATA_RIGHTS_EXECUTION_STARTED');
-  assert.equal(h.sets[0][1].status,'IN_REVIEW');
+  const ownerFence=h.sets.find(([ref])=>ref===ownerRef);
+  const requestUpdate=h.sets.find(([ref])=>ref===requestRef);
+  assert.ok(ownerFence);
+  assert.equal(ownerFence[1].dataRightsDeletionPendingCentralPrivacy,true);
+  assert.equal(ownerFence[1].dataRightsDeletionRequestId,'synthetic-request-01');
+  assert.equal(ownerFence[2].merge,true);
+  assert.equal(requestUpdate[1].status,'IN_REVIEW');
   assert.equal(h.creates[0][1].retentionDecisionReceiptId,receiptId);
 });
 test('new unapproved request fails before audit writes',async()=>{
@@ -140,7 +165,7 @@ const exportPayload = {
 const exportResult = {
   payload: exportPayload, recordCount:0,
   sha256:createHash('sha256').update(JSON.stringify(exportPayload)).digest('hex'),
-  gcsRef:'gs://synthetic-bucket/privacy/data-rights/synthetic-owner/synthetic-request-01/export.json',
+  gcsRef:`gs://synthetic-bucket/privacy/data-rights/${ownerHash}/synthetic-request-01/export.json`,
 };
 const validExportReceipt = {
   ...completed, requestType:'EXPORT',
@@ -151,8 +176,27 @@ const validExportReceipt = {
 function reseal(result, base=completed) {
   return {...base, result, resultDigest:createHash('sha256').update(JSON.stringify(result)).digest('hex')};
 }
+
+for (const [label, changed] of [
+  ['rejected request status', {status:'REJECTED'}],
+  ['pending request status', {status:'PENDING'}],
+  ['approved but nonterminal request status', {status:'APPROVED'}],
+  ['globally completed request status without current Jobs reconciliation', {status:'COMPLETED'}],
+  ['unrelated execution terminal state', {executionState:'PROTECTED_STAGING_EXECUTION_FAILED_RETRYABLE'}],
+  ['missing request execution receipt pointer', {executionReceiptPath:undefined}],
+  ['foreign request execution receipt pointer',
+    {executionReceiptPath:'dataRightsRequests/foreign/audit/execution-synthetic'}],
+]) {
+  test('completed receipt with ' + label + ' denies replay before writes',async()=>{
+    const h=setup({record:{...request,...changed}});
+    await assert.rejects(h.invoke(),/terminal-state|reconciliation|execution receipt/i);
+    assert.equal(h.creates.length,0);
+    assert.equal(h.sets.length,0);
+  });
+}
+
 test('valid scoped export receipt still replays only its owner data', async () => {
-  const h=setup({record:{...request,requestType:'EXPORT'},prior:validExportReceipt});
+  const h=setup({record:{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'},prior:validExportReceipt});
   const result=await h.invoke();
   assert.equal(result.replay.event,'DATA_RIGHTS_EXECUTION_FINISHED');
   assert.equal(h.creates.length,0); assert.equal(h.sets.length,0);
@@ -166,13 +210,16 @@ for (const [label, receipt, record] of [
   ['negative deleted job count', reseal({...completeResult,jobsAnonymized:-1}),request],
   ['fractional deleted job count', reseal({...completeResult,jobsAnonymized:0.5}),request],
   ['queue deletes exceed jobs anonymized', reseal({...completeResult,queueDeletes:2}),request],
-  ['rehashed log count exceeds per-job deletion capacity', reseal({...completeResult,logDeletes:497}),request],
-  ['rehashed logs with zero anonymized jobs', reseal({...completeResult,jobsAnonymized:0,queueDeletes:0,logDeletes:1}),request],
-  ['export missing payload', reseal({recordCount:0,gcsRef:exportResult.gcsRef},validExportReceipt),{...request,requestType:'EXPORT'}],
-  ['export owner mismatch', reseal({...exportResult,payload:{...exportPayload,ownerUid:'foreign-owner'}},validExportReceipt),{...request,requestType:'EXPORT'}],
-  ['export claims complete ecosystem', reseal({...exportResult,payload:{...exportPayload,completeEcosystemExport:true}},validExportReceipt),{...request,requestType:'EXPORT'}],
-  ['export GCS location unbound', reseal({...exportResult,gcsRef:'https://foreign.invalid/export'},validExportReceipt),{...request,requestType:'EXPORT'}],
-  ['export payload SHA mismatch', reseal({...exportResult,sha256:'0'.repeat(64)},validExportReceipt),{...request,requestType:'EXPORT'}],
+  ['export missing payload', reseal({recordCount:0,gcsRef:exportResult.gcsRef},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export owner mismatch', reseal({...exportResult,payload:{...exportPayload,ownerUid:'foreign-owner'}},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export claims complete ecosystem', reseal({...exportResult,payload:{...exportPayload,completeEcosystemExport:true}},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export wrong GCS bucket despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://foreign-bucket/privacy/data-rights/${ownerHash}/synthetic-request-01/export.json`},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export wrong owner hash despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/${'f'.repeat(64)}/synthetic-request-01/export.json`},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export wrong request directory despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/${ownerHash}/other-synthetic-request/export.json`},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export extra unbound directory despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/extra/${ownerHash}/synthetic-request-01/export.json`},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export wrong object name despite valid receipt digest', reseal({...exportResult,gcsRef:`gs://synthetic-bucket/privacy/data-rights/${ownerHash}/synthetic-request-01/export.json.bak`},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export GCS location unbound', reseal({...exportResult,gcsRef:'https://foreign.invalid/export'},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
+  ['export payload SHA mismatch', reseal({...exportResult,sha256:'0'.repeat(64)},validExportReceipt),{...request,requestType:'EXPORT',executionState:'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'}],
 ]) {
   test('finished receipt ' + label + ' requires reconciliation',async()=>{
     const h=setup({record,prior:receipt});
@@ -202,87 +249,332 @@ for (const [label, record, prior] of [
 }
 
 
-// Execute the original protected-staging delete implementation in a bounded
-// synthetic Firestore double. This is NOT a deletion or Firebase emulator run.
-const deleteSourceStart = content.indexOf('async function executeDelete(db: Firestore, requestId: string, ownerUid: string) {');
-const deleteSourceStop = content.indexOf('\n}\n\nconst handler =',deleteSourceStart);
-assert.ok(deleteSourceStart >= 0 && deleteSourceStop > deleteSourceStart,'Original delete routine must be source-bound');
-const maxLogsMatch = content.match(/const MAX_LOGS_PER_DELETE_BATCH = ([0-9]+);/);
-assert.ok(maxLogsMatch,'Exact bounded per-job deletion constant must exist');
-assert.equal(Number(maxLogsMatch[1]),496,'The batch must reserve operations for job, queue and transforms');
-const deleteModuleText = maxLogsMatch[0] + '\n' + content.slice(deleteSourceStart,deleteSourceStop+2)
-  + '\nmodule.exports.executeDelete = executeDelete;';
-const deleteCompiled = ts.transpileModule(deleteModuleText,{
-  fileName:'JobsDataRightsDelete.ts',reportDiagnostics:true,
-  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
+// Execute the maintained DELETE function itself with an in-memory Firestore
+// double: replay-only testing cannot detect private fields surviving merge.
+const deleteStart = content.indexOf('async function executeDelete(db: Firestore, requestId: string, ownerUid: string) {');
+const deleteEnd = content.indexOf('\n}\n\nconst handler', deleteStart) + 2;
+assert.ok(deleteStart >= 0 && deleteEnd > deleteStart,
+  'Original Jobs deletion function must remain source-bound');
+const deletionConstantsStart=content.indexOf('const TERMINAL_DELETE_JOB = new Set(');
+assert.ok(deletionConstantsStart>=0 && deletionConstantsStart<deleteStart, 'Deletion terminal-state source binding is present');
+const logLimitDeclaration = content.match(/^const MAX_LOGS_PER_DELETE_BATCH = \d+;$/m)?.[0];
+assert.ok(logLimitDeclaration, 'Conservative Firestore deletion log cap remains source-bound');
+const deleteModuleText = logLimitDeclaration + '\n' + content.slice(deletionConstantsStart, deleteEnd)
+  + '\nmodule.exports.executeDeleteFromSource = executeDelete;';
+const deleteCompiled = ts.transpileModule(deleteModuleText, {
+  fileName: 'JobsDataRightsDelete.ts', reportDiagnostics: true,
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 });
-assert.equal(deleteCompiled.diagnostics?.length??0,0);
-const deleteModule={exports:{}};
-let currentDeleteJobs=[];
-const serverTimestampMarker=Symbol('server-timestamp');
-runInNewContext(deleteCompiled.outputText,{
-  module:deleteModule,exports:deleteModule.exports,createHash,
-  EXECUTION_SCHEMA:'urai-jobs-data-rights-execution-v1',
-  FieldValue:{delete:()=>Symbol('delete'),serverTimestamp:()=>serverTimestampMarker},
-  httpsError:(code,message)=>Object.assign(new Error(message),{code}),
-  ownedJobs:async()=>currentDeleteJobs,
-},{filename:'JobsDataRightsDelete.js',timeout:2000});
-const countServerTimestamps=value=>value===serverTimestampMarker?1
-  :!value||typeof value!=='object'?0
-  :Object.values(value).reduce((n,item)=>n+countServerTimestamps(item),0);
-function deletionBudgetFixture(logCount,queueExists=true){
-  const budget={batches:0,commits:0,writeCount:0,userMarkers:0};
-  const logs=Array.from({length:logCount},(_,id)=>({ref:{id}}));
-  const job={id:'synthetic-owned-job',ref:{collection:(name)=>{
-    assert.equal(name,'logs');
-    return {limit:n=>({get:async()=>({size:Math.min(n,logCount),docs:logs.slice(0,n)})})};
-  }}};
-  currentDeleteJobs=[job];
+assert.equal(deleteCompiled.diagnostics?.length ?? 0, 0, 'Source-bound deletion transpiles');
+const deletedSentinel = Symbol('synthetic-FieldValue-delete');
+const deletionModule = { exports: {} };
+runInNewContext(deleteCompiled.outputText, {
+  module: deletionModule, exports: deletionModule.exports, Promise, createHash,
+  ownedJobs: async db => db.syntheticOwnedJobs,
+  FieldValue: {
+    delete: () => deletedSentinel,
+    serverTimestamp: () => 'SYNTHETIC_SERVER_TIMESTAMP',
+  },
+  EXECUTION_SCHEMA: 'urai-jobs-data-rights-execution-v1',
+  httpsError: (code, message) => Object.assign(new Error(message), { code }),
+}, { filename: 'JobsDataRightsDelete.js', timeout: 2000 });
+const executeDeleteFromSource = deletionModule.exports.executeDeleteFromSource;
+
+function deletionHarness({
+  logCount = 2, hasQueue = true, jobCount = 1,
+  jobStatus = 'SUCCESS', queueStatus = 'DONE', currentOwnerOverride = null,
+} = {}) {
+  const jobs = Array.from({length:jobCount}, (_,i)=>({
+    ownerUid, status:jobStatus, type:'private-movie',
+    payload:{privateNarration:'synthetic secret'},
+    output:{privatePreview:'synthetic-video-path'},
+    customPrivateMetadata:{sensitive:'must-not-survive'},
+    providerAuth:'synthetic-provider-private-id',
+    unrestrictedFutureField:{private:true},
+    id:i,
+  }));
+  const deletedRefs=[],writes=[],userPatches=[];
+  let committed=0;
+  const docs=jobs.map((_,i)=>{
+    const jobRef={type:'job',i,
+      collection(name) {
+        assert.equal(name,'logs');
+        return {limit:bound=>({type:'logs',i,bound})};
+      },
+    };
+    return {id:'synthetic-job-'+i,ref:jobRef,data:()=>jobs[i]};
+  });
   const db={
-    batch(){
-      budget.batches++;
-      let writes=0;
-      return {
-        delete(){writes++},
-        set(_ref,data){writes+=1+countServerTimestamps(data)},
-        async commit(){
-          budget.writeCount=writes;
-          if(writes>500)throw Error('synthetic-firestore-batch-overflow');
-          budget.commits++;
-        },
-      };
-    },
+    syntheticOwnedJobs:docs,
     collection(name){
-      if(name==='jobQueue')return{doc:()=>({get:async()=>({exists:queueExists})})};
-      if(name==='users')return{doc:()=>({set:async()=>{budget.userMarkers++}})};
-      throw Error('unexpected-collection:'+name);
+      if(name==='jobQueue')return {doc:id=>({type:'queue',id})};
+      if(name==='users')return {doc:id=>{
+        assert.equal(id,ownerUid);
+        return {set:async(data,opts)=>userPatches.push({data,opts})};
+      }};
+      throw new Error('unexpected private collection '+name);
+    },
+    async runTransaction(fn){
+      const changes=[];
+      const transaction={
+        async get(ref){
+          if(ref.type==='job')return {exists:true,
+            data:()=>({...jobs[ref.i],ownerUid:currentOwnerOverride||jobs[ref.i].ownerUid})};
+          if(ref.type==='queue')return {exists:hasQueue,
+            data:()=>({jobId:ref.id,status:queueStatus})};
+          if(ref.type==='logs'){
+            assert.equal(ref.bound,497);
+            return {size:logCount,
+              docs:Array.from({length:logCount},(_,j)=>({ref:{type:'log',i:ref.i,j}}))};
+          }
+          throw new Error('unexpected Firestore read');
+        },
+        delete(ref){changes.push({kind:'delete',ref});},
+        set(ref,data,opts){changes.push({kind:'set',ref,data,opts});},
+      };
+      const result=await fn(transaction);
+      assert.ok(changes.length<=500,'Firestore transaction must stay within 500 document writes');
+      if(changes.length>0){
+        committed++;
+        for(const change of changes){
+          if(change.kind==='delete'){deletedRefs.push(change.ref);continue;}
+          writes.push(change);
+          const current=jobs[change.ref.i];
+          const next=change.opts?.merge?{...current,...change.data}:{...change.data};
+          for(const [key,value] of Object.entries(next)) {
+            if(value===deletedSentinel)delete next[key];
+          }
+          jobs[change.ref.i]=next;
+        }
+      }
+      return result;
     },
   };
-  return {run:()=>deleteModule.exports.executeDelete(db,'synthetic-request','synthetic-owner'),budget};
+  return {db,jobs,deletedRefs,writes,userPatches,get commits(){return committed;}};
 }
-test('protected staging job deletion stays within 500 Firestore writes with 496 logs',async()=>{
-  const f=deletionBudgetFixture(496,true);
-  const result=await f.run();
-  assert.equal(result.logDeletes,496);
-  assert.equal(result.jobsAnonymized,1);
-  assert.deepEqual(f.budget,{batches:1,commits:1,writeCount:500,userMarkers:1});
-  assert.equal(result.unresolvedDomains.length,4);
+
+test('DELETE replaces each owner job with a receipt-only tombstone, never retains unknown private fields', async () => {
+  const h=deletionHarness({jobCount:2});
+  const result=await executeDeleteFromSource(h.db,'synthetic-request-01',ownerUid);
+  assert.equal(result.jobsAnonymized,2);
+  assert.equal(result.queueDeletes,2);
+  assert.equal(result.logDeletes,4);
+  assert.equal(h.commits,2);
+  for (const job of h.jobs) {
+    assert.deepEqual(Object.keys(job).sort(),['ownerUid','deletionReceipt','updatedAt'].sort());
+    assert.equal(job.ownerUid,'deleted:'+ownerHash);
+    assert.equal(job.deletionReceipt.requestId,'synthetic-request-01');
+    assert.equal(job.deletionReceipt.ownerHash,ownerHash);
+  }
+  assert.ok(h.writes.every(write => write.opts?.merge !== true),
+    'an anonymization receipt must never be merged with private original fields');
+  assert.equal(h.deletedRefs.length,6);
+  assert.equal(h.userPatches.length,1);
+  assert.equal(h.userPatches[0].data.dataRightsDeletionPendingCentralPrivacy,true);
+  assert.equal(h.userPatches[0].opts.merge,true);
+  assert.ok(result.unresolvedDomains.includes('cross-system-data-owned-by-other-urai-services'));
 });
-test('497 logs with queue are refused before constructing any deletion batch',async()=>{
-  const f=deletionBudgetFixture(497,true);
-  await assert.rejects(f.run(),/too many logs|bounded deletion/);
-  assert.deepEqual(f.budget,{batches:0,commits:0,writeCount:0,userMarkers:0});
+
+test('DELETE refuses 500 logs before job tombstone, cannot claim bounded job deletion', async () => {
+  const h=deletionHarness({logCount:500});
+  await assert.rejects(
+    executeDeleteFromSource(h.db,'synthetic-request-01',ownerUid),
+    /logs exceed|bounded.*deletion/i
+  );
+  assert.equal(h.commits,0);
+  assert.equal(h.userPatches.length,0);
+  assert.equal(h.writes.length,0);
 });
-test('497 logs without queue also fail conservatively before any writes',async()=>{
-  const f=deletionBudgetFixture(497,false);
-  await assert.rejects(f.run(),/too many logs|bounded deletion/);
-  assert.deepEqual(f.budget,{batches:0,commits:0,writeCount:0,userMarkers:0});
+
+test('DELETE with zero owned jobs reports central privacy pending, not ecosystem completion', async () => {
+  const h=deletionHarness({jobCount:0});
+  const r=await executeDeleteFromSource(h.db,'synthetic-request-01',ownerUid);
+  assert.equal(r.jobsAnonymized,0);
+  assert.equal(r.queueDeletes,0);
+  assert.equal(r.logDeletes,0);
+  assert.equal(h.writes.length,0);
+  assert.equal(h.userPatches.length,1);
+  assert.equal(h.userPatches[0].data.dataRightsDeletionPendingCentralPrivacy,true);
+  assert.ok(!Object.prototype.hasOwnProperty.call(r,'crossSystemComplete'));
 });
-test('small legitimate deletion still retains pending central privacy obligation',async()=>{
-  const f=deletionBudgetFixture(3,false);
-  const result=await f.run();
-  assert.equal(result.logDeletes,3);
-  assert.equal(result.jobsAnonymized,1);
-  assert.equal(result.queueDeletes,0);
-  assert.deepEqual(f.budget,{batches:1,commits:1,writeCount:6,userMarkers:1});
+
+
+// The maintained executor source is used, not a duplicate implementation.
+const redactStart = content.indexOf('function redact(value: unknown): unknown {');
+const redactEnd = content.indexOf('\n}\n\nasync function ownedJobs',redactStart)+2;
+assert.ok(redactStart>=0&&redactEnd>redactStart,'source-bound redactor found');
+const redactSource=content.slice(redactStart,redactEnd);
+const redactCompiled=ts.transpileModule(redactSource+'\nmodule.exports.redact=redact;',{
+  fileName:'JobsRedact.ts',reportDiagnostics:true,
+  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
+});
+assert.equal(redactCompiled.diagnostics?.length??0,0);
+const redactModule={exports:{}};
+runInNewContext(redactCompiled.outputText,{module:redactModule,exports:redactModule.exports},
+  {filename:'JobsRedact.js',timeout:2000});
+const redactFromSource=redactModule.exports.redact;
+
+test('source-bound credential redaction protects nested owner exports',()=>{
+  const original={
+    title:'Synthetic Owner Memory',apiKey:'synthetic-sensitive',api_key:'synthetic-sensitive',
+    privateKey:'synthetic-sensitive',access_key:'synthetic-sensitive',
+    credentials:'synthetic-sensitive',bearer:'synthetic-sensitive',
+    webhookKey:'synthetic-sensitive',password:'synthetic-sensitive',
+    events:[{scene:'synthetic-scene',provider:{credential:'synthetic-sensitive',apiKey:'synthetic-sensitive'}}],
+  };
+  const sanitized=redactFromSource(original);
+  for(const key of ['apiKey','api_key','privateKey','access_key','credentials','bearer','webhookKey','password'])
+    assert.equal(Object.prototype.hasOwnProperty.call(sanitized,key),false,key);
+  assert.equal(Object.prototype.hasOwnProperty.call(sanitized.events[0].provider,'apiKey'),false);
+  assert.equal(Object.prototype.hasOwnProperty.call(sanitized.events[0].provider,'credential'),false);
+  assert.equal(sanitized.title,'Synthetic Owner Memory');
+  assert.equal(sanitized.events[0].scene,'synthetic-scene');
+});
+test('source-bound credential redaction blocks special prototype properties',()=>{
+  const raw=JSON.parse('{"__proto__":{"isAdmin":true},"title":"safe"}');
+  const sanitized=redactFromSource(raw);
+  assert.equal('isAdmin' in sanitized,false);
+  assert.equal(Object.prototype.hasOwnProperty.call(sanitized,'__proto__'),false);
+  assert.equal(sanitized.title,'safe');
+});
+const exportStart=content.indexOf('async function buildExport(db: Firestore, requestId: string, ownerUid: string) {');
+const exportStop=content.indexOf('\n}\n\nconst TERMINAL_DELETE_JOB = new Set(',exportStart)+2;
+assert.ok(exportStart>=0&&exportStop>exportStart,'source-bound buildExport found');
+const exportScript=redactSource+'\n'+timestampSource+'\n'+content.slice(exportStart,exportStop)
+  +'\nmodule.exports.buildExport=buildExport;';
+const exportCompiled=ts.transpileModule(exportScript,{
+  fileName:'JobsExport.ts',reportDiagnostics:true,
+  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
+});
+assert.equal(exportCompiled.diagnostics?.length??0,0);
+const exportModule={exports:{}};
+const storedExports=[];
+runInNewContext(exportCompiled.outputText,{
+  module:exportModule,exports:exportModule.exports,Promise,Buffer,createHash,
+  EXECUTION_SCHEMA:'urai-jobs-data-rights-execution-v1',
+  ownedJobs:async(db,uid)=>{
+    assert.equal(uid,ownerUid);
+    return [{id:'synthetic-job-1',data:()=>({
+      jobType:'private-movie',status:'DONE',
+      payload:{scene:'Synthetic Family',apiKey:'synthetic-sensitive',source:{privateKey:'synthetic-sensitive',label:'my photo'}},
+      output:{sceneUrl:'private-owner-path',credential:'synthetic-sensitive',nested:[{bearer:'synthetic-sensitive',frame:5}]},
+    })}];
+  },
+  uploadToGcs:async(bytes,path,mime)=>{
+    storedExports.push({bytes:bytes.toString('utf8'),path,mime});
+    return 'gs://synthetic-bucket/'+path;
+  },
+},{filename:'JobsExport.js',timeout:2000});
+const buildExportFromSource=exportModule.exports.buildExport;
+test('source-bound governed EXPORT writes credential-free GCS bytes',async()=>{
+  const db={collection:name=>{
+    assert.equal(name,'users');
+    return {doc:id=>{
+      assert.equal(id,ownerUid);
+      return {get:async()=>({exists:true,data:()=>({
+        displayName:'synthetic-owner',credentials:{clientSecret:'synthetic-sensitive'},
+        apiKey:'synthetic-sensitive',settings:{plan:'free',webhookKey:'synthetic-sensitive'},
+      })})};
+    }};
+  }};
+  const result=await buildExportFromSource(db,'synthetic-request-01',ownerUid);
+  assert.equal(storedExports.length,1);
+  const stored=JSON.parse(storedExports[0].bytes);
+  assert.equal(result.recordCount,2);
+  assert.equal(stored.completeEcosystemExport,false);
+  assert.equal(stored.scope,'urai-jobs-proven-owner-data');
+  assert.equal(stored.user.displayName,'synthetic-owner');
+  assert.equal(stored.user.settings.plan,'free');
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.user,'credentials'),false);
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.user,'apiKey'),false);
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.user.settings,'webhookKey'),false);
+  assert.equal(stored.jobs[0].payload.scene,'Synthetic Family');
+  assert.equal(stored.jobs[0].payload.source.label,'my photo');
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.jobs[0].payload,'apiKey'),false);
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.jobs[0].payload.source,'privateKey'),false);
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.jobs[0].output,'credential'),false);
+  assert.equal(Object.prototype.hasOwnProperty.call(stored.jobs[0].output.nested[0],'bearer'),false);
+  assert.ok(stored.unresolvedDomains.includes('cross-system-data-owned-by-other-urai-services'));
+  assert.equal(storedExports[0].path,
+    'privacy/data-rights/'+ownerHash+'/synthetic-request-01/export.json');
+  assert.equal(storedExports[0].mime,'application/json');
+  assert.equal(result.sha256,createHash('sha256').update(Buffer.from(storedExports[0].bytes,'utf8')).digest('hex'));
+});
+
+
+test('DELETE rejects running or pending owner jobs before mutation',async()=>{
+  for(const status of ['RUNNING','PENDING','LEASED','UNKNOWN']){
+    const h=deletionHarness({jobStatus:status});
+    await assert.rejects(executeDeleteFromSource(h.db,'synthetic-request-01',ownerUid),
+      /active|unknown|reconciliation/i);
+    assert.equal(h.commits,0);
+    assert.equal(h.userPatches.length,0);
+    assert.equal(h.writes.length,0);
+  }
+});
+test('DELETE rechecks latest owner and refuses reassigned documents',async()=>{
+  const h=deletionHarness({currentOwnerOverride:'other-synthetic-owner'});
+  await assert.rejects(executeDeleteFromSource(h.db,'synthetic-request-01',ownerUid),
+    /owner changed|reconciliation/i);
+  assert.equal(h.commits,0);
+  assert.equal(h.userPatches.length,0);
+});
+test('DELETE refuses an active queue even if master job is terminal',async()=>{
+  const h=deletionHarness({queueStatus:'PENDING'});
+  await assert.rejects(executeDeleteFromSource(h.db,'synthetic-request-01',ownerUid),
+    /active|queue/i);
+  assert.equal(h.commits,0);
+  assert.equal(h.userPatches.length,0);
+});
+test('DELETE enforces conservative 496-log transaction ceiling with or without a queue',async()=>{
+  const tooMany=deletionHarness({logCount:497,hasQueue:true});
+  await assert.rejects(executeDeleteFromSource(tooMany.db,'synthetic-request-01',ownerUid),
+    /logs exceed|bounded/i);
+  assert.equal(tooMany.commits,0);
+  const withQueue=deletionHarness({logCount:496,hasQueue:true});
+  const a=await executeDeleteFromSource(withQueue.db,'synthetic-request-01',ownerUid);
+  assert.equal(a.logDeletes,496);
+  assert.equal(a.queueDeletes,1);
+  assert.equal(withQueue.deletedRefs.length,497);
+  const withoutQueue=deletionHarness({logCount:496,hasQueue:false});
+  const b=await executeDeleteFromSource(withoutQueue.db,'synthetic-request-01',ownerUid);
+  assert.equal(b.logDeletes,496);
+  assert.equal(b.queueDeletes,0);
+  assert.equal(withoutQueue.deletedRefs.length,496);
+  assert.equal(withoutQueue.commits,1);
+  const tooManyWithoutQueue=deletionHarness({logCount:497,hasQueue:false});
+  await assert.rejects(executeDeleteFromSource(tooManyWithoutQueue.db,'synthetic-request-01',ownerUid),
+    /logs exceed|bounded/i);
+  assert.equal(tooManyWithoutQueue.commits,0);
+});
+
+
+for(const [label, ownerRecord, ownerExists] of [
+  ['foreign active deletion', {dataRightsDeletionPendingCentralPrivacy:true,dataRightsDeletionRequestId:'foreign-request'},true],
+  ['malformed deletion fence', {dataRightsDeletionPendingCentralPrivacy:'false'},true],
+  ['missing owner account', null,false],
+]) {
+  test('approved DELETE refuses '+label+' before any writes',async()=>{
+    const h=setup({prior:null,record:{...request,status:'APPROVED'},ownerRecord,ownerExists});
+    await assert.rejects(h.invoke(),/owner|fence|reconciliation/i);
+    assert.equal(h.creates.length,0);
+    assert.equal(h.sets.length,0);
+  });
+}
+test('approved DELETE accepts same-request pending fence only for reconciliation',async()=>{
+  const h=setup({prior:null,record:{...request,status:'APPROVED'},
+    ownerRecord:{dataRightsDeletionPendingCentralPrivacy:true,
+      dataRightsDeletionRequestId:'synthetic-request-01'}});
+  const outcome=await h.invoke();
+  assert.equal(outcome.replay,null);
+  assert.equal(h.creates.length,1);
+  assert.equal(h.sets.length,2);
+});
+test('approved EXPORT does not acquire the owner deletion fence',async()=>{
+  const h=setup({prior:null,record:{...request,requestType:'EXPORT',status:'APPROVED'}});
+  const outcome=await h.invoke();
+  assert.equal(outcome.replay,null);
+  assert.equal(h.creates.length,1);
+  assert.equal(h.sets.length,1);
+  assert.equal(h.gets.includes('owner'),false);
 });

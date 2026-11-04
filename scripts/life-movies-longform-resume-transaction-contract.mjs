@@ -37,6 +37,15 @@ vm.runInNewContext(ts.transpileModule(blockFragment,{compilerOptions:{module:ts.
   {module:moduleBlock,exports:moduleBlock.exports,Object,Array,Error});
 const actualConsent = moduleBlock.exports.assertJobConsentBlockClear;
 assert.equal(typeof actualConsent,'function');
+const ownerFenceSource=readFileSync(new URL('../functions/src/privacy/ownerDeletionFence.ts',import.meta.url),'utf8');
+const ownerFenceModule={exports:{}};
+vm.runInNewContext(ts.transpileModule(ownerFenceSource,{
+  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
+}).outputText,{
+  module:ownerFenceModule,exports:ownerFenceModule.exports,Object,Array,Error,
+});
+const verifiedOwnerFence=ownerFenceModule.exports.assertOwnerDeletionFenceClear;
+assert.equal(typeof verifiedOwnerFence,'function');
 const planId = 'lmp_' + 'A'.repeat(26), owner = 'owner01', tenant = 'tenant01';
 const childId=shape.makeChildId(planId,0);
 const base = {planId, schemaVersion:'urai-life-movie-longform-plan-v1', tenantId: tenant, ownerUid: owner, status: 'PENDING', childJobIds: [childId],
@@ -108,6 +117,11 @@ function make(phase){
  const transaction = {
   async get(r){calls.reads.push(r.path);
    if(r.path==='plans/'+planId)return snapshot(changed);
+   if(r.path==='users/'+owner){
+     if(phase==='owner-missing')return {exists:false};
+     return snapshot({dataRightsDeletionPendingCentralPrivacy:
+       phase==='owner-pending'?true:phase==='owner-malformed'?'false':false});
+   }
    if(r.path.startsWith('jobConsentBlocks/')){
     if(phase==='read-error')throw new Error('synthetic_firestore_failure');
     if(phase==='revoke')return snapshot({active:true});
@@ -124,13 +138,15 @@ function make(phase){
   update(r,obj){calls.writes.push({verb:'update',path:r.path,obj})},
   set(r,obj){calls.writes.push({verb:'set',path:r.path,obj})}
  };
- const db={async runTransaction(cb){calls.started=true;return cb(transaction)}};
+ const db={collection(name){assert.equal(name,'users');return {doc:id=>ref('users/'+id)};},
+  async runTransaction(cb){calls.started=true;return cb(transaction)}};
  const module={exports:{}};
  const env = {module,Error,Promise,Date,Set,String,Array, Number,
   getFirestore:()=>db,
   loadPlan:async()=>before,
   assertPlanConsentActive:async()=>true,
   assertJobConsentBlockClear:actualConsent,
+  assertOwnerDeletionFenceClear:verifiedOwnerFence,
   assertPlanOwner:shape.assertPlanOwner,
   assertPlanStructure:shape.assertPlanStructure,
   boundPlanJob:shape.boundPlanJob,validateOwnedMovieJob:owners.exports,buildRequestFingerprint:fingerprint,

@@ -6,7 +6,7 @@ import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/sh
 import { returnLeaseAfterPublishFailure } from '../core/dispatchRecovery.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { isTerminalJobStatus } from './executionGuards.js';
-import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { consentBlockRef, isConsentContext, checkedJobConsentBlockState } from '../privacy/consentBlocks.js';
 import { deferLifeMovieJob, LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS } from '../privacy/lifeMovieConsentGate.js';
 
 const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
@@ -70,6 +70,16 @@ function terminalQueueStatus(status: unknown): JobQueueStatus {
 }
 
 function jobConsentContexts(job: Job) {
+  // Existing documents can be malformed even when createJob validated the original request.
+  // Never silently discard an invalid consent context and treat it as unblocked.
+  const consentValue = (job as unknown as Record<string, unknown>).consent;
+  const consentsValue = (job as unknown as Record<string, unknown>).consents;
+  if (consentValue !== undefined && !isConsentContext(consentValue)) return null;
+  if (consentsValue !== undefined &&
+      (!Array.isArray(consentsValue) || consentsValue.length === 0 ||
+       consentsValue.some((entry) => !isConsentContext(entry)))) return null;
+  if ((consentValue !== undefined || consentsValue !== undefined) &&
+      (typeof job.ownerUid !== 'string' || !job.ownerUid.trim())) return null;
   const contexts = [
     ...(isConsentContext(job.consent) ? [job.consent] : []),
     ...(Array.isArray(job.consents) ? job.consents.filter(isConsentContext) : []),
@@ -155,13 +165,32 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
       }
 
       const consentContexts = jobConsentContexts(job);
+      if (consentContexts === null) {
+        transaction.update(queueRef, {
+          availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+          updatedAt: now,
+          'dispatch.blockedReason': 'job_consent_context_unverified',
+        });
+        return { lease: null, outcome: 'consent-context-unverified' as const };
+      }
       if (job.ownerUid && consentContexts.length > 0) {
         const blockSnapshots = await Promise.all(
           consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
         );
-        const blockedPurpose = blockSnapshots
-          .map((snapshot, index) => ({ snapshot, purpose: consentContexts[index].purpose }))
-          .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
+        const blockStates = blockSnapshots
+          .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: consentContexts[index].purpose }));
+        // Revocation is conclusive even when another block is malformed.
+        const blocked = blockStates.find(({ state }) => state === 'revoked')
+          ?? blockStates.find(({ state }) => state === 'unverified');
+        if (blocked?.state === 'unverified') {
+          transaction.update(queueRef, {
+            availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+            updatedAt: now,
+            'dispatch.blockedReason': 'job_consent_block_unverified',
+          });
+          return { lease: null, outcome: 'consent-block-unverified' as const };
+        }
+        const blockedPurpose = blocked?.state === 'revoked' ? blocked.purpose : null;
         if (blockedPurpose) {
           transaction.update(masterJobRef, {
             status: 'CANCELLED',

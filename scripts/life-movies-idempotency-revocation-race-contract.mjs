@@ -11,6 +11,12 @@ const raw=read('privacy/consentBlocks.ts');
 const block={exports:{}};
 vm.runInNewContext(compile(raw.slice(raw.indexOf('export type JobConsentBlockState ='))),{module:block,exports:block.exports});
 assert.equal(typeof block.exports.assertJobConsentBlockClear,'function');
+// Use the original owner-deletion guard; never substitute an allow-all stub.
+const ownerModule={exports:{}};
+vm.runInNewContext(compile(read('privacy/ownerDeletionFence.ts')),
+  {module:ownerModule,exports:ownerModule.exports});
+const ownerFence=ownerModule.exports.assertOwnerDeletionFenceClear;
+assert.equal(typeof ownerFence,'function');
 const absent={exists:false};
 const stored=active=>({exists:true,data:()=>({active})});
 const existing={exists:true,data:()=>({jobId:'prior-accepted-job'})};
@@ -26,6 +32,10 @@ function harness(mode,phase){
   const ref=path=>({path,async get(){preflight.push(path);return path.startsWith('bindings/')?existing:absent},collection:x=>ref(path+'/'+x),doc:x=>ref(path+'/'+x)});
   const db={collection:x=>ref(x),async runTransaction(fn){return fn({
     async get(r){reads.push(r.path);
+      if(r.path.startsWith('users/')){
+        if(phase==='owner-missing')return {exists:false};
+        return {exists:true,data:()=>({dataRightsDeletionPendingCentralPrivacy:phase==='owner-pending'?true:phase==='owner-malformed'?'false':false})};
+      }
       if(r.path.startsWith('jobConsentBlocks/')){
         if(phase==='error')throw Error('synthetic_firestore_unavailable');
         return phase==='revoked'?stored(true):phase==='malformed'?stored('false'):absent;
@@ -35,6 +45,7 @@ function harness(mode,phase){
     create(r,body){writes.push({path:r.path,body})}
   })}};
   const env={module:{exports:{}},Error,Date,Promise,createHash,assertJobConsentBlockClear:block.exports.assertJobConsentBlockClear,
+    assertOwnerDeletionFenceClear:ownerFence,
     getFirestore:()=>db,consentBlockRef:()=>ref('jobConsentBlocks/owner-1'),requireLifeMovieCreationAdmission:async()=>{},
     assertStudioLifeMovieRenderPlanDigest:x=>x,assertLifeMovieTenantPaths:x=>x,assertStudioLifeMovieLongformPlanDigest:x=>x,assertLifeMovieLongformTenantPaths:x=>x,
     verifySceneTruthReceipt:()=>({expiresAt:'2030-01-01T00:00:00.000Z'}),assertSceneTruthReceiptValue:()=>({receiptId:'receipt',expiresAt:'2030-01-01T00:00:00.000Z'}),
@@ -45,7 +56,7 @@ function harness(mode,phase){
   vm.runInNewContext(compile(src.slice(start,end)+'\nmodule.exports='+fn+';'),env);
   return {invoke:()=>env.module.exports(request),reads,writes,preflight};
 }
-for(const mode of ['short','longform'])for(const phase of ['revoked','malformed','error','clear']){
+for(const mode of ['short','longform'])for(const phase of ['revoked','malformed','error','clear','owner-pending','owner-malformed','owner-missing']){
   test(mode+' existing idempotency binding '+phase+' must use transactional revocation',async()=>{
     const h=harness(mode,phase);
     if(phase==='clear'){
@@ -54,11 +65,14 @@ for(const mode of ['short','longform'])for(const phase of ['revoked','malformed'
       assert.equal(mode==='short'?result.jobId:result.planId,'prior-accepted-job');
     }else{
       const error=phase==='revoked'?(mode==='short'?'life_movie_consent_revoked':'life_movie_longform_consent_revoked'):
-        phase==='malformed'?'life_movie_consent_block_unverified':'synthetic_firestore_unavailable';
+        phase==='malformed'?'life_movie_consent_block_unverified':
+        phase==='owner-pending'?'owner_data_rights_deletion_pending':
+        phase==='owner-malformed'||phase==='owner-missing'?'owner_data_rights_authority_unavailable':'synthetic_firestore_unavailable';
       await assert.rejects(h.invoke(),new RegExp(error));
       assert.equal(h.writes.length,0,'revoked or unverified consent must not write');
     }
     assert.ok(h.preflight.some(x=>x.startsWith('jobConsentBlocks/')),'initial consent preflight required');
     assert.ok(h.reads.some(x=>x.startsWith('jobConsentBlocks/')),'existing idempotency replay must check consent within transaction');
+    assert.ok(h.reads.includes('users/owner-1'),'existing replay must check original owner-deletion fence inside transaction');
   });
 }

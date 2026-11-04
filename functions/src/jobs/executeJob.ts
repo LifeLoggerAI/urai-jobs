@@ -5,7 +5,7 @@ import axios from 'axios';
 import { z } from 'zod';
 import type { Job, JobQueueEntry } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
-import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { consentBlockRef, isConsentContext, checkedJobConsentBlockState } from '../privacy/consentBlocks.js';
 import { deferLifeMovieJob, LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS } from '../privacy/lifeMovieConsentGate.js';
 import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJobTypes.js';
 import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
@@ -43,6 +43,16 @@ const JobExecutionMessageSchema = z.object({
 });
 
 function jobConsentContexts(job: Job) {
+  // Existing documents can be malformed even when createJob validated the original request.
+  // Never silently discard an invalid consent context and treat it as unblocked.
+  const consentValue = (job as unknown as Record<string, unknown>).consent;
+  const consentsValue = (job as unknown as Record<string, unknown>).consents;
+  if (consentValue !== undefined && !isConsentContext(consentValue)) return null;
+  if (consentsValue !== undefined &&
+      (!Array.isArray(consentsValue) || consentsValue.length === 0 ||
+       consentsValue.some((entry) => !isConsentContext(entry)))) return null;
+  if ((consentValue !== undefined || consentsValue !== undefined) &&
+      (typeof job.ownerUid !== 'string' || !job.ownerUid.trim())) return null;
   const contexts = [
     ...(isConsentContext(job.consent) ? [job.consent] : []),
     ...(Array.isArray(job.consents) ? job.consents.filter(isConsentContext) : []),
@@ -246,9 +256,21 @@ function createInlineWorkerResult(job: Job, jobId: string, jobType: string): Inl
 
 async function appendJobLog(jobId: string, input: { level: string; message: string; source: string; metadata?: Record<string, unknown> }) {
   try {
-    await jobDoc(jobId).collection('logs').add({
-      ...input,
-      createdAt: FieldValue.serverTimestamp(),
+    const db = getFirestore();
+    const jobRef = jobDoc(jobId);
+    // A late worker must never recreate a private log after a deletion
+    // tombstone. Read the master and create the log in one transaction.
+    await db.runTransaction(async transaction => {
+      const snapshot = await transaction.get(jobRef);
+      if (!snapshot.exists) return;
+      const job = snapshot.data();
+      if (!job || typeof job.ownerUid !== 'string' || !job.ownerUid ||
+          job.ownerUid.startsWith('deleted:') ||
+          Object.prototype.hasOwnProperty.call(job, 'deletionReceipt')) return;
+      transaction.create(jobRef.collection('logs').doc(), {
+        ...input,
+        createdAt: FieldValue.serverTimestamp(),
+      });
     });
   } catch (logError) {
     console.error(`Failed to append job log for ${jobId}:`, logError);
@@ -408,13 +430,53 @@ export const executeJob = onMessagePublished({
     }
 
     const consentContexts = jobConsentContexts(job);
+    if (consentContexts === null) {
+      const queueSnapshot = await transaction.get(queueRef);
+      const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+      if (!queue || queue.status !== 'LEASED' || queue.lease?.leaseToken !== leaseToken) {
+        return { action: 'ignore' as const, reason: 'queue-lease-mismatch' as const };
+      }
+      const now = FieldValue.serverTimestamp();
+      transaction.update(jobRef, {
+        status: 'PENDING', lease: FieldValue.delete(), updatedAt: now,
+      });
+      transaction.update(queueRef, {
+        status: 'PENDING',
+        availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+        lease: FieldValue.delete(), updatedAt: now,
+        'dispatch.blockedReason': 'job_consent_context_unverified',
+      });
+      return { action: 'ignore' as const, reason: 'consent-context-unverified' as const };
+    }
     if (job.ownerUid && consentContexts.length > 0) {
       const blockSnapshots = await Promise.all(
         consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
       );
-      const blockedPurpose = blockSnapshots
-        .map((snapshot, index) => ({ snapshot, purpose: consentContexts[index].purpose }))
-        .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
+      const blockStates = blockSnapshots
+        .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: consentContexts[index].purpose }));
+      // Revocation is conclusive even when another block is malformed.
+      const blocked = blockStates.find(({ state }) => state === 'revoked')
+        ?? blockStates.find(({ state }) => state === 'unverified');
+      if (blocked?.state === 'unverified') {
+        // A malformed/unreadable block must never admit a worker attempt.
+        const queueSnapshot = await transaction.get(queueRef);
+        const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+        if (!queue || queue.status !== 'LEASED' || queue.lease?.leaseToken !== leaseToken) {
+          return { action: 'ignore' as const, reason: 'queue-lease-mismatch' as const };
+        }
+        const now = FieldValue.serverTimestamp();
+        transaction.update(jobRef, {
+          status: 'PENDING', lease: FieldValue.delete(), updatedAt: now,
+        });
+        transaction.update(queueRef, {
+          status: 'PENDING',
+          availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+          lease: FieldValue.delete(), updatedAt: now,
+          'dispatch.blockedReason': 'job_consent_block_unverified',
+        });
+        return { action: 'ignore' as const, reason: 'consent-block-unverified' as const };
+      }
+      const blockedPurpose = blocked?.state === 'revoked' ? blocked.purpose : null;
       if (blockedPurpose) {
         const now = FieldValue.serverTimestamp();
         transaction.update(jobRef, {
@@ -494,13 +556,22 @@ export const executeJob = onMessagePublished({
       result = await executeTinyFishJob(jobType, getPayloadRecord(job));
     } else if (target) {
       const dispatchConsentContexts = jobConsentContexts(job);
+      if (dispatchConsentContexts === null) throw new Error('job_consent_context_unverified');
       if (job.ownerUid && dispatchConsentContexts.length > 0) {
         const blockSnapshots = await Promise.all(
           dispatchConsentContexts.map((context) => consentBlockRef(job.ownerUid!, context.purpose).get())
         );
-        const blockedPurpose = blockSnapshots
-          .map((snapshot, index) => ({ snapshot, purpose: dispatchConsentContexts[index].purpose }))
-          .find(({ snapshot }) => snapshot.exists && snapshot.data()?.active === true)?.purpose;
+        const blockStates = blockSnapshots
+          .map((snapshot, index) => ({ state: checkedJobConsentBlockState(snapshot), purpose: dispatchConsentContexts[index].purpose }));
+        // Revocation is conclusive even when another block is malformed.
+        const blocked = blockStates.find(({ state }) => state === 'revoked')
+          ?? blockStates.find(({ state }) => state === 'unverified');
+        if (blocked?.state === 'unverified') {
+          // A block can become corrupt after the execution lease was granted.
+          // Never cross the external worker boundary on unknown authority.
+          throw new Error('job_consent_block_unverified');
+        }
+        const blockedPurpose = blocked?.state === 'revoked' ? blocked.purpose : null;
         if (blockedPurpose) {
           const now = FieldValue.serverTimestamp();
           await db.runTransaction(async (transaction) => {

@@ -107,7 +107,14 @@ jobs:
           project_id: ${{ env.DEPLOY_PROJECT_ID }}
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove frozen install preserved lock and exact deployed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git diff --exit-code -- package.json pnpm-lock.yaml pnpm-workspace.yaml
 
       - name: Export Cloud Run worker URLs
         env:

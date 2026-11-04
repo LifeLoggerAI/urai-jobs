@@ -12,6 +12,7 @@ import { consentBlockRef, checkedJobConsentBlockState, assertJobConsentBlockClea
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
 import { parseLifeMoviePrivateDeliveryRequest } from './lifeMoviePrivateDeliveryContract.js';
 import { requireLifeMovieCreationAdmission } from '../privacy/lifeMovieCreationAdmission.js';
+import { assertOwnerDeletionFenceClear } from '../privacy/ownerDeletionFence.js';
 import { requirePinnedMovieOutputGeneration } from '../privacy/lifeMovieOutputGeneration.js';
 import { deleteOwnedMovieOutputs, preflightOwnedMovieOutputs, validateOwnedMovieJob } from './lifeMovieOwnerDeletion.js';
 import {
@@ -333,11 +334,13 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
   return db.runTransaction(async (transaction) => {
     // Check active revocation in the same serializable write transaction.
     // Preflight alone cannot close the revoke-before-commit window.
-    const [inside, receiptInside, liveConsentBlock] = await Promise.all([
+    const [inside, receiptInside, liveConsentBlock, ownerSnapshot] = await Promise.all([
       transaction.get(bindingRef),
       transaction.get(receiptBindingRef),
       transaction.get(consentRef),
+      transaction.get(db.collection('users').doc(input.userId)),
     ]);
+    assertOwnerDeletionFenceClear(ownerSnapshot);
     assertJobConsentBlockClear(liveConsentBlock, 'life_movie_longform_consent_revoked');
 
     if (receiptInside.exists) {
@@ -583,12 +586,14 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
     // Refresh source, consent, and all selected segment outputs in the same
     // write transaction that queues an assembly job. These reads conflict
     // with concurrent revocation/cancellation/output changes at commit time.
-    const [planSnapshot, existing, liveConsentBlock, currentChildSnapshots] = await Promise.all([
+    const [planSnapshot, existing, liveConsentBlock, currentChildSnapshots, ownerSnapshot] = await Promise.all([
       transaction.get(planRef(planId)),
       transaction.get(jobDoc(jobId)),
       transaction.get(consentBlockRef(plan.ownerUid, plan.consent.purpose)),
       transaction.getAll(...plan.childJobIds.map((childId) => jobDoc(childId))),
+      transaction.get(db.collection('users').doc(userId)),
     ]);
+    assertOwnerDeletionFenceClear(ownerSnapshot);
     assertJobConsentBlockClear(liveConsentBlock, 'life_movie_longform_consent_revoked');
     if (!planSnapshot.exists) throw new Error('longform_plan_not_found');
     const currentPlan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
@@ -809,12 +814,14 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
     // Read both owner-plan state and consent revocation in the same write
     // transaction that can requeue failed children. These transaction reads
     // force retry/abort if cancellation or revocation races this resume.
-    const [snapshots, assemblySnapshot, planSnapshot, liveConsentBlock] = await Promise.all([
+    const [snapshots, assemblySnapshot, planSnapshot, liveConsentBlock, ownerSnapshot] = await Promise.all([
       childRefs.length ? transaction.getAll(...childRefs) : Promise.resolve([]),
       plan.assemblyJobId ? transaction.get(jobDoc(plan.assemblyJobId)) : Promise.resolve(null),
       transaction.get(planRef(planId)),
       transaction.get(consentBlockRef(plan.ownerUid, plan.consent.purpose)),
+      transaction.get(db.collection('users').doc(userId)),
     ]);
+    assertOwnerDeletionFenceClear(ownerSnapshot);
     assertJobConsentBlockClear(liveConsentBlock, 'life_movie_longform_consent_revoked');
     if (!planSnapshot.exists) throw new Error('longform_plan_not_found');
     const currentPlan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
@@ -1162,9 +1169,12 @@ export const studioLifeMovieLongformBridge = onRequest({
       'life_movie_output_inflight_unresolved', 'life_movie_output_ref_invalid', 'life_movie_output_limit_exceeded',
       'life_movie_output_changed', 'life_movie_output_generation_invalid', 'life_movie_output_generation_changed',
       'life_movie_output_boundary_mismatch', 'life_movie_output_bucket_authority_unavailable',
+      'owner_data_rights_deletion_pending', 'owner_data_rights_authority_unavailable',
     ]);
     const code = error instanceof Error && known.has(error.message) ? error.message : 'longform_bridge_failed';
-    const status = code === 'longform_plan_not_found' ? 404
+    const status = code === 'owner_data_rights_deletion_pending' ? 409
+      : code === 'owner_data_rights_authority_unavailable' ? 503
+      : code === 'longform_plan_not_found' ? 404
       : code === 'longform_plan_boundary_mismatch' ? 403
       : code === 'life_movie_owner_job_boundary_mismatch' || code === 'life_movie_output_boundary_mismatch' ? 403
       : code === 'longform_output_boundary_mismatch' ? 403

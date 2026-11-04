@@ -15,7 +15,7 @@ function load(relativePath, imports = {}) {
   const module = { exports: {} };
   vm.runInNewContext(compiled, {
     module, exports: module.exports,
-    Buffer, ArrayBuffer, AbortSignal, Date, Error, Number, Reflect, Object, Response, URL,
+    Buffer, ArrayBuffer, AbortSignal, Date, Error, Number, Reflect, Object, Response, URL, TextDecoder,
     require(name) {
       if (name in imports) return imports[name];
       throw new Error(`Unexpected import ${name}`);
@@ -117,6 +117,51 @@ for (const [key, value] of [
   ['renderScope', { ...renderScope, sourceSetDigest: 'd'.repeat(64) }],
 ]) await rejects(make({ fetchImpl: async () => response({ result: { ...allowed, [key]: value } }) }),
   'life_movie_consent_decision_denied');
+// Strict Jobs acceptance: a perfectly bound positive Privacy decision may
+// carry ONLY the canonical 13 own fields. Marked emulator proposals and
+// unexpected authority-looking claims are never allowed to pass as consent.
+for (const [field, marker] of [
+  ['reviewOnlyEmulator', true],
+  ['productionAuthorized', false],
+  ['hiddenAudit', 'untrusted'],
+  ['unexpectedAuthority', true],
+]) await rejects(make({ fetchImpl: async () => response({
+  result: { ...allowed, [field]: marker },
+}) }), 'life_movie_consent_decision_denied');
+
+// Source-level adversarial checks include shapes JSON would drop on the wire.
+// These exercise the original Jobs validator, not a copied assertion.
+assert.doesNotThrow(() => decisionModule.assertLifeMovieConsentDecision(allowed, expected, fixedNow));
+pass();
+// The actual JSON decoder may execute in a different VM/test realm. A genuine
+// canonical parsed object must still pass; only extra claims must be denied.
+const crossRealmDecision = vm.runInNewContext('JSON.parse(payload)', {
+  payload: JSON.stringify(allowed),
+});
+assert.doesNotThrow(() =>
+  decisionModule.assertLifeMovieConsentDecision(crossRealmDecision, expected, fixedNow));
+pass();
+const crossRealmMarked = vm.runInNewContext('JSON.parse(payload)', {
+  payload: JSON.stringify({ ...allowed, reviewOnlyEmulator: true }),
+});
+assert.throws(() =>
+  decisionModule.assertLifeMovieConsentDecision(crossRealmMarked, expected, fixedNow),
+  (error) => error && error.message === 'life_movie_consent_decision_denied');
+pass();
+for (const forged of [
+  Object.assign(Object.create({ inheritedAuthority: true }), allowed),
+  Object.assign({ ...allowed }, { [Symbol('synthetic-grant')]: true }),
+  Object.defineProperty({ ...allowed }, 'reviewOnlyEmulator', {
+    enumerable: false, value: true,
+  }),
+  new Proxy({ ...allowed }, { ownKeys() { throw new Error('untrusted-reflection-trap'); } }),
+]) {
+  assert.throws(
+    () => decisionModule.assertLifeMovieConsentDecision(forged, expected, fixedNow),
+    (error) => error && error.message === 'life_movie_consent_decision_denied',
+  );
+  pass();
+}
 for (const fakeResponse of [
   response({ error: { status: 'PERMISSION_DENIED' } }),
   response({ result: allowed, error: { status: 'PERMISSION_DENIED' } }),
