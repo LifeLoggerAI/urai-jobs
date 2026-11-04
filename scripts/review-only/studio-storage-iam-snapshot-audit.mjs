@@ -40,6 +40,8 @@ const REVIEWED_READ_ONLY_ROLES = new Set([
 const PROJECT = /^[a-z][a-z0-9-]{4,62}$/;
 const BUCKET = /^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$/;
 const SERVICE = /^[a-z0-9][a-z0-9-]{0,62}$/;
+const REGION = /^[a-z][a-z0-9-]{2,35}[0-9]$/;
+const COLLECTOR_COVERAGE = 'ONE_REGION_ONLY_RETAINED_EXECUTIONS_NOT_EFFECTIVE_IAM_OR_DRAIN_PROOF';
 const SA = /^[a-z0-9._+-]+@(?:[a-z0-9._-]+\.)?gserviceaccount\.com$/;
 const MEMBER = /^(?:(?:serviceAccount|user|group|domain|principal|principalSet):\S+|allUsers|allAuthenticatedUsers)$/;
 const IAM_ROLE = /^(?:roles\/[A-Za-z0-9_.]+|(?:projects|organizations)\/[A-Za-z0-9._-]+\/roles\/[A-Za-z0-9_]+)$/;
@@ -114,6 +116,15 @@ export function auditStudioStorageIamSnapshot(snapshot, expected) {
       snapshot.projectId !== expected.projectId || snapshot.bucket !== expected.bucket) {
     return invalidResult('EVIDENCE_SCOPE_MISMATCH', snapshot);
   }
+  // R586: reject unrelated regions and a fictional global-completeness declaration.
+  // Even a matching single-region inventory never proves effective IAM globally.
+  if (!REGION.test(String(expected.region ?? '')))
+    return invalidResult('EXPECTED_REGION_REQUIRED', snapshot);
+  if (!REGION.test(String(snapshot.collectionRegion ?? '')) ||
+      snapshot.collectionRegion !== expected.region)
+    return invalidResult('EVIDENCE_REGION_MISMATCH_OR_MISSING', snapshot);
+  if (snapshot.collectorCoverage !== COLLECTOR_COVERAGE)
+    return invalidResult('COLLECTOR_COVERAGE_UNVERIFIED', snapshot);
   if (!policy(snapshot.projectPolicy) || !policy(snapshot.bucketPolicy)) {
     return invalidResult('PROJECT_OR_BUCKET_POLICY_MISSING', snapshot);
   }
@@ -122,7 +133,10 @@ export function auditStudioStorageIamSnapshot(snapshot, expected) {
         (s.serviceAccount === null || SA.test(String(s.serviceAccount ?? ''))))) {
     return invalidResult('CLOUD_RUN_SERVICE_INVENTORY_INCOMPLETE', snapshot);
   }
+  if (new Set(snapshot.runServices.map(s => s.name)).size !== snapshot.runServices.length)
+    return invalidResult('DUPLICATE_CLOUD_RUN_SERVICE_INVENTORY', snapshot);
   const findings = new Set([
+    'REGIONAL_CAPTURE_CANNOT_PROVE_GLOBAL_RUNTIME_OR_IAM',
     'LIVE_EFFECTIVE_IAM_NOT_VERIFIED',
     'EXISTING_CREDENTIALS_AND_SIGNED_URLS_NOT_REVOKED',
     'ALREADY_RUNNING_REVISIONS_NOT_FULLY_INVENTORIED',
@@ -213,6 +227,8 @@ export function auditStudioStorageIamSnapshot(snapshot, expected) {
     // A nonempty array of placeholders is not evidence of historical identities.
     return invalidResult('HISTORIC_REVISION_INVENTORY_MALFORMED', snapshot);
   } else {
+    if (new Set(snapshot.revisionInventory.map(rev => rev.name)).size !== snapshot.revisionInventory.length)
+      return invalidResult('DUPLICATE_HISTORIC_REVISION_INVENTORY', snapshot);
     if (snapshot.revisionInventory.some(rev => !rev.serviceAccount)) {
       findings.add('HISTORIC_REVISION_PRINCIPAL_UNVERIFIED');
     }
@@ -233,9 +249,9 @@ export function auditStudioStorageIamSnapshot(snapshot, expected) {
 }
 function cli() {
   const args = process.argv.slice(2);
-  if (args.length !== 6 || args[0] !== '--snapshot' ||
-      args[2] !== '--project' || args[4] !== '--bucket') {
-    process.stderr.write('HOLD: expected --snapshot <private-json> --project <id> --bucket <name>; no cloud calls performed\n');
+  if (args.length !== 8 || args[0] !== '--snapshot' ||
+      args[2] !== '--project' || args[4] !== '--bucket' || args[6] !== '--region') {
+    process.stderr.write('HOLD: expected --snapshot <private-json> --project <id> --bucket <name> --region <region>; no cloud calls performed\n');
     process.exitCode = 2; return;
   }
   try {
@@ -245,7 +261,7 @@ function cli() {
     if (!stat.isFile() || stat.size > 2_000_000 || stat.size === 0) throw new Error('invalid input');
     const snapshot = JSON.parse(readFileSync(file, 'utf8'));
     const result = auditStudioStorageIamSnapshot(snapshot, {
-      projectId: args[3], bucket: args[5],
+      projectId: args[3], bucket: args[5], region: args[7],
     });
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
     process.exitCode = result.findings.some(x =>
