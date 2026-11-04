@@ -247,6 +247,53 @@ try {
   assert.equal((await orphan.jobRef.get()).data()?.output, undefined);
   checks.push('same-event-retry-after-orphan-reconciliation-succeeds');
 
+  // An orphan upload may precede ALL job output references. An affected
+  // longform plan alone must keep its canonical project in the inventory,
+  // fail closed, and allow only explicit reconciliation on the same event.
+  const planOnlyOwner = 'synthetic-owner-' + token + '-plan-only';
+  const planOnlyEventId = 'event-' + token + '-plan-only';
+  const planOnlyProject = 'movie-' + token + '-plan-only';
+  const planOnlyPath = 'tenants/tenant-1/life-movies/' + planOnlyProject +
+    '/attempt-unrecorded/private.mp4';
+  const planOnlyRef = db.collection('studioLifeMovieLongformPlans').doc('plan-' + token + '-plan-only');
+  const planOnlyEvent = {
+    eventId: planOnlyEventId, ownerUid: planOnlyOwner,
+    purpose: 'life-movie.render', revokedAt: new Date().toISOString(),
+  };
+  const planOnlyReceiptRef = db.collection('jobConsentEventReceipts').doc(
+    createHash('sha256').update(planOnlyEventId).digest('hex'));
+  await planOnlyReceiptRef.set({
+    eventId: planOnlyEventId, ownerUid: planOnlyOwner,
+    purpose: 'life-movie.render', status: 'blocked',
+    consumerId: 'urai-jobs', revokedAt: planOnlyEvent.revokedAt,
+  });
+  await planOnlyRef.set({
+    ownerUid: planOnlyOwner, tenantId: 'tenant-1',
+    projectId: planOnlyProject, status: 'PLANNED',
+  });
+  await bucket.file(planOnlyPath).save(Buffer.from('synthetic-plan-only-orphan'), {
+    resumable: false, metadata: { contentType: 'video/mp4' },
+  });
+  activeCases.add(planOnlyPath);
+  await assert.rejects(
+    () => invalidateLifeMovieDerivativesForConsent(planOnlyEvent),
+    /life_movie_revocation_unattributed_output_unresolved/,
+  );
+  const planOnlyBlocked = (await planOnlyRef.get()).data();
+  assert.equal(planOnlyBlocked?.derivativeAccessState, 'REVOKED');
+  assert.equal(planOnlyBlocked?.outputDeletedAt, undefined);
+  assert.equal(await missingFile(planOnlyPath), false,
+    'unknown plan-only object must not be broad-deleted');
+  checks.push('plan-only-unrecorded-output-denies-cleanup');
+
+  await bucket.file(planOnlyPath).delete();
+  const planOnlyRetry = await invalidateLifeMovieDerivativesForConsent(planOnlyEvent);
+  assert.equal(planOnlyRetry.jobsInvalidated, 0);
+  assert.equal(planOnlyRetry.plansInvalidated, 1);
+  assert.ok((await planOnlyRef.get()).data()?.outputDeletedAt != null,
+    'same-event retry can complete after explicit orphan reconciliation');
+  checks.push('plan-only-orphan-reconciliation-retry-completes');
+
   // Files in a different tenant/project are NOT eligible for destructive
   // cleanup by another owner's revocation.
   const otherProject = await seed('other-project');
