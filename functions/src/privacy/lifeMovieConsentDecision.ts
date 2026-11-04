@@ -28,12 +28,23 @@ const REQUIRED_DECISION_FIELDS = [
   'expiresAt', 'decisionEventId',
 ] as const;
 
+/** JSON-parsed records may come from another VM realm, but a custom
+ * inherited prototype cannot supply approval or selected-media authority. */
+function ordinaryDataPrototype(value: object): boolean {
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === null ||
+    (Object.getPrototypeOf(prototype) === null &&
+      Reflect.ownKeys(prototype).length === Reflect.ownKeys(Object.prototype).length &&
+      Reflect.ownKeys(Object.prototype).every(key =>
+        Object.prototype.hasOwnProperty.call(prototype, key)));
+}
+
 /** Only literal own data properties can carry selected-media authority. */
 function ownDataScope(scope: unknown): LifeMovieRenderScope | null {
   if (!scope || typeof scope !== 'object' || Array.isArray(scope)) return null;
   try {
     const value = scope as Record<string, unknown>;
-    if (Reflect.ownKeys(value).length !== 3) return null;
+    if (!ordinaryDataPrototype(value) || Reflect.ownKeys(value).length !== 3) return null;
     const props = Object.getOwnPropertyDescriptors(value);
     const keys = ['projectId', 'renderPlanDigest', 'sourceSetDigest'] as const;
     if (!keys.every(key => Object.prototype.hasOwnProperty.call(props, key) &&
@@ -106,42 +117,45 @@ export function assertLifeMovieConsentDecision(
   // Reject reviewOnlyEmulator/productionAuthorized markers, unexpected claims,
   // inherited authority, accessors, symbols, or throwing property traps.
   // The real Privacy callable returns exactly these 13 own data fields.
-  let exactDecision = false;
+  let pinnedDecision: Readonly<Record<string, unknown>> | null = null;
   try {
     const keys = Reflect.ownKeys(value);
-    const prototype = Object.getPrototypeOf(value);
-    // JSON.parse in a separate VM/test realm has its own Object.prototype.
-    // Accept an ordinary cross-realm Object prototype, but not custom
-    // inherited authority or caller-defined prototype metadata.
-    const plainPrototype = prototype === null ||
-      (Object.getPrototypeOf(prototype) === null &&
-        Reflect.ownKeys(prototype).length === Reflect.ownKeys(Object.prototype).length &&
-        Reflect.ownKeys(Object.prototype).every(key =>
-          Object.prototype.hasOwnProperty.call(prototype, key)));
-    exactDecision = plainPrototype &&
-      keys.length === REQUIRED_DECISION_FIELDS.length &&
-      keys.every(key => typeof key === 'string' &&
-        (REQUIRED_DECISION_FIELDS as readonly string[]).includes(key)) &&
-      REQUIRED_DECISION_FIELDS.every(key => {
-        const descriptor = Object.getOwnPropertyDescriptor(value, key);
-        return descriptor !== undefined && Object.prototype.hasOwnProperty.call(descriptor, 'value');
-      });
+    if (ordinaryDataPrototype(value) &&
+        keys.length === REQUIRED_DECISION_FIELDS.length &&
+        keys.every(key => typeof key === 'string' &&
+          (REQUIRED_DECISION_FIELDS as readonly string[]).includes(key))) {
+      // Capture descriptor values once, before any clock or scope checks.
+      // Re-reading a mutable Proxy after validation could change its claim.
+      const descriptors = Object.getOwnPropertyDescriptors(value);
+      const snapshot: Record<string, unknown> = Object.create(null);
+      let complete = true;
+      for (const key of REQUIRED_DECISION_FIELDS) {
+        const descriptor = descriptors[key];
+        if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+          complete = false;
+          break;
+        }
+        snapshot[key] = descriptor.value;
+      }
+      if (complete) pinnedDecision = Object.freeze(snapshot);
+    }
   } catch {
-    exactDecision = false;
+    pinnedDecision = null;
   }
-  if (!exactDecision) {
+  if (!pinnedDecision) {
     throw new Error('life_movie_consent_decision_denied');
   }
-  const time = typeof value.evaluatedAt === 'string' ? Date.parse(value.evaluatedAt) : NaN;
-  const expiry = typeof value.expiresAt === 'string' ? Date.parse(value.expiresAt) : NaN;
+  const valueSnapshot = pinnedDecision;
+  const time = typeof valueSnapshot.evaluatedAt === 'string' ? Date.parse(valueSnapshot.evaluatedAt) : NaN;
+  const expiry = typeof valueSnapshot.expiresAt === 'string' ? Date.parse(valueSnapshot.expiresAt) : NaN;
   const current = Number.isFinite(time) && time <= nowMs && nowMs - time <= maxAgeMs &&
     Number.isFinite(expiry) && expiry > nowMs;
-  if (value.allowed !== true || value.reason !== 'ALLOWED' || value.purpose !== 'life-movie.render' ||
-      value.policyVersion !== '1.1.0' || value.requiredTier !== 'C6' ||
-      value.subjectUid !== bound.subjectUid || value.tenantId !== bound.tenantId ||
-      value.correlationId !== bound.correlationId || value.receiptHash !== bound.decisionReceiptId ||
-      typeof value.decisionEventId !== 'string' || !value.decisionEventId ||
-      !exactScope(value.renderScope, bound.renderScope) || !current) {
+  if (valueSnapshot.allowed !== true || valueSnapshot.reason !== 'ALLOWED' || valueSnapshot.purpose !== 'life-movie.render' ||
+      valueSnapshot.policyVersion !== '1.1.0' || valueSnapshot.requiredTier !== 'C6' ||
+      valueSnapshot.subjectUid !== bound.subjectUid || valueSnapshot.tenantId !== bound.tenantId ||
+      valueSnapshot.correlationId !== bound.correlationId || valueSnapshot.receiptHash !== bound.decisionReceiptId ||
+      typeof valueSnapshot.decisionEventId !== 'string' || !valueSnapshot.decisionEventId ||
+      !exactScope(valueSnapshot.renderScope, bound.renderScope) || !current) {
     throw new Error('life_movie_consent_decision_denied');
   }
 }
