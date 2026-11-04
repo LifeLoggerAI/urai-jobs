@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_ID="${FIREBASE_PROJECT_ID:-${GOOGLE_CLOUD_PROJECT:-${GCLOUD_PROJECT:-urai-jobs}}}"
+PROJECT_ID="${FIREBASE_PROJECT_ID:-${GOOGLE_CLOUD_PROJECT:-${GCLOUD_PROJECT:-}}}"
+: "${PROJECT_ID:?FIREBASE_PROJECT_ID, GOOGLE_CLOUD_PROJECT or GCLOUD_PROJECT must explicitly select a project}"
+for candidate in "${FIREBASE_PROJECT_ID:-}" "${GOOGLE_CLOUD_PROJECT:-}" "${GCLOUD_PROJECT:-}"; do
+  if [[ -n "$candidate" && "$candidate" != "$PROJECT_ID" ]]; then
+    echo "[FAIL] Conflicting project IDs: refuse worker IAM bootstrap." >&2
+    exit 1
+  fi
+done
 REGION="${GCP_REGION:-us-central1}"
 SERVICE_ACCOUNT_NAME="${WORKER_SERVICE_ACCOUNT_NAME:-urai-jobs-worker}"
 SERVICE_ACCOUNT_EMAIL="${WORKER_SERVICE_ACCOUNT_EMAIL:-${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com}"
@@ -14,6 +21,10 @@ WORKERS_CSV="$WORKERS_CSV" node scripts/studio-worker-deploy-veto.mjs
 # A preapproved bucket is required. Never create a chargeable bucket or grant
 # blanket Storage object administration as a bootstrap side effect.
 BUCKET="${GCS_BUCKET_NAME:?GCS_BUCKET_NAME must identify an existing approved bucket}"
+if ! [[ "$BUCKET" =~ ^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$ ]] || [[ "$BUCKET" == *..* ]]; then
+  echo "[FAIL] GCS_BUCKET_NAME must be a single exact bucket name, not a path or glob." >&2
+  exit 1
+fi
 if [[ "${BUCKET}" =~ replace-with|placeholder|YOUR_|dummy|fake|changeme ]]; then
   echo "[FAIL] GCS_BUCKET_NAME contains a placeholder value." >&2
   exit 1
