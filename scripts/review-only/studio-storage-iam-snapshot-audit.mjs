@@ -141,12 +141,30 @@ export function auditStudioStorageIamSnapshot(snapshot, expected) {
   if (snapshot.runServices.some(s => /studio/i.test(s.name) && !s.serviceAccount)) {
     findings.add('STUDIO_RUNTIME_PRINCIPAL_UNVERIFIED');
   }
+  // A non-Studio Cloud Run worker can also write private objects; do not hide
+  // unidentified alternate workload principals behind a valid Studio identity.
+  if (snapshot.runServices.some(s => !s.serviceAccount)) {
+    findings.add('CLOUD_RUN_RUNTIME_PRINCIPAL_UNVERIFIED');
+  }
   if (snapshot.runServices.some(s => typeof s.serviceAccount === 'string' &&
       /@(?:developer|appspot)\.gserviceaccount\.com$/.test(s.serviceAccount))) {
     findings.add('DEFAULT_SHARED_RUNTIME_IDENTITY_REQUIRES_REVIEW');
   }
   if (!Array.isArray(snapshot.revisionInventory) || !snapshot.revisionInventory.length) {
     findings.add('HISTORIC_STUDIO_REVISION_IDENTITIES_MISSING');
+  } else if (snapshot.revisionInventory.length > 10000 ||
+      !snapshot.revisionInventory.every(rev => object(rev) &&
+        SERVICE.test(String(rev.name ?? '')) &&
+        (rev.serviceAccount === null || SA.test(String(rev.serviceAccount ?? ''))))) {
+    // A nonempty array of placeholders is not evidence of historical identities.
+    return invalidResult('HISTORIC_REVISION_INVENTORY_MALFORMED', snapshot);
+  } else {
+    if (snapshot.revisionInventory.some(rev => !rev.serviceAccount)) {
+      findings.add('HISTORIC_REVISION_PRINCIPAL_UNVERIFIED');
+    }
+    if (!snapshot.revisionInventory.some(rev => /studio/i.test(rev.name))) {
+      findings.add('HISTORIC_STUDIO_REVISION_IDENTITIES_MISSING');
+    }
   }
   // Unknown custom roles, inherited IAM, and service account impersonation
   // always require separate effective permissions testing.
