@@ -133,6 +133,21 @@ for (const [field, marker] of [
 // These exercise the original Jobs validator, not a copied assertion.
 assert.doesNotThrow(() => decisionModule.assertLifeMovieConsentDecision(allowed, expected, fixedNow));
 pass();
+// The actual JSON decoder may execute in a different VM/test realm. A genuine
+// canonical parsed object must still pass; only extra claims must be denied.
+const crossRealmDecision = vm.runInNewContext('JSON.parse(payload)', {
+  payload: JSON.stringify(allowed),
+});
+assert.doesNotThrow(() =>
+  decisionModule.assertLifeMovieConsentDecision(crossRealmDecision, expected, fixedNow));
+pass();
+const crossRealmMarked = vm.runInNewContext('JSON.parse(payload)', {
+  payload: JSON.stringify({ ...allowed, reviewOnlyEmulator: true }),
+});
+assert.throws(() =>
+  decisionModule.assertLifeMovieConsentDecision(crossRealmMarked, expected, fixedNow),
+  (error) => error && error.message === 'life_movie_consent_decision_denied');
+pass();
 for (const forged of [
   Object.assign(Object.create({ inheritedAuthority: true }), allowed),
   Object.assign({ ...allowed }, { [Symbol('synthetic-grant')]: true }),
