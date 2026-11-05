@@ -37,6 +37,25 @@ function requireSnapshot(snapshot) {
       (snapshot.phase === 'OPEN' && (snapshot.revokedBy !== null || snapshot.epoch !== 1)) ||
       (snapshot.phase === 'FENCING' && (!validId(snapshot.revokedBy) || snapshot.epoch < 2)) ||
       !Array.isArray(snapshot.attempts) || snapshot.attempts.length > MAX_ATTEMPTS) deny();
+  // Caller-provided review snapshots are untrusted. Reject forged/duplicated
+  // reservation histories before processing any event, even a harmless retry.
+  const seen = new Set();
+  for (const attempt of snapshot.attempts) {
+    if (!attempt || typeof attempt !== 'object' || Array.isArray(attempt) ||
+        !validId(attempt.id) || seen.has(attempt.id) ||
+        !Number.isSafeInteger(attempt.epoch) || attempt.epoch < 1 ||
+        (snapshot.phase === 'OPEN'
+          ? attempt.epoch !== snapshot.epoch ||
+            !['RESERVED','UPLOADING','UPLOADED_NOT_FINAL','RECORDED'].includes(attempt.phase)
+          : attempt.epoch >= snapshot.epoch ||
+            !['RECONCILE_REQUIRED','REVIEW_ONLY_SETTLED'].includes(attempt.phase)) ||
+        (attempt.generation !== null &&
+          (!validId(attempt.generation) || !/^[1-9][0-9]*$/.test(attempt.generation) ||
+            !Number.isSafeInteger(Number(attempt.generation)))) ||
+        (['UPLOADED_NOT_FINAL','RECORDED'].includes(attempt.phase) && attempt.generation === null) ||
+        (attempt.phase === 'RESERVED' && attempt.generation !== null)) deny();
+    seen.add(attempt.id);
+  }
 }
 function requireAttempt(state, attemptId) {
   const attempt = state.attempts.find(a => a.id === attemptId);
