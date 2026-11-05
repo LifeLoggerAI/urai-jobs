@@ -56,4 +56,40 @@ test('pure model admits no REVOKED transition even after every simulated attempt
   assert.equal(s.phase,'FENCING');
 });
 
+
+test('R646: forged attempt identities and duplicate reservations are rejected before any transition',()=>{
+  const valid=reserve(initial());
+  for(const attempts of [
+    [null], [{}], [{...valid.attempts[0],id:'bad path'}],
+    [valid.attempts[0],{...valid.attempts[0]}],
+    [{...valid.attempts[0],epoch:0}],
+    [{...valid.attempts[0],epoch:2}],
+    [{...valid.attempts[0],phase:'RECORDED',generation:null}],
+    [{...valid.attempts[0],phase:'REVOKED'}],
+    [{...valid.attempts[0],phase:'RESERVED',generation:'999'}],
+    [{...valid.attempts[0],phase:'UPLOADED_NOT_FINAL',generation:'0'}],
+    [{...valid.attempts[0],phase:'UPLOADED_NOT_FINAL',generation:'1e3'}],
+    [{...valid.attempts[0],phase:'UPLOADED_NOT_FINAL',generation:'9007199254740992'}]
+  ]) {
+    denied(()=>advanceReviewSnapshot({...valid,attempts},evt('reserve',valid.epoch,{attemptId:'fresh'})));
+  }
+});
+
+test('R646: forged post-withdrawal attempt phases or epochs cannot become synthetic settlement',()=>{
+  const fenced=withdraw(begin(reserve(initial())));
+  for(const attempt of [
+    {...fenced.attempts[0],phase:'RECORDED',generation:'123'},
+    {...fenced.attempts[0],phase:'REVIEW_ONLY_SETTLED',generation:'0'},
+    {...fenced.attempts[0],phase:'UPLOADING'},
+    {...fenced.attempts[0],epoch:fenced.epoch},
+    {...fenced.attempts[0],epoch:-1},
+    {...fenced.attempts[0],id:'invalid/path'},
+  ]) {
+    denied(()=>advanceReviewSnapshot({...fenced,attempts:[attempt]},evt('settle-attempt',fenced.epoch,{
+      attemptId:'attempt-1',reviewOnlyProof:{attemptId:'attempt-1',epoch:fenced.epoch,
+        writerStopped:true,storageGenerationAbsent:true,noPendingNetworkFinalize:true}
+    })));
+  }
+});
+
 console.log('R573_REVIEW_ONLY_REVOCATION_ACK_HARD_DENY modelOnly=true storageAuthority=false deletionAck=false');
