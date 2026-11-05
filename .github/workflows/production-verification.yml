@@ -17,6 +17,7 @@ env:
 
 jobs:
   verify:
+    name: Verify production contracts
     runs-on: ubuntu-latest
 
     env:
