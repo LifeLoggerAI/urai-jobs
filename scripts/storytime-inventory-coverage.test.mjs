@@ -96,3 +96,24 @@ test('noncanonical legacy name remains unresolved regardless of journal coverage
   assert.equal(out[0].reason,'legacy_or_unrecognized_object_name');
   assert.equal(out[0].state,'UNRESOLVED');
 });
+
+test('unspecified ledger coverage is not evidence that an observed object is orphaned',()=>{
+  const h=harness();
+  const entries=h.classifyStorytimeInventory(scope,'test-bucket',[obj],[]);
+  assert.equal(entries[0].reason,'ledger_scan_incomplete');
+  assert.equal(entries[0].state,'UNRESOLVED');
+});
+test('unspecified GCS coverage cannot assert that a journaled object is absent',()=>{
+  const h=harness();
+  const entries=h.classifyStorytimeInventory(scope,'test-bucket',[],[row]);
+  assert.equal(entries[0].reason,'object_scan_incomplete');
+  assert.equal(entries[0].state,'UNRESOLVED');
+});
+test('Firestore document ID, not document data id, is canonical identity for audit inventory',async()=>{
+  const record={...row,id:'forged-document-id'};
+  const h=harness({docs:[doc('trusted-reservation-id',record)],files:[{name:path,metadata:{generation:'42',metadata:{uraiUploadId:'upload-1'}}}]});
+  const report=await h.inspectStorytimeNarratorInventory(scope);
+  assert.equal(report.entries[0].reservationId,'trusted-reservation-id');
+  assert.equal(report.entries[0].state,'REVIEW_REFERENCED');
+  assert.equal(report.deletionAcknowledged,false);
+});

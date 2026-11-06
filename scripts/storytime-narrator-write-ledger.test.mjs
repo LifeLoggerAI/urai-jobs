@@ -104,7 +104,7 @@ test('unknown legacy object never authorized for cleanup',()=>{
   const e=inventory.classifyStorytimeInventory(scope,'test-narrator-bucket',
     [{name:path,generation:'42',uploadId:'upload1'}],[]);
   assert.equal(e[0].state,'UNRESOLVED');
-  assert.equal(e[0].reason,'legacy_or_orphan_without_reservation');
+  assert.equal(e[0].reason,'ledger_scan_incomplete');
 });
 test('changed generation, missing metadata, altered upload identity are unresolved',()=>{
   for(const obj of [
@@ -121,7 +121,7 @@ test('unsealed reservation and vanished objects are unresolved',()=>{
   assert.equal(inventory.classifyStorytimeInventory(scope,'test-narrator-bucket',
     [{name:path,generation:'42',uploadId:'upload1'}],[r])[0].reason,'unresolved_write_state');
   assert.equal(inventory.classifyStorytimeInventory(scope,'test-narrator-bucket',[],[r])[0].reason,
-    'journal_without_current_object');
+    'object_scan_incomplete');
 });
 test('foreign scope and duplicated ledger record cannot be adopted',()=>{
   const r=row();r.ownerUid='foreign';
