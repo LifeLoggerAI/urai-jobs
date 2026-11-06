@@ -520,10 +520,12 @@ export const studioLifeMovieBridge = onRequest({
       'life_movie_output_ref_invalid', 'life_movie_output_limit_exceeded', 'life_movie_output_changed',
       'life_movie_output_generation_invalid', 'life_movie_output_generation_changed',
       'owner_data_rights_deletion_pending', 'owner_data_rights_authority_unavailable',
+      'life_movie_owner_tenant_authority_unavailable',
     ]);
     const code = error instanceof Error && known.has(error.message) ? error.message : 'bridge_failed';
     const status = code === 'owner_data_rights_deletion_pending' ? 409
       : code === 'owner_data_rights_authority_unavailable' ? 503
+      : code === 'life_movie_owner_tenant_authority_unavailable' ? 503
       : code === 'job_not_found' ? 404
       : code === 'job_boundary_mismatch' ? 403
       : code === 'idempotency_conflict' ? 409
