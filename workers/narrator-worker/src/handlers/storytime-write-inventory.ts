@@ -58,16 +58,21 @@ export function classifyStorytimeInventory(
   const entries: StorytimeInventoryEntry[] = [];
   const observed = new Set<string>();
   for (const object of objects) {
-    if (!object.name.startsWith(prefix) || !AUDIO.test(object.name.slice(prefix.length))
+    // Reading an owner-scoped legacy object is not permission to delete it.
+    // Preserve the evidence instead of aborting the entire inventory just
+    // because its original name predates the UUID-based writer contract.
+    if (typeof object.name !== 'string' || !object.name.startsWith(prefix)
       || observed.has(object.name)) throw new Error('storytime_inventory_object_boundary_unverified');
     observed.add(object.name);
+    const canonicalName = AUDIO.test(object.name.slice(prefix.length));
     const matching = records.get(object.name) ?? [];
     const generation = typeof object.generation === 'string' && GEN.test(object.generation)
       && Number.isSafeInteger(Number(object.generation)) ? object.generation : null;
     const matched = matching.length === 1 ? matching[0] : null;
     const exact = matched && generation && matched.artifactGeneration === generation
       && typeof object.uploadId === 'string' && matched.uploadId === object.uploadId;
-    const reason = matching.length === 0 ? 'legacy_or_orphan_without_reservation'
+    const reason = !canonicalName ? 'legacy_or_unrecognized_object_name'
+      : matching.length === 0 ? 'legacy_or_orphan_without_reservation'
       : matching.length !== 1 ? 'ambiguous_multiple_reservations'
       : !exact ? 'generation_or_upload_id_unverified'
       : matched.state !== 'STORED_PENDING_JOB' ? 'unresolved_write_state'
