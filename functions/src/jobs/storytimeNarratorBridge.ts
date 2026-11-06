@@ -62,7 +62,7 @@ function configuredToken() {
 
 function authorized(header: string) {
   const expected = configuredToken();
-  if (!expected) return !productionRuntime() && process.env.FUNCTIONS_EMULATOR === 'true';
+  if (!expected) return false;
   const expectedHash = createHash('sha256').update(`Bearer ${expected}`).digest();
   const actualHash = createHash('sha256').update(header || '').digest();
   return timingSafeEqual(actualHash, expectedHash);
