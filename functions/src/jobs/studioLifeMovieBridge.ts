@@ -19,7 +19,7 @@ import { consentBlockRef, isConsentContext, assertJobConsentBlockClear } from '.
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
 import { parseLifeMoviePrivateDeliveryRequest } from './lifeMoviePrivateDeliveryContract.js';
 import { requireLifeMovieCreationAdmission } from '../privacy/lifeMovieCreationAdmission.js';
-import { assertOwnerDeletionFenceClear } from '../privacy/ownerDeletionFence.js';
+import { assertLifeMovieOwnerTenantAuthorityClear, assertOwnerDeletionFenceClear } from '../privacy/ownerDeletionFence.js';
 import { deleteOwnedMovieOutputs, preflightOwnedMovieOutputs } from './lifeMovieOwnerDeletion.js';
 import { requirePinnedMovieOutputGeneration } from '../privacy/lifeMovieOutputGeneration.js';
 
@@ -200,6 +200,7 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
       transaction.get(ownerRef),
     ]);
     assertOwnerDeletionFenceClear(ownerSnapshot);
+    assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, input.userId, input.tenantId);
     assertJobConsentBlockClear(liveConsentBlock, 'life_movie_consent_revoked');
 
     if (sceneTruthInside.exists) {

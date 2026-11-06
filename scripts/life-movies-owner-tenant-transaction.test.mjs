@@ -1,0 +1,81 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import test from 'node:test';
+import { createRequire } from 'node:module';
+import vm from 'node:vm';
+
+// Original TypeScript source is transpiled in memory. No mocked authority
+// decision can open the separate consent or Storage write gate.
+const require = createRequire(new URL('../functions/package.json', import.meta.url));
+const ts = require('typescript');
+const ownerSource = fs.readFileSync(path.resolve('functions/src/privacy/ownerDeletionFence.ts'), 'utf8');
+const js = ts.transpileModule(ownerSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const module = { exports: {} };
+vm.runInNewContext(js, { module, exports: module.exports, Object, Array, Error });
+const { assertLifeMovieOwnerTenantAuthorityClear: check } = module.exports;
+const BLOCK = /life_movie_owner_tenant_authority_unavailable/;
+const fixture = { uid: 'owner-1', tenantId: 'tenant-1', accountStatus: 'active', deleted: false,
+  markedForDeletion: false, disabled: false, dataRightsDeletionPendingCentralPrivacy: false };
+const snap = value => ({ exists: value !== null, data: () => value });
+
+function denied(value, uid = 'owner-1', tenant = 'tenant-1') {
+  assert.throws(() => check(snap(value), uid, tenant), BLOCK);
+}
+
+test('approved owner/tenant and clear account projection passes the independent transaction-local guard', () => {
+  assert.doesNotThrow(() => check(snap(fixture), 'owner-1', 'tenant-1'));
+});
+test('wrong tenant, wrong owner, missing profile and missing identity fail closed', () => {
+  denied(fixture, 'foreign-1'); denied(fixture, 'owner-1', 'foreign-1');
+  denied(null); denied({ ...fixture, uid: 'other-1' }); denied({ ...fixture, tenantId: 'other-1' });
+  denied({ ...fixture, uid: undefined }); denied({ ...fixture, tenantId: undefined });
+  denied(fixture, '', 'tenant-1'); denied(fixture, 'owner-1', 'not/a/tenant');
+});
+test('missing legacy owner/tenant/active state cannot be mistaken for authorization', () => {
+  for (const key of ['uid','tenantId','accountStatus','deleted','markedForDeletion']) {
+    const copy = { ...fixture }; delete copy[key]; denied(copy);
+  }
+});
+test('disabled, deleted, pending deletion and malformed status fail closed', () => {
+  for (const field of [
+    { disabled:true }, { disabled:null }, { deleted:true },
+    { markedForDeletion:true }, { accountStatus:'disabled' },
+    { dataRightsDeletionPendingCentralPrivacy:true },
+    { dataRightsDeletionPendingCentralPrivacy:null },
+  ]) denied({ ...fixture, ...field });
+});
+test('legacy absent disabled/central flag does not manufacture those states', () => {
+  const copy={...fixture}; delete copy.disabled; delete copy.dataRightsDeletionPendingCentralPrivacy;
+  assert.doesNotThrow(() => check(snap(copy),'owner-1','tenant-1'));
+});
+test('inherited and accessor-backed tenant and deletion fields are rejected without executing getters', () => {
+  const bad=Object.create({ tenantId:'tenant-1' }); Object.assign(bad, fixture); delete bad.tenantId; denied(bad);
+  let calls=0; const getter={...fixture}; Object.defineProperty(getter,'tenantId',{get(){calls++;return 'tenant-1'}});
+  denied(getter); assert.equal(calls,0);
+  const inherited=Object.create(null); Object.assign(inherited,fixture); Object.setPrototypeOf(inherited,{disabled:false});
+  denied(inherited);
+  const deletion={...fixture}; Object.defineProperty(deletion,'dataRightsDeletionPendingCentralPrivacy',{get(){calls++;return false}});
+  denied(deletion); assert.equal(calls,0);
+});
+test('throwing profile or hostile snapshot fails closed', () => {
+  assert.throws(()=>check({exists:true,data(){throw new Error('Firestore unavailable')}},'owner-1','tenant-1'),BLOCK);
+  assert.throws(()=>check({exists:false,data:()=>fixture},'owner-1','tenant-1'),BLOCK);
+  assert.throws(()=>check(null,'owner-1','tenant-1'),BLOCK);
+});
+test('both actual Studio bridges enforce the guard inside all enqueue/resume transactions', () => {
+  for(const name of ['studioLifeMovieBridge.ts','studioLifeMovieLongformBridge.ts']) {
+    const source=fs.readFileSync(path.resolve(`functions/src/jobs/${name}`),'utf8');
+    const expected=name.includes('Longform')?3:1;
+    const matches=[...source.matchAll(/assertOwnerDeletionFenceClear\(ownerSnapshot\);\s*assertLifeMovieOwnerTenantAuthorityClear\(ownerSnapshot,\s*(?:input.userId|userId),\s*(?:input.tenantId|tenantId)\);/g)];
+    assert.equal(matches.length,expected,name+' must bind every owner-relevant transaction');
+  }
+});
+test('worker activation and consent availability remain hard closed', () => {
+  const source=fs.readFileSync('functions/src/privacy/lifeMovieConsentGate.ts','utf8');
+  assert.match(source,/export function lifeMovieConsentAuthorityAvailable\(\): boolean \{\s*return false;/);
+  const worker=fs.readFileSync('workers/studio-worker/index.js','utf8');
+  assert.match(worker,/function lifeMovieConsentAuthorityAvailable\(\) \{\s*return false;/);
+});

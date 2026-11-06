@@ -12,7 +12,7 @@ import { consentBlockRef, checkedJobConsentBlockState, assertJobConsentBlockClea
 import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
 import { parseLifeMoviePrivateDeliveryRequest } from './lifeMoviePrivateDeliveryContract.js';
 import { requireLifeMovieCreationAdmission } from '../privacy/lifeMovieCreationAdmission.js';
-import { assertOwnerDeletionFenceClear } from '../privacy/ownerDeletionFence.js';
+import { assertLifeMovieOwnerTenantAuthorityClear, assertOwnerDeletionFenceClear } from '../privacy/ownerDeletionFence.js';
 import { requirePinnedMovieOutputGeneration } from '../privacy/lifeMovieOutputGeneration.js';
 import { deleteOwnedMovieOutputs, preflightOwnedMovieOutputs, validateOwnedMovieJob } from './lifeMovieOwnerDeletion.js';
 import {
@@ -341,6 +341,7 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
       transaction.get(db.collection('users').doc(input.userId)),
     ]);
     assertOwnerDeletionFenceClear(ownerSnapshot);
+    assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, input.userId, input.tenantId);
     assertJobConsentBlockClear(liveConsentBlock, 'life_movie_longform_consent_revoked');
 
     if (receiptInside.exists) {
@@ -594,6 +595,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
       transaction.get(db.collection('users').doc(userId)),
     ]);
     assertOwnerDeletionFenceClear(ownerSnapshot);
+    assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, userId, tenantId);
     assertJobConsentBlockClear(liveConsentBlock, 'life_movie_longform_consent_revoked');
     if (!planSnapshot.exists) throw new Error('longform_plan_not_found');
     const currentPlan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
@@ -822,6 +824,7 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
       transaction.get(db.collection('users').doc(userId)),
     ]);
     assertOwnerDeletionFenceClear(ownerSnapshot);
+    assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, userId, tenantId);
     assertJobConsentBlockClear(liveConsentBlock, 'life_movie_longform_consent_revoked');
     if (!planSnapshot.exists) throw new Error('longform_plan_not_found');
     const currentPlan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
