@@ -105,6 +105,25 @@ function refs(identity: NarratorWriteIdentity) {
     consentRef: database.collection('jobConsentBlocks').doc(blockId),
   };
 }
+/** Keep the worker revocation veto as strict as Jobs' consentBlocks policy.
+ * This is not an affirmative consent grant. Any unreadable or malformed block
+ * fails closed without invoking an accessor supplied as a field value. */
+function checkedNarratorConsentBlockClear(snapshot: unknown): boolean {
+  try {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return false;
+    const block = snapshot as { exists?: unknown; data?: () => unknown };
+    if (block.exists === false) return true;
+    if (block.exists !== true || typeof block.data !== 'function') return false;
+    const data = block.data();
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+    const field = Object.getOwnPropertyDescriptor(data, 'active');
+    return !!field && Object.prototype.hasOwnProperty.call(field, 'value')
+      && field.value === false;
+  } catch {
+    return false;
+  }
+}
+
 function authorizedLive(identity: NarratorWriteIdentity, snapshots: any[]): boolean {
   const [jobSnap, ownerSnap, blockSnap] = snapshots;
   if (!jobSnap?.exists || !ownerSnap?.exists) return false;
@@ -118,8 +137,10 @@ function authorizedLive(identity: NarratorWriteIdentity, snapshots: any[]): bool
   const ownerClear = (deleted === undefined || deleted === false)
     && (owner.disabled === undefined || owner.disabled === false)
     && (owner.deletionPending === undefined || owner.deletionPending === false);
-  const consentClear = blockSnap?.exists === false
-    || (blockSnap?.exists === true && record(blockSnap.data()).active === false);
+  // Mirror Jobs checkedJobConsentBlockState: a missing block is clear, but
+  // an existing block must supply an own literal boolean. Inherited and
+  // accessor-backed values never prove consent-revocation clearance.
+  const consentClear = checkedNarratorConsentBlockClear(blockSnap);
   return ownerClear && consentClear
     && job.jobId === identity.jobId && job.ownerUid === identity.ownerUid
     && job.sourceSystem === 'urai-storytime'
