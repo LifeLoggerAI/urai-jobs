@@ -35,12 +35,17 @@ for (const [key, port] of [
   ['FIREBASE_AUTH_EMULATOR_HOST', '9099'],
   ['FIRESTORE_EMULATOR_HOST', '8080'],
   ['FIREBASE_STORAGE_EMULATOR_HOST', '9199'],
-  ['FUNCTIONS_EMULATOR_HOST', '5001'],
 ]) {
   const raw = String(process.env[key] || '');
   if (raw !== '127.0.0.1:' + port && raw !== 'http://127.0.0.1:' + port)
     hold('missing_or_nonlocal_emulator_' + key);
 }
+// Firebase CLI does not consistently export FUNCTIONS_EMULATOR_HOST to its
+// emulators:exec child. If supplied, it MUST refer to localhost; regardless,
+// the real HTTP readiness probe below must confirm the actual Functions route.
+const functionsHost = String(process.env.FUNCTIONS_EMULATOR_HOST || '');
+if (functionsHost && functionsHost !== '127.0.0.1:5001' && functionsHost !== 'http://127.0.0.1:5001')
+  hold('nonlocal_functions_emulator');
 const jobsSha = git(process.cwd(), 'rev-parse', 'HEAD');
 if (!/^[0-9a-f]{40}$/.test(jobsSha) || jobsSha !== process.env.URAI_ACCEPTANCE_SHA)
   hold('jobs_source_pin_mismatch');
