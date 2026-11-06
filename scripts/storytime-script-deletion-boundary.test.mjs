@@ -10,7 +10,7 @@ import { test } from 'node:test';
 const ts = createRequire(new URL('../functions/package.json', import.meta.url))('typescript');
 const source = readFileSync(new URL('../functions/src/jobs/storytimeNarratorBridge.ts', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('storytimeNarratorBridge.ts', source, ts.ScriptTarget.Latest, true);
-const names = ['parseArtifactPath', 'artifactLocation', 'deleteOutput'];
+const names = ['parseArtifactPath', 'pinnedNarratorGeneration', 'artifactLocation', 'deleteOutput'];
 const clauses = names.map((name) => {
   const node = ast.statements.find((entry) => ts.isFunctionDeclaration(entry) && entry.name?.text === name);
   assert.ok(node?.body, 'missing checked-in Storytime function: ' + name);
@@ -29,9 +29,17 @@ let updates = 0;
 const module = { exports: {} };
 vm.runInNewContext(compiled, {
   module, exports: module.exports, process: {env: {GCS_BUCKET_NAME: 'synthetic-audio-bucket'}},
-  loadBoundJob: async () => ({ status: currentStatus, output: {artifactPath: currentPath} }),
-  getStorage: () => ({ bucket: () => ({file: () => ({delete: async () => {deletions++;}})}) }),
-  jobDoc: () => ({update: async () => {updates++;}}),
+  loadBoundJob: async () => ({ status: currentStatus, output: {artifactPath: currentPath,artifactGeneration:'42'} }),
+  assertBoundJob: (job) => job,
+  getFirestore: () => ({runTransaction: async (fn) => fn({
+    get: async () => ({exists:true,data: () => ({status:currentStatus,output:{artifactPath:currentPath,artifactGeneration:'42'}})}),
+    update: () => {updates++;},
+  })}),
+  getStorage: () => ({ bucket: () => ({file: () => ({
+    delete: async () => {deletions++;},
+    getMetadata: async () => {throw Object.assign(new Error('not-found'),{code:404});},
+  })}) }),
+  jobDoc: () => ({}),
   FieldValue: {serverTimestamp: () => 'now', delete: () => 'deleted'},
   String, Error, Object,
 });
