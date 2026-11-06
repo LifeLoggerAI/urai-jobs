@@ -43,11 +43,11 @@ const scope={ownerUid:'owner1',sessionId:'session1',narratorScriptId:'script1'};
 const identity=()=>writer.storytimeNarratorWriteIdentity(job(),path,'upload1');
 const row=()=>({...identity(),id:identity().reservationId,artifactGeneration:'42',state:'STORED_PENDING_JOB'});
 function snap(value){return {exists:true,data:()=>value};}
-function live({status='RUNNING',lease='lease1',deleted=false,blocked=false,consent='receipt1'}={}){
+function live({status='RUNNING',lease='lease1',deleted=false,disabled=false,pending=false,blocked=false,consent='receipt1'}={}){
   const j=job();
   return [
     snap({...j,status,execution:{leaseToken:lease},lease:{leaseToken:lease},consent:{...j.consent,decisionReceiptId:consent}}),
-    snap({dataRightsDeletionPendingCentralPrivacy:deleted}),
+    snap({dataRightsDeletionPendingCentralPrivacy:deleted,disabled,deletionPending:pending}),
     snap({active:blocked}),
   ];
 }
@@ -74,7 +74,7 @@ test('live lease and source admit in-flight result',()=>{
   assert.equal(writer.authorizedLive(identity(),live()),true);
 });
 test('cancelled, expired lease, revoked consent or deletion pending veto',()=>{
-  for(const change of [{status:'CANCELLED'},{lease:'different'},{deleted:true},{blocked:true},{consent:'other'}]){
+  for(const change of [{status:'CANCELLED'},{lease:'different'},{deleted:true},{disabled:true},{pending:true},{blocked:true},{consent:'other'}]){
     assert.equal(writer.authorizedLive(identity(),live(change)),false);
   }
 });
