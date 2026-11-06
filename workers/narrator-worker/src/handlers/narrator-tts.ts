@@ -1,6 +1,7 @@
 import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 import { Storage } from "@google-cloud/storage";
 import { randomUUID } from "node:crypto";
+import { storytimeNarratorWriteIdentity, reserveStorytimeNarratorWrite, sealStorytimeNarratorWrite, noteStorytimeNarratorWriteCompensation } from "./storytime-write-ledger.js";
 
 const ttsClient = new TextToSpeechClient();
 const storage = new Storage();
@@ -196,6 +197,10 @@ export async function handleNarratorTts(job: any) {
   // A retry must never overwrite a newer object, even at the same path.
   // Verify the upload identity when reading its immutable GCS generation.
   const uploadId = randomUUID();
+  const reservation = storytimeNarratorWriteIdentity(job, fileName, uploadId);
+  // Durable intent first: an interrupted writer remains in the reconciliation
+  // inventory even when the job document, response or worker disappears.
+  await reserveStorytimeNarratorWrite(reservation);
   await file.save(audioBuffer, {
     preconditionOpts: { ifGenerationMatch: 0 },
     metadata: {
@@ -214,6 +219,35 @@ export async function handleNarratorTts(job: any) {
   if (typeof artifactGeneration !== "string" || !/^[1-9][0-9]{0,19}$/.test(artifactGeneration)
     || !Number.isSafeInteger(Number(artifactGeneration)) || stored.metadata?.uraiUploadId !== uploadId) {
     throw new Error("narrator_artifact_generation_unverified");
+  }
+
+  try {
+    await sealStorytimeNarratorWrite(reservation, artifactGeneration);
+  } catch (recheckError) {
+    // Never return a revoked result. Conditionally remove only our own object
+    // generation. If the cleanup or journal update fails, the pre-upload
+    // reservation survives as a reconciliation obligation.
+    if (reservation) {
+      try {
+        await storage.bucket(BUCKET_NAME).file(fileName, {
+          preconditionOpts: { ifGenerationMatch: artifactGeneration },
+        }).delete();
+        try {
+          await storage.bucket(BUCKET_NAME).file(fileName).getMetadata();
+          throw new Error('storytime_narrator_compensation_replaced');
+        } catch (absenceError) {
+          if ((absenceError as { code?: unknown })?.code !== 404) throw absenceError;
+        }
+        await noteStorytimeNarratorWriteCompensation(reservation, artifactGeneration, true);
+      } catch (compensationError) {
+        console.error('storytime_narrator_write_compensation_unresolved', {
+          jobId: job.jobId,
+          reservationId: reservation.reservationId,
+          reason: compensationError instanceof Error ? compensationError.message : 'unknown',
+        });
+      }
+    }
+    throw recheckError;
   }
 
   console.log(`Audio content written to GCS: gs://${BUCKET_NAME}/${fileName}`);
