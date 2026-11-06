@@ -174,6 +174,38 @@ export async function reserveStorytimeNarratorWrite(identity: NarratorWriteIdent
   });
 }
 
+/** Revalidate after synthesis but before GCS upload. The transaction is not a
+ * GCS atomic fence: a revocation can still race an upload. A rejected check
+ * leaves a durable journal entry for independent reconciliation. */
+export async function assertStorytimeNarratorWriteActiveBeforeUpload(identity: NarratorWriteIdentity | null): Promise<void> {
+  if (!identity) return;
+  const r = refs(identity);
+  const accepted = await r.database.runTransaction(async (transaction) => {
+    const [reservation, ...snapshots] = await Promise.all([
+      transaction.get(r.reservationRef),
+      ...authoritySnapshots(transaction, identity, r),
+    ]);
+    const existing = record(reservation.data());
+    if (!reservation.exists || existing.schema !== 'storytime-narrator-write-v1'
+      || existing.state !== 'RESERVED'
+      || existing.jobId !== identity.jobId || existing.ownerUid !== identity.ownerUid
+      || existing.sessionId !== identity.sessionId || existing.narratorScriptId !== identity.narratorScriptId
+      || existing.bucket !== identity.bucket || existing.objectPath !== identity.objectPath
+      || existing.uploadId !== identity.uploadId
+      || existing.leaseHash !== createHash('sha256').update(identity.leaseToken).digest('hex')) {
+      throw new Error('storytime_narrator_write_reservation_unverified');
+    }
+    if (authorizedLive(identity, snapshots)) return true;
+    transaction.update(r.reservationRef, {
+      state: 'RECONCILE_REQUIRED',
+      reason: 'pre_upload_authority_changed',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return false;
+  });
+  if (!accepted) throw new Error('storytime_narrator_write_authority_revoked_before_upload');
+}
+
 /** Post-byte authorization recheck. A revoked lease becomes an independently
  * discoverable reconciliation obligation, never a successful worker result. */
 export async function sealStorytimeNarratorWrite(identity: NarratorWriteIdentity | null, artifactGeneration: unknown): Promise<void> {
