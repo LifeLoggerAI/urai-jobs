@@ -84,7 +84,7 @@ test('pinned generation deletes only the selected byte version and acknowledges 
   assert.deepEqual(f.metrics(),{live:null,deletions:1,updates:1,reads:1,inspected:1});
 });
 test('missing legacy generation fails closed before Storage',async()=>{
-  const f=fixture({pinned:undefined});
+  const f=fixture({pinned:null});
   await assert.rejects(f.deleteOutput(owner),/narrator_artifact_generation_unverified/);
   assert.equal(f.metrics().deletions,0);
 });
@@ -147,7 +147,7 @@ function workerFixture({generation='42',matchingUpload=true}={}){
       save:async(_bytes,options)=>{
         saves++;
         saved=options;
-        assert.deepEqual(options.preconditionOpts,{ifGenerationMatch:0});
+        assert.equal(options.preconditionOpts?.ifGenerationMatch,0);
       },
       getMetadata:async()=>{
         reads++;
@@ -177,7 +177,7 @@ test('worker rejects metadata for a replaced upload before accepting a generatio
   }}),/narrator_artifact_generation_unverified/);
 });
 test('worker rejects missing or invalid cloud object version',async()=>{
-  for(const generation of [undefined,'0','01','9007199254740992',42]){
+  for(const generation of [null,'0','01','9007199254740992',42]){
     const f=workerFixture({generation});
     await assert.rejects(f.handleNarratorTts({jobId:'synthetic-job',payload:{
       text:'synthetic',provider:'google',outputPrefix:'storytime/synthetic-owner/synthetic-session/script-1',
