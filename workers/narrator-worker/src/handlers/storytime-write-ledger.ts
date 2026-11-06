@@ -46,9 +46,21 @@ function safeGeneration(value: unknown): value is string {
 /** Only source-bound Storytime jobs use this ledger. Fail closed if they are malformed. */
 export function storytimeNarratorWriteIdentity(job: unknown, objectPath: unknown, uploadId: unknown): NarratorWriteIdentity | null {
   const source = record(job);
-  if (source.sourceSystem !== 'urai-storytime') return null;
   const payload = record(source.payload);
   const consent = record(source.consent);
+  // A malformed source marker cannot silently downgrade private Storytime
+  // outputs to the unjournaled generic-narrator path. All recognizable
+  // Storytime provenance must be bound, even when a job field was stripped.
+  const candidatePrefix = payload.outputPrefix;
+  const storytimePath = (value: unknown) => typeof value === 'string'
+    && (value === 'storytime' || value.startsWith('storytime/'));
+  const protectedStorytime = storytimePath(candidatePrefix) || storytimePath(objectPath)
+    || source.sourceSessionId !== undefined || source.sourceNarratorScriptId !== undefined
+    || consent.purpose === PURPOSE;
+  if (source.sourceSystem !== 'urai-storytime') {
+    if (protectedStorytime) throw new Error('storytime_narrator_write_identity_unverified');
+    return null;
+  }
   const bucket = String(process.env.GCS_BUCKET_NAME || '').trim();
   const jobId = source.jobId;
   const ownerUid = source.ownerUid;

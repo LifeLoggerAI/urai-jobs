@@ -55,8 +55,15 @@ test('valid Storytime writer gets deterministic scoped reservation',()=>{
   const a=identity();assert.equal(a.objectPath,path);assert.equal(a.bucket,'test-narrator-bucket');
   assert.equal(a.reservationId,identity().reservationId);assert.match(a.reservationId,/^[a-f0-9]{64}$/);
 });
-test('non-Storytime remains outside new ledger',()=>{
-  const j=job();j.sourceSystem='other';assert.equal(writer.storytimeNarratorWriteIdentity(j,path,'upload1'),null);
+test('forged non-Storytime marker cannot bypass protected narrator journal',()=>{
+  const j=job();j.sourceSystem='other';
+  assert.throws(()=>writer.storytimeNarratorWriteIdentity(j,path,'upload1'),
+    /storytime_narrator_write_identity_unverified/);
+});
+test('genuine generic narration without protected source markers remains outside Storytime journal',()=>{
+  const j={jobId:'generic',type:'narrator.tts',sourceSystem:'other',
+    payload:{outputPrefix:'tts'},consent:{purpose:'generic.narration'}};
+  assert.equal(writer.storytimeNarratorWriteIdentity(j,'tts/'+uuid+'.mp3','upload1'),null);
 });
 test('rejects malformed job, source, consent, lease, and file prefix',()=>{
   for(const mutate of [
