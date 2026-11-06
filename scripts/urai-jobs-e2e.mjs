@@ -2,16 +2,20 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { createHash } from 'node:crypto';
+import { verifyJobsPrivateStorageE2E } from './urai-jobs-auth-storage.e2e.mjs';
 import { prepareDataRightsRequestExport } from '../functions/lib/functions/privacy/dataRightsRequestExport.js';
 
 const E2E_TIMESTAMP = Date.now();
 const PROJECT_ID = process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || 'demo-urai-jobs';
 const ADMIN_UID = `e2e-admin-${E2E_TIMESTAMP}`;
 const USER_UID = `e2e-user-${E2E_TIMESTAMP}`;
+const FOREIGN_UID = `e2e-foreign-${E2E_TIMESTAMP}`;
 const ADMIN_EMAIL = `admin_${E2E_TIMESTAMP}@test.local`;
 const USER_EMAIL = `user_${E2E_TIMESTAMP}@test.local`;
+const FOREIGN_EMAIL = `foreign_${E2E_TIMESTAMP}@test.local`;
 const ADMIN_PASSWORD = `Admin-${E2E_TIMESTAMP}!`;
 const USER_PASSWORD = `User-${E2E_TIMESTAMP}!`;
+const FOREIGN_PASSWORD = `Foreign-${E2E_TIMESTAMP}!`;
 const IDEMPOTENCY_KEY = `urai-jobs-e2e-${E2E_TIMESTAMP}`;
 const FUNCTIONS_EMULATOR_ORIGIN = process.env.FUNCTIONS_EMULATOR_ORIGIN || 'http://127.0.0.1:5001';
 
@@ -121,11 +125,15 @@ async function main() {
   log('Starting URAI Jobs callable E2E validation');
 
   if (!process.env.FIRESTORE_EMULATOR_HOST) {
-    fail('FIRESTORE_EMULATOR_HOST not set. Run: firebase emulators:start --only firestore,auth,functions');
+    fail('FIRESTORE_EMULATOR_HOST not set. Run: firebase emulators:start --only firestore,auth,functions,storage');
   }
 
   if (!process.env.FIREBASE_AUTH_EMULATOR_HOST) {
-    fail('FIREBASE_AUTH_EMULATOR_HOST not set. Run: firebase emulators:start --only firestore,auth,functions');
+    fail('FIREBASE_AUTH_EMULATOR_HOST not set. Run: firebase emulators:start --only firestore,auth,functions,storage');
+  }
+
+  if (process.env.FIREBASE_STORAGE_EMULATOR_HOST !== '127.0.0.1:9199' || !/^demo-[a-z0-9-]+$/.test(PROJECT_ID)) {
+    fail('The callable acceptance requires a local Storage emulator and disposable demo project.');
   }
 
   initializeApp({ projectId: PROJECT_ID });
@@ -141,14 +149,17 @@ async function main() {
     log('Seeding emulator auth users and URAI role documents...');
     await auth.createUser({ uid: ADMIN_UID, email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
     await auth.createUser({ uid: USER_UID, email: USER_EMAIL, password: USER_PASSWORD });
+    await auth.createUser({ uid: FOREIGN_UID, email: FOREIGN_EMAIL, password: FOREIGN_PASSWORD });
     await auth.setCustomUserClaims(ADMIN_UID, { role: 'admin', roles: ['admin'], uraiJobsAdmin: true });
     await db.collection('users').doc(ADMIN_UID).set({ role: 'admin', email: ADMIN_EMAIL, permissions: ['jobs:create'] });
     await db.collection('users').doc(USER_UID).set({ role: 'user', email: USER_EMAIL, permissions: ['jobs:create'] });
+    await db.collection('users').doc(FOREIGN_UID).set({ role: 'user', email: FOREIGN_EMAIL, permissions: [] });
     pass('Test users and roles seeded.');
 
     log('Signing in through the Auth emulator to get callable ID tokens...');
     const adminToken = await signInWithPassword(ADMIN_EMAIL, ADMIN_PASSWORD);
     const userToken = await signInWithPassword(USER_EMAIL, USER_PASSWORD);
+    const foreignToken = await signInWithPassword(FOREIGN_EMAIL, FOREIGN_PASSWORD);
     pass('Emulator ID tokens acquired.');
 
     log('Testing governed data-rights intake retries and owner boundaries...');
@@ -392,6 +403,13 @@ async function main() {
     if (queue.jobId !== jobId) fail(`Queue entry jobId mismatch: ${JSON.stringify(queue)}`);
     if (queue.status !== 'PENDING') fail(`Expected queue.status PENDING, got ${queue.status}`);
     pass('Atomic job and queue records verified.');
+
+    log('Testing real Storage Rules against a Functions-created, owner-bound job...');
+    await verifyJobsPrivateStorageE2E({
+      projectId: PROJECT_ID, ownerUid: USER_UID, jobId,
+      ownerToken: userToken, otherToken: foreignToken,
+    });
+    pass('Four-emulator Auth/Firestore/Functions/Storage owner isolation and client-write denials verified.');
 
     log('Calling listJobsV2 callable as admin for PENDING jobs...');
     const listResult = await callCallable('listJobsV2', adminToken, { status: 'PENDING', limit: 100 });
