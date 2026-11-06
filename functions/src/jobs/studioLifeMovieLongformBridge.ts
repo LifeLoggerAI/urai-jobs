@@ -1173,10 +1173,12 @@ export const studioLifeMovieLongformBridge = onRequest({
       'life_movie_output_changed', 'life_movie_output_generation_invalid', 'life_movie_output_generation_changed',
       'life_movie_output_boundary_mismatch', 'life_movie_output_bucket_authority_unavailable',
       'owner_data_rights_deletion_pending', 'owner_data_rights_authority_unavailable',
+      'life_movie_owner_tenant_authority_unavailable',
     ]);
     const code = error instanceof Error && known.has(error.message) ? error.message : 'longform_bridge_failed';
     const status = code === 'owner_data_rights_deletion_pending' ? 409
       : code === 'owner_data_rights_authority_unavailable' ? 503
+      : code === 'life_movie_owner_tenant_authority_unavailable' ? 503
       : code === 'longform_plan_not_found' ? 404
       : code === 'longform_plan_boundary_mismatch' ? 403
       : code === 'life_movie_owner_job_boundary_mismatch' || code === 'life_movie_output_boundary_mismatch' ? 403
