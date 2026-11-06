@@ -143,6 +143,7 @@ function workerFixture({generation='42',matchingUpload=true}={}){
     normalizeAudioEncoding: format => format === 'OGG_OPUS' ? 'OGG_OPUS' : 'MP3',
     storytimeNarratorWriteIdentity: () => null,
     reserveStorytimeNarratorWrite: async () => {},
+    assertStorytimeNarratorWriteActiveBeforeUpload: async () => {},
     sealStorytimeNarratorWrite: async () => {},
     synthesizeGoogle:async()=>({audioBuffer:Buffer.from('synthetic'),fileExtension:'mp3',
       mimeType:'audio/mpeg',provider:'google',modelId:'synthetic-model',voiceId:'synthetic-voice'}),
