@@ -33,10 +33,16 @@ for variable in GCLOUD_PROJECT GOOGLE_CLOUD_PROJECT FIREBASE_PROJECT_ID CLOUDSDK
   value="${!variable:-}"
   [[ -z "$value" || "$value" == "$PROJECT" ]] || die "$variable points outside disposable emulator project"
 done
-for variable in FIRESTORE_EMULATOR_HOST FIREBASE_AUTH_EMULATOR_HOST FIREBASE_STORAGE_EMULATOR_HOST FUNCTIONS_EMULATOR_HOST; do
+for variable in FIRESTORE_EMULATOR_HOST FIREBASE_AUTH_EMULATOR_HOST FIREBASE_STORAGE_EMULATOR_HOST STORAGE_EMULATOR_HOST FUNCTIONS_EMULATOR_HOST FIREBASE_FUNCTIONS_EMULATOR_HOST; do
   [[ -z "${!variable:-}" ]] || die "$variable must be unset before firebase emulators:exec"
 done
 for variable in GOOGLE_APPLICATION_CREDENTIALS FIREBASE_TOKEN FIREBASE_CLI_TOKEN GOOGLE_OAUTH_ACCESS_TOKEN GOOGLE_CLOUD_ACCESS_TOKEN GITHUB_TOKEN GH_TOKEN RUNPOD_API_KEY STRIPE_SECRET_KEY OPENAI_API_KEY; do
+  [[ -z "${!variable:-}" ]] || die "$variable must be absent from emulator-only acceptance"
+done
+# Firebase Admin may read a preloaded project/bucket configuration independently
+# of the CLI --project flag. Do not let inherited settings redirect any
+# synthetic test traffic toward private or production Cloud Storage.
+for variable in FIREBASE_CONFIG GCS_BUCKET_NAME FIREBASE_STORAGE_BUCKET GOOGLE_CLOUD_STORAGE_BUCKET; do
   [[ -z "${!variable:-}" ]] || die "$variable must be absent from emulator-only acceptance"
 done
 export GCLOUD_PROJECT="$PROJECT"
