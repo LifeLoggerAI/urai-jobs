@@ -124,19 +124,36 @@ function checkedNarratorConsentBlockClear(snapshot: unknown): boolean {
   }
 }
 
+/** Mirror the canonical Jobs owner-deletion fence. Inherited, accessor-backed
+ * or malformed flags are never evidence that private work may continue. */
+function checkedNarratorOwnerDeletionClear(snapshot: unknown): boolean {
+  try {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return false;
+    const ownerSnapshot = snapshot as { exists?: unknown; data?: () => unknown };
+    if (ownerSnapshot.exists !== true || typeof ownerSnapshot.data !== 'function') return false;
+    const owner = ownerSnapshot.data();
+    if (!owner || typeof owner !== 'object' || Array.isArray(owner)) return false;
+    const clearFlag = (name: string): boolean => {
+      const own = Object.getOwnPropertyDescriptor(owner, name);
+      if (!own) return !(name in owner); // Inherited values cannot prove clearance.
+      return Object.prototype.hasOwnProperty.call(own, 'value') && own.value === false;
+    };
+    return clearFlag('dataRightsDeletionPendingCentralPrivacy')
+      && clearFlag('disabled') && clearFlag('deletionPending');
+  } catch {
+    return false;
+  }
+}
+
 function authorizedLive(identity: NarratorWriteIdentity, snapshots: any[]): boolean {
   const [jobSnap, ownerSnap, blockSnap] = snapshots;
   if (!jobSnap?.exists || !ownerSnap?.exists) return false;
   const job = record(jobSnap.data());
-  const owner = record(ownerSnap.data());
   const execution = record(job.execution);
   const lease = record(job.lease);
   const payload = record(job.payload);
   const consent = record(job.consent);
-  const deleted = owner.dataRightsDeletionPendingCentralPrivacy;
-  const ownerClear = (deleted === undefined || deleted === false)
-    && (owner.disabled === undefined || owner.disabled === false)
-    && (owner.deletionPending === undefined || owner.deletionPending === false);
+  const ownerClear = checkedNarratorOwnerDeletionClear(ownerSnap);
   // Mirror Jobs checkedJobConsentBlockState: a missing block is clear, but
   // an existing block must supply an own literal boolean. Inherited and
   // accessor-backed values never prove consent-revocation clearance.
