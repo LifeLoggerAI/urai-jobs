@@ -11,6 +11,7 @@ const GEN = /^[1-9][0-9]{0,19}$/;
 const MAX = 100;
 
 export type StorytimeInventoryScope = { ownerUid: string; sessionId: string; narratorScriptId: string };
+export type StorytimeInventoryCoverage = { ledgerComplete?: boolean; objectComplete?: boolean };
 export type StorytimeInventoryEntry = {
   objectPath: string;
   generation: string | null;
@@ -40,6 +41,7 @@ type LedgerRow = {
 /** Pure classification. Never infer deletability from a path alone. */
 export function classifyStorytimeInventory(
   scope: StorytimeInventoryScope, bucket: string, objects: {name: string; generation?: unknown; uploadId?: unknown}[], reservations: LedgerRow[],
+  coverage: StorytimeInventoryCoverage = {},
 ): StorytimeInventoryEntry[] {
   const prefix = validateScope(scope);
   if (!bucket) throw new Error('storytime_inventory_bucket_missing');
@@ -72,7 +74,7 @@ export function classifyStorytimeInventory(
     const exact = matched && generation && matched.artifactGeneration === generation
       && typeof object.uploadId === 'string' && matched.uploadId === object.uploadId;
     const reason = !canonicalName ? 'legacy_or_unrecognized_object_name'
-      : matching.length === 0 ? 'legacy_or_orphan_without_reservation'
+      : matching.length === 0 ? (coverage.ledgerComplete === false ? 'ledger_scan_incomplete' : 'legacy_or_orphan_without_reservation')
       : matching.length !== 1 ? 'ambiguous_multiple_reservations'
       : !exact ? 'generation_or_upload_id_unverified'
       : matched.state !== 'STORED_PENDING_JOB' ? 'unresolved_write_state'
@@ -89,7 +91,8 @@ export function classifyStorytimeInventory(
       for (const row of rows) {
         entries.push({
           objectPath, generation: typeof row.artifactGeneration === 'string' ? row.artifactGeneration : null,
-          reservationId: row.id, state: 'UNRESOLVED', reason: 'journal_without_current_object',
+          reservationId: row.id, state: 'UNRESOLVED',
+          reason: coverage.objectComplete === false ? 'object_scan_incomplete' : 'journal_without_current_object',
         });
       }
     }
@@ -114,14 +117,18 @@ export async function inspectStorytimeNarratorInventory(scope: StorytimeInventor
   }).map(d=>({id:d.id,...d.data()}));
   // A broad owner query may truncate before the requested session appears.
   const ledgerTruncated = snapshot.docs.length > MAX;
-  const [files] = await new Storage().bucket(bucket).getFiles({prefix,maxResults:MAX + 1,autoPaginate:false});
-  const objectTruncated = files.length > MAX;
+  const [files, nextQuery, apiResponse] = await new Storage().bucket(bucket).getFiles({prefix,maxResults:MAX + 1,autoPaginate:false});
+  // Storage may paginate before the requested maximum. A continuation token
+  // means an object is unobserved even if fewer than MAX items were returned.
+  const objectTruncated = files.length > MAX || Boolean(nextQuery) || Boolean(apiResponse?.nextPageToken);
   const objects = files.slice(0,MAX).map(file=>({
     name:file.name,
     generation:file.metadata?.generation,
     uploadId:file.metadata?.metadata?.uraiUploadId,
   }));
-  const entries = classifyStorytimeInventory(scope,bucket,objects,relevant);
+  const entries = classifyStorytimeInventory(scope,bucket,objects,relevant,{
+    ledgerComplete: !ledgerTruncated, objectComplete: !objectTruncated,
+  });
   return {
     scope, scannedObjects: objects.length, scannedReservations: relevant.length,
     complete: false as const,
