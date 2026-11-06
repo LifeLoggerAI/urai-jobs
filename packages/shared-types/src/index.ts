@@ -74,6 +74,9 @@ export interface Job {
   sourceProject?: string;
   createdBy?: string;
   output?: unknown;
+  // Older persisted Job records may retain the worker response under `result`.
+  // Keep legacy adoption checks typed without weakening owner/lease validation.
+  result?: unknown;
   attempts?: number;
   maxAttempts?: number;
   error?: unknown;
