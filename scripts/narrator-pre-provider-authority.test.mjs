@@ -16,7 +16,7 @@ const compiled = ts.transpileModule(node.getText(ast) + '\nmodule.exports = { ha
 });
 assert.equal((compiled.diagnostics ?? []).filter(x => x.category === ts.DiagnosticCategory.Error).length, 0);
 
-function fixture({ denyReservation = false, providerFailure = false, provider = 'google', format = 'MP3',
+function fixture({ denyReservation = false, denyBeforeUpload = false, providerFailure = false, provider = 'google', format = 'MP3',
   returnedExtension, sealFailure = false } = {}) {
   const events = [];
   const module = { exports: {} };
@@ -41,6 +41,10 @@ function fixture({ denyReservation = false, providerFailure = false, provider = 
     reserveStorytimeNarratorWrite: async () => {
       events.push('reserve');
       if (denyReservation) throw new Error('storytime_narrator_write_authority_revoked');
+    },
+    assertStorytimeNarratorWriteActiveBeforeUpload: async () => {
+      events.push('recheck');
+      if (denyBeforeUpload) throw new Error('storytime_narrator_write_authority_revoked_before_upload');
     },
     sealStorytimeNarratorWrite: async () => {
       events.push('seal');
@@ -70,18 +74,18 @@ test('denied reservation must prevent all private text provider disclosure', asy
 });
 test('normal Google MP3 path reserves before provider and upload', async () => {
   const f=fixture(); const result=await f.run();
-  assert.deepEqual(f.events,['reserve','google-provider','upload','metadata','seal']);
+  assert.deepEqual(f.events,['reserve','google-provider','recheck','upload','metadata','seal']);
   assert.equal(result.artifactGeneration,'42');
   assert.match(result.artifactPath,/\.mp3$/);
 });
 test('Google OGG path reserves before provider and honors filename format', async () => {
   const f=fixture({format:'OGG_OPUS'}); const r=await f.run();
-  assert.deepEqual(f.events,['reserve','google-provider','upload','metadata','seal']);
+  assert.deepEqual(f.events,['reserve','google-provider','recheck','upload','metadata','seal']);
   assert.match(r.artifactPath,/\.ogg$/);
 });
 test('authorized ElevenLabs also reserves before external provider', async () => {
   const f=fixture({provider:'elevenlabs'}); const result=await f.run();
-  assert.deepEqual(f.events,['reserve','elevenlabs-provider','upload','metadata','seal']);
+  assert.deepEqual(f.events,['reserve','elevenlabs-provider','recheck','upload','metadata','seal']);
   assert.match(result.artifactPath,/\.mp3$/);
 });
 test('provider exception never causes a storage upload', async () => {
@@ -98,6 +102,17 @@ test('post-upload lease refusal attempts exact-version compensation', async () =
   const f=fixture({sealFailure:true});
   await assert.rejects(f.run(),/storytime_narrator_write_authority_revoked_after_upload/);
   assert.equal(f.events[0],'reserve');
-  assert.deepEqual(f.events.slice(0,5), ['reserve','google-provider','upload','metadata','seal']);
+  assert.deepEqual(f.events.slice(0,6), ['reserve','google-provider','recheck','upload','metadata','seal']);
   assert.ok(f.events.includes('delete'));
+});
+
+test('consent revoked during synthesis prevents any Storage upload', async () => {
+  const f=fixture({denyBeforeUpload:true});
+  await assert.rejects(f.run(),/storytime_narrator_write_authority_revoked_before_upload/);
+  assert.deepEqual(f.events,['reserve','google-provider','recheck']);
+});
+test('ElevenLabs authority loss after synthesis prevents upload', async () => {
+  const f=fixture({provider:'elevenlabs',denyBeforeUpload:true});
+  await assert.rejects(f.run(),/storytime_narrator_write_authority_revoked_before_upload/);
+  assert.deepEqual(f.events,['reserve','elevenlabs-provider','recheck']);
 });
