@@ -187,20 +187,24 @@ export async function handleNarratorTts(job: any) {
   const providerAuthorization = payload.provider === "elevenlabs"
     ? trustedProviderAuthorization(job, payload)
     : null;
+  // Resolve the expected output name without sending private script text
+  // to a provider. Storytime authority must be verified and journaled first.
+  const expectedExtension = payload.provider === "elevenlabs" || normalizeAudioEncoding(payload.format) === "MP3"
+    ? "mp3" : "ogg";
+  const fileName = `${payload.outputPrefix || "tts"}/${randomUUID()}.${expectedExtension}`;
+  const file = storage.bucket(BUCKET_NAME).file(fileName);
+  const uploadId = randomUUID();
+  const reservation = storytimeNarratorWriteIdentity(job, fileName, uploadId);
+  // If revoked, never call the voice provider with private narration text.
+  await reserveStorytimeNarratorWrite(reservation);
+
   const synthesis = payload.provider === "elevenlabs"
     ? await synthesizeElevenLabs(payload, providerAuthorization as TrustedProviderAuthorization)
     : await synthesizeGoogle(payload);
   const { audioBuffer, fileExtension, mimeType } = synthesis;
-
-  const fileName = `${payload.outputPrefix || "tts"}/${randomUUID()}.${fileExtension}`;
-  const file = storage.bucket(BUCKET_NAME).file(fileName);
-  // A retry must never overwrite a newer object, even at the same path.
-  // Verify the upload identity when reading its immutable GCS generation.
-  const uploadId = randomUUID();
-  const reservation = storytimeNarratorWriteIdentity(job, fileName, uploadId);
-  // Durable intent first: an interrupted writer remains in the reconciliation
-  // inventory even when the job document, response or worker disappears.
-  await reserveStorytimeNarratorWrite(reservation);
+  if (fileExtension !== expectedExtension) {
+    throw new Error("narrator_audio_format_mismatch");
+  }
   await file.save(audioBuffer, {
     preconditionOpts: { ifGenerationMatch: 0 },
     metadata: {
