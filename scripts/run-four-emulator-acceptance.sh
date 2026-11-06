@@ -39,6 +39,13 @@ done
 for variable in GOOGLE_APPLICATION_CREDENTIALS FIREBASE_TOKEN FIREBASE_CLI_TOKEN GOOGLE_OAUTH_ACCESS_TOKEN GOOGLE_CLOUD_ACCESS_TOKEN GITHUB_TOKEN GH_TOKEN RUNPOD_API_KEY STRIPE_SECRET_KEY OPENAI_API_KEY; do
   [[ -z "${!variable:-}" ]] || die "$variable must be absent from emulator-only acceptance"
 done
+# Reject ignored Functions environment files before any installation lifecycle
+# or build script. The preexisting file may contain production credentials.
+ENV_FILE="functions/.env.$PROJECT"
+[[ ! -e "$ENV_FILE" ]] || die "Preexisting emulator Functions environment configuration is forbidden"
+command -v ffmpeg >/dev/null || die "ffmpeg is required for original Life Movie worker smoke"
+command -v ffprobe >/dev/null || die "ffprobe is required for original Life Movie worker smoke"
+
 # Firebase Admin may read a preloaded project/bucket configuration independently
 # of the CLI --project flag. Do not let inherited settings redirect any
 # synthetic test traffic toward private or production Cloud Storage.
@@ -47,11 +54,6 @@ for variable in FIREBASE_CONFIG GCS_BUCKET_NAME FIREBASE_STORAGE_BUCKET GOOGLE_C
 done
 export GCLOUD_PROJECT="$PROJECT"
 export GOOGLE_CLOUD_PROJECT="$PROJECT"
-
-# Reject ignored emulator configuration before any package lifecycle or
-# dependency install can load it; preserve the post-build check too.
-ENV_FILE="functions/.env.$PROJECT"
-[[ ! -e "$ENV_FILE" ]] || die "Refusing to use preexisting local emulator function configuration"
 
 printf 'URAI_FOUR_EMULATOR_SOURCE %s\n' "$CURRENT_SHA"
 node --test scripts/owner_authority_rules.static.test.mjs
@@ -64,7 +66,8 @@ pnpm typecheck
 pnpm build
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || die "Original build modified reviewed source"
 
-[[ ! -e "$ENV_FILE" ]] || die "Frozen install/build unexpectedly created emulator configuration"
+# An install/build that creates the ignored Functions env file is unsafe.
+[[ ! -e "$ENV_FILE" ]] || die "Frozen build created emulator Functions environment configuration"
 cleanup() { rm -f -- "$ENV_FILE"; }
 trap cleanup EXIT
 printf '%s\n' \

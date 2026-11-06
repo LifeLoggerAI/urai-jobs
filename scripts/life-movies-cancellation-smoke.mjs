@@ -36,7 +36,9 @@ function harness(options = {}) {
   if (options.longRender) job.payload.timeline[0].endMs = 30000;
   const current = { ...structuredClone(job), status: 'RUNNING', execution: { leaseToken: job.leaseToken },
     consent: { purpose: 'life-movie.render', policyVersion: '1.1.0', decisionReceiptId: 'a'.repeat(64) } };
-  const state = { current, reads: 0, downloads: 0, uploads: [], deleted: [], objects: new Map(), metadata: new Map(), children: new Set(), consentRevoked: false };
+  const owner = { uid: job.ownerUid, tenantId: job.tenantId, accountStatus: 'active', deleted: false,
+    markedForDeletion: false, disabled: false, dataRightsDeletionPendingCentralPrivacy: Boolean(options.ownerDeletionPending) };
+  const state = { current, owner, reads: 0, downloads: 0, uploads: [], deleted: [], objects: new Map(), metadata: new Map(), children: new Set(), consentRevoked: false };
   const app = { use() {}, get() {}, post() {}, listen() {} };
   const express = Object.assign(() => app, { json: () => () => {} });
   const admin = {
@@ -47,7 +49,7 @@ function harness(options = {}) {
       if (options.hungAuthority) return new Promise(() => {});
       return collection === 'jobs'
         ? { exists: true, data: () => state.current }
-        : collection === 'users' ? { exists: !options.ownerMissing, data: () => ({ dataRightsDeletionPendingCentralPrivacy: Boolean(options.ownerDeletionPending) }) }
+        : collection === 'users' ? { exists: !options.ownerMissing, data: () => state.owner }
         : { exists: state.consentRevoked, data: () => ({ active: state.consentRevoked }) };
     } }) }) }),
     storage: () => ({ bucket: () => ({ file: (name) => ({
@@ -87,7 +89,7 @@ function harness(options = {}) {
   };
   const worker = {};
   vm.runInNewContext(code + '\nmodule.exports = {renderLifeMovie, createRenderControl, run};', {
-    module: worker, Buffer, AbortController, console: { log() {}, error() {} },
+    module: worker, Buffer, Object, Array, AbortController, console: { log() {}, error() {} },
     process: { env: { GCS_BUCKET_NAME: 'private-fixture-bucket', URAI_ENV: 'test',
       URAI_STUDIO_LEASE_POLL_MS: '25', URAI_STUDIO_RENDER_TIMEOUT_MS: options.timeout || '10000' } },
     require(name) {
@@ -103,6 +105,7 @@ function harness(options = {}) {
         state.children.add(child);
         child.on('close', () => state.children.delete(child));
         if (options.cancelRender) setTimeout(() => { state.current.status = 'CANCELLED'; }, 30);
+        if (options.changeTenantDuringRender) setTimeout(() => { state.owner.tenantId = 'another-tenant'; }, 30);
         return child;
       } };
       return require(name);
@@ -133,6 +136,20 @@ try {
   await rejected({ authorityError: true }, /render_authority_unavailable/);
   await rejected({ ownerMissing: true }, /render_authority_unavailable/);
   await rejected({ ownerDeletionPending: true }, /render_owner_deletion_pending/);
+  // Current owner/tenant admission is not permanent: the worker must re-check
+  // at every lease poll and reject changes after an approved queue entry.
+  for (const change of [
+    { tenantId: 'changed-tenant' }, { uid: 'other-owner' },
+    { accountStatus: 'suspended' }, { deleted: true },
+    { markedForDeletion: true }, { disabled: true },
+  ]) {
+    const h = await rejected({}, /render_authority_unavailable/, ({ state }) => Object.assign(state.owner, change));
+    assert.equal(h.state.downloads, 0, 'invalid owner state must prevent source reads');
+  }
+  for (const missing of ['uid', 'tenantId', 'accountStatus', 'deleted', 'markedForDeletion']) {
+    await rejected({}, /render_authority_unavailable/, ({ state }) => { delete state.owner[missing]; });
+  }
+  await rejected({ longRender: true, changeTenantDuringRender: true }, /render_authority_unavailable/);
   await rejected({ hungAuthority: true, timeout: '75' }, /render_deadline_exceeded/);
   await rejected({}, /render_consent_revoked/, ({ state, job }) => {
     state.consentRevoked = true;
