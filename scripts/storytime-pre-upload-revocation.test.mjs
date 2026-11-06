@@ -133,3 +133,62 @@ test('no existing consent block remains clear without being a positive grant',as
   await f.ledger.reserveStorytimeNarratorWrite(f.identity());
   assert.equal(f.ledgerRow().state,'RESERVED');
 });
+
+test('inherited false owner-deletion field is unverified, never authority',async()=>{
+  const f=fixture();const owner=Object.create({dataRightsDeletionPendingCentralPrivacy:false});
+  f.rows.set('users/owner1',owner);
+  await assert.rejects(f.ledger.reserveStorytimeNarratorWrite(f.identity()),/storytime_narrator_write_authority_revoked/);
+  assert.equal(f.ledgerRow(),undefined);
+});
+test('accessor owner-deletion field cannot authorize or invoke getter',async()=>{
+  const f=fixture();let invoked=0;const owner={};
+  Object.defineProperty(owner,'dataRightsDeletionPendingCentralPrivacy',{enumerable:true,get(){invoked++;return false;}});
+  f.rows.set('users/owner1',owner);
+  await assert.rejects(f.ledger.reserveStorytimeNarratorWrite(f.identity()),/storytime_narrator_write_authority_revoked/);
+  assert.equal(invoked,0);
+  assert.equal(f.ledgerRow(),undefined);
+});
+test('inherited disabled=false cannot prove an owner is enabled',async()=>{
+  const f=fixture();const owner=Object.create({disabled:false});
+  owner.dataRightsDeletionPendingCentralPrivacy=false;
+  f.rows.set('users/owner1',owner);
+  await assert.rejects(f.ledger.reserveStorytimeNarratorWrite(f.identity()),/storytime_narrator_write_authority_revoked/);
+});
+test('accessor deletionPending=false cannot run in a worker',async()=>{
+  const f=fixture();let invoked=0;
+  const owner={dataRightsDeletionPendingCentralPrivacy:false};
+  Object.defineProperty(owner,'deletionPending',{enumerable:true,get(){invoked++;return false;}});
+  f.rows.set('users/owner1',owner);
+  await assert.rejects(f.ledger.reserveStorytimeNarratorWrite(f.identity()),/storytime_narrator_write_authority_revoked/);
+  assert.equal(invoked,0);
+});
+test('own literal false owner flags remain clear',async()=>{
+  const f=fixture(); f.rows.set('users/owner1',{
+    dataRightsDeletionPendingCentralPrivacy:false,disabled:false,deletionPending:false,
+  });
+  await f.ledger.reserveStorytimeNarratorWrite(f.identity());
+  assert.equal(f.ledgerRow().state,'RESERVED');
+});
+test('missing legacy deletion flag is clear when no inherited field exists',async()=>{
+  const f=fixture();f.rows.set('users/owner1',{});
+  await f.ledger.reserveStorytimeNarratorWrite(f.identity());
+  assert.equal(f.ledgerRow().state,'RESERVED');
+});
+test('true and malformed owner-deletion states deny private narration',async()=>{
+  for (const owner of [
+    {dataRightsDeletionPendingCentralPrivacy:true},
+    {dataRightsDeletionPendingCentralPrivacy:null},
+    {dataRightsDeletionPendingCentralPrivacy:'false'},
+    {dataRightsDeletionPendingCentralPrivacy:false,disabled:true},
+    {dataRightsDeletionPendingCentralPrivacy:false,deletionPending:true},
+  ]){
+    const f=fixture();f.rows.set('users/owner1',owner);
+    await assert.rejects(f.ledger.reserveStorytimeNarratorWrite(f.identity()),/storytime_narrator_write_authority_revoked/);
+  }
+});
+test('owner-deletion field becoming inherited after reservation blocks pre-upload recheck',async()=>{
+  const f=fixture();await f.ledger.reserveStorytimeNarratorWrite(f.identity());
+  f.rows.set('users/owner1',Object.create({dataRightsDeletionPendingCentralPrivacy:false}));
+  await assert.rejects(f.ledger.assertStorytimeNarratorWriteActiveBeforeUpload(f.identity()),/storytime_narrator_write_authority_revoked_before_upload/);
+  assert.equal(f.ledgerRow().state,'RECONCILE_REQUIRED');
+});
