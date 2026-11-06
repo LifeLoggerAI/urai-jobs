@@ -193,11 +193,15 @@ export async function handleNarratorTts(job: any) {
 
   const fileName = `${payload.outputPrefix || "tts"}/${randomUUID()}.${fileExtension}`;
   const file = storage.bucket(BUCKET_NAME).file(fileName);
-
+  // A retry must never overwrite a newer object, even at the same path.
+  // Verify the upload identity when reading its immutable GCS generation.
+  const uploadId = randomUUID();
   await file.save(audioBuffer, {
+    preconditionOpts: { ifGenerationMatch: 0 },
     metadata: {
       contentType: mimeType,
       metadata: {
+        uraiUploadId: uploadId,
         uraiProvider: synthesis.provider,
         uraiModelId: synthesis.modelId,
         uraiVoiceId: synthesis.voiceId,
@@ -205,11 +209,18 @@ export async function handleNarratorTts(job: any) {
       },
     },
   });
+  const [stored] = await file.getMetadata();
+  const artifactGeneration = stored.generation;
+  if (typeof artifactGeneration !== "string" || !/^[1-9][0-9]{0,19}$/.test(artifactGeneration)
+    || !Number.isSafeInteger(Number(artifactGeneration)) || stored.metadata?.uraiUploadId !== uploadId) {
+    throw new Error("narrator_artifact_generation_unverified");
+  }
 
   console.log(`Audio content written to GCS: gs://${BUCKET_NAME}/${fileName}`);
 
   return {
     artifactPath: `gs://${BUCKET_NAME}/${fileName}`,
+    artifactGeneration,
     mimeType,
     size: audioBuffer.length,
     provider: synthesis.provider,
