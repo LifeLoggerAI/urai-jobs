@@ -18,9 +18,13 @@ test('external source pin and offline safety gates reject unsafe Jobs acceptance
     const scripts = join(repo, 'scripts')
     const bin = join(root, 'offline-bin')
     const badBin = join(root, 'wrong-pnpm-bin')
+    const stageBin = join(root, 'phase-gate-bin')
+    const stageEvents = join(root, 'phase-events.log')
     mkdirSync(scripts, { recursive: true })
+    mkdirSync(join(repo, 'functions'))
     mkdirSync(bin)
     mkdirSync(badBin)
+    mkdirSync(stageBin)
     const runner = join(scripts, 'run-four-emulator-acceptance.sh')
     copyFileSync(fileURLToPath(new URL('./run-four-emulator-acceptance.sh', import.meta.url)), runner)
 
@@ -36,6 +40,17 @@ test('external source pin and offline safety gates reject unsafe Jobs acceptance
       stub(directory, 'npx', 'echo UNEXPECTED_NPX >&2\nexit 74\n')
     }
 
+    // Phase stubs record command ordering without ever installing or invoking Firebase.
+    stub(stageBin, 'java', 'exit 0\n')
+    stub(stageBin, 'pnpm', `if [ "$1" = "--version" ]; then echo 8.15.9; exit 0; fi
+      printf 'pnpm %s\n' "$*" >> "$URAI_TEST_EVENTS"
+      if [ "$1" = "\${URAI_TEST_FAIL_STEP:-never}" ]; then echo OFFLINE_BLOCKED_PHASE >&2; exit 71; fi
+      exit 0
+    `)
+    stub(stageBin, 'npx', `printf 'npx %s\n' "$*" >> "$URAI_TEST_EVENTS"
+      echo OFFLINE_STUB_EMULATOR >&2
+      exit 74
+    `)
     const git = (args) => {
       const result = spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', timeout: 5000 })
       assert.equal(result.status, 0, 'Git fixture failed: ' + result.stderr)
@@ -103,6 +118,47 @@ test('external source pin and offline safety gates reject unsafe Jobs acceptance
       const result = invoke({ URAI_ACCEPTANCE_SHA: sha })
       denied(result, /OFFLINE_STUB_PNPM/, 73)
       assert.match(result.output, /URAI_FOUR_EMULATOR_SOURCE/)
+    })
+    const phaseRun = (failStep = 'never') => {
+      writeFileSync(stageEvents, '')
+      const result = invoke({ URAI_ACCEPTANCE_SHA: sha, URAI_TEST_EVENTS: stageEvents,
+        URAI_TEST_FAIL_STEP: failStep }, stageBin)
+      return { result, steps: readFileSync(stageEvents, 'utf8').trim().split('\n') }
+    }
+    await t.test('original typecheck failure stops before full build or emulators', () => {
+      const { result, steps } = phaseRun('typecheck')
+      denied(result, /OFFLINE_BLOCKED_PHASE/, 71)
+      assert.deepEqual(steps, [
+        'pnpm install --frozen-lockfile',
+        'pnpm --filter @urai-jobs/shared-types build',
+        'pnpm --filter urai-jobs-functions build',
+        'pnpm typecheck',
+      ])
+    })
+    await t.test('original full-build failure stops before emulators', () => {
+      const { result, steps } = phaseRun('build')
+      denied(result, /OFFLINE_BLOCKED_PHASE/, 71)
+      assert.deepEqual(steps, [
+        'pnpm install --frozen-lockfile',
+        'pnpm --filter @urai-jobs/shared-types build',
+        'pnpm --filter urai-jobs-functions build',
+        'pnpm typecheck',
+        'pnpm build',
+      ])
+    })
+    await t.test('passing stub builds still cannot claim emulator PASS', () => {
+      const { result, steps } = phaseRun()
+      denied(result, /OFFLINE_STUB_EMULATOR/, 74)
+      assert.deepEqual(steps.slice(0, 5), [
+        'pnpm install --frozen-lockfile',
+        'pnpm --filter @urai-jobs/shared-types build',
+        'pnpm --filter urai-jobs-functions build',
+        'pnpm typecheck',
+        'pnpm build',
+      ])
+      assert.match(steps.at(-1), /^npx --yes firebase-tools@15\.24\.0 --project demo-urai-jobs emulators:exec --only auth,firestore,functions,storage /)
+      assert.doesNotMatch(result.output, /URAI_FOUR_EMULATOR_ACCEPTANCE_PASS/)
+      assert.equal(readFileSync(stageEvents, 'utf8').includes('firebase-tools@15.24.0'), true)
     })
   } finally {
     rmSync(root, { recursive: true, force: true })
