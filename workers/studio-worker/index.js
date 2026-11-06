@@ -83,6 +83,38 @@ function checkedStudioOwnerDeletionFenceState(snapshot) {
   } catch { return 'unverified'; }
 }
 
+
+/**
+ * The job's owner/tenant binding can change after enqueue and dispatch.
+ * Recheck the current Jobs users/{ownerUid} document on every lease poll.
+ * This is a *veto*, never positive Privacy consent or Storage write authority.
+ * A missing, forged, malformed, disabled or inactive profile is a denial.
+ */
+function checkedStudioOwnerTenantState(snapshot, current) {
+  try {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot) ||
+        snapshot.exists !== true || typeof snapshot.data !== 'function' ||
+        !current || typeof current !== 'object') return 'unverified';
+    const id = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+    if (typeof current.ownerUid !== 'string' || !id.test(current.ownerUid) ||
+        typeof current.tenantId !== 'string' || !id.test(current.tenantId)) return 'unverified';
+    const owner = snapshot.data();
+    if (!owner || typeof owner !== 'object' || Array.isArray(owner)) return 'unverified';
+    const prototype = Object.getPrototypeOf(owner);
+    if (prototype !== Object.prototype && prototype !== null) return 'unverified';
+    const ownValue = (key) => {
+      const field = Object.getOwnPropertyDescriptor(owner, key);
+      return field && Object.prototype.hasOwnProperty.call(field, 'value')
+        ? field.value : undefined;
+    };
+    if (ownValue('uid') !== current.ownerUid || ownValue('tenantId') !== current.tenantId ||
+        ownValue('accountStatus') !== 'active' || ownValue('deleted') !== false ||
+        ownValue('markedForDeletion') !== false) return 'unverified';
+    if ('disabled' in owner && ownValue('disabled') !== false) return 'unverified';
+    return 'clear';
+  } catch { return 'unverified'; }
+}
+
 function createRenderControl(job) {
   const jobId = safeSegment(String(job.jobId || ''), 'job_id');
   const jobType = String(job.jobType || job.type || '');
@@ -141,6 +173,11 @@ function createRenderControl(job) {
         const ownerState = checkedStudioOwnerDeletionFenceState(ownerSnapshot);
         if (ownerState !== 'clear') {
           throw new Error(ownerState === 'pending' ? 'render_owner_deletion_pending' : 'render_authority_unavailable');
+        }
+        // Re-read tenant and lifecycle authority on every poll, not only at
+        // original queue admission. This cannot authorize a render by itself.
+        if (checkedStudioOwnerTenantState(ownerSnapshot, current) !== 'clear') {
+          throw new Error('render_authority_unavailable');
         }
         const id = crypto.createHash('sha256').update(`${current.ownerUid}\n${current.consent.purpose}`).digest('hex');
         const block = await wait(admin.firestore().collection('jobConsentBlocks').doc(id).get());
