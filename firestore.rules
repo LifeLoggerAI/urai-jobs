@@ -20,7 +20,16 @@ service cloud.firestore {
     }
 
     function userProfileFieldsUnchanged() {
-      return request.resource.data.role == resource.data.role
+      // Client profile updates must never add, remove, or mutate server-owned
+      // tenant, consent/deletion, lifecycle, or role authority fields.
+      // affectedKeys includes addedKeys and removedKeys; equality alone is
+      // insufficient for fields that did not exist on legacy profiles.
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'role', 'orgId', 'permissions', 'disabled', 'uid',
+          'tenantId', 'accountStatus', 'deleted', 'markedForDeletion',
+          'dataRightsDeletionPendingCentralPrivacy'
+        ])
+        && request.resource.data.role == resource.data.role
         && request.resource.data.orgId == resource.data.orgId
         && request.resource.data.permissions == resource.data.permissions
         && request.resource.data.disabled == resource.data.disabled
