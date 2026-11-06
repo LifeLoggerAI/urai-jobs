@@ -271,7 +271,7 @@ async function artifactLocation(input: z.infer<typeof JobActionSchema>) {
   const output = job.output && typeof job.output === 'object' ? job.output as Record<string, unknown> : {};
   const location = parseArtifactPath(output.artifactPath);
   const allowedBucket = String(process.env.GCS_BUCKET_NAME || '').trim();
-  const requiredPrefix = `storytime/${input.userId}/${input.sessionId}/`;
+  const requiredPrefix = `storytime/${input.userId}/${input.sessionId}/${input.narratorScriptId}/`;
   if (!allowedBucket || location.bucket !== allowedBucket || !location.objectPath.startsWith(requiredPrefix)) {
     throw new Error('narrator_artifact_boundary_mismatch');
   }
