@@ -39,6 +39,13 @@ done
 for variable in GOOGLE_APPLICATION_CREDENTIALS FIREBASE_TOKEN FIREBASE_CLI_TOKEN GOOGLE_OAUTH_ACCESS_TOKEN GOOGLE_CLOUD_ACCESS_TOKEN GITHUB_TOKEN GH_TOKEN RUNPOD_API_KEY STRIPE_SECRET_KEY OPENAI_API_KEY; do
   [[ -z "${!variable:-}" ]] || die "$variable must be absent from emulator-only acceptance"
 done
+# Reject ignored Functions environment files before any installation lifecycle
+# or build script. The preexisting file may contain production credentials.
+ENV_FILE="functions/.env.$PROJECT"
+[[ ! -e "$ENV_FILE" ]] || die "Preexisting emulator Functions environment configuration is forbidden"
+command -v ffmpeg >/dev/null || die "ffmpeg is required for original Life Movie worker smoke"
+command -v ffprobe >/dev/null || die "ffprobe is required for original Life Movie worker smoke"
+
 # Firebase Admin may read a preloaded project/bucket configuration independently
 # of the CLI --project flag. Do not let inherited settings redirect any
 # synthetic test traffic toward private or production Cloud Storage.
@@ -59,8 +66,8 @@ pnpm typecheck
 pnpm build
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || die "Original build modified reviewed source"
 
-ENV_FILE="functions/.env.$PROJECT"
-[[ ! -e "$ENV_FILE" ]] || die "Refusing to overwrite existing local emulator function configuration"
+# An install/build that creates the ignored Functions env file is unsafe.
+[[ ! -e "$ENV_FILE" ]] || die "Frozen build created emulator Functions environment configuration"
 cleanup() { rm -f -- "$ENV_FILE"; }
 trap cleanup EXIT
 printf '%s\n' \
@@ -72,6 +79,6 @@ printf '%s\n' \
 timeout --kill-after=30s 10m npx --yes "firebase-tools@$TOOLS_VERSION" \
   --project "$PROJECT" emulators:exec \
   --only auth,firestore,functions,storage \
-  "node scripts/urai-jobs-e2e.mjs && node --test scripts/user_authority_rules.firebase-emulator.test.mjs"
+  "node scripts/life-movies-cancellation-smoke.mjs && node scripts/urai-jobs-e2e.mjs && node --test scripts/user_authority_rules.firebase-emulator.test.mjs"
 
 printf 'URAI_FOUR_EMULATOR_ACCEPTANCE_PASS source=%s project=%s\n' "$CURRENT_SHA" "$PROJECT"

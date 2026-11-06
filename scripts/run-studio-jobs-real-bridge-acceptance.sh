@@ -12,6 +12,8 @@ command -v pnpm >/dev/null || die 'pnpm missing'
 command -v node >/dev/null || die 'node missing'
 command -v java >/dev/null || die 'java missing'
 command -v npx >/dev/null || die 'npx missing'
+command -v ffmpeg >/dev/null || die 'ffmpeg missing'
+command -v ffprobe >/dev/null || die 'ffprobe missing'
 [[ "$(node --version)" == v22.* ]] || die 'Node 22 required'
 [[ "$(pnpm --version)" == 8.15.9 ]] || die 'pnpm 8.15.9 required'
 HEAD_SHA="$(git rev-parse HEAD)"
@@ -55,6 +57,9 @@ pnpm --filter urai-jobs-functions build
 pnpm typecheck
 pnpm build
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || die 'Original build changed Jobs source'
+# Exercise the original worker FFmpeg, cancellation and output-write fence
+# before reporting a native Studio→Jobs bridge acceptance.
+node scripts/life-movies-cancellation-smoke.mjs
 cleanup() { rm -f "$ENV_FILE"; }
 trap cleanup EXIT
 printf '%s\n' \
