@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import { Readable, Writable } from 'node:stream';
 import { spawn, spawnSync } from 'node:child_process';
 
-const require = createRequire(import.meta.url);
+const require = createRequire(new URL('../workers/studio-worker/index.js', import.meta.url));
 const code = fs.readFileSync(new URL('../workers/studio-worker/index.js', import.meta.url), 'utf8');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'urai-cancellation-proof-'));
 const source = path.join(root, 'source.wav');
@@ -34,8 +34,9 @@ const baseJob = {
 function harness(options = {}) {
   const job = structuredClone(baseJob);
   if (options.longRender) job.payload.timeline[0].endMs = 30000;
-  const current = { ...structuredClone(job), status: 'RUNNING', execution: { leaseToken: job.leaseToken } };
-  const state = { current, reads: 0, downloads: 0, uploads: [], deleted: [], objects: new Map(), children: new Set(), consentRevoked: false };
+  const current = { ...structuredClone(job), status: 'RUNNING', execution: { leaseToken: job.leaseToken },
+    consent: { purpose: 'life-movie.render', policyVersion: '1.1.0', decisionReceiptId: 'a'.repeat(64) } };
+  const state = { current, reads: 0, downloads: 0, uploads: [], deleted: [], objects: new Map(), metadata: new Map(), children: new Set(), consentRevoked: false };
   const app = { use() {}, get() {}, post() {}, listen() {} };
   const express = Object.assign(() => app, { json: () => () => {} });
   const admin = {
@@ -46,6 +47,7 @@ function harness(options = {}) {
       if (options.hungAuthority) return new Promise(() => {});
       return collection === 'jobs'
         ? { exists: true, data: () => state.current }
+        : collection === 'users' ? { exists: !options.ownerMissing, data: () => ({ dataRightsDeletionPendingCentralPrivacy: Boolean(options.ownerDeletionPending) }) }
         : { exists: state.consentRevoked, data: () => ({ active: state.consentRevoked }) };
     } }) }) }),
     storage: () => ({ bucket: () => ({ file: (name) => ({
@@ -69,11 +71,14 @@ function harness(options = {}) {
           final(callback) {
             if (options.failUpload && state.uploads.length === 2) return callback(new Error('fixture_upload_failed'));
             state.objects.set(name, Buffer.concat(chunks));
+            state.metadata.set(name, { generation: String(1793378565000020 + state.uploads.length),
+              metadata: metadata.metadata.metadata });
             if (options.cancelUpload) state.current.status = 'CANCELLED';
             callback();
           },
         });
       },
+      async getMetadata() { return [state.metadata.get(name)]; },
       async delete() {
         if (options.failCleanup) throw new Error('fixture_delete_failed');
         state.deleted.push(name); state.objects.delete(name);
@@ -88,6 +93,11 @@ function harness(options = {}) {
     require(name) {
       if (name === 'express') return express;
       if (name === 'firebase-admin') return admin;
+      // Synthetic-only render/cleanup test double. Do not modify the real
+      // private-output-write-authority source or interpret these as cloud IAM passes.
+      if (name === './private-output-write-authority' && options.syntheticOutputAuthority) {
+        return { assertPrivateOutputWriteAuthority() {}, privateOutputWriteAuthorityAvailable: () => true };
+      }
       if (name === 'node:child_process') return { spawnSync, spawn(command, args, opts) {
         const child = spawn(command, args, opts);
         state.children.add(child);
@@ -121,22 +131,26 @@ try {
   await rejected({}, /render_job_binding_mismatch/, ({ state }) => { state.current.tenantId = 'another-tenant'; });
   await rejected({}, /render_job_binding_mismatch/, ({ state }) => { state.current.payload.timeline[0].endMs = 1000; });
   await rejected({ authorityError: true }, /render_authority_unavailable/);
+  await rejected({ ownerMissing: true }, /render_authority_unavailable/);
+  await rejected({ ownerDeletionPending: true }, /render_owner_deletion_pending/);
   await rejected({ hungAuthority: true, timeout: '75' }, /render_deadline_exceeded/);
   await rejected({}, /render_consent_revoked/, ({ state, job }) => {
-    state.current.consent = { purpose: 'private-media' }; state.consentRevoked = true;
+    state.consentRevoked = true;
   });
   await rejected({ cancelDownload: true }, /render_lease_revoked/);
   await rejected({ longRender: true, cancelRender: true }, /render_lease_revoked/);
   await rejected({ longRender: true, timeout: '75' }, /render_deadline_exceeded/);
-  const cancelled = await rejected({ cancelUpload: true }, /render_lease_revoked/);
+  // Verify the unchanged production interlock actually refuses output writes.
+  await rejected({}, /life_movie_storage_enforced_write_authority_unavailable/);
+  const cancelled = await rejected({ cancelUpload: true, syntheticOutputAuthority: true }, /render_lease_revoked/);
   assert.equal(cancelled.state.deleted.length, 1);
-  const failed = await rejected({ failUpload: true }, /fixture_upload_failed/);
-  assert.equal(failed.state.deleted.length, 2);
-  await rejected({ cancelUpload: true, failCleanup: true }, /render_cleanup_incomplete/);
+  const failed = await rejected({ failUpload: true, syntheticOutputAuthority: true }, /render_cleanup_incomplete/);
+  assert.equal(failed.state.deleted.length, 1);
+  await rejected({ cancelUpload: true, failCleanup: true, syntheticOutputAuthority: true }, /render_cleanup_incomplete/);
 
   const successes = [];
   for (let attempt = 0; attempt < 2; attempt++) {
-    const h = harness();
+    const h = harness({ syntheticOutputAuthority: true });
     const result = await h.worker.renderLifeMovie(h.job);
     assert.equal(result.ok, true);
     assert.equal(h.state.objects.size, 3);
@@ -158,7 +172,7 @@ try {
     successes.push(movie.ref);
   }
   assert.notEqual(successes[0], successes[1], 'separate attempts must not overwrite each other');
-  console.log('[PASS] Life Movies: stale/cancelled leases, payload/tenant binding, unavailable authority, consent revocation, blocked download, active FFmpeg cancellation/deadline, failed upload cleanup, explicit cleanup failure, two actual MP4 renders and source hashes');
+  console.log('[PASS] Life Movies: production output-write interlock DENIED; fictional-only positive render/cleanup test double; stale/cancelled leases, owner deletion, consent revocation, FFmpeg cancellation/deadline, cleanup and two MP4 renders');
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
 }
