@@ -140,6 +140,10 @@ function workerFixture({generation='42',matchingUpload=true}={}){
     ['handleNarratorTts'],{
     BUCKET_NAME:'synthetic-audio-bucket',
     normalizePayload:value=>value,
+    normalizeAudioEncoding: format => format === 'OGG_OPUS' ? 'OGG_OPUS' : 'MP3',
+    storytimeNarratorWriteIdentity: () => null,
+    reserveStorytimeNarratorWrite: async () => {},
+    sealStorytimeNarratorWrite: async () => {},
     synthesizeGoogle:async()=>({audioBuffer:Buffer.from('synthetic'),fileExtension:'mp3',
       mimeType:'audio/mpeg',provider:'google',modelId:'synthetic-model',voiceId:'synthetic-voice'}),
     randomUUID:()=>['synthetic-object','synthetic-upload-id'][idIndex++],
