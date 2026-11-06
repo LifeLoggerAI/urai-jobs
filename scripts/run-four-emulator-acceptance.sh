@@ -49,6 +49,7 @@ export GCLOUD_PROJECT="$PROJECT"
 export GOOGLE_CLOUD_PROJECT="$PROJECT"
 
 printf 'URAI_FOUR_EMULATOR_SOURCE %s\n' "$CURRENT_SHA"
+node --test scripts/owner_authority_rules.static.test.mjs
 pnpm install --frozen-lockfile
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || die "Frozen install changed source"
 pnpm --filter @urai-jobs/shared-types build
@@ -71,6 +72,6 @@ printf '%s\n' \
 timeout --kill-after=30s 10m npx --yes "firebase-tools@$TOOLS_VERSION" \
   --project "$PROJECT" emulators:exec \
   --only auth,firestore,functions,storage \
-  "node scripts/urai-jobs-e2e.mjs"
+  "node scripts/urai-jobs-e2e.mjs && node --test scripts/user_authority_rules.firebase-emulator.test.mjs"
 
 printf 'URAI_FOUR_EMULATOR_ACCEPTANCE_PASS source=%s project=%s\n' "$CURRENT_SHA" "$PROJECT"
