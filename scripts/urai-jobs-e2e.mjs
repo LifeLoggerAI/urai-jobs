@@ -320,7 +320,7 @@ async function main() {
     await expectCallableError('createJob', userToken, {
       jobType: 'studio.render.video', payload: studioPayload,
       idempotencyKey: `direct-studio-${E2E_TIMESTAMP}`,
-    }, ['dedicated authenticated Studio Life Movie bridge']);
+    }, ['dedicated authenticated Studio Life Movie bridge', 'provenance-bound URAI Life Movies render contract']);
     await expectCallableError('createJob', userToken, {
       jobType: 'studio.assemble.video', payload: {},
       idempotencyKey: `direct-assembly-${E2E_TIMESTAMP}`,

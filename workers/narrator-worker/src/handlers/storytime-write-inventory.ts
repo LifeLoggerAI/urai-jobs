@@ -120,7 +120,7 @@ export async function inspectStorytimeNarratorInventory(scope: StorytimeInventor
   const [files, nextQuery, apiResponse] = await new Storage().bucket(bucket).getFiles({prefix,maxResults:MAX + 1,autoPaginate:false});
   // Storage may paginate before the requested maximum. A continuation token
   // means an object is unobserved even if fewer than MAX items were returned.
-  const objectTruncated = files.length > MAX || Boolean(nextQuery) || Boolean(apiResponse?.nextPageToken);
+  const objectTruncated = files.length > MAX || Boolean(nextQuery) || Boolean((apiResponse as { nextPageToken?: unknown } | undefined)?.nextPageToken);
   const objects = files.slice(0,MAX).map(file=>({
     name:file.name,
     generation:file.metadata?.generation,
