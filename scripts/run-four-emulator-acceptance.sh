@@ -16,6 +16,8 @@ die() {
 command -v git >/dev/null || die "git is required"
 command -v node >/dev/null || die "Node.js is required"
 command -v pnpm >/dev/null || die "pnpm 8.15.9 is required"
+[[ "$(pnpm --version)" == "8.15.9" ]] || die "Exact pnpm 8.15.9 required for frozen install"
+[[ "$(node --version)" == v22.* ]] || die "Node.js 22 is required"
 command -v java >/dev/null || die "Java 21 is required for Firestore"
 command -v npx >/dev/null || die "npm/npx is required to run pinned Firebase Tools"
 
@@ -28,6 +30,9 @@ EXPECTED_SHA="${URAI_ACCEPTANCE_SHA:-$CURRENT_SHA}"
 for variable in GCLOUD_PROJECT GOOGLE_CLOUD_PROJECT FIREBASE_PROJECT_ID CLOUDSDK_CORE_PROJECT; do
   value="${!variable:-}"
   [[ -z "$value" || "$value" == "$PROJECT" ]] || die "$variable points outside disposable emulator project"
+done
+for variable in FIRESTORE_EMULATOR_HOST FIREBASE_AUTH_EMULATOR_HOST FIREBASE_STORAGE_EMULATOR_HOST FUNCTIONS_EMULATOR_HOST; do
+  [[ -z "${!variable:-}" ]] || die "$variable must be unset before firebase emulators:exec"
 done
 for variable in GOOGLE_APPLICATION_CREDENTIALS FIREBASE_TOKEN GITHUB_TOKEN GH_TOKEN RUNPOD_API_KEY; do
   [[ -z "${!variable:-}" ]] || die "$variable must be absent from emulator-only acceptance"
