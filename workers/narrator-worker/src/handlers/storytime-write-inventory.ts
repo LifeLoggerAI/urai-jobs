@@ -74,7 +74,7 @@ export function classifyStorytimeInventory(
     const exact = matched && generation && matched.artifactGeneration === generation
       && typeof object.uploadId === 'string' && matched.uploadId === object.uploadId;
     const reason = !canonicalName ? 'legacy_or_unrecognized_object_name'
-      : matching.length === 0 ? (coverage.ledgerComplete === false ? 'ledger_scan_incomplete' : 'legacy_or_orphan_without_reservation')
+      : matching.length === 0 ? (coverage.ledgerComplete !== true ? 'ledger_scan_incomplete' : 'legacy_or_orphan_without_reservation')
       : matching.length !== 1 ? 'ambiguous_multiple_reservations'
       : !exact ? 'generation_or_upload_id_unverified'
       : matched.state !== 'STORED_PENDING_JOB' ? 'unresolved_write_state'
@@ -92,7 +92,7 @@ export function classifyStorytimeInventory(
         entries.push({
           objectPath, generation: typeof row.artifactGeneration === 'string' ? row.artifactGeneration : null,
           reservationId: row.id, state: 'UNRESOLVED',
-          reason: coverage.objectComplete === false ? 'object_scan_incomplete' : 'journal_without_current_object',
+          reason: coverage.objectComplete !== true ? 'object_scan_incomplete' : 'journal_without_current_object',
         });
       }
     }
@@ -114,7 +114,7 @@ export async function inspectStorytimeNarratorInventory(scope: StorytimeInventor
   const relevant = snapshot.docs.filter(d=>{
     const r=d.data();
     return r.sessionId===scope.sessionId && r.narratorScriptId===scope.narratorScriptId;
-  }).map(d=>({id:d.id,...d.data()}));
+  }).map(d=>({...d.data(),id:d.id}));
   // A broad owner query may truncate before the requested session appears.
   const ledgerTruncated = snapshot.docs.length > MAX;
   const [files, nextQuery, apiResponse] = await new Storage().bucket(bucket).getFiles({prefix,maxResults:MAX + 1,autoPaginate:false});
