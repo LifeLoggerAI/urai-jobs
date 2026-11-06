@@ -22,12 +22,23 @@ for name in GCLOUD_PROJECT GOOGLE_CLOUD_PROJECT FIREBASE_PROJECT_ID CLOUDSDK_COR
   v="${!name:-}"
   [[ -z "$v" || "$v" == "$PROJECT" ]] || die "$name non-demo project"
 done
-for name in GOOGLE_APPLICATION_CREDENTIALS FIREBASE_TOKEN GITHUB_TOKEN GH_TOKEN RUNPOD_API_KEY GOOGLE_CLOUD_ACCESS_TOKEN GOOGLE_OAUTH_ACCESS_TOKEN; do
+# A separate Jobs acceptance runner already enforces these boundaries. The
+# Studio -> Jobs emulator runner must enforce the same policy independently;
+# the Firebase CLI's demo --project flag alone does not override Admin SDK or
+# Storage configuration inherited from the launching shell.
+for name in GOOGLE_APPLICATION_CREDENTIALS FIREBASE_TOKEN FIREBASE_CLI_TOKEN GITHUB_TOKEN GH_TOKEN RUNPOD_API_KEY GOOGLE_CLOUD_ACCESS_TOKEN GOOGLE_OAUTH_ACCESS_TOKEN STRIPE_SECRET_KEY OPENAI_API_KEY; do
   [[ -z "${!name:-}" ]] || die "$name credential present"
 done
-for name in FIRESTORE_EMULATOR_HOST FIREBASE_AUTH_EMULATOR_HOST FIREBASE_STORAGE_EMULATOR_HOST FUNCTIONS_EMULATOR_HOST; do
+for name in FIRESTORE_EMULATOR_HOST FIREBASE_AUTH_EMULATOR_HOST FIREBASE_STORAGE_EMULATOR_HOST STORAGE_EMULATOR_HOST FUNCTIONS_EMULATOR_HOST FIREBASE_FUNCTIONS_EMULATOR_HOST; do
   [[ -z "${!name:-}" ]] || die "$name must be unset"
 done
+for name in FIREBASE_CONFIG GCS_BUCKET_NAME FIREBASE_STORAGE_BUCKET GOOGLE_CLOUD_STORAGE_BUCKET URAI_STUDIO_JOBS_BRIDGE_TOKEN URAI_JOBS_BRIDGE_URL; do
+  [[ -z "${!name:-}" ]] || die "$name must be absent from emulator-only acceptance"
+done
+# Refuse to install/build if an existing function env file could be loaded
+# during package scripts, and never overwrite an unreviewed credential file.
+ENV_FILE="functions/.env.$PROJECT"
+[[ ! -e "$ENV_FILE" ]] || die 'Existing emulator environment file'
 STUDIO_DIR="${URAI_STUDIO_SOURCE_DIR:-}"
 [[ -n "$STUDIO_DIR" && -d "$STUDIO_DIR/.git" ]] || die 'external Studio checkout missing'
 [[ "$(git -C "$STUDIO_DIR" rev-parse HEAD)" == "$STUDIO_SHA" ]] || die 'Studio SHA drift'
@@ -39,8 +50,11 @@ pnpm install --frozen-lockfile
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || die 'Install changed Jobs source'
 pnpm --filter @urai-jobs/shared-types build
 pnpm --filter urai-jobs-functions build
-ENV_FILE="functions/.env.$PROJECT"
-[[ ! -e "$ENV_FILE" ]] || die 'Existing emulator environment file'
+# The Studio bridge must not advertise a real four-emulator result after
+# Functions-only builds when the actual workspace fails typechecking/building.
+pnpm typecheck
+pnpm build
+[[ -z "$(git status --porcelain --untracked-files=all)" ]] || die 'Original build changed Jobs source'
 cleanup() { rm -f "$ENV_FILE"; }
 trap cleanup EXIT
 printf '%s\n' \
