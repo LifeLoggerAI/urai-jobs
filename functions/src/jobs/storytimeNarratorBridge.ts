@@ -278,25 +278,6 @@ async function artifactLocation(input: z.infer<typeof JobActionSchema>) {
   return { job, output, location };
 }
 
-async function playback(input: z.infer<typeof JobActionSchema>) {
-  const { output, location } = await artifactLocation(input);
-  const expiresAtMs = Date.now() + 5 * 60 * 1000;
-  const [url] = await getStorage().bucket(location.bucket).file(location.objectPath).getSignedUrl({
-    action: 'read',
-    expires: expiresAtMs,
-    responseDisposition: 'inline',
-    responseType: typeof output.mimeType === 'string' ? output.mimeType : 'audio/mpeg',
-  });
-  return {
-    url,
-    expiresAt: new Date(expiresAtMs).toISOString(),
-    mimeType: typeof output.mimeType === 'string' ? output.mimeType : 'audio/mpeg',
-    provider: typeof output.provider === 'string' ? output.provider : undefined,
-    modelId: typeof output.modelId === 'string' ? output.modelId : undefined,
-    voiceId: typeof output.voiceId === 'string' ? output.voiceId : undefined,
-  };
-}
-
 async function deleteOutput(input: z.infer<typeof JobActionSchema>) {
   const { location } = await artifactLocation(input);
   await getStorage().bucket(location.bucket).file(location.objectPath).delete({ ignoreNotFound: true });
@@ -335,6 +316,13 @@ export const storytimeNarratorBridge = onRequest({
     res.status(400).json({ ok: false, error: 'invalid_storytime_narrator_request' });
     return;
   }
+  // A five-minute GCS bearer URL cannot be revoked when owner consent is withdrawn.
+  // Keep legacy Storytime playback off until current-owner authenticated delivery
+  // can revalidate privacy/rights on every request without exporting signed links.
+  if (parsed.data.action === 'playback') {
+    res.status(503).json({ ok: false, error: 'storytime_authenticated_delivery_required' });
+    return;
+  }
 
   try {
     if (parsed.data.action === 'create') {
@@ -350,10 +338,6 @@ export const storytimeNarratorBridge = onRequest({
     if (parsed.data.action === 'cancel') {
       const job = await cancelJob(parsed.data);
       res.status(200).json({ ok: true, job });
-      return;
-    }
-    if (parsed.data.action === 'playback') {
-      res.status(200).json({ ok: true, playback: await playback(parsed.data) });
       return;
     }
     res.status(200).json({ ok: true, deletion: await deleteOutput(parsed.data) });
