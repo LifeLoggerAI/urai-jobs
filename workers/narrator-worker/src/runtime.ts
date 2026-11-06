@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 
 export type LogSeverity = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 
@@ -66,22 +66,18 @@ export function requestIdMiddleware(req: RuntimeRequest, res: Response, next: Ne
 export function requireWorkerAuth(req: RuntimeRequest, res: Response, next: NextFunction) {
   const expectedToken = process.env.URAI_JOBS_WORKER_TOKEN;
   const env = String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
-  const localBypass = env === 'local' || env === 'test' || process.env.FUNCTIONS_EMULATOR === 'true';
-
-  if (!expectedToken && localBypass) {
-    log('WARN', 'worker_auth_local_bypass', { requestId: req.requestId, env });
-    next();
-    return;
-  }
-
-  if (!expectedToken) {
+  // Emulator and test traffic must prove the same dedicated bearer identity.
+  // An absent or blank secret is never permission to access a media worker.
+  if (!expectedToken || !expectedToken.trim()) {
     log('ERROR', 'worker_auth_missing_token', { requestId: req.requestId, env });
     res.status(503).send({ ok: false, error: 'worker auth is not configured', requestId: req.requestId });
     return;
   }
 
   const header = req.header('authorization') || '';
-  if (header !== `Bearer ${expectedToken}`) {
+  const expectedHash = createHash('sha256').update(`Bearer ${expectedToken}`).digest();
+  const actualHash = createHash('sha256').update(header).digest();
+  if (!timingSafeEqual(actualHash, expectedHash)) {
     log('WARN', 'worker_auth_denied', { requestId: req.requestId, env });
     res.status(401).send({ ok: false, error: 'unauthorized', requestId: req.requestId });
     return;
