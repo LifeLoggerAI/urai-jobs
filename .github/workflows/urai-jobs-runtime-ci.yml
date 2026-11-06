@@ -71,6 +71,9 @@ jobs:
       - name: Verify exact-head safety and offline emulator preflight
         run: node --test scripts/run-four-emulator-acceptance.contract.test.mjs
 
+      - name: Verify Studio-Jobs cloud environment and full-build preflight
+        run: node --test scripts/run-studio-jobs-real-bridge-acceptance.contract.test.mjs
+
       - name: Install exact dependency graph
         run: pnpm install --frozen-lockfile
 
@@ -161,6 +164,9 @@ jobs:
 
       - name: Verify exact-head safety and offline emulator preflight
         run: node --test scripts/run-four-emulator-acceptance.contract.test.mjs
+
+      - name: Verify Studio-Jobs cloud environment and full-build preflight
+        run: node --test scripts/run-studio-jobs-real-bridge-acceptance.contract.test.mjs
 
       - name: Install exact dependency graph
         run: pnpm install --frozen-lockfile
