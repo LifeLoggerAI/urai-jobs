@@ -68,6 +68,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Verify exact-head safety and offline emulator preflight
+        run: node --test scripts/run-four-emulator-acceptance.contract.test.mjs
+
       - name: Install exact dependency graph
         run: pnpm install --frozen-lockfile
 
@@ -155,6 +158,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+
+      - name: Verify exact-head safety and offline emulator preflight
+        run: node --test scripts/run-four-emulator-acceptance.contract.test.mjs
 
       - name: Install exact dependency graph
         run: pnpm install --frozen-lockfile
