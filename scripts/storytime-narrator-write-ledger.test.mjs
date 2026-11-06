@@ -30,7 +30,7 @@ function extract(file,constants,functions,context={}){
 }
 const writer=extract('../workers/narrator-worker/src/handlers/storytime-write-ledger.ts',
   ['SAFE_ID','UUID_AUDIO','GENERATION','PURPOSE'],
-  ['record','validId','safeGeneration','storytimeNarratorWriteIdentity','authorizedLive']);
+  ['record','validId','safeGeneration','storytimeNarratorWriteIdentity','checkedNarratorConsentBlockClear','authorizedLive']);
 const inventory=extract('../workers/narrator-worker/src/handlers/storytime-write-inventory.ts',
   ['SAFE','AUDIO','GEN'],['validateScope','classifyStorytimeInventory']);
 const uuid='11111111-1111-4111-8111-111111111111';

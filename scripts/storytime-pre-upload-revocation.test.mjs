@@ -96,3 +96,40 @@ test('genuine generic narration has no Storytime journal authority',async()=>{
   const f=fixture();await f.ledger.assertStorytimeNarratorWriteActiveBeforeUpload(null);
   assert.equal(f.rows.size,3);
 });
+
+test('an inherited false active field is not a valid revocation clearance',async()=>{
+  const f=fixture();
+  f.rows.set('jobConsentBlocks/'+blockId,Object.create({active:false}));
+  await assert.rejects(f.ledger.reserveStorytimeNarratorWrite(f.identity()),/storytime_narrator_write_authority_revoked/);
+  assert.equal(f.ledgerRow(),undefined);
+});
+test('an accessor active field cannot act as consent authority or execute its getter',async()=>{
+  const f=fixture();let invoked=0;
+  const block={};Object.defineProperty(block,'active',{enumerable:true,get(){invoked++;return false;}});
+  f.rows.set('jobConsentBlocks/'+blockId,block);
+  await assert.rejects(f.ledger.reserveStorytimeNarratorWrite(f.identity()),/storytime_narrator_write_authority_revoked/);
+  assert.equal(invoked,0);
+  assert.equal(f.ledgerRow(),undefined);
+});
+test('missing and malformed active fields are refused by the worker',async()=>{
+  for(const block of [{}, {active:'false'}, {active:null}, {active:0}, {active:undefined}]){
+    const f=fixture();f.rows.set('jobConsentBlocks/'+blockId,block);
+    await assert.rejects(f.ledger.reserveStorytimeNarratorWrite(f.identity()),/storytime_narrator_write_authority_revoked/);
+    assert.equal(f.ledgerRow(),undefined);
+  }
+});
+test('a literal own false field is the only existing-block clear state',async()=>{
+  const f=fixture();f.rows.set('jobConsentBlocks/'+blockId,{active:false});
+  await f.ledger.reserveStorytimeNarratorWrite(f.identity());
+  assert.equal(f.ledgerRow().state,'RESERVED');
+});
+test('explicit active=true revocation must refuse provider admission',async()=>{
+  const f=fixture();f.rows.set('jobConsentBlocks/'+blockId,{active:true});
+  await assert.rejects(f.ledger.reserveStorytimeNarratorWrite(f.identity()),/storytime_narrator_write_authority_revoked/);
+  assert.equal(f.ledgerRow(),undefined);
+});
+test('no existing consent block remains clear without being a positive grant',async()=>{
+  const f=fixture();f.rows.delete('jobConsentBlocks/'+blockId);
+  await f.ledger.reserveStorytimeNarratorWrite(f.identity());
+  assert.equal(f.ledgerRow().state,'RESERVED');
+});
