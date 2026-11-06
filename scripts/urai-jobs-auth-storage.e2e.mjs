@@ -37,7 +37,7 @@ export async function verifyJobsPrivateStorageE2E({
   const mediaUrl = (name) => 'http://' + storageHost + '/v0/b/' +
     encodeURIComponent(bucketName) + '/o/' + encodeURIComponent(name) + '?alt=media';
   const readAs = (name, token) => fetch(mediaUrl(name), {
-    headers: token ? {authorization: 'Bearer ' + token} : {},
+    headers: token ? {authorization: 'Firebase ' + token} : {},
   });
   const denial = async (response, label) => {
     assert.ok([401, 403].includes(response.status),
@@ -60,11 +60,31 @@ export async function verifyJobsPrivateStorageE2E({
     await denial(await readAs(objectPath, null), 'anonymous read');
     await denial(await readAs(temporaryPath, ownerToken), 'temporary worker media read');
 
+    // Mirror the real Firebase Storage client protocol, not a malformed
+    // request that might fail before Storage Rules are evaluated.
+    const boundary = 'urai-e2e-' + randomUUID().replaceAll('-', '');
+    const preamble = Buffer.from([
+      '--' + boundary,
+      'Content-Type: application/json; charset=utf-8',
+      '',
+      JSON.stringify({name: clientPath, contentType: 'audio/mpeg'}),
+      '--' + boundary,
+      'Content-Type: audio/mpeg',
+      '',
+      '',
+    ].join('\r\n'));
+    const multipart = Buffer.concat([
+      preamble, fixture, Buffer.from('\r\n--' + boundary + '--'),
+    ]);
     const upload = await fetch('http://' + storageHost + '/v0/b/' +
       encodeURIComponent(bucketName) + '/o?name=' + encodeURIComponent(clientPath), {
       method: 'POST',
-      headers: {authorization: 'Bearer ' + ownerToken, 'content-type': 'audio/mpeg'},
-      body: fixture,
+      headers: {
+        authorization: 'Firebase ' + ownerToken,
+        'x-goog-upload-protocol': 'multipart',
+        'content-type': 'multipart/related; boundary=' + boundary,
+      },
+      body: multipart,
     });
     await denial(upload, 'client-generated job output upload');
     const [clientCreated] = await bucket.file(clientPath).exists();
