@@ -48,6 +48,11 @@ done
 export GCLOUD_PROJECT="$PROJECT"
 export GOOGLE_CLOUD_PROJECT="$PROJECT"
 
+# Reject ignored emulator configuration before any package lifecycle or
+# dependency install can load it; preserve the post-build check too.
+ENV_FILE="functions/.env.$PROJECT"
+[[ ! -e "$ENV_FILE" ]] || die "Refusing to use preexisting local emulator function configuration"
+
 printf 'URAI_FOUR_EMULATOR_SOURCE %s\n' "$CURRENT_SHA"
 node --test scripts/owner_authority_rules.static.test.mjs
 pnpm install --frozen-lockfile
@@ -59,8 +64,7 @@ pnpm typecheck
 pnpm build
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || die "Original build modified reviewed source"
 
-ENV_FILE="functions/.env.$PROJECT"
-[[ ! -e "$ENV_FILE" ]] || die "Refusing to overwrite existing local emulator function configuration"
+[[ ! -e "$ENV_FILE" ]] || die "Frozen install/build unexpectedly created emulator configuration"
 cleanup() { rm -f -- "$ENV_FILE"; }
 trap cleanup EXIT
 printf '%s\n' \
@@ -72,6 +76,6 @@ printf '%s\n' \
 timeout --kill-after=30s 10m npx --yes "firebase-tools@$TOOLS_VERSION" \
   --project "$PROJECT" emulators:exec \
   --only auth,firestore,functions,storage \
-  "node scripts/urai-jobs-e2e.mjs && node --test scripts/user_authority_rules.firebase-emulator.test.mjs"
+  "node scripts/life-movies-cancellation-smoke.mjs && node scripts/urai-jobs-e2e.mjs && node --test scripts/user_authority_rules.firebase-emulator.test.mjs"
 
 printf 'URAI_FOUR_EMULATOR_ACCEPTANCE_PASS source=%s project=%s\n' "$CURRENT_SHA" "$PROJECT"
