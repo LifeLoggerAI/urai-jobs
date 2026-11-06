@@ -1,7 +1,7 @@
 import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 import { Storage } from "@google-cloud/storage";
 import { randomUUID } from "node:crypto";
-import { storytimeNarratorWriteIdentity, reserveStorytimeNarratorWrite, sealStorytimeNarratorWrite, noteStorytimeNarratorWriteCompensation } from "./storytime-write-ledger.js";
+import { storytimeNarratorWriteIdentity, reserveStorytimeNarratorWrite, assertStorytimeNarratorWriteActiveBeforeUpload, sealStorytimeNarratorWrite, noteStorytimeNarratorWriteCompensation } from "./storytime-write-ledger.js";
 
 const ttsClient = new TextToSpeechClient();
 const storage = new Storage();
@@ -205,6 +205,9 @@ export async function handleNarratorTts(job: any) {
   if (fileExtension !== expectedExtension) {
     throw new Error("narrator_audio_format_mismatch");
   }
+  // Consent/owner/lease may change during remote synthesis. Recheck just
+  // before the first Storage write, without claiming this is an atomic fence.
+  await assertStorytimeNarratorWriteActiveBeforeUpload(reservation);
   await file.save(audioBuffer, {
     preconditionOpts: { ifGenerationMatch: 0 },
     metadata: {
