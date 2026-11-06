@@ -103,7 +103,9 @@ function authorizedLive(identity: NarratorWriteIdentity, snapshots: any[]): bool
   const payload = record(job.payload);
   const consent = record(job.consent);
   const deleted = owner.dataRightsDeletionPendingCentralPrivacy;
-  const ownerClear = deleted === undefined || deleted === false;
+  const ownerClear = (deleted === undefined || deleted === false)
+    && (owner.disabled === undefined || owner.disabled === false)
+    && (owner.deletionPending === undefined || owner.deletionPending === false);
   const consentClear = blockSnap?.exists === false
     || (blockSnap?.exists === true && record(blockSnap.data()).active === false);
   return ownerClear && consentClear
@@ -120,12 +122,12 @@ function authorizedLive(identity: NarratorWriteIdentity, snapshots: any[]): bool
     && consent.policyVersion === identity.consentPolicyVersion
     && consent.decisionReceiptId === identity.consentReceiptId;
 }
-async function authoritySnapshots(transaction: any, identity: NarratorWriteIdentity, refsValue: ReturnType<typeof refs>) {
-  return Promise.all([
+function authoritySnapshots(transaction: any, _identity: NarratorWriteIdentity, refsValue: ReturnType<typeof refs>) {
+  return [
     transaction.get(refsValue.jobRef),
     transaction.get(refsValue.ownerRef),
     transaction.get(refsValue.consentRef),
-  ]);
+  ];
 }
 
 /** Pre-byte reservation: Firestore transactions conflict with concurrent
@@ -136,7 +138,7 @@ export async function reserveStorytimeNarratorWrite(identity: NarratorWriteIdent
   await r.database.runTransaction(async (transaction) => {
     const [reservation, ...snapshots] = await Promise.all([
       transaction.get(r.reservationRef),
-      ...await authoritySnapshots(transaction, identity, r),
+      ...authoritySnapshots(transaction, identity, r),
     ]);
     if (reservation.exists) throw new Error('storytime_narrator_write_replayed_reservation');
     if (!authorizedLive(identity, snapshots)) {
@@ -169,7 +171,7 @@ export async function sealStorytimeNarratorWrite(identity: NarratorWriteIdentity
   const accepted = await r.database.runTransaction(async (transaction) => {
     const [reservation, ...snapshots] = await Promise.all([
       transaction.get(r.reservationRef),
-      ...await authoritySnapshots(transaction, identity, r),
+      ...authoritySnapshots(transaction, identity, r),
     ]);
     const existing = record(reservation.data());
     if (!reservation.exists || existing.schema !== 'storytime-narrator-write-v1'
