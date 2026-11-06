@@ -265,6 +265,15 @@ function parseArtifactPath(value: unknown) {
   return { bucket, objectPath };
 }
 
+/** Private narrator outputs must identify the exact uploaded GCS object version. */
+function pinnedNarratorGeneration(value: unknown): string {
+  if (typeof value !== 'string' || !/^[1-9][0-9]{0,19}$/.test(value)
+    || !Number.isSafeInteger(Number(value))) {
+    throw new Error('narrator_artifact_generation_unverified');
+  }
+  return value;
+}
+
 async function artifactLocation(input: z.infer<typeof JobActionSchema>) {
   const job = await loadBoundJob(input);
   if (String(job.status) !== 'SUCCESS') throw new Error('job_not_ready_for_playback');
@@ -275,19 +284,53 @@ async function artifactLocation(input: z.infer<typeof JobActionSchema>) {
   if (!allowedBucket || location.bucket !== allowedBucket || !location.objectPath.startsWith(requiredPrefix)) {
     throw new Error('narrator_artifact_boundary_mismatch');
   }
-  return { job, output, location };
+  const generation = pinnedNarratorGeneration(output.artifactGeneration);
+  return { job, output, location, generation };
 }
 
 async function deleteOutput(input: z.infer<typeof JobActionSchema>) {
-  const { location } = await artifactLocation(input);
-  await getStorage().bucket(location.bucket).file(location.objectPath).delete({ ignoreNotFound: true });
-  const now = FieldValue.serverTimestamp();
-  await jobDoc(input.jobId).update({
-    output: FieldValue.delete(),
-    result: FieldValue.delete(),
-    outputDeletedAt: now,
-    outputDeletedBy: input.userId,
-    updatedAt: now,
+  const { location, generation } = await artifactLocation(input);
+  const bucket = getStorage().bucket(location.bucket);
+  // Never adopt the latest object at a stored path. A 412 is a changed version,
+  // not a successful delete. Missing legacy generation is rejected above.
+  try {
+    await bucket.file(location.objectPath, {
+      preconditionOpts: { ifGenerationMatch: generation },
+    }).delete();
+  } catch (error) {
+    if ((error as { code?: unknown })?.code === 412) throw new Error('narrator_artifact_generation_changed');
+    if ((error as { code?: unknown })?.code !== 404) throw error;
+  }
+  // A 404, or a fresh replacement immediately after deletion, is not proof
+  // of cleanup while the object path remains occupied.
+  try {
+    await bucket.file(location.objectPath).getMetadata();
+    throw new Error('narrator_artifact_generation_changed');
+  } catch (error) {
+    if ((error as { code?: unknown })?.code !== 404) throw error;
+  }
+  // Compare the currently stored result inside the update transaction. A
+  // concurrent job/output change must not be acknowledged as deleted.
+  await getFirestore().runTransaction(async (transaction) => {
+    const ref = jobDoc(input.jobId);
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new Error('job_not_found');
+    const current = assertBoundJob(snapshot.data() as BoundJob, input);
+    const output = current.output && typeof current.output === 'object'
+      ? current.output as Record<string, unknown> : {};
+    if (current.status !== 'SUCCESS'
+      || output.artifactPath !== `gs://${location.bucket}/${location.objectPath}`
+      || pinnedNarratorGeneration(output.artifactGeneration) !== generation) {
+      throw new Error('narrator_artifact_output_changed');
+    }
+    const now = FieldValue.serverTimestamp();
+    transaction.update(ref, {
+      output: FieldValue.delete(),
+      result: FieldValue.delete(),
+      outputDeletedAt: now,
+      outputDeletedBy: input.userId,
+      updatedAt: now,
+    });
   });
   return { deleted: true };
 }
@@ -352,6 +395,8 @@ export const storytimeNarratorBridge = onRequest({
       : code === 'idempotency_conflict' ? 409
       : code === 'job_not_ready_for_playback' ? 409
       : code === 'narrator_artifact_boundary_mismatch' ? 403
+      : code === 'narrator_artifact_generation_unverified' ? 409
+      : code === 'narrator_artifact_generation_changed' || code === 'narrator_artifact_output_changed' ? 409
       : code === 'narrator_artifact_missing' ? 409
       : code === 'elevenlabs_voice_id_required' ? 400
       : 400;
