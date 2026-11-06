@@ -10,6 +10,7 @@ import { deferLifeMovieJob, LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, LIFE_MOVIE
 import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJobTypes.js';
 import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
 import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
+import { cleanupRejectedNarratorOutput } from './rejectedNarratorOutput.js';
 
 // URAI Jobs worker routing audit markers.
 // asset/spatial/studio subsystem workers route: '/'
@@ -701,6 +702,47 @@ export const executeJob = onMessagePublished({
     });
 
     if (!finalized) {
+      // Worker bytes can outlive a revoked execution lease. Compensate only
+      // the rejected narrator output, and never delete an output now adopted
+      // by the durable job record. No anonymous path-based cleanup.
+      if (jobType === 'narrator.tts' && target) {
+        try {
+          const currentSnapshot = await jobRef.get();
+          const current = currentSnapshot.exists ? currentSnapshot.data() as Job : undefined;
+          const output = result && typeof result === 'object' && !Array.isArray(result)
+            ? result as Record<string, unknown> : {};
+          const adopted = current?.status === 'SUCCESS'
+            && [current?.output, current?.result].some((item) => {
+              if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+              const candidate = item as Record<string, unknown>;
+              return candidate.artifactPath === output.artifactPath
+                && candidate.artifactGeneration === output.artifactGeneration;
+            });
+          if (adopted) {
+            await appendJobLog(jobId, {
+              level: 'warn', source: 'executeJob',
+              message: 'Rejected narrator result is already referenced by the durable job; compensation skipped.',
+              metadata: { jobType },
+            });
+          } else {
+            const compensated = await cleanupRejectedNarratorOutput(job, result);
+            await appendJobLog(jobId, {
+              level: 'warn', source: 'executeJob',
+              message: 'Rejected narrator artifact compensation completed.',
+              metadata: { jobType, compensated },
+            });
+          }
+        } catch (compensationError) {
+          // Not a deletion acknowledgement: this is an outstanding orphan
+          // reconciliation obligation, including permission and 412 failures.
+          await appendJobLog(jobId, {
+            level: 'error', source: 'executeJob',
+            message: 'Rejected narrator artifact compensation unresolved; private cleanup requires reconciliation.',
+            metadata: { jobType, reason: compensationError instanceof Error ? compensationError.message : 'unknown' },
+          });
+          throw compensationError;
+        }
+      }
       await appendJobLog(jobId, {
         level: 'warn',
         source: 'executeJob',
