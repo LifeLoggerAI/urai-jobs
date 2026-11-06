@@ -70,7 +70,9 @@ test('external source pin and offline safety gates reject unsafe Jobs acceptance
       'RUNPOD_API_KEY', 'STRIPE_SECRET_KEY', 'OPENAI_API_KEY', 'GCLOUD_PROJECT',
       'GOOGLE_CLOUD_PROJECT', 'FIREBASE_PROJECT_ID', 'CLOUDSDK_CORE_PROJECT',
       'FIRESTORE_EMULATOR_HOST', 'FIREBASE_AUTH_EMULATOR_HOST',
-      'FIREBASE_STORAGE_EMULATOR_HOST', 'FUNCTIONS_EMULATOR_HOST',
+      'FIREBASE_STORAGE_EMULATOR_HOST', 'STORAGE_EMULATOR_HOST',
+      'FUNCTIONS_EMULATOR_HOST', 'FIREBASE_FUNCTIONS_EMULATOR_HOST',
+      'FIREBASE_CONFIG', 'GCS_BUCKET_NAME', 'FIREBASE_STORAGE_BUCKET', 'GOOGLE_CLOUD_STORAGE_BUCKET',
     ]) delete baseEnv[key]
     const invoke = (overrides = {}, directory = bin) => {
       const result = spawnSync('bash', [runner], {
@@ -113,6 +115,20 @@ test('external source pin and offline safety gates reject unsafe Jobs acceptance
     })
     await t.test('rejects preselected remote Storage emulator', () => {
       denied(invoke({ URAI_ACCEPTANCE_SHA: sha, FIREBASE_STORAGE_EMULATOR_HOST: 'example.invalid:9199' }), /FIREBASE_STORAGE_EMULATOR_HOST must be unset/)
+    })
+    await t.test('rejects preloaded Firebase production configuration', () => {
+      denied(invoke({ URAI_ACCEPTANCE_SHA: sha,
+        FIREBASE_CONFIG: JSON.stringify({ projectId: 'urai-4dc1d', storageBucket: 'urai-4dc1d.appspot.com' })
+      }), /FIREBASE_CONFIG must be absent/)
+    })
+    await t.test('rejects inherited production GCS bucket selector', () => {
+      denied(invoke({ URAI_ACCEPTANCE_SHA: sha, GCS_BUCKET_NAME: 'urai-private-prod' }), /GCS_BUCKET_NAME must be absent/)
+    })
+    await t.test('rejects preloaded nonlocal Admin SDK storage endpoint', () => {
+      denied(invoke({ URAI_ACCEPTANCE_SHA: sha, STORAGE_EMULATOR_HOST: 'https://storage.googleapis.com' }), /STORAGE_EMULATOR_HOST must be unset/)
+    })
+    await t.test('rejects preloaded nonlocal Functions emulator endpoint', () => {
+      denied(invoke({ URAI_ACCEPTANCE_SHA: sha, FIREBASE_FUNCTIONS_EMULATOR_HOST: 'outside.example.invalid:5001' }), /FIREBASE_FUNCTIONS_EMULATOR_HOST must be unset/)
     })
     await t.test('clean approved checkout reaches only the offline install stub', () => {
       const result = invoke({ URAI_ACCEPTANCE_SHA: sha })
