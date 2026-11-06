@@ -62,6 +62,11 @@ printf '%s\n' \
   'URAI_JOBS_PRIVACY_EVENT_TOKEN=e2e-privacy-event-token' \
   'URAI_STUDIO_JOBS_BRIDGE_TOKEN=r815-synthetic-bridge-token-no-prod' > "$ENV_FILE"
 export URAI_STUDIO_JOBS_BRIDGE_TOKEN=r815-synthetic-bridge-token-no-prod
+# Original FFmpeg cancellation/cleanup proof must pass on the actual source
+# before a real Studio->Jobs HTTP emulator receipt can be emitted.
+command -v ffmpeg >/dev/null || die 'ffmpeg missing'
+command -v ffprobe >/dev/null || die 'ffprobe missing'
+node scripts/life-movies-cancellation-smoke.mjs
 timeout --kill-after=30s 11m npx --yes firebase-tools@15.24.0 \
   --project "$PROJECT" emulators:exec --only auth,firestore,functions,storage \
   'node scripts/urai-jobs-e2e.mjs && node scripts/studio-jobs-real-bridge-emulator.mjs'
