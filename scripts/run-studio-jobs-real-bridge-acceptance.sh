@@ -22,14 +22,20 @@ for name in GCLOUD_PROJECT GOOGLE_CLOUD_PROJECT FIREBASE_PROJECT_ID CLOUDSDK_COR
   v="${!name:-}"
   [[ -z "$v" || "$v" == "$PROJECT" ]] || die "$name non-demo project"
 done
-for name in GOOGLE_APPLICATION_CREDENTIALS FIREBASE_TOKEN GITHUB_TOKEN GH_TOKEN RUNPOD_API_KEY GOOGLE_CLOUD_ACCESS_TOKEN GOOGLE_OAUTH_ACCESS_TOKEN; do
+for name in GOOGLE_APPLICATION_CREDENTIALS FIREBASE_TOKEN FIREBASE_CLI_TOKEN GITHUB_TOKEN GH_TOKEN RUNPOD_API_KEY GOOGLE_CLOUD_ACCESS_TOKEN GOOGLE_OAUTH_ACCESS_TOKEN STRIPE_SECRET_KEY OPENAI_API_KEY; do
   [[ -z "${!name:-}" ]] || die "$name credential present"
 done
-for name in FIRESTORE_EMULATOR_HOST FIREBASE_AUTH_EMULATOR_HOST FIREBASE_STORAGE_EMULATOR_HOST FUNCTIONS_EMULATOR_HOST; do
+for name in FIRESTORE_EMULATOR_HOST FIREBASE_AUTH_EMULATOR_HOST FIREBASE_STORAGE_EMULATOR_HOST STORAGE_EMULATOR_HOST FUNCTIONS_EMULATOR_HOST FIREBASE_FUNCTIONS_EMULATOR_HOST; do
   [[ -z "${!name:-}" ]] || die "$name must be unset"
 done
+# Firebase Admin and GCS clients may select a bucket or project independently
+# of the Firebase CLI --project flag. Reject inherited live configuration.
+for name in FIREBASE_CONFIG GCS_BUCKET_NAME FIREBASE_STORAGE_BUCKET GOOGLE_CLOUD_STORAGE_BUCKET; do
+  [[ -z "${!name:-}" ]] || die "$name must be absent"
+done
 STUDIO_DIR="${URAI_STUDIO_SOURCE_DIR:-}"
-[[ -n "$STUDIO_DIR" && -d "$STUDIO_DIR/.git" ]] || die 'external Studio checkout missing'
+[[ "$STUDIO_DIR" == /* && -d "$STUDIO_DIR" ]] || die 'absolute external Studio checkout required'
+[[ "$(git -C "$STUDIO_DIR" rev-parse --is-inside-work-tree 2>/dev/null)" == true ]] || die 'external Studio checkout missing'
 [[ "$(git -C "$STUDIO_DIR" rev-parse HEAD)" == "$STUDIO_SHA" ]] || die 'Studio SHA drift'
 [[ -z "$(git -C "$STUDIO_DIR" status --porcelain --untracked-files=all)" ]] || die 'Studio dirty'
 export URAI_EXPECTED_STUDIO_SHA="$STUDIO_SHA" URAI_STUDIO_SOURCE_DIR="$STUDIO_DIR"
@@ -39,6 +45,10 @@ pnpm install --frozen-lockfile
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || die 'Install changed Jobs source'
 pnpm --filter @urai-jobs/shared-types build
 pnpm --filter urai-jobs-functions build
+# The real HTTP bridge cannot certify a partial Functions-only build.
+pnpm typecheck
+pnpm build
+[[ -z "$(git status --porcelain --untracked-files=all)" ]] || die 'Build changed Jobs source'
 ENV_FILE="functions/.env.$PROJECT"
 [[ ! -e "$ENV_FILE" ]] || die 'Existing emulator environment file'
 cleanup() { rm -f "$ENV_FILE"; }
