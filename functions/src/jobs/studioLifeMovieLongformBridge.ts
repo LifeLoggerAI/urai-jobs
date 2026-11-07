@@ -495,6 +495,21 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
   const consentState = checkedJobConsentBlockState(consentSnapshot);
   if (consentState === 'unverified') throw new Error('life_movie_consent_block_unverified');
   const revoked = consentState === 'revoked';
+  if (revoked) {
+    // Revocation must not disclose segment/assembly identifiers or provenance
+    // and must not fetch private job records. Cancellation and deletion retain
+    // their separate fail-closed cleanup paths.
+    return {
+      planId,
+      status: 'REVOKED',
+      consentRevoked: true,
+      segmentCount: 0,
+      counts: {},
+      children: [],
+      assembly: null,
+      publicReleaseAuthorized: false,
+    };
+  }
   const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
   const assemblySnapshot = plan.assemblyJobId ? await jobDoc(plan.assemblyJobId).get() : null;
   const children = snapshots.map((snapshot, index) => {

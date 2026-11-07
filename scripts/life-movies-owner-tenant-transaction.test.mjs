@@ -151,6 +151,7 @@ test('long-form status transaction rechecks current owner before private segment
   let currentOwner = { ...fixture };
   let consentReads = 0;
   let segmentReads = 0;
+  let consentMode = 'clear';
   const txReads = [];
   const db = {
     collection(name) {
@@ -178,7 +179,7 @@ test('long-form status transaction rechecks current owner before private segment
     planRef: id => ({ kind: 'plan', id }),
     jobDoc: id => ({ kind: 'job', id }),
     consentBlockRef: () => ({ async get() { consentReads++; return snap({ blocked: false }); } }),
-    checkedJobConsentBlockState: () => 'clear',
+    checkedJobConsentBlockState: () => consentMode,
     deriveStatus: () => 'SUCCESS',
     assertLifeMovieOwnerTenantAuthorityClear: check,
   });
@@ -204,7 +205,27 @@ test('long-form status transaction rechecks current owner before private segment
     assert.equal(consentReads, 0, 'owner denial must precede consent detail');
     assert.equal(segmentReads, 0, 'owner denial must precede private segment metadata');
   }
+  // Consent revocation may expose only minimal revoked state, not child jobs,
+  // segment identifiers, assembly state or provenance digests.
   currentOwner = { ...fixture };
+  consentMode = 'revoked';
+  txReads.length = 0;
+  consentReads = 0;
+  segmentReads = 0;
+  const revokedStatus = await load();
+  assert.deepEqual(txReads, ['plan', 'owner']);
+  assert.equal(consentReads, 1);
+  assert.equal(segmentReads, 0, 'revoked status must not read private child jobs');
+  assert.equal(revokedStatus.status, 'REVOKED');
+  assert.equal(revokedStatus.consentRevoked, true);
+  assert.equal(revokedStatus.segmentCount, 0);
+  assert.deepEqual(Array.from(revokedStatus.children), []);
+  assert.equal(revokedStatus.assembly, null);
+  assert.equal(revokedStatus.publicReleaseAuthorized, false);
+  assert.equal('renderPlanDigest' in revokedStatus, false);
+  assert.equal('sceneTruthDigest' in revokedStatus, false);
+  assert.equal(Object.keys(revokedStatus.counts).length, 0);
+  consentMode = 'clear';
   currentPlan = { ...plan, tenantId: 'foreign' };
   txReads.length = 0;
   consentReads = 0;
