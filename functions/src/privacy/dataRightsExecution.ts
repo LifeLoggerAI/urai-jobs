@@ -202,6 +202,13 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
     queueDeletes += deleted.queueDeletes;
   }
 
+  // The rate-limit lock contains no raw owner UID but is still a linkable
+  // owner-derived record. Destroy it only after Jobs-owned jobs are
+  // reconciled and anonymized; never claim this completes ecosystem deletion.
+  const { jobCreateRateLimitLockId } = await import('../core/jobsReliability.js');
+  await db.collection('jobCreateRateLimitLocks')
+    .doc(jobCreateRateLimitLockId(ownerUid)).delete();
+
   // Jobs does not own Firebase Auth deletion, provider derivatives or the
   // rest of the ecosystem. Never claim global privacy completion.
   await db.collection('users').doc(ownerUid).set({
