@@ -30,6 +30,17 @@ const stale={uid:'caller',token:{role:'operator',uraiJobsAdmin:true}};
 const activeToken={uid:'caller',token:{role:'user'}};
 const active={uid:'caller',role:'operator',disabled:false,accountStatus:'active'};
 const denied=e=>e?.code==='permission-denied';
+test('R876: actual admin callable TypeScript parses and brace-loss mutant is rejected',()=>{
+ for(const path of ['functions/src/jobs/admin.ts','functions/src/jobs/admin-v2.ts']){
+  const f=new URL(path,root);
+  const parsed=ts.createSourceFile(f.pathname,readFileSync(f,'utf8'),ts.ScriptTarget.ES2022,true,ts.ScriptKind.TS);
+  assert.deepEqual(parsed.parseDiagnostics.map(d=>({code:d.code,message:ts.flattenDiagnosticMessageText(d.messageText,' ')})),[],path);
+ }
+ const malformed='export const bad = onCall(async () =>\\n const uid = 1;\\n});'.replaceAll('\\n','\n');
+ const parsed=ts.createSourceFile('malformed.ts',malformed,ts.ScriptTarget.ES2022,true,ts.ScriptKind.TS);
+ assert.ok(parsed.parseDiagnostics.some(d=>d.code===1005),'missing callback brace must trigger TS1005');
+});
+
 test('R875 authority helper rejects stale claim override, deleted user and deletion fence',()=>{
  assert.deepEqual(helper.checkedCurrentJobCaller(stale,{uid:'caller',role:'user',disabled:false}),{uid:'caller',operator:false});
  assert.deepEqual(helper.checkedCurrentJobCaller(activeToken,active),{uid:'caller',operator:true});
