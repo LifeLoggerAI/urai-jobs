@@ -24,7 +24,13 @@ function instantiate(existingBlock) {
   const records=new Map();if(existingBlock!==null)records.set('block',existingBlock);
   const DELETED=Symbol('FIRESTORE_FIELD_DELETE');
   const touched=[];let invalidationCalls=0;let cleanupFailuresLeft=0;
-  const receiptRef={id:'receipt',async set(value){touched.push({kind:'receiptSet',value});records.set('receipt',{...records.get('receipt'),...value});}};
+  const receiptRef={id:'receipt',async set(value){
+    touched.push({kind:'receiptSet',value});
+    const merged={...records.get('receipt'),...value};
+    // Mirror Firestore set(..., {merge:true}) FieldValue.delete() semantics.
+    for(const [key,item] of Object.entries(merged))if(item===DELETED)delete merged[key];
+    records.set('receipt',merged);
+  }};
   const db={async runTransaction(callback){
     const writes=[];
     const transaction={async get(ref){let data=records.get(ref.id);return {exists:data!==undefined,data:()=>data};},
@@ -119,4 +125,50 @@ test('successful event replay re-runs idempotent cleanup without overwriting the
   assert.equal(h.records.get('block'),block,'retry must keep exact existing block');
   assert.equal(h.invalidationCalls,2,'cleanup should be retryable after a lost response');
   assert.equal(h.touched.filter(x=>x.kind==='create'&&x.ref.id==='receipt').length,1);
+});
+
+
+test('R855: consent BLOCKED receipt never implies private derivative deletion complete',async()=>{
+  const h=instantiate(null);
+  const response=await h.invoke();
+  assert.equal(response.statusCode,200);
+  assert.equal(response.body.ok,true);
+  assert.equal(response.body.acknowledgement.status,'blocked');
+  assert.equal(response.body.acknowledgement.privateOutputDeletionAcknowledged,false);
+  assert.equal(response.body.acknowledgement.storageWriteFenceVerified,false);
+  assert.equal(response.body.acknowledgement.derivativeInvalidationStatus,'STORAGE_WRITE_FENCE_UNVERIFIED');
+  assert.equal(Object.hasOwn(response.body.acknowledgement,'derivativeInvalidationCompletedAt'),false);
+  const receipt=h.records.get('receipt');
+  assert.equal(receipt.privateOutputDeletionAcknowledged,false);
+  assert.equal(receipt.storageWriteFenceVerified,false);
+  assert.equal(receipt.derivativeInvalidationStatus,'STORAGE_WRITE_FENCE_UNVERIFIED');
+  assert.equal(receipt.derivativeInvalidationAttemptedAt,'server-time');
+  assert.equal(Object.hasOwn(receipt,'derivativeInvalidationCompletedAt'),false);
+  assert.equal(h.records.get('block').active,true);
+});
+
+test('R855: exact replay scrubs legacy false cleanup-complete field without deleting consent block',async()=>{
+  const h=instantiate(null);
+  assert.equal((await h.invoke()).statusCode,200);
+  h.records.get('receipt').derivativeInvalidationCompletedAt='legacy-unsafe-success';
+  const oldBlock=h.records.get('block');
+  const result=await h.invoke();
+  assert.equal(result.statusCode,200);
+  assert.equal(h.records.get('block'),oldBlock);
+  assert.equal(Object.hasOwn(h.records.get('receipt'),'derivativeInvalidationCompletedAt'),false);
+  assert.equal(Object.hasOwn(result.body.acknowledgement,'derivativeInvalidationCompletedAt'),false);
+  assert.equal(result.body.acknowledgement.privateOutputDeletionAcknowledged,false);
+  assert.equal(h.invalidationCalls,2,'original retry cleanup still runs');
+});
+
+test('R855: transient cleanup failure cannot return a private deletion acknowledgement',async()=>{
+  const h=instantiate(null);
+  h.failNextCleanup();
+  const response=await h.invoke();
+  assert.equal(response.statusCode,500);
+  assert.equal(h.records.get('block').active,true);
+  assert.equal(response.body.acknowledgement.privateOutputDeletionAcknowledged,false);
+  assert.equal(response.body.acknowledgement.storageWriteFenceVerified,false);
+  assert.equal(Object.hasOwn(h.records.get('receipt'),'derivativeInvalidationCompletedAt'),false);
+  assert.equal(Object.hasOwn(h.records.get('receipt'),'derivativeInvalidationAttemptedAt'),false);
 });

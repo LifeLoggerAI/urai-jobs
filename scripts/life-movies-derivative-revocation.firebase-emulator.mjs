@@ -185,7 +185,12 @@ try {
   const state = (await success.jobRef.get()).data();
   assert.equal(state?.derivativeAccessState, 'REVOKED');
   assert.equal(state?.output, undefined);
-  assert.ok(state?.outputDeletedAt != null);
+  assert.equal(state?.outputDeletedAt, undefined, 'point-in-time cleanup cannot claim durable deletion');
+  assert.ok(state?.outputCleanupObservedAt != null);
+  assert.equal(state?.privateOutputDeletionAcknowledged, false);
+  assert.equal(state?.storageWriteFenceVerified, false);
+  assert.equal(result.privateOutputDeletionAcknowledged, false);
+  assert.equal(result.storageWriteFenceVerified, false);
   checks.push('actual-storage-generation-deleted-before-job-output-clear');
 
   // Legacy/malformed job records can contain divergent aliases. Cleanup must
@@ -205,7 +210,10 @@ try {
     const cleaned = (await divergent.jobRef.get()).data();
     assert.equal(cleaned?.derivativeAccessState, 'REVOKED');
     assert.equal(cleaned?.output, undefined);
-    assert.ok(cleaned?.outputDeletedAt != null);
+    assert.equal(cleaned?.outputDeletedAt, undefined);
+    assert.ok(cleaned?.outputCleanupObservedAt != null);
+    assert.equal(cleaned?.privateOutputDeletionAcknowledged, false);
+    assert.equal(cleaned?.storageWriteFenceVerified, false);
     checks.push('conflicting-job-type-alias-fenced-' + kind);
   }
   const unrelatedSource = await seed('foreign-source',
@@ -290,8 +298,12 @@ try {
   const planOnlyRetry = await invalidateLifeMovieDerivativesForConsent(planOnlyEvent);
   assert.equal(planOnlyRetry.jobsInvalidated, 0);
   assert.equal(planOnlyRetry.plansInvalidated, 1);
-  assert.ok((await planOnlyRef.get()).data()?.outputDeletedAt != null,
-    'same-event retry can complete after explicit orphan reconciliation');
+  const planCleaned = (await planOnlyRef.get()).data();
+  assert.equal(planCleaned?.outputDeletedAt, undefined, 'storage write fence remains unverified');
+  assert.ok(planCleaned?.outputCleanupObservedAt != null);
+  assert.equal(planCleaned?.privateOutputDeletionAcknowledged, false);
+  assert.equal(planCleaned?.storageWriteFenceVerified, false);
+  assert.equal(planOnlyRetry.privateOutputDeletionAcknowledged, false);
   checks.push('plan-only-orphan-reconciliation-retry-completes');
 
   // Files in a different tenant/project are NOT eligible for destructive
