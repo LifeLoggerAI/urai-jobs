@@ -1,0 +1,94 @@
+(node:11) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> urai-jobs@ typecheck /workspace/scratch/80a9b7b328e5/jobs-current
+> npm run typecheck --prefix packages/shared-types --if-present && npm run typecheck --prefix functions && npm run typecheck --prefix web --if-present && npm run typecheck --prefix workers --if-present && npm run career-worker:typecheck && npm run private-source-worker:typecheck && npm run studio-worker:typecheck && npm run captured-reality-worker:typecheck && npm run private-life-model-index-provider:typecheck
+
+(node:24) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @urai-jobs/shared-types@1.0.0 typecheck
+> tsc -p tsconfig.json
+
+(node:50) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> typecheck
+> tsc -p tsconfig.json --noEmit
+
+(node:76) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> typecheck
+> tsc -p tsconfig.json
+
+(node:102) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> typecheck
+> tsc -p tsconfig.json --noEmit
+
+(node:128) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> career-worker:typecheck
+> npm run typecheck --prefix workers/career-worker
+
+(node:141) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> career-worker@1.0.0 typecheck
+> tsc -p tsconfig.json --noEmit
+
+(node:167) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> private-source-worker:typecheck
+> npm run typecheck --prefix workers/private-source-worker
+
+(node:180) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> private-source-worker@1.0.0 typecheck
+> tsc -p tsconfig.json --noEmit
+
+(node:206) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> studio-worker:typecheck
+> npm run typecheck --prefix workers/studio-worker
+
+(node:219) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> studio-worker@1.1.0 typecheck
+> node --check index.js
+
+(node:232) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:240) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> captured-reality-worker:typecheck
+> npm run typecheck --prefix workers/captured-reality-worker
+
+(node:253) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> captured-reality-worker@1.0.0 typecheck
+> node --check index.js
+
+(node:266) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:274) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> private-life-model-index-provider:typecheck
+> npm run typecheck --prefix workers/private-life-model-index-provider
+
+(node:287) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> private-life-model-index-provider@1.0.0 typecheck
+> tsc -p tsconfig.json --noEmit
+
