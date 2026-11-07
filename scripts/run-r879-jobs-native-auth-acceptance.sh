@@ -50,10 +50,7 @@ ENV_FILE="functions/.env.$PROJECT"
 # build. A tracked functions/.env.example is documentation, not configuration.
 assert_no_functions_local_configuration() {
   local found
-  found="$(find functions -maxdepth 1 \\( \\
-    -name '.env' -o -name '.env.*' -o \\
-    -name '.secret.local' -o -name '.runtimeconfig.json' \\
-  \\) ! -name '.env.example' -print -quit)"
+  found="$(find functions -maxdepth 1 \( -name '.env' -o -name '.env.*' -o -name '.secret.local' -o -name '.runtimeconfig.json' \) ! -name '.env.example' -print -quit)"
   [[ -z "$found" ]] || die "Functions local environment/secret configuration forbidden: $found"
 }
 assert_no_functions_local_configuration
