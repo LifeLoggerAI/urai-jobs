@@ -159,18 +159,25 @@ test('long-form status transaction rechecks current owner before private segment
       return { doc(uid) { return { kind: 'owner', uid }; } };
     },
     async runTransaction(fn) {
-      return fn({ async get(ref) {
-        txReads.push(ref.kind);
-        if (ref.kind === 'plan') return snap(currentPlan);
-        if (ref.kind === 'owner') { assert.equal(ref.uid, 'owner-1'); return snap(currentOwner); }
-        throw Error('unexpected transaction reference');
-      } });
+      return fn({
+        async get(ref) {
+          txReads.push(ref.kind);
+          if (ref.kind === 'plan') return snap(currentPlan);
+          if (ref.kind === 'owner') { assert.equal(ref.uid, 'owner-1'); return snap(currentOwner); }
+          if (ref.kind === 'consent') { consentReads++; return snap({ state: consentMode }); }
+          if (ref.kind === 'job') return snap({ status: 'SUCCESS' });
+          throw Error('unexpected Firestore transaction reference');
+        },
+        async getAll(...refs) {
+          txReads.push('children');
+          segmentReads++;
+          assert.equal(refs.length, 1);
+          return [snap({ status: 'SUCCESS' })];
+        },
+      });
     },
-    async getAll(...refs) {
-      segmentReads++;
-      assert.equal(refs.length, 1);
-      return [snap({ status: 'SUCCESS' })];
-    },
+    // The old nontransactional child-read path must never be reintroduced.
+    async getAll() { throw Error('private_child_read_outside_transaction'); },
   };
   const longformModule = { exports: {} };
   vm.runInNewContext(output + '\nmodule.exports.readPlanStatus = readPlanStatus;', {
@@ -178,8 +185,8 @@ test('long-form status transaction rechecks current owner before private segment
     getFirestore: () => db,
     planRef: id => ({ kind: 'plan', id }),
     jobDoc: id => ({ kind: 'job', id }),
-    consentBlockRef: () => ({ async get() { consentReads++; return snap({ blocked: false }); } }),
-    checkedJobConsentBlockState: () => consentMode,
+    consentBlockRef: () => ({ kind: 'consent', get() { throw Error('consent_read_outside_transaction'); } }),
+    checkedJobConsentBlockState: (snapshot) => snapshot.data()?.state ?? 'unverified',
     deriveStatus: () => 'SUCCESS',
     assertLifeMovieOwnerTenantAuthorityClear: check,
   });
@@ -187,7 +194,7 @@ test('long-form status transaction rechecks current owner before private segment
   const valid = await load();
   assert.equal(valid.status, 'SUCCESS');
   assert.equal(valid.segmentCount, 1);
-  assert.deepEqual(txReads, ['plan', 'owner']);
+  assert.deepEqual(txReads, ['plan', 'owner', 'consent', 'children']);
   assert.equal(consentReads, 1);
   assert.equal(segmentReads, 1);
 
@@ -213,7 +220,7 @@ test('long-form status transaction rechecks current owner before private segment
   consentReads = 0;
   segmentReads = 0;
   const revokedStatus = await load();
-  assert.deepEqual(txReads, ['plan', 'owner']);
+  assert.deepEqual(txReads, ['plan', 'owner', 'consent']);
   assert.equal(consentReads, 1);
   assert.equal(segmentReads, 0, 'revoked status must not read private child jobs');
   assert.equal(revokedStatus.status, 'REVOKED');
@@ -225,6 +232,14 @@ test('long-form status transaction rechecks current owner before private segment
   assert.equal('renderPlanDigest' in revokedStatus, false);
   assert.equal('sceneTruthDigest' in revokedStatus, false);
   assert.equal(Object.keys(revokedStatus.counts).length, 0);
+  // An unreadable consent block must fail before any child lookup.
+  consentMode = 'unverified';
+  txReads.length = 0;
+  consentReads = 0;
+  segmentReads = 0;
+  await assert.rejects(load(), /life_movie_consent_block_unverified/);
+  assert.deepEqual(txReads, ['plan', 'owner', 'consent']);
+  assert.equal(segmentReads, 0);
   consentMode = 'clear';
   currentPlan = { ...plan, tenantId: 'foreign' };
   txReads.length = 0;
