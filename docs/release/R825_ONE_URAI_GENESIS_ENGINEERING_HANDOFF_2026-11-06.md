@@ -4,6 +4,37 @@
 
 **Status: GENESIS PRODUCTION HOLD.** This is a source-grounded handoff, *not* an authorization, deployment, or runtime receipt. All branches below are DRAFT and must be rechecked before working because parallel Chalk workers may advance them.
 
+## LATEST VERIFIED GENESIS RELEASE LINE — 2026-11-07 UTC (supersedes stale checkpoints below)
+
+**This is the authoritative current delta.** Sections further down preserve evidence/history, not current release acceptance; do not advance production GO based on dated pod statuses or older branch heads.
+
+| System | Exact active source / evidence | Latest verified execution |
+|---|---|---|
+| Jobs/Studio | Jobs #310 `4755101eb1182ead9e89b5effcd91adef3e7b8aa`, Studio #179 `153d6c35557c66a8b9f8629778ca796b83730464` | Real frozen full Jobs build, four actual emulators, 2 synthetic FFmpeg MP4/cancel tests, native client owner/tenant Rules, real Studio→Jobs negative HTTP **PASS**; positive movie still disabled. |
+| Jobs handoff/CI | Jobs #312 `0fff966845a2db8ac11ddf96abff8b6a14edc464` before this documentation edit | The newer CI command requires native Rules; hosted GitHub Actions still fails before native execution; no R825 pass. |
+| Privacy original donor | #224 `f9e7786854f7ec70cab9a6e22d2c90ad95b834ed` | Older pinned real Jobs→Privacy callable **HTTP403 negative PASS** with local test identity; no Google-signed positive issuer. |
+| **Privacy unified R825** | [#227](https://github.com/LifeLoggerAI/urai-privacy/pull/227) `ccf5f5b2a2370ec25f5c32f37ce5d33e29ed2da9` | **Source-reviewed only**, two-parent merge of Privacy #225 issuer lifecycle guards and #226 updated Jobs donor denial. Six paths updated. Review-only C6 native test and actual Jobs→Privacy native denial now run consecutively in a *single* demo-only four-emulator session. 14/14 source invariants checked by GitHub readback; no frozen-install/native result on this head. |
+| **Spatial R819 original** | [#2063](https://github.com/LifeLoggerAI/urai-spatial/pull/2063) `ddaa673657dc8c03be9b86dc4a6082a487e5e749` | Existing stopped Runpod `yxc12hq3art2pr`: frozen install, original Functions build, Functions **1787/1787 PASS**, static Rules **21/21 PASS**, native owner Firestore Rules **30/30 PASS**, Tier1 typecheck PASS. Tier1 unit FAIL 0/7 in iOS source archive; downstream native four-service/consumer journey BLOCKED. |
+| **Spatial R820 preflight review** | [#2064](https://github.com/LifeLoggerAI/urai-spatial/pull/2064) `fdc6e9fd1b7370a675bbf1ab131b5dd2a39793e4` | One original exact-head runner change: preinstall Python3 executable/stdlib requirement, guarding all 7 original iOS archive tests that invoke `spawnSync('python3')`. Strong hypothesis (not proven) that earlier pod had no launchable Python3: Node TAP `expected:0 actual:~` matched local missing-executable reproduction. No R820 native test pass. |
+
+**NEXT WORKER MUST RECHECK HEADS FIRST.** The two new PRs are draft; do not re-merge identical histories or transfer old test receipts. Do not create a separate release branch just to create another R-number.
+
+### Immediate executable next steps
+
+1. **Run Privacy #227 exact native** on a connected authorized **cost-approved** runner, with clean Privacy SHA `ccf5f5b2a2370ec25f5c32f37ce5d33e29ed2da9`, independently clean Jobs donor `6a42de467d949871ae1c7da9c8d079ea7150ee5f` under `/tmp/...`, Node22/pnpm8.15.9/Java21 and frozen original packages. Original script:
+
+   `URAI_EXPECTED_PRIVACY_SHA=ccf5f5b2a2370ec25f5c32f37ce5d33e29ed2da9 URAI_JOBS_SOURCE_DIR=/tmp/urai-jobs-pinned bash scripts/run-r818-native-jobs-privacy-acceptance.sh`
+
+   It must pass the **original Jobs negative callable** and **original review-only scoped C6 Firestore** tests together in demo project. A synthetic review-only grant never authorizes a real render.
+
+2. **Spatial #2064 original exact-head run**: start only after confirming a Python3.8+ executable with stdlib `zipfile`, Java21, Node22 and pnpm10. Use `URAI_EXPECTED_HEAD=fdc6e9fd1b7370a675bbf1ab131b5dd2a39793e4 bash scripts/genesis-r799-exact-head-acceptance.sh`; capture original iOS archive test `spawnSync.error.code` if still null. The original native Firestore owner suite has already passed at parent #2063, but requires new-head acceptance; Tier1 build, original four-emulator first-memory/Replay, device acceptance still missing.
+
+3. **Real positive authorization and private delivery remain P0:** approved owner notice and selected-source rights C6, verified Google-signed Jobs service identity, least-privilege sole-writer GCS broker, effective IAM/old Cloud Run principals audit, revocation epoch/late-upload drain/deletion ACK, private owner-only Replay. The IAM/race review-only files from Jobs #261/#263/#264 are already in the actual Jobs R823 tree; inspect/reuse them, don't mistake their models for live effective IAM.
+4. **Consumer Genesis and institutions:** complete Home→Ascent→Life Map→Focus→Replay→Escape→Focus→Life Map→Home on real web/mobile/XR where supported, accessibility/trauma-aware/keyboard/haptic and media consent, CI/rulesets/frozen builds, production billing/service continuity, rollback and independent founder GO. Labs #260 six-system manifest is an older governance snapshot, not a green release receipt.
+
+**RELEASE HOLD.** All Privacy positive grants and private movie writes remain hard-off; no customer media, real secrets, IAM changes, production deployments or new paid compute were performed in the R825 continuation. Status evidence here is exact-source current as of this review, and later workers must independently recheck it.
+
+
 ## 1. The most important newly verified result — Jobs + Studio
 
 - **Jobs [PR #310](https://github.com/LifeLoggerAI/urai-jobs/pull/310)**, exact executed SHA `4755101eb1182ead9e89b5effcd91adef3e7b8aa`, Git tree `84565134a915670d0d3a463b6437dfa863bc2265`.
