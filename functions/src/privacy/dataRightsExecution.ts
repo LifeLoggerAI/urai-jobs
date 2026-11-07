@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { uploadToGcs } from '../core/gcs.js';
+import { jobCreateRateLimitLockId } from '../core/jobsReliability.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
 const MAX_OWNED_JOBS = 2_000;
@@ -205,7 +206,6 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
   // The rate-limit lock contains no raw owner UID but is still a linkable
   // owner-derived record. Destroy it only after Jobs-owned jobs are
   // reconciled and anonymized; never claim this completes ecosystem deletion.
-  const { jobCreateRateLimitLockId } = await import('../core/jobsReliability.js');
   await db.collection('jobCreateRateLimitLocks')
     .doc(jobCreateRateLimitLockId(ownerUid)).delete();
 
