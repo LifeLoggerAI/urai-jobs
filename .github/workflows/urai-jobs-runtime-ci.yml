@@ -188,7 +188,7 @@ jobs:
           # The callable E2E also tests real Storage Rules with Auth emulator ID
           # tokens against a Functions-created Firestore owner-bound job.
           # Never count a three-emulator run as the four-emulator release gate.
-          timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" --project demo-urai-jobs emulators:exec --only firestore,auth,functions,storage "node scripts/urai-jobs-e2e.mjs" > urai-jobs-emulator-e2e.log 2>&1
+          timeout --kill-after=30s 8m npx --yes "firebase-tools@${FIREBASE_TOOLS_VERSION}" --project demo-urai-jobs emulators:exec --only firestore,auth,functions,storage "node scripts/urai-jobs-e2e.mjs && node --test scripts/user_authority_rules.firebase-emulator.test.mjs" > urai-jobs-emulator-e2e.log 2>&1
           status=$?
           rm -f functions/.env.demo-urai-jobs
           trap - EXIT
