@@ -1,7 +1,7 @@
 import { getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { checkedCurrentJobCaller } from "./currentJobCallerAuthority.js";
+import { checkedCurrentJobCaller, boundJobMatchesCurrentOwnerScope } from "./currentJobCallerAuthority.js";
 
 if (getApps().length === 0) initializeApp();
 
@@ -40,9 +40,9 @@ export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
 
     const job = jobSnap.data() || {};
     const status = String(job.status || "");
-    const ownerUid = String(job.ownerUid || job.createdBy || "");
+    // Current tenant/org binding must match, not merely the owner UID.
 
-    if (!caller.operator && ownerUid !== caller.uid) {
+    if (!caller.operator && !boundJobMatchesCurrentOwnerScope(job, userSnap.data(), caller.uid)) {
       throw new HttpsError("permission-denied", "You do not have access to cancel this job.");
     }
 
