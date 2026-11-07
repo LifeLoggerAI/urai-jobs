@@ -65,6 +65,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // R880: transaction lock for all Jobs creation types by one owner.
+    // UID is SHA-256 domain-separated, and all Firebase clients are denied.
+    match /jobCreateRateLimitLocks/{lockId} {
+      allow read, write: if false;
+    }
+
     match /jobTerminalEventOutbox/{eventId} {
       allow read, write: if false;
     }
