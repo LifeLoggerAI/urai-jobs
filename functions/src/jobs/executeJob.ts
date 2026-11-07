@@ -11,6 +11,7 @@ import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJo
 import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
 import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
 import { cleanupRejectedNarratorOutput } from './rejectedNarratorOutput.js';
+import { currentJobOwnerEligibleForDispatch } from './currentJobCallerAuthority.js';
 
 // URAI Jobs worker routing audit markers.
 // asset/spatial/studio subsystem workers route: '/'
@@ -406,6 +407,34 @@ export const executeJob = onMessagePublished({
       return decision;
     }
 
+    // The lease alone does not certify current ownership. Revalidate the
+    // original owner within the same Firestore transaction that starts RUNNING.
+    const ownerUid = typeof job.ownerUid === 'string' ? job.ownerUid : '';
+    const currentOwner = ownerUid && ownerUid === ownerUid.trim()
+      ? await transaction.get(db.collection('users').doc(ownerUid))
+      : null;
+    if (!currentOwner?.exists || !currentJobOwnerEligibleForDispatch(job, currentOwner.data())) {
+      const queueSnapshot = await transaction.get(queueRef);
+      const queue = queueSnapshot.exists ? queueSnapshot.data() as JobQueueEntry : null;
+      if (!queue || queue.status !== 'LEASED' || queue.lease?.leaseToken !== leaseToken) {
+        return { action: 'ignore' as const, reason: 'queue-lease-mismatch' as const };
+      }
+      const now = FieldValue.serverTimestamp();
+      transaction.update(jobRef, {
+        status: 'PENDING',
+        lease: FieldValue.delete(),
+        updatedAt: now,
+      });
+      transaction.update(queueRef, {
+        status: 'PENDING',
+        availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+        lease: FieldValue.delete(),
+        updatedAt: now,
+        'dispatch.blockedReason': 'job_owner_authority_unavailable',
+      });
+      return { action: 'ignore' as const, reason: 'owner-authority-unavailable' as const };
+    }
+
     // A message may already have been leased before the admission gate was
     // enabled. Return it to the pending queue without consuming an attempt.
     if (deferLifeMovieJob(job)) {
@@ -522,7 +551,7 @@ export const executeJob = onMessagePublished({
 
   if (prepared.action !== 'start') {
     console.warn(`Ignoring execution message for ${jobId}: ${prepared.reason}`);
-    if (prepared.reason !== 'missing-job') {
+    if (prepared.reason !== 'missing-job' && prepared.reason !== 'owner-authority-unavailable') {
       await appendJobLog(jobId, {
         level: 'warn',
         source: 'executeJob',
