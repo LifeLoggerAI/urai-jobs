@@ -2,7 +2,7 @@
 
 **Mission:** Continue the real LifeLogger → LifeOS → One UrAi system already built since 2024. UrAi is the consumer experience; RuAi is the professional hub. Prove an owner-authorized, revocable, protected Life Movie inside the existing Home → Ascent → Life Map → Focus → Replay → Escape → Focus → Life Map → Home experience. **Do not collapse earlier built systems into “attempts.”**
 
-**Status: GENESIS PRODUCTION HOLD.** This is a source-grounded handoff, *not* an authorization, deployment, or runtime receipt. All branches below are DRAFT and must be rechecked before working because parallel Chalk workers may advance them.
+**Status: GENESIS PRODUCTION HOLD.** This handoff records executed source builds and tests with their limits; it does not authorize production or certify a complete private-media user journey. All branches below are DRAFT and must be rechecked before working because parallel Chalk workers may advance them.
 
 ## CURRENT — local full builds and runtime blockers (November 6, 2026 Central)
 
