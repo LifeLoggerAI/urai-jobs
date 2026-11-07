@@ -68,3 +68,35 @@ The actual P0 #252 cannot close until the service-account inventory is independe
 ## R866 crash-safety finding and narrow repair
 
 The first R865 version used `ftruncateSync` before replacing the same private report with a complete JSON document. A process kill, disk failure, or power loss between truncation and the next complete fsync could erase a previously recorded pre-request sentinel. R866 changes **only the review probe and its tests/docs**, using an append-only, exclusive-created (`0600`) JSONL journal with `fsync` after each event and a no-symlink manifest check. The command still exits 2 and cannot authorize production. The previous R865 source blob remains available as immutable history; native full-source and staging IAM observations still require independent execution at the **new** commit.
+
+## R867: ambiguous outcomes after a sent upload are potential leftover objects
+
+The R866 probe had an important blind spot: a timed-out or reset connection can occur
+**after** Cloud Storage commits the zero-byte object. Its prior classification
+`TRANSPORT_UNVERIFIED` did not mark cleanup and continued attempting other
+identities. An otherwise unexpected 2xx status outside 200/201 was also not
+classified as a possible successful mutation. The R867 review-only patch does
+not expand network scope; it treats all HTTP 2xx as `WRITE_WAS_ALLOWED` and
+marks `cleanupRequired=true`, while an ambiguous transport/status response is
+recorded as `TRANSPORT_UNVERIFIED` or `UNVERIFIED_RESPONSE` with the **same
+conservative cleanup-review flag**. No object existence is inferred from the
+ambiguous result. The probe stops after the first non-403 post-request result.
+Only a definite 403 permits the next approved staging identity to be probed.
+Credential minting failures occur before an upload and remain `TOKEN_UNAVAILABLE`
+without implying a created object.
+
+Every potentially unresolved sentinel path was already durably recorded by the
+R866 append-only private journal before network access. R867 ensures the
+resulting `HTTP_RESULT` also flags it for an independently authorized check.
+An HTTP 412 may indicate that a live version already existed, per Google Cloud
+Storage's `ifGenerationMatch=0` rules; it is **not** proof that this probe
+created bytes, and it requires generation-aware review, not blind deletion.
+No authorization to perform a cleanup or to inspect real customer objects is
+provided by the tool. `productionGo`, `effectiveIamVerified`,
+`storageWriteFenceVerified` and `privateOutputDeletionAcknowledged` remain false.
+
+Local R867 verification: `node --check` and `node --test` **19/19 PASS**;
+additional cases cover a simulated network reset after potential commit,
+all 2xx statuses, 401/412/429/500 ambiguous outcomes and a continuing
+403-only negative observation. These are mocked transport tests, **not** live
+GCS data-plane evidence or a full source-build certificate.
