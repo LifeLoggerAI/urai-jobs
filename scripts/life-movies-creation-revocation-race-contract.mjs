@@ -9,9 +9,11 @@ const compile=s=>ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.Com
 const block={exports:{}},blockCode=read('privacy/consentBlocks.ts');
 vm.runInNewContext(compile(blockCode.slice(blockCode.indexOf('export type JobConsentBlockState ='))),{module:block,exports:block.exports});
 const ownerModule={exports:{}};
-vm.runInNewContext(compile(read('privacy/ownerDeletionFence.ts')),{module:ownerModule,exports:ownerModule.exports});
+vm.runInNewContext(compile(read('privacy/ownerDeletionFence.ts')),{module:ownerModule,exports:ownerModule.exports,Object,Array,Error});
 const ownerFence=ownerModule.exports.assertOwnerDeletionFenceClear;
 assert.equal(typeof ownerFence,'function');
+const ownerTenantFence=ownerModule.exports.assertLifeMovieOwnerTenantAuthorityClear;
+assert.equal(typeof ownerTenantFence,'function');
 const clear={exists:false},present=x=>({exists:true,data:()=>({active:x})}),hash='a'.repeat(64);
 const input={userId:'owner-1',tenantId:'tenant-1',idempotencyKey:'key',consent:{purpose:'life-movie.render',policyVersion:'1.1.0',decisionReceiptId:hash},payload:{projectId:'p1',renderPlanDigest:hash,sceneTruthDigest:hash,sceneTruthReceiptRef:'receipt-1'}};
 function harness(mode,phase){
@@ -22,10 +24,10 @@ function harness(mode,phase){
  const db={collection:x=>ref(x),async runTransaction(fn){return fn({async get(r){reads.push(r.path);
   if(r.path.startsWith('users/')){
     if(phase==='owner-missing')return {exists:false};
-    return {exists:true,data:()=>({dataRightsDeletionPendingCentralPrivacy:phase==='owner-pending'?true:phase==='owner-malformed'?'false':false})};
+    return {exists:true,data:()=>({uid:'owner-1',tenantId:'tenant-1',accountStatus:'active',deleted:false,markedForDeletion:false,disabled:false,dataRightsDeletionPendingCentralPrivacy:phase==='owner-pending'?true:phase==='owner-malformed'?'false':false})};
   }
   if(r.path.startsWith('jobConsentBlocks/')){if(phase==='error')throw Error('synthetic_firestore_unavailable');return phase==='revoked'?present(true):phase==='malformed'?present('false'):clear;}return clear;},create(r,data){writes.push({path:r.path,data})}})}};
- const env={module:{exports:{}},Error,Date,Promise,createHash:()=>({update:()=>({digest:()=>hash})}),assertJobConsentBlockClear:block.exports.assertJobConsentBlockClear,assertOwnerDeletionFenceClear:ownerFence,
+ const env={module:{exports:{}},Error,Date,Promise,createHash:()=>({update:()=>({digest:()=>hash})}),assertJobConsentBlockClear:block.exports.assertJobConsentBlockClear,assertOwnerDeletionFenceClear:ownerFence,assertLifeMovieOwnerTenantAuthorityClear:ownerTenantFence,
  getFirestore:()=>db,consentBlockRef:()=>ref('jobConsentBlocks/owner-1'),requireLifeMovieCreationAdmission:async()=>{},
  assertStudioLifeMovieRenderPlanDigest:x=>x,assertLifeMovieTenantPaths:x=>x,assertStudioLifeMovieLongformPlanDigest:x=>x,assertLifeMovieLongformTenantPaths:x=>x,
  verifySceneTruthReceipt:()=>({expiresAt:'2030-01-01T00:00:00.000Z'}),assertSceneTruthReceiptValue:()=>({receiptId:'receipt',expiresAt:'2030-01-01T00:00:00.000Z'}),

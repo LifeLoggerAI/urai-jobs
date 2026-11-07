@@ -118,6 +118,7 @@ const ownerDeletion = load('jobs/lifeMovieOwnerDeletion.ts', {
   '../privacy/lifeMovieArtifactRefs.js': artifactRefs,
 });
 mocks['./lifeMovieOwnerDeletion.js'] = ownerDeletion;
+mocks['./rejectedNarratorOutput.js'] = load('jobs/rejectedNarratorOutput.ts', mocks);
 const short = load('jobs/studioLifeMovieBridge.ts', mocks).studioLifeMovieBridge;
 const long = load('jobs/studioLifeMovieLongformBridge.ts', mocks).studioLifeMovieLongformBridge;
 const tick = load('jobs/processQueueTick.ts', mocks).processQueueTick;
