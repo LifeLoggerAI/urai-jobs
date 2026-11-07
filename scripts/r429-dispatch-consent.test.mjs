@@ -81,6 +81,14 @@ function setup(snapshotState){
    ...consentModule.exports,
    consentBlockRef:()=>refs.consent,
  };
+ // Keep the real rejected-output validator in the executor import graph.
+ // These dispatch fixtures never authorize Storage compensation.
+ const rejectedOutputModule={exports:{}};
+ evalSource(compiled('jobs/rejectedNarratorOutput.ts'),rejectedOutputModule,k=>{
+   assert.equal(k,'firebase-admin/storage');
+   return {getStorage(){throw Error('dispatch fixture must not access Storage');}};
+ });
+ modules['./rejectedNarratorOutput.js']=rejectedOutputModule.exports;
  const load=path=>{
    const moduleObj={exports:{}};
    evalSource(compiled('jobs/'+path+'.ts'),moduleObj,k=>{
