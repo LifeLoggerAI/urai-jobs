@@ -479,67 +479,83 @@ async function loadPlan(planId: string, tenantId: string, userId: string) {
 
 async function readPlanStatus(planId: string, tenantId: string, userId: string) {
   const db = getFirestore();
-  // Long-form status cannot use a historical plan binding as current owner
-  // authority. Read both records in one Firestore read transaction before
-  // observing the consent block, segment states or provenance.
-  // Cancellation and deletion keep their separate cleanup paths.
-  const plan = await db.runTransaction(async (transaction) => {
+  // Read owner, plan, consent revocation and private child states from one
+  // Firestore transaction. Separate consent and job reads allowed a revocation
+  // committed between the two to disclose stale segment/provenance metadata.
+  return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(planRef(planId));
     if (!snapshot.exists) throw new Error('longform_plan_not_found');
-    const current = assertPlanOwner(snapshot.data() as StoredPlan, tenantId, userId);
+    const plan = assertPlanOwner(snapshot.data() as StoredPlan, tenantId, userId);
+    // The recorded child identifiers and segment indexes are themselves
+    // security boundaries; validate before requesting any child documents.
+    assertPlanStructure(plan, planId);
     const ownerSnapshot = await transaction.get(db.collection('users').doc(userId));
     assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, userId, tenantId);
-    return current;
-  });
-  const consentSnapshot = await consentBlockRef(plan.ownerUid, plan.consent.purpose).get();
-  const consentState = checkedJobConsentBlockState(consentSnapshot);
-  if (consentState === 'unverified') throw new Error('life_movie_consent_block_unverified');
-  const revoked = consentState === 'revoked';
-  if (revoked) {
-    // Revocation must not disclose segment/assembly identifiers or provenance
-    // and must not fetch private job records. Cancellation and deletion retain
-    // their separate fail-closed cleanup paths.
+    const consentSnapshot = await transaction.get(consentBlockRef(plan.ownerUid, plan.consent.purpose));
+    const consentState = checkedJobConsentBlockState(consentSnapshot);
+    if (consentState === 'unverified') throw new Error('life_movie_consent_block_unverified');
+    if (consentState === 'revoked') {
+      // No private child reads, segment identifiers or provenance on revoke.
+      return {
+        planId,
+        status: 'REVOKED',
+        consentRevoked: true,
+        segmentCount: 0,
+        counts: {},
+        children: [],
+        assembly: null,
+        publicReleaseAuthorized: false,
+      };
+    }
+    const childRefs = plan.childJobIds.map((jobId) => jobDoc(jobId));
+    const snapshots = childRefs.length ? await transaction.getAll(...childRefs) : [];
+    const assemblySnapshot = plan.assemblyJobId ? await transaction.get(jobDoc(plan.assemblyJobId)) : null;
+    if (snapshots.length !== plan.childJobIds.length) throw new Error('longform_child_not_found');
+    // The plan binding alone is not proof that the underlying job still
+    // belongs to the same owner, tenant, source, or approved consent.
+    for (const [index, childSnapshot] of snapshots.entries()) {
+      if (!childSnapshot.exists) throw new Error('longform_child_not_found');
+      const child = childSnapshot.data() as Job;
+      validateOwnedMovieJob(child as unknown as Record<string, unknown>,
+        boundPlanJob(plan, plan.childJobIds[index], 'segment'));
+      if (!isDeepStrictEqual(child.consent, plan.consent)) throw new Error('life_movie_owner_job_boundary_mismatch');
+    }
+    if (plan.assemblyJobId) {
+      if (!assemblySnapshot?.exists) throw new Error('longform_child_not_found');
+      const assembly = assemblySnapshot.data() as Job;
+      validateOwnedMovieJob(assembly as unknown as Record<string, unknown>,
+        boundPlanJob(plan, plan.assemblyJobId, 'assembly'));
+      if (!isDeepStrictEqual(assembly.consent, plan.consent)) throw new Error('life_movie_owner_job_boundary_mismatch');
+    }
+    const children = snapshots.map((childSnapshot, index) => {
+      const data = childSnapshot.exists ? childSnapshot.data() : undefined;
+      return {
+        jobId: plan.childJobIds[index],
+        status: (data?.status ?? 'DEAD') as JobStatus,
+        index: plan.segments[index]?.index ?? index,
+      };
+    });
+    const statuses = children.map((child) => child.status);
+    const counts = statuses.reduce<Record<string, number>>((result, status) => {
+      result[status] = (result[status] ?? 0) + 1;
+      return result;
+    }, {});
     return {
       planId,
-      status: 'REVOKED',
-      consentRevoked: true,
-      segmentCount: 0,
-      counts: {},
-      children: [],
-      assembly: null,
+      status: deriveStatus(plan, statuses),
+      consentRevoked: false,
+      segmentCount: children.length,
+      counts,
+      children,
+      renderPlanDigest: plan.renderPlanDigest,
+      sceneTruthDigest: plan.sceneTruthDigest,
+      assembly: plan.assemblyJobId ? {
+        jobId: plan.assemblyJobId,
+        status: assemblySnapshot?.exists ? String(assemblySnapshot.data()?.status || 'DEAD') : 'DEAD',
+      } : null,
       publicReleaseAuthorized: false,
     };
-  }
-  const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
-  const assemblySnapshot = plan.assemblyJobId ? await jobDoc(plan.assemblyJobId).get() : null;
-  const children = snapshots.map((snapshot, index) => {
-    const data = snapshot.exists ? snapshot.data() : undefined;
-    return {
-      jobId: plan.childJobIds[index],
-      status: (data?.status ?? 'DEAD') as JobStatus,
-      index: plan.segments[index]?.index ?? index,
-    };
   });
-  const statuses = children.map((child) => child.status);
-  const counts = statuses.reduce<Record<string, number>>((result, status) => {
-    result[status] = (result[status] ?? 0) + 1;
-    return result;
-  }, {});
-  return {
-    planId,
-    status: revoked ? 'REVOKED' : deriveStatus(plan, statuses),
-    consentRevoked: revoked,
-    segmentCount: children.length,
-    counts,
-    children,
-    renderPlanDigest: plan.renderPlanDigest,
-    sceneTruthDigest: plan.sceneTruthDigest,
-    assembly: plan.assemblyJobId ? {
-      jobId: plan.assemblyJobId,
-      status: assemblySnapshot?.exists ? String(assemblySnapshot.data()?.status || 'DEAD') : 'DEAD',
-    } : null,
-    publicReleaseAuthorized: false,
-  };
 }
 
 async function assemblePlan(planId: string, tenantId: string, userId: string) {
