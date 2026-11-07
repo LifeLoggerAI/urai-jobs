@@ -47,7 +47,6 @@ for (const marker of [
   "status: 'CANCELLED'",
   "consent: input.consent",
   "publicReleaseAuthorized: false",
-  "consentRevoked: revoked",
   "await assertPlanConsentActive(plan)",
   "async function resumePlan(",
   "['FAILED', 'DEAD', 'CANCELLED']",
@@ -69,6 +68,20 @@ for (const marker of [
   "assemblyResumed",
   "assemblyCancelled",
 ]) assert.ok(bridge.includes(marker), `long-form orchestrator missing ${marker}`)
+const statusBody = bridge.slice(bridge.indexOf('async function readPlanStatus('),
+  bridge.indexOf('async function assemblePlan('));
+const revokedStart = statusBody.indexOf("if (consentState === 'revoked')");
+const childReadStart = statusBody.indexOf('const childRefs');
+assert.ok(revokedStart >= 0 && childReadStart > revokedStart,
+  'revoked status must return before private child reads');
+const revokedBody = statusBody.slice(revokedStart, childReadStart);
+for (const marker of ["status: 'REVOKED'", 'consentRevoked: true',
+  'segmentCount: 0', 'children: []', 'assembly: null']) {
+  assert.ok(revokedBody.includes(marker), 'revoked status must redact: ' + marker);
+}
+assert.doesNotMatch(revokedBody, /renderPlanDigest|sceneTruthDigest|jobDoc\(|transaction\.getAll\(/);
+assert.ok(statusBody.slice(childReadStart).includes('consentRevoked: false'),
+  'only current clear consent may project private child status');
 assert.ok(bridge.includes('deleteOwnedMovieOutputs(owner)'), 'long-form cleanup must use the owner-bound deletion')
 assert.ok(ownerDeletion.includes('output: FieldValue.delete()') && ownerDeletion.includes('result: FieldValue.delete()'),
   'owner deletion must scrub both output aliases')
