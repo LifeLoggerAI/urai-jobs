@@ -174,6 +174,7 @@ test('long-form status transaction rechecks current owner before private segment
   let consentReads = 0;
   let segmentReads = 0;
   let consentMode = 'clear';
+  let afterChildRead = null;
   const txReads = [];
   const db = {
     collection(name) {
@@ -191,7 +192,9 @@ test('long-form status transaction rechecks current owner before private segment
     async getAll(...refs) {
       segmentReads++;
       assert.equal(refs.length, 1);
-      return [snap(currentChild)];
+      const selected = snap(currentChild);
+      if (afterChildRead) afterChildRead();
+      return [selected];
     },
   };
   const longformModule = { exports: {} };
@@ -211,8 +214,8 @@ test('long-form status transaction rechecks current owner before private segment
   const valid = await load();
   assert.equal(valid.status, 'SUCCESS');
   assert.equal(valid.segmentCount, 1);
-  assert.deepEqual(txReads, ['plan', 'owner']);
-  assert.equal(consentReads, 1);
+  assert.deepEqual(txReads, ['plan', 'owner', 'plan', 'owner']);
+  assert.equal(consentReads, 2);
   assert.equal(segmentReads, 1);
 
   for (const blocked of [
@@ -276,6 +279,43 @@ test('long-form status transaction rechecks current owner before private segment
     assert.equal(segmentReads, 1);
   }
   currentChild = child;
+  // Simulate a live authority mutation immediately after Firestore returns
+  // child metadata, before the final revalidation transaction and consent.
+  const races = [
+    { change() { currentOwner = { ...fixture, disabled: true }; }, pattern: BLOCK },
+    { change() { currentOwner = { ...fixture, tenantId: 'foreign' }; }, pattern: BLOCK },
+    { change() { currentPlan = { ...plan, renderPlanDigest: 'c'.repeat(64) }; },
+      pattern: /longform_plan_changed/ },
+    { change() { currentPlan = { ...plan, consent: { ...plan.consent, decisionReceiptId: 'other' } }; },
+      pattern: /longform_plan_changed/ },
+    { change() { consentMode = 'revoked'; }, redacted: true },
+    { change() { consentMode = 'unverified'; }, pattern: /life_movie_consent_block_unverified/ },
+  ];
+  for (const race of races) {
+    currentPlan = plan;
+    currentOwner = { ...fixture };
+    currentChild = child;
+    consentMode = 'clear';
+    afterChildRead = race.change;
+    txReads.length = 0;
+    consentReads = 0;
+    segmentReads = 0;
+    if (race.redacted) {
+      const result = await load();
+      assert.equal(result.status, 'REVOKED');
+      assert.equal(result.segmentCount, 0);
+      assert.deepEqual(Array.from(result.children), []);
+      assert.equal(result.assembly, null);
+      assert.equal('renderPlanDigest' in result, false);
+      assert.equal('sceneTruthDigest' in result, false);
+    } else {
+      await assert.rejects(load(), race.pattern);
+    }
+    assert.equal(segmentReads, 1, 'race simulated only after private child read');
+  }
+  afterChildRead = null;
+  consentMode = 'clear';
+  currentOwner = { ...fixture };
   currentPlan = { ...plan, assemblyJobId: assemblyId };
   const validAssembly = await load();
   assert.equal(validAssembly.assembly?.status, 'SUCCESS');
