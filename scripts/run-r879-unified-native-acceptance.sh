@@ -39,7 +39,7 @@ check_blob 'scripts/life-movie-generation-evidence-matrix.test.mjs' '39d73f87371
 check_blob 'scripts/life-movies-review-only-physical-broker.firebase-emulator.mjs' 'd7cf29fbfd70ffcdf942543a5da7478d9f6888eb'
 check_blob 'scripts/run-r854-private-storage-p0-negative-native.sh' '19d078daf110c1ac633aa535b583918a43e568a6'
 check_blob 'workers/studio-worker/private-output-write-authority.js' 'ea6b25f3949ec2c17f65a9da68fa9cf937e86e76'
-check_blob 'functions/src/jobs/currentJobCallerAuthority.ts' 'cd60013bcd188dc59d97a48ac1cce02f7625508d'
+check_blob 'functions/src/jobs/currentJobCallerAuthority.ts' 'c01eda8d879c695b6642196f124550b3dd743c0a'
 check_blob 'functions/src/jobs/admin.ts' '67cb0e314a47d7ca075e9cb3c17b3b0d29cbe3e5'
 check_blob 'functions/src/jobs/admin-v2.ts' '84104f5697314a3bccda87d538ad1c5e21a26070'
 check_blob 'functions/src/jobs/getJob.ts' 'fd7d04c76907bbd819568336f2c237b8819d738a'
@@ -51,7 +51,7 @@ check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d53
 check_blob 'functions/src/jobs/createJob.ts' '03433ab35ce0374cae58dac572985c75c3abf3b3'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' 'f8550771dd33ac82bd639179387ef816609d3607'
+check_blob 'package.json' 'c10d20f5abf8a68d754c241364fc708d57ce92be'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
@@ -120,6 +120,11 @@ grep -q '# pass 18' "$OUT/current_callable_18_source.log" || hold '18 current-ca
 # R881 synthetic current owner / tenant scoped callable acceptance (not native Firebase).
 stage owner_callable_16_source 120s node --experimental-strip-types --test scripts/r881-owner-scope-callable-behavior.test.mjs
 grep -q '# pass 16' "$OUT/owner_callable_16_source.log" || hold '16 owner-callable behavioral source tests not recorded'
+
+# R882 malformed tenant/org record policy regression (source-only, not Firebase IAM).
+check_blob 'scripts/r882-malformed-owner-scope.test.mjs' '59fa0441adbd960b322994a9db921932609f6460'
+stage malformed_scope_17_source 120s node --experimental-strip-types --test scripts/r882-malformed-owner-scope.test.mjs
+grep -q '# pass 17' "$OUT/malformed_scope_17_source.log" || hold 'Malformed scope source acceptance missing'
 
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \
