@@ -487,6 +487,10 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
     const snapshot = await transaction.get(planRef(planId));
     if (!snapshot.exists) throw new Error('longform_plan_not_found');
     const current = assertPlanOwner(snapshot.data() as StoredPlan, tenantId, userId);
+    // Validate the entire stored plan before reading any owner-private child
+    // metadata. A corrupt or oversized historic child list must fail closed
+    // rather than triggering unbounded Firestore status fan-out.
+    assertPlanStructure(current, planId);
     const ownerSnapshot = await transaction.get(db.collection('users').doc(userId));
     assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, userId, tenantId);
     return current;
