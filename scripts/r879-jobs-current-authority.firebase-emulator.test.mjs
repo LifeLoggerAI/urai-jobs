@@ -123,7 +123,7 @@ after(async () => {
       // The original R879 teardown previously left these synthetic lock
       // records behind. Reuse exactly the engine's current derivation.
       const quotaLockId = createHash('sha256')
-        .update('urai-jobs:create-rate-limit-lock:v1\\n' + uid)
+        .update('urai-jobs:create-rate-limit-lock:v1' + String.fromCharCode(10) + uid)
         .digest('hex');
       await db.collection('jobCreateRateLimitLocks').doc(quotaLockId).delete();
       await db.collection('users').doc(uid).delete();
