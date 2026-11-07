@@ -136,41 +136,47 @@ test('Studio status rechecks owner and tenant within one Firestore read transact
   assert.deepEqual(reads, ['job'], 'missing job must not read owner profile');
 });
 
-test('long-form status reads owner, consent and private job metadata in one transaction', async () => {
+test('long-form status atomically checks owner, consent and original job bindings', async () => {
   const source = fs.readFileSync(path.resolve('functions/src/jobs/studioLifeMovieLongformBridge.ts'), 'utf8');
   const ast = ts.createSourceFile('studioLifeMovieLongformBridge.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const decl = name => ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
   const owner = decl('assertPlanOwner');
   const reader = decl('readPlanStatus');
-  const makeChild = decl('makeChildId');
-  const makeAssembly = decl('makeAssemblyJobId');
-  const validatePlan = decl('assertPlanStructure');
-  assert.ok([owner, reader, makeChild, makeAssembly, validatePlan].every(fn => fn?.body),
-    'long-form status must retain exact original owner, plan structure and child binding functions');
-  const output = ts.transpileModule([owner, makeChild, makeAssembly, validatePlan, reader]
-    .map(fn => fn.getText(ast)).join('\n'), {
+  const structural = ['makeChildId', 'makeAssemblyJobId', 'assertPlanStructure', 'boundPlanJob']
+    .map(name => decl(name));
+  assert.ok(owner?.body && reader?.body && structural.every(node => node?.body),
+    'original long-form structure, owner, job binding and status functions must exist');
+  const deletionSource = fs.readFileSync(path.resolve('functions/src/jobs/lifeMovieOwnerDeletion.ts'), 'utf8');
+  const deletionAst = ts.createSourceFile('lifeMovieOwnerDeletion.ts', deletionSource,
+    ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const validator = deletionAst.statements.find(node =>
+    ts.isFunctionDeclaration(node) && node.name?.text === 'validateOwnedMovieJob');
+  const safeSegment = deletionAst.statements.find(node =>
+    ts.isVariableStatement(node) && node.declarationList.declarations.some(declaration =>
+      declaration.name.getText(deletionAst) === 'SAFE_SEGMENT'));
+  assert.ok(validator?.body && safeSegment, 'actual Jobs owner-bound validator must exist');
+  const sourceFunctions = [safeSegment.getText(deletionAst),
+    validator.getText(deletionAst).replace(/^export\s+/, ''),
+    ...structural.map(node => node.getText(ast)), owner.getText(ast), reader.getText(ast)];
+  const output = ts.transpileModule(sourceFunctions.join('\n'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const planId = 'synthetic-plan-1';
   const childId = 'lms_' + createHash('sha256').update(planId + ':0000').digest('hex').slice(0, 32) + '_0000';
-  const plan = { planId, tenantId: 'tenant-1', ownerUid: 'owner-1',
-    consent: { purpose: 'life-movie.render' }, childJobIds: [childId],
-    segments: [{ jobId: childId, index: 0 }],
-    renderPlanDigest: 'a'.repeat(64), sceneTruthDigest: 'b'.repeat(64) };
   const assemblyId = 'lma_' + createHash('sha256').update(planId + ':assembly-v1').digest('hex').slice(0, 40);
+  const consent = { purpose: 'life-movie.render', policyVersion: '1.0.0', decisionReceiptId: 'synthetic-receipt' };
+  const plan = { planId, tenantId: 'tenant-1', ownerUid: 'owner-1', projectId: 'synthetic-project',
+    consent, childJobIds: [childId], segments: [{ index: 0, jobId: childId }],
+    renderPlanDigest: 'a'.repeat(64), sceneTruthDigest: 'b'.repeat(64) };
   const child = { jobId: childId, ownerUid: 'owner-1', tenantId: 'tenant-1',
-    sourceSystem: 'urai-studio', jobType: 'studio.render.video',
-    execution: { rootJobId: planId, parentJobId: planId },
-    consent: plan.consent, status: 'SUCCESS' };
-  const assembly = { jobId: assemblyId, ownerUid: 'owner-1', tenantId: 'tenant-1',
-    sourceSystem: 'urai-studio', jobType: 'studio.assemble.video',
-    execution: { rootJobId: planId, parentJobId: planId },
-    consent: plan.consent, status: 'SUCCESS' };
+    sourceSystem: 'urai-studio', jobType: 'studio.render.video', status: 'SUCCESS',
+    payload: { projectId: plan.projectId },
+    execution: { rootJobId: planId, parentJobId: planId }, consent };
+  const assembly = { ...child, jobId: assemblyId, jobType: 'studio.assemble.video' };
   let currentChild = child;
   let currentAssembly = assembly;
   let currentPlan = plan;
   let currentOwner = { ...fixture };
-  let assemblyReads = 0;
   let consentReads = 0;
   let segmentReads = 0;
   let consentMode = 'clear';
@@ -181,39 +187,34 @@ test('long-form status reads owner, consent and private job metadata in one tran
       return { doc(uid) { return { kind: 'owner', uid }; } };
     },
     async runTransaction(fn) {
-      return fn({ async get(ref) {
-        if (ref.kind === 'consent') { consentReads++; return snap({ blocked: false }); }
-        if (ref.kind === 'job') {
-          assemblyReads++; assert.equal(ref.id, assemblyId); return snap(currentAssembly);
-        }
-        txReads.push(ref.kind);
-        if (ref.kind === 'plan') return snap(currentPlan);
-        if (ref.kind === 'owner') { assert.equal(ref.uid, 'owner-1'); return snap(currentOwner); }
-        throw Error('unexpected transaction reference');
-      }, async getAll(...refs) {
-        segmentReads++;
-        assert.equal(refs.length, 1);
-        assert.equal(refs[0].kind, 'job');
-        assert.equal(refs[0].id, childId);
-        return [snap(currentChild)];
-      } });
+      return fn({
+        async get(ref) {
+          txReads.push(ref.kind);
+          if (ref.kind === 'plan') return snap(currentPlan);
+          if (ref.kind === 'owner') { assert.equal(ref.uid, 'owner-1'); return snap(currentOwner); }
+          if (ref.kind === 'consent') { consentReads++; return snap({ state: consentMode }); }
+          if (ref.kind === 'job') return snap(currentAssembly);
+          throw Error('unexpected Firestore transaction reference');
+        },
+        async getAll(...refs) {
+          txReads.push('children');
+          segmentReads++;
+          assert.equal(refs.length, 1);
+          return [snap(currentChild)];
+        },
+      });
     },
-    async getAll() {
-      throw Error('private status read escaped the owner/consent transaction');
-    },
+    // The old nontransactional child-read path must never be reintroduced.
+    async getAll() { throw Error('private_child_read_outside_transaction'); },
   };
   const longformModule = { exports: {} };
   vm.runInNewContext(output + '\nmodule.exports.readPlanStatus = readPlanStatus;', {
     module: longformModule, Object, Array, Promise, Error, Set, createHash, isDeepStrictEqual,
     getFirestore: () => db,
     planRef: id => ({ kind: 'plan', id }),
-    jobDoc: id => ({ kind: 'job', id, async get() {
-      throw Error('assembly read escaped the owner/consent transaction');
-    } }),
-    consentBlockRef: () => ({ kind: 'consent', async get() {
-      throw Error('consent read escaped the owner/consent transaction');
-    } }),
-    checkedJobConsentBlockState: () => consentMode,
+    jobDoc: id => ({ kind: 'job', id }),
+    consentBlockRef: () => ({ kind: 'consent', get() { throw Error('consent_read_outside_transaction'); } }),
+    checkedJobConsentBlockState: (snapshot) => snapshot.data()?.state ?? 'unverified',
     deriveStatus: () => 'SUCCESS',
     assertLifeMovieOwnerTenantAuthorityClear: check,
   });
@@ -221,7 +222,7 @@ test('long-form status reads owner, consent and private job metadata in one tran
   const valid = await load();
   assert.equal(valid.status, 'SUCCESS');
   assert.equal(valid.segmentCount, 1);
-  assert.deepEqual(txReads, ['plan', 'owner']);
+  assert.deepEqual(txReads, ['plan', 'owner', 'consent', 'children']);
   assert.equal(consentReads, 1);
   assert.equal(segmentReads, 1);
 
@@ -239,35 +240,65 @@ test('long-form status reads owner, consent and private job metadata in one tran
     assert.equal(consentReads, 0, 'owner denial must precede consent detail');
     assert.equal(segmentReads, 0, 'owner denial must precede private segment metadata');
   }
+  // Consent revocation may expose only minimal revoked state, not child jobs,
+  // segment identifiers, assembly state or provenance digests.
   currentOwner = { ...fixture };
-  // Revocation is a minimal state, not permission to read child documents or
-  // return private segment IDs, render digests, or assembly metadata.
   consentMode = 'revoked';
   txReads.length = 0;
   consentReads = 0;
   segmentReads = 0;
-  assemblyReads = 0;
-  const redacted = await load();
-  assert.equal(redacted.status, 'REVOKED');
-  assert.equal(redacted.consentRevoked, true);
-  assert.equal(redacted.segmentCount, 0);
-  assert.deepEqual(Array.from(redacted.children), []);
-  assert.equal(redacted.assembly, null);
-  assert.equal(redacted.publicReleaseAuthorized, false);
-  assert.equal('renderPlanDigest' in redacted, false);
-  assert.equal('sceneTruthDigest' in redacted, false);
-  assert.equal(Object.keys(redacted.counts).length, 0);
-  assert.deepEqual(txReads, ['plan', 'owner']);
+  const revokedStatus = await load();
+  assert.deepEqual(txReads, ['plan', 'owner', 'consent']);
   assert.equal(consentReads, 1);
+  assert.equal(segmentReads, 0, 'revoked status must not read private child jobs');
+  assert.equal(revokedStatus.status, 'REVOKED');
+  assert.equal(revokedStatus.consentRevoked, true);
+  assert.equal(revokedStatus.segmentCount, 0);
+  assert.deepEqual(Array.from(revokedStatus.children), []);
+  assert.equal(revokedStatus.assembly, null);
+  assert.equal(revokedStatus.publicReleaseAuthorized, false);
+  assert.equal('renderPlanDigest' in revokedStatus, false);
+  assert.equal('sceneTruthDigest' in revokedStatus, false);
+  assert.equal(Object.keys(revokedStatus.counts).length, 0);
+  // An unreadable consent block must fail before any child lookup.
+  consentMode = 'unverified';
+  txReads.length = 0;
+  consentReads = 0;
+  segmentReads = 0;
+  await assert.rejects(load(), /life_movie_consent_block_unverified/);
+  assert.deepEqual(txReads, ['plan', 'owner', 'consent']);
   assert.equal(segmentReads, 0);
-  assert.equal(assemblyReads, 0);
   consentMode = 'clear';
-  // Existing children can be replaced or reconsented after the parent plan
-  // was created. The status boundary must reject a foreign live job.
+  currentPlan = plan;
+  currentChild = { ...child, ownerUid: 'cross-owner' };
+  txReads.length = 0;
+  consentReads = 0;
+  await assert.rejects(load(), /life_movie_owner_job_boundary_mismatch/);
+  assert.deepEqual(txReads, ['plan', 'owner', 'consent', 'children'],
+    'foreign child must be rejected before status disclosure');
+  currentChild = { ...child, consent: { ...consent, decisionReceiptId: 'forged-consent' } };
+  await assert.rejects(load(), /life_movie_owner_job_boundary_mismatch/);
+  currentChild = child;
+  currentPlan = { ...plan, assemblyJobId: assemblyId };
+  const validAssembly = await load();
+  assert.equal(validAssembly.assembly?.status, 'SUCCESS');
+  currentAssembly = { ...assembly, tenantId: 'cross-tenant' };
+  await assert.rejects(load(), /life_movie_owner_job_boundary_mismatch/);
+  currentAssembly = assembly;
+  currentPlan = { ...plan, childJobIds: ['foreign-child'] };
+  await assert.rejects(load(), /longform_plan_structure_invalid/);
+  currentPlan = plan;
+  currentChild = null;
+  await assert.rejects(load(), /longform_child_not_found/);
+  currentChild = child;
+
+  // Preserve the parallel R832 worker's full tamper matrix, adapted to
+  // R831's atomic Firestore read path and shared owner-bound validator.
   const tamperedChildren = [
     { ...child, jobId: 'other-child' },
     { ...child, ownerUid: 'foreign-owner' },
     { ...child, tenantId: 'foreign-tenant' },
+    { ...child, payload: { ...child.payload, projectId: 'foreign-project' } },
     { ...child, sourceSystem: 'foreign-studio' },
     { ...child, jobType: 'studio.assemble.video' },
     { ...child, execution: { rootJobId: 'foreign-plan', parentJobId: planId } },
@@ -275,25 +306,24 @@ test('long-form status reads owner, consent and private job metadata in one tran
     { ...child, consent: { ...plan.consent, decisionReceiptId: 'forged' } },
     { ...child, consent: null },
   ];
+  currentPlan = plan;
   for (const foreign of tamperedChildren) {
-    currentPlan = plan;
     currentChild = foreign;
     txReads.length = 0;
     consentReads = 0;
     segmentReads = 0;
-    await assert.rejects(load(), /longform_child_status_boundary_mismatch/);
-    assert.deepEqual(txReads, ['plan', 'owner']);
+    await assert.rejects(load(), /life_movie_owner_job_boundary_mismatch/);
+    assert.deepEqual(txReads, ['plan', 'owner', 'consent', 'children']);
+    assert.equal(consentReads, 1);
     assert.equal(segmentReads, 1);
   }
   currentChild = child;
   currentPlan = { ...plan, assemblyJobId: assemblyId };
-  const validAssembly = await load();
-  assert.equal(validAssembly.assembly?.status, 'SUCCESS');
-  assert.ok(assemblyReads > 0);
   const badAssemblies = [
     { ...assembly, jobId: 'other-assembly' },
     { ...assembly, ownerUid: 'foreign-owner' },
     { ...assembly, tenantId: 'foreign-tenant' },
+    { ...assembly, payload: { ...assembly.payload, projectId: 'foreign-project' } },
     { ...assembly, sourceSystem: 'foreign-studio' },
     { ...assembly, jobType: 'studio.render.video' },
     { ...assembly, execution: { rootJobId: 'foreign-plan', parentJobId: planId } },
@@ -302,12 +332,16 @@ test('long-form status reads owner, consent and private job metadata in one tran
   ];
   for (const foreign of badAssemblies) {
     currentAssembly = foreign;
-    await assert.rejects(load(), /longform_assembly_status_boundary_mismatch/);
+    txReads.length = 0;
+    consentReads = 0;
+    segmentReads = 0;
+    await assert.rejects(load(), /life_movie_owner_job_boundary_mismatch/);
+    assert.deepEqual(txReads, ['plan', 'owner', 'consent', 'children', 'job']);
+    assert.equal(consentReads, 1);
+    assert.equal(segmentReads, 1);
   }
   currentAssembly = assembly;
   currentPlan = plan;
-  // Malformed persisted plans must not cause unbounded or mismatched
-  // per-child Firestore lookups, even if their historical owner matches.
   const malformed = [
     { ...plan, childJobIds: [], segments: [] },
     { ...plan, childJobIds: [childId, childId], segments: [
@@ -326,10 +360,11 @@ test('long-form status reads owner, consent and private job metadata in one tran
     consentReads = 0;
     segmentReads = 0;
     await assert.rejects(load(), /longform_plan_structure_invalid/);
-    assert.deepEqual(txReads, ['plan'], 'invalid child plan must fail before owner metadata');
-    assert.equal(consentReads, 0, 'invalid plan must not read consent details');
-    assert.equal(segmentReads, 0, 'invalid plan must not read child-job metadata');
+    assert.deepEqual(txReads, ['plan'], 'invalid plan must fail before owner metadata');
+    assert.equal(consentReads, 0);
+    assert.equal(segmentReads, 0);
   }
+  currentPlan = plan;
   currentPlan = { ...plan, tenantId: 'foreign' };
   txReads.length = 0;
   consentReads = 0;
