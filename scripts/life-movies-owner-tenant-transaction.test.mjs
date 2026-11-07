@@ -136,7 +136,7 @@ test('Studio status rechecks owner and tenant within one Firestore read transact
   assert.deepEqual(reads, ['job'], 'missing job must not read owner profile');
 });
 
-test('long-form status transaction rechecks current owner before private segment reads', async () => {
+test('long-form status reads owner, consent and private job metadata in one transaction', async () => {
   const source = fs.readFileSync(path.resolve('functions/src/jobs/studioLifeMovieLongformBridge.ts'), 'utf8');
   const ast = ts.createSourceFile('studioLifeMovieLongformBridge.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const decl = name => ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
@@ -182,16 +182,24 @@ test('long-form status transaction rechecks current owner before private segment
     },
     async runTransaction(fn) {
       return fn({ async get(ref) {
+        if (ref.kind === 'consent') { consentReads++; return snap({ blocked: false }); }
+        if (ref.kind === 'job') {
+          assemblyReads++; assert.equal(ref.id, assemblyId); return snap(currentAssembly);
+        }
         txReads.push(ref.kind);
         if (ref.kind === 'plan') return snap(currentPlan);
         if (ref.kind === 'owner') { assert.equal(ref.uid, 'owner-1'); return snap(currentOwner); }
         throw Error('unexpected transaction reference');
+      }, async getAll(...refs) {
+        segmentReads++;
+        assert.equal(refs.length, 1);
+        assert.equal(refs[0].kind, 'job');
+        assert.equal(refs[0].id, childId);
+        return [snap(currentChild)];
       } });
     },
-    async getAll(...refs) {
-      segmentReads++;
-      assert.equal(refs.length, 1);
-      return [snap(currentChild)];
+    async getAll() {
+      throw Error('private status read escaped the owner/consent transaction');
     },
   };
   const longformModule = { exports: {} };
@@ -200,9 +208,11 @@ test('long-form status transaction rechecks current owner before private segment
     getFirestore: () => db,
     planRef: id => ({ kind: 'plan', id }),
     jobDoc: id => ({ kind: 'job', id, async get() {
-      assemblyReads++; assert.equal(id, assemblyId); return snap(currentAssembly);
+      throw Error('assembly read escaped the owner/consent transaction');
     } }),
-    consentBlockRef: () => ({ async get() { consentReads++; return snap({ blocked: false }); } }),
+    consentBlockRef: () => ({ kind: 'consent', async get() {
+      throw Error('consent read escaped the owner/consent transaction');
+    } }),
     checkedJobConsentBlockState: () => consentMode,
     deriveStatus: () => 'SUCCESS',
     assertLifeMovieOwnerTenantAuthorityClear: check,
