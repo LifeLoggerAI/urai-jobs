@@ -1,0 +1,139 @@
+{
+  "schema_version": "1.0",
+  "audit": "R847 high-risk exact-byte batch 04",
+  "repo": "LifeLoggerAI/urai-jobs",
+  "source_commit": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+  "source_tree": "3e74b4b0d6e10df15f9ccd747e9e936218b7fc25",
+  "scope": "Remaining 15 of 65 high-risk file instances; R845 manifest order 50..64",
+  "method": "Fetch exact source-commit content as base64; decode original raw bytes; recompute Git blob SHA-1 with header and SHA-256 content digest; compare byte length, connector SHA and manifest SHA. Self-tests for SHA-256 abc and empty Git blob passed.",
+  "counts": {
+    "attempted": 15,
+    "verified": 15,
+    "failed": 0,
+    "verified_bytes": 121277,
+    "unique_verified_blob_ids": 15
+  },
+  "records": [
+    {
+      "path": "functions/src/privacy/lifeMovieTrustedAdmission.ts",
+      "expected_git_blob_sha": "2391b7428cb0a6090a1c0ceea4ab3065ed66ebc7",
+      "actual_git_blob_sha": "2391b7428cb0a6090a1c0ceea4ab3065ed66ebc7",
+      "byte_length": 2903,
+      "sha256": "2b683302f0ea2d45308429307fdb8a73c62f550e499e40caea0a2d8f4884ebcb",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieWriteReservationsReview.ts",
+      "expected_git_blob_sha": "88126bbbcff6188b9c3d8f1aadda84b33404dacd",
+      "actual_git_blob_sha": "88126bbbcff6188b9c3d8f1aadda84b33404dacd",
+      "byte_length": 14412,
+      "sha256": "0a6b676ebd067243776f640a071dd723d9be2edf2609e084b18d7071da7807b6",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/ownerDeletionFence.ts",
+      "expected_git_blob_sha": "25952da83f79f121ce12819dba3452fee6706df6",
+      "actual_git_blob_sha": "25952da83f79f121ce12819dba3452fee6706df6",
+      "byte_length": 4220,
+      "sha256": "9907b859af7013edd29edcb7ff0ca6d17735b5b8651ff4a07d898660163fe047",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/run-deploy-publish-workflow.sh",
+      "expected_git_blob_sha": "ce0cefc8e65baadcc9d3339c0ccd4b6703d809a6",
+      "actual_git_blob_sha": "ce0cefc8e65baadcc9d3339c0ccd4b6703d809a6",
+      "byte_length": 1668,
+      "sha256": "458045175a6b35b0e126d04f2475ddb52abe7976ea55998db28401b73d3f4ccd",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/run-four-emulator-acceptance.contract.test.mjs",
+      "expected_git_blob_sha": "efa1d4dc6e4f550f9a81424e77027a025db9667c",
+      "actual_git_blob_sha": "efa1d4dc6e4f550f9a81424e77027a025db9667c",
+      "byte_length": 9463,
+      "sha256": "0c379d12d3d08a8d5fe3fcf0b0a520caad55c9faa23cce395d23a4ed05fc34a9",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/run-four-emulator-acceptance.sh",
+      "expected_git_blob_sha": "a0860c014eeddd4e73ac691d057d61a98012b42f",
+      "actual_git_blob_sha": "a0860c014eeddd4e73ac691d057d61a98012b42f",
+      "byte_length": 4818,
+      "sha256": "096717eec40280552f7693f601263d00d08191ac1ff1672797c764aff66628d3",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/run-studio-jobs-real-bridge-acceptance.contract.test.mjs",
+      "expected_git_blob_sha": "a5c307bc06fba41c3a5ed559e11c1cef17bc338b",
+      "actual_git_blob_sha": "a5c307bc06fba41c3a5ed559e11c1cef17bc338b",
+      "byte_length": 6862,
+      "sha256": "eb61efc37a9fe03b4e155ccb6246e7a78d53925846d675ebb0413fbff34d40f2",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/run-studio-jobs-real-bridge-acceptance.sh",
+      "expected_git_blob_sha": "317f9d2183af6138af42dcd4718e8db7bf6e4822",
+      "actual_git_blob_sha": "317f9d2183af6138af42dcd4718e8db7bf6e4822",
+      "byte_length": 4522,
+      "sha256": "589e7e7bfe4a1fcdf3262283f231f07872b4502ac152695a5568f0bc6e8c6031",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/run-worker.mjs",
+      "expected_git_blob_sha": "d1375ea6e18c25f1f4e6125c94045fb58cef5fc7",
+      "actual_git_blob_sha": "d1375ea6e18c25f1f4e6125c94045fb58cef5fc7",
+      "byte_length": 13738,
+      "sha256": "20f8681f303bb0445789aeec3a8198df37f2fed24996fcb10965f05b8240dccb",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "storage.rules",
+      "expected_git_blob_sha": "eedbbe45545ecd09d8867c9d702cd00bb3b7d7be",
+      "actual_git_blob_sha": "eedbbe45545ecd09d8867c9d702cd00bb3b7d7be",
+      "byte_length": 1420,
+      "sha256": "704e384c9b368eea1beeb71d62ed8c0826252646c635ab55a4dd48d750fcb183",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/studio-worker/Dockerfile",
+      "expected_git_blob_sha": "3d7a86326f5386f50aaf27ad15e58c93a3d5c128",
+      "actual_git_blob_sha": "3d7a86326f5386f50aaf27ad15e58c93a3d5c128",
+      "byte_length": 313,
+      "sha256": "0fc3ba096948c6fcff6af625791fc1eba4bdd849a4f299267345d2e72c2f3567",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/studio-worker/index.js",
+      "expected_git_blob_sha": "1b0e1fbcc76b4e9fc2fbd58863a33723f4513973",
+      "actual_git_blob_sha": "1b0e1fbcc76b4e9fc2fbd58863a33723f4513973",
+      "byte_length": 54633,
+      "sha256": "5c85b47920ee2624d9c5f3c026b96b50c9508d3a8cdde6e9f2e8efaa0543ef48",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/studio-worker/package.json",
+      "expected_git_blob_sha": "488dcfac1973b2f0d2b618d4a8b9c9220e4b1871",
+      "actual_git_blob_sha": "488dcfac1973b2f0d2b618d4a8b9c9220e4b1871",
+      "byte_length": 362,
+      "sha256": "83adee44dbfa14c14783c618715318a9ed0f93ddf91520474fc39ab63e1ad07e",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/studio-worker/private-output-cleanup.js",
+      "expected_git_blob_sha": "17296935941ec1491bbe31f9aeb9a2542e023d63",
+      "actual_git_blob_sha": "17296935941ec1491bbe31f9aeb9a2542e023d63",
+      "byte_length": 932,
+      "sha256": "aac5a66a63a195df3b921cbca8937ce54862a1f7d6b135b007c294c1fcfc211b",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/studio-worker/private-output-write-authority.js",
+      "expected_git_blob_sha": "ea6b25f3949ec2c17f65a9da68fa9cf937e86e76",
+      "actual_git_blob_sha": "ea6b25f3949ec2c17f65a9da68fa9cf937e86e76",
+      "byte_length": 1011,
+      "sha256": "a8a1a6fa86574bed3f1e2d9c7db305a12b3f238c066d37c023be199720cf6075",
+      "status": "VERIFIED"
+    }
+  ],
+  "limitations": "Source-byte attestation only, not a production test or security certification."
+}
