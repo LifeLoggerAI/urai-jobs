@@ -39,9 +39,9 @@ assert.ok(!process.env.FUNCTIONS_EMULATOR_ORIGIN ||
 const app = initializeApp({ projectId: PROJECT }, 'r879-' + randomUUID());
 const auth = getAuth(app), db = getFirestore(app);
 const prefix = randomUUID().replaceAll('-', '').slice(0, 18);
-const ids = { owner: 'r879-owner-' + prefix, operator: 'r879-operator-' + prefix };
+const ids = { owner: 'r879-owner-' + prefix, operator: 'r879-operator-' + prefix, foreign: 'r879-foreign-' + prefix };
 const credentials = new Map(), touchedJobs = new Set();
-let ownerToken, operatorToken, originalId;
+let ownerToken, operatorToken, foreignToken, originalId;
 const oldKey = 'r879-' + prefix + '-original';
 function profile(uid, role, extra = {}) {
   return { uid, role, disabled: false, deleted: false, markedForDeletion: false,
@@ -65,7 +65,7 @@ async function tokenFor(uid) {
   return body.idToken;
 }
 async function invoke(name, token, data) {
-  assert.match(name, /^(getJob|getJobStatus|cancelJob|createJob|listJobsV2|listJobLogsV2|retryJobV2)$/);
+  assert.match(name, /^(getJob|getJobStatus|cancelJob|createJob|listJobs|listJobLogs|retryJob|listJobsV2|listJobLogsV2|retryJobV2)$/);
   const response = await fetch('http://' + FUNCTIONS_HOST + '/' + PROJECT + '/us-central1/' + name, {
     method: 'POST', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
     body: JSON.stringify({ data }), signal: AbortSignal.timeout(20000),
@@ -94,8 +94,10 @@ before(async () => {
   await auth.setCustomUserClaims(ids.operator, { role: 'operator', roles: ['operator'], uraiJobsAdmin: true });
   await db.collection('users').doc(ids.owner).set(profile(ids.owner, 'user'));
   await db.collection('users').doc(ids.operator).set(profile(ids.operator, 'operator'));
+  await db.collection('users').doc(ids.foreign).set(profile(ids.foreign, 'user', { permissions: [] }));
   ownerToken = await tokenFor(ids.owner);
   operatorToken = await tokenFor(ids.operator); // intentionally retained after demotion
+  foreignToken = await tokenFor(ids.foreign);
 });
 after(async () => {
   await Promise.allSettled(Object.values(ids).map(uid => db.collection('users').doc(uid).delete()));
@@ -125,6 +127,12 @@ test('R879 original native Auth/Firestore/Functions caller and owner-scope accep
     assert.equal(retry.deduplicated, true);
     assert.equal((await db.collection('jobs').where('ownerUid', '==', ids.owner).get()).size, 1);
   });
+  await t.test('ordinary foreign owner cannot read or cancel another owner job', async () => {
+    await denied('getJob', foreignToken, { jobId: originalId });
+    await denied('getJobStatus', foreignToken, { jobId: originalId });
+    await denied('cancelJob', foreignToken, { jobId: originalId });
+    await denied('createJob', foreignToken, requestFor('foreign-no-permission', 'r879-' + prefix + '-foreign'));
+  });
   await t.test('demoted operator holding earlier token cannot read, cancel, list logs or retry foreign jobs', async () => {
     assert.equal((await succeeds('getJob', operatorToken, { jobId: originalId })).job.ownerUid, ids.owner);
     await db.collection('users').doc(ids.operator).update({ role: 'user', disabled: true, permissions: [] });
@@ -132,6 +140,8 @@ test('R879 original native Auth/Firestore/Functions caller and owner-scope accep
       ['getJob', { jobId: originalId }], ['cancelJob', { jobId: originalId }],
       ['listJobsV2', {}], ['listJobLogsV2', { jobId: originalId }],
       ['retryJobV2', { jobId: originalId }],
+      ['listJobs', {}], ['listJobLogs', { jobId: originalId }],
+      ['retryJob', { jobId: originalId }],
     ]) await denied(method, operatorToken, data);
     assert.equal((await db.collection('jobs').doc(originalId).get()).data().status, 'PENDING');
   });
