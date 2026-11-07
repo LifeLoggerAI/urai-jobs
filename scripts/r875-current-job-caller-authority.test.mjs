@@ -10,7 +10,7 @@ const root=new URL('../', import.meta.url);
 const requireFunctions=createRequire(new URL('../functions/package.json', import.meta.url));
 const ts=requireFunctions('typescript');
 class HttpsError extends Error{constructor(code,message){super(message);this.code=code;}}
-function compile(path){const f=new URL(path,root);return ts.transpileModule(readFileSync(f,'utf8'),{fileName:f.pathname,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;}
+function compile(path){const f=new URL(path,root);const result=ts.transpileModule(readFileSync(f,'utf8'),{fileName:f.pathname,reportDiagnostics:true,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}});const diagnostics=(result.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);if(diagnostics.length)throw Error('TypeScript parse failed for '+path+': '+diagnostics.map(d=>'TS'+d.code+' '+ts.flattenDiagnosticMessageText(d.messageText,' ')).join('; '));return result.outputText;}
 function runModule(source,stubs){const mod={exports:{}};new Function('require','module','exports',source)((name)=>{if(!(name in stubs))throw Error('unexpected module '+name);return stubs[name];},mod,mod.exports);return mod.exports;}
 const helper=runModule(compile('functions/src/jobs/currentJobCallerAuthority.ts'),{});
 function fixture({status='RUNNING',ownerUid='victim',user={uid:'caller',role:'user',disabled:true}}={}){
