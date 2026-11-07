@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { assessReviewOnlyGenerationEvidence as assess,
-  canonicalReviewOnlyStorageGeneration as canonical } from '../functions/src/privacy/lifeMovieGenerationEvidenceReview.ts';
+  canonicalReviewOnlyStorageGeneration as canonical,
+  assertReviewOnlyHistoricalObservationClaim as assertClaim } from '../functions/src/privacy/lifeMovieGenerationEvidenceReview.ts';
 
 test('R872: valid uint64 and no loss of large decimal generations', () => {
   for (const v of ['1','9007199254740993','18446744073709551615'])
@@ -41,4 +42,20 @@ test('R872: verified original live generation is idempotent', () => {
 
 test('R872: malformed claimed generations fail closed before provenance evaluation', () => {
   assert.throws(()=>assess('01',null,true,true),/generation_invalid/);
+});
+
+test('R873: historical caller-claimed mismatches stay generation conflicts', () => {
+  assert.throws(()=>assertClaim('16','15','tenants/a/file','tenants/a/file'),
+    /generation_conflict/);
+  assert.throws(()=>assertClaim('15','15','tenants/a/file','tenants/b/file'),
+    /generation_conflict/);
+  assert.throws(()=>assertClaim('15',null,'tenants/a/file','tenants/a/file'),
+    /generation_conflict/);
+  assert.doesNotThrow(()=>assertClaim('15','15','tenants/a/file','tenants/a/file'));
+});
+
+test('R873: live path replacement is classified separately after exact claim binding', () => {
+  assert.doesNotThrow(()=>assertClaim('15','15','tenants/a/file','tenants/a/file'));
+  assert.throws(()=>assess('15','16',false,true),/generation_replaced_unverified/);
+  assert.deepEqual(assess('15',null,true,true),{storageCurrentlyObserved:false});
 });
