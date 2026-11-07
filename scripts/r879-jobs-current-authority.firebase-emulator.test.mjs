@@ -4,7 +4,7 @@
  * Not a GCS IAM, positive C6, private rendering or release certificate.
  */
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { before, after, test } from 'node:test';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -119,6 +119,13 @@ after(async () => {
       const bindings = await db.collection('jobIdempotencyBindings')
         .where('ownerUid', '==', uid).get();
       for (const binding of bindings.docs) await binding.ref.delete();
+      // R883: R880 writes one SHA-256 domain-separated quota lock per owner.
+      // The original R879 teardown previously left these synthetic lock
+      // records behind. Reuse exactly the engine's current derivation.
+      const quotaLockId = createHash('sha256')
+        .update('urai-jobs:create-rate-limit-lock:v1\\n' + uid)
+        .digest('hex');
+      await db.collection('jobCreateRateLimitLocks').doc(quotaLockId).delete();
       await db.collection('users').doc(uid).delete();
       await auth.deleteUser(uid);
     } catch (error) {
