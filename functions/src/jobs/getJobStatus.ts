@@ -5,7 +5,7 @@ import type { User } from '@urai-jobs/shared-types';
 import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { jobDoc } from '../core/firestore-paths.js';
-import { checkedCurrentJobCaller } from './currentJobCallerAuthority.js';
+import { checkedCurrentJobCaller, boundJobMatchesCurrentOwnerScope } from './currentJobCallerAuthority.js';
 
 const GetJobStatusSchema = z.object({
   jobId: z.string().min(1),
@@ -44,7 +44,7 @@ async function handler(data: unknown, context: CallableContext, _user: User) {
     if (!job) {
       throw httpsError('not-found', 'Job not found.');
     }
-    if (!caller.operator && job.ownerUid !== caller.uid) {
+    if (!caller.operator && !boundJobMatchesCurrentOwnerScope(job, userSnapshot.data(), caller.uid)) {
       throw httpsError('permission-denied', 'You do not have permission to view this job.');
     }
     return { job };
