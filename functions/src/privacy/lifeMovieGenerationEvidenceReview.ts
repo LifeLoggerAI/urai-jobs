@@ -11,6 +11,24 @@ export function canonicalReviewOnlyStorageGeneration(value: unknown): value is s
     BigInt(value) <= UINT64_MAX;
 }
 
+/**
+ * Reject a replay that claims a different generation or a different canonical
+ * object than the already verified record. Evaluate this *before* observing
+ * current Storage metadata: a false caller claim is a ledger conflict,
+ * whereas a live different generation for the same true claim is a replacement.
+ */
+export function assertReviewOnlyHistoricalObservationClaim(
+  claimedGeneration: string,
+  recordedGeneration: unknown,
+  canonicalObjectPath: string,
+  recordedObjectPath: unknown,
+): void {
+  if (recordedGeneration !== claimedGeneration ||
+    recordedObjectPath !== canonicalObjectPath) {
+    throw new Error('life_movie_review_write_generation_conflict');
+  }
+}
+
 export type ReviewOnlyGenerationEvidence = {
   /** True only if the current exact Storage generation was observed. */
   storageCurrentlyObserved: boolean;
