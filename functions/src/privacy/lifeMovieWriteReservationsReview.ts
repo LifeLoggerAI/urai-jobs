@@ -129,6 +129,7 @@ function checkedAttempt(data: unknown, scope: ReviewOutputScope, jobId: string, 
   }
   if (r.state === 'PHYSICAL_GENERATION_UNVERIFIED' &&
     (r.storageWriteFenceVerified !== false || r.productionAuthorized !== false ||
+      r.storageMetadataReadbackVerified !== true ||
       !canonicalGeneration(r.physicalGeneration) ||
       r.objectPath !== reviewOnlySyntheticOutputObjectPath({
         ...scope, jobId, attemptId,
@@ -391,16 +392,18 @@ export async function recordReviewOnlyBrokerPhysicalGeneration(
   // fabricate an object that never existed at the bound canonical path.
   // Storage metadata and Firestore are not atomic: this is observation only,
   // with every attempt permanently unresolved for deletion ACK.
-  let observedGeneration: unknown;
+  let observedGeneration: unknown = null;
   try {
     const [metadata] = await getStorage().bucket(PROJECT + '.appspot.com')
       .file(objectPath).getMetadata();
     observedGeneration = metadata?.generation;
   } catch (error) {
-    if ((error as { code?: unknown })?.code === 404) {
-      throw new Error('life_movie_review_write_generation_not_observed');
+    // A previously verified generation may already have been precisely
+    // deleted during revocation. Absence does not revoke the HISTORICAL
+    // observation, but it must never admit a NEW generation record.
+    if ((error as { code?: unknown })?.code !== 404) {
+      throw new Error('life_movie_review_write_storage_unverified');
     }
-    throw new Error('life_movie_review_write_storage_unverified');
   }
   // Firebase Admin SDK's GCS generation is ordinarily a decimal string.
   // Reject unsafe JS numbers rather than introducing precision loss.
@@ -408,9 +411,8 @@ export async function recordReviewOnlyBrokerPhysicalGeneration(
     observedGeneration = Number.isSafeInteger(observedGeneration)
       ? String(observedGeneration) : null;
   }
-  if (!canonicalGeneration(observedGeneration) || observedGeneration !== generation) {
-    throw new Error('life_movie_review_write_generation_not_observed');
-  }
+  const storageCurrentlyObserved = canonicalGeneration(observedGeneration)
+    && observedGeneration === generation;
   const { db, fence } = refs(s);
   const item = attemptRef(s, jobId, attemptId);
   return db.runTransaction(async (transaction) => {
@@ -422,14 +424,21 @@ export async function recordReviewOnlyBrokerPhysicalGeneration(
     const attempt = checkedAttempt(attemptSnap.data(), s, jobId, attemptId);
     const data = attemptSnap.data() as Record<string, unknown>;
     if (attempt.state === 'PHYSICAL_GENERATION_UNVERIFIED') {
+      // checkedAttempt already insists this record was physically verified
+      // under R869. Preserve idempotency after an exact generation delete:
+      // replay is a HISTORICAL observation, not a new object or deletion ACK.
       if (data.physicalGeneration !== generation || data.objectPath !== objectPath) {
         throw new Error('life_movie_review_write_generation_conflict');
       }
       return {
         observed: true, alreadyRecorded: true,
+        storageCurrentlyObserved,
         withdrawalFenced: current.state === 'FENCING',
         revocationAcknowledgementPermitted: false, productionAuthorized: false,
       };
+    }
+    if (!storageCurrentlyObserved) {
+      throw new Error('life_movie_review_write_generation_not_observed');
     }
     if (attempt.state !== 'SIMULATED_IN_FLIGHT' ||
       (current.state === 'OPEN' && current.epoch !== attempt.epoch) ||
@@ -440,6 +449,7 @@ export async function recordReviewOnlyBrokerPhysicalGeneration(
       state: 'PHYSICAL_GENERATION_UNVERIFIED',
       physicalGeneration: generation,
       objectPath,
+      storageMetadataReadbackVerified: true,
       withdrawalFencedBeforeObservation: current.state === 'FENCING',
       storageWriteFenceVerified: false,
       productionAuthorized: false,
@@ -447,6 +457,7 @@ export async function recordReviewOnlyBrokerPhysicalGeneration(
     });
     return {
       observed: true, alreadyRecorded: false,
+      storageCurrentlyObserved: true,
       withdrawalFenced: current.state === 'FENCING',
       revocationAcknowledgementPermitted: false, productionAuthorized: false,
     };
