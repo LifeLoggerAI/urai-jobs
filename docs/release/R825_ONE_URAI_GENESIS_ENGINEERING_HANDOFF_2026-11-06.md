@@ -60,3 +60,12 @@ Jobs/Privacy GitHub Actions have failed **before any steps** (Jobs run `42314642
 No new paid pods or GPUs without explicit budget authority. If a parallel worker already has a running test, use read-only logs and avoid competing changes. Never save real personal memories into synthetic tests. Keep positive consent/render hard-off during review, and record every run's exact SHA, command, environment class, native tests, PASS/FAIL, negative-vs-positive scope, artifact digest and stopped resource status. Evidence is more important than another R-number.
 
 **This handoff does not claim One UrAi shipped. The built estate is real; the remaining work is integrated authorization, private delivery, device proof and release authorization.**
+
+## 6. Parallel-worker addendum: Spatial R818 actual build repair (discovered during R825 handoff)
+
+A parallel worker has already advanced Spatial past the R817 source above. **Spatial [PR #2062](https://github.com/LifeLoggerAI/urai-spatial/pull/2062)** at exact SHA `ed6d92fe90bf2b640a0f571ae80cfb871329fd42` is a one-file source fix over R817 #2061. Actual frozen `pnpm install --frozen-lockfile` and the original Spatial R817 Functions build were attempted on an earlier Runpod pod; the build returned **exit 2**, `TS18048` due to possibly undefined `policy` and `c` in `apps/functions/src/lifeMovie.ts:324`. That is a **genuine code compile blocker**, not a CI pre-execution failure. #2062 explicitly denies missing C1 policy/consent and narrows their types; it does not relax consent. Earlier Functions build failure log SHA256 `59799849f03048de8cc7693017cc2c03aff64498e473d6ed6f1df4dc661b6bb0`.
+
+An already-started parallel worker Runpod CPU pod `f8out0bg80mpnw` was **RUNNING** at this addendum: its live log verified Node22/pnpm10/Java21, clean pinned #2062 SHA `ed6d92fe90bf2b640a0f571ae80cfb871329fd42` and free disk pre-install. **No final result was yet observed**. Do not start a competing pod or stop theirs. Check its later logs and exact head before treating the new compiler fix as a pass; a source-pinned build, native Rules and full four-emulator acceptance remain required.
+
+Jobs R825 hosted CI run `42317166262` failed with `Validate runtime` and `Callable emulator E2E` skipped; inspect job steps before calling this a source test failure. The new CI native-Rules enrollment is **committed but not executed successfully** on R825. Recheck all branches because these workers are actively working in parallel.
+
