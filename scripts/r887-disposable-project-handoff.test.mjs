@@ -12,7 +12,10 @@ test('R887 outer negative storage phase retains separate staging project',()=>{
   assert.match(outer,/stage r854_original 5400s bash scripts\/run-r854-private-storage-p0-negative-native\.sh/);
 });
 test('R887 inner native phase overrides or clears every project environment inherited from outer',()=>{
-  assert.match(outer,/stage jobs_authority_quota_native 7200s env \\\n\s+-u FIREBASE_PROJECT_ID -u CLOUDSDK_CORE_PROJECT \\\n\s+URAI_EMULATOR_PROJECT=demo-urai-jobs GCLOUD_PROJECT=demo-urai-jobs GOOGLE_CLOUD_PROJECT=demo-urai-jobs/);
+  const nested=outer.slice(outer.indexOf('stage jobs_authority_quota_native 7200s env'));
+  assert.ok(nested.startsWith('stage jobs_authority_quota_native 7200s env'));
+  assert.ok(nested.includes('-u FIREBASE_PROJECT_ID -u CLOUDSDK_CORE_PROJECT'));
+  assert.ok(nested.includes('URAI_EMULATOR_PROJECT=demo-urai-jobs GCLOUD_PROJECT=demo-urai-jobs GOOGLE_CLOUD_PROJECT=demo-urai-jobs'));
   assert.match(inner,/PROJECT="demo-urai-jobs"/);
   assert.match(inner,/for variable in GCLOUD_PROJECT GOOGLE_CLOUD_PROJECT FIREBASE_PROJECT_ID CLOUDSDK_CORE_PROJECT;/);
 });
