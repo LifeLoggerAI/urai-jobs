@@ -97,7 +97,52 @@ try{
     assert.equal(ledger[0].data().state,'PHYSICAL_GENERATION_UNVERIFIED');
     assert.equal(ledger[0].data().physicalGeneration,gen);
     assert.equal(ledger[0].data().storageWriteFenceVerified,false);
+    assert.equal(ledger[0].data().storageMetadataReadbackVerified,true);
     assert.equal((await reviewOnlyDrainStatus(bScope)).activeOrUnproven,1);
+  });
+
+  await check('forged and absent physical generations cannot create a durable ledger record',async()=>{
+    const noScope=scope('missing'),no=attempt(noScope,'missing');
+    await fixture(noScope,no);
+    await reserveReviewOnlyOutputAttempt(no,1);
+    await beginReviewOnlySimulatedUpload(no);
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(no,'1'),'generation_not_observed');
+    const snap=await db.collection('lifeMovieWriteAttemptsReviewOnly')
+      .where('scopeId','==',reviewOnlyScopeId(noScope)).get();
+    assert.equal(snap.size,1);
+    assert.equal(snap.docs[0].data().state,'SIMULATED_IN_FLIGHT');
+    assert.equal(snap.docs[0].data().physicalGeneration,undefined);
+
+    const real=await db.collection('lifeMovieWriteAttemptsReviewOnly')
+      .where('scopeId','==',reviewOnlyScopeId(bScope)).get();
+    const actual=real.docs[0].data().physicalGeneration;
+    const wrong=(BigInt(actual)===1n?'2':'1');
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,wrong),'generation_conflict');
+    const unchanged=(await real.docs[0].ref.get()).data();
+    assert.equal(unchanged.physicalGeneration,actual);
+    assert.equal(unchanged.state,'PHYSICAL_GENERATION_UNVERIFIED');
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,'18446744073709551616'),'generation_invalid');
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,'9007199254740993x'),'generation_invalid');
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,'01'),'generation_invalid');
+  });
+
+  await check('legacy unverified physical record cannot be silently promoted by replay',async()=>{
+    const legacyScope=scope('legacy'),legacy=attempt(legacyScope,'legacy');
+    await fixture(legacyScope,legacy);
+    await reserveReviewOnlyOutputAttempt(legacy,1);
+    await beginReviewOnlySimulatedUpload(legacy);
+    const snap=await db.collection('lifeMovieWriteAttemptsReviewOnly')
+      .where('scopeId','==',reviewOnlyScopeId(legacyScope)).get();
+    assert.equal(snap.size,1);
+    await snap.docs[0].ref.update({
+      state:'PHYSICAL_GENERATION_UNVERIFIED',
+      physicalGeneration:'1',
+      objectPath:reviewOnlySyntheticOutputObjectPath(legacy),
+      storageWriteFenceVerified:false,
+      storageMetadataReadbackVerified:false,
+    });
+    await deny(()=>reviewOnlyDrainStatus(legacyScope),'physical_generation_unverified');
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(legacy,'1'),'physical_generation_unverified');
   });
 
   await check('repeat same physical generation is idempotent but a new generation cannot replace it',async()=>{
@@ -106,7 +151,8 @@ try{
     const gen=snapshot.docs[0].data().physicalGeneration;
     const replay=await recordReviewOnlyBrokerPhysicalGeneration(b,gen);
     assert.equal(replay.alreadyRecorded,true);
-    const other=String(Number(gen)+1);
+    assert.equal(replay.storageCurrentlyObserved,true);
+    const other=String(BigInt(gen)+1n);
     await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,other),'generation_conflict');
     await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,'0'),'generation_invalid');
   });
@@ -115,6 +161,10 @@ try{
     const file=bucket.file(path);
     const [meta]=await file.getMetadata();
     await bucket.file(path,{preconditionOpts:{ifGenerationMatch:String(meta.generation)}}).delete();
+    const replay=await recordReviewOnlyBrokerPhysicalGeneration(b,String(meta.generation));
+    assert.equal(replay.alreadyRecorded,true,'previous real observation survives precise cleanup');
+    assert.equal(replay.storageCurrentlyObserved,false,'not a claim the object is still present');
+    assert.equal(replay.revocationAcknowledgementPermitted,false);
     const state=await reviewOnlyDrainStatus(bScope);
     assert.equal(state.activeOrUnproven,1);
     assert.equal(state.revocationComplete,false);
