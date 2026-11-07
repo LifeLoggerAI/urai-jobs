@@ -51,7 +51,7 @@ check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d53
 check_blob 'functions/src/jobs/createJob.ts' '03433ab35ce0374cae58dac572985c75c3abf3b3'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' '4de466f92dc64bb40bbf0f1bf59f2da91109c251'
+check_blob 'package.json' 'd24fb1048d776774912e7145d91efa4f00bcb246'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
@@ -143,6 +143,16 @@ check_blob 'functions/src/jobs/executeJob.ts' '446aba4eac661b5e283476de7b7db5a17
 check_blob 'scripts/r886-owner-admission-gates.test.mjs' '5309b02898b6080c395865fa15b526d1396b820e'
 stage current_owner_dispatch_19_source 120s node --experimental-strip-types --test scripts/r886-owner-admission-gates.test.mjs
 grep -q '# pass 19' "$OUT/current_owner_dispatch_19_source.log" || hold 'R886 original owner admission regressions not recorded'
+
+# R887 deny bypassing production with old Admin SDK CLI commands.
+check_blob 'scripts/legacy-admin-writer-gate.mjs' '48ec8dcfd9ae4d83bf5826e8db392dfe8516d01d'
+check_blob 'scripts/r887-legacy-admin-writer-gate.test.mjs' 'ebdc6b577190de5c654b008cc6c8eb9fa9d1a999'
+check_blob 'scripts/queue-job.mjs' 'aeaad4d2e73c1cdcf1c9a46f6bf89fbb3de741b9'
+check_blob 'scripts/requeue-dead.mjs' 'fa56f43e016a1eb6a426e199d72ae47ff690bd2e'
+check_blob 'scripts/reclaim-stale-leases.mjs' 'b6e5b640c9bb3a85afa24682ed5ebe3ae318499c'
+check_blob 'scripts/admin-process-queue-now.mjs' '0a2c843726952b6ca62fe745c3b296e95e928b0d'
+stage legacy_writer_refusal_18_source 120s node --test scripts/r887-legacy-admin-writer-gate.test.mjs
+grep -q '# pass 18' "$OUT/legacy_writer_refusal_18_source.log" || hold 'R887 legacy writer refusal regressions not recorded'
 
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \
