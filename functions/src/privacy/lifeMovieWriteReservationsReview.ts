@@ -15,7 +15,7 @@
 import { createHash } from 'node:crypto';
 import { getApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
-import { assessReviewOnlyGenerationEvidence, canonicalReviewOnlyStorageGeneration } from './lifeMovieGenerationEvidenceReview.js';
+import { assertReviewOnlyHistoricalObservationClaim, assessReviewOnlyGenerationEvidence, canonicalReviewOnlyStorageGeneration } from './lifeMovieGenerationEvidenceReview.js';
 import { getStorage } from 'firebase-admin/storage';
 
 const PROJECT = 'urai-staging-test';
@@ -407,19 +407,21 @@ export async function recordReviewOnlyBrokerPhysicalGeneration(
     const current = checkedFence(fenceSnap.data(), s);
     const attempt = checkedAttempt(attemptSnap.data(), s, jobId, attemptId);
     const data = attemptSnap.data() as Record<string, unknown>;
-    // Evaluate against the observed live object and the verified historical
-    // record. A live replacement generation is not a harmless 404 replay.
+    // Reject a forged historical claim before classifying the current GCS
+    // object. This preserves the original generation_conflict contract.
+    if (attempt.state === 'PHYSICAL_GENERATION_UNVERIFIED') {
+      assertReviewOnlyHistoricalObservationClaim(
+        generation, data.physicalGeneration, objectPath, data.objectPath,
+      );
+    }
+    // An actual live replacement is distinct from missing after exact cleanup.
     const { storageCurrentlyObserved } = assessReviewOnlyGenerationEvidence(
       generation, observedGeneration, storageNotFound,
       attempt.state === 'PHYSICAL_GENERATION_UNVERIFIED',
     );
     if (attempt.state === 'PHYSICAL_GENERATION_UNVERIFIED') {
-      // checkedAttempt already insists this record was physically verified
-      // under R869. Preserve idempotency after an exact generation delete:
-      // replay is a HISTORICAL observation, not a new object or deletion ACK.
-      if (data.physicalGeneration !== generation || data.objectPath !== objectPath) {
-        throw new Error('life_movie_review_write_generation_conflict');
-      }
+      // checkedAttempt insists this record was physically verified under R869.
+      // Historical replay after exact cleanup grants no current write or ACK.
       return {
         observed: true, alreadyRecorded: true,
         storageCurrentlyObserved,
