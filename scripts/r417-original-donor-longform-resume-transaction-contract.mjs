@@ -46,6 +46,8 @@ vm.runInNewContext(ts.transpileModule(ownerFenceSource,{
 });
 const verifiedOwnerFence=ownerFenceModule.exports.assertOwnerDeletionFenceClear;
 assert.equal(typeof verifiedOwnerFence,'function');
+const verifiedOwnerTenantFence=ownerFenceModule.exports.assertLifeMovieOwnerTenantAuthorityClear;
+assert.equal(typeof verifiedOwnerTenantFence,'function');
 const planId = 'lmp_' + 'A'.repeat(26), owner = 'owner01', tenant = 'tenant01';
 const childId=shape.makeChildId(planId,0);
 const base = {planId, schemaVersion:'urai-life-movie-longform-plan-v1', tenantId: tenant, ownerUid: owner, status: 'PENDING', childJobIds: [childId],
@@ -119,7 +121,7 @@ function make(phase){
    if(r.path==='plans/'+planId)return snapshot(changed);
    if(r.path==='users/'+owner){
      if(phase==='owner-missing')return {exists:false};
-     return snapshot({dataRightsDeletionPendingCentralPrivacy:
+     return snapshot({uid:owner,tenantId:tenant,accountStatus:'active',deleted:false,markedForDeletion:false,disabled:false,dataRightsDeletionPendingCentralPrivacy:
        phase==='owner-pending'?true:phase==='owner-malformed'?'false':false});
    }
    if(r.path.startsWith('jobConsentBlocks/')){
@@ -147,6 +149,7 @@ function make(phase){
   assertPlanConsentActive:async()=>true,
   assertJobConsentBlockClear:actualConsent,
   assertOwnerDeletionFenceClear:verifiedOwnerFence,
+  assertLifeMovieOwnerTenantAuthorityClear:verifiedOwnerTenantFence,
   assertPlanOwner:shape.assertPlanOwner,
   assertPlanStructure:shape.assertPlanStructure,
   boundPlanJob:shape.boundPlanJob,validateOwnedMovieJob:owners.exports,buildRequestFingerprint:fingerprint,
