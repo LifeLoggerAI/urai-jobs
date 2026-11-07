@@ -14,9 +14,11 @@ assert.equal(typeof block.exports.assertJobConsentBlockClear,'function');
 // Use the original owner-deletion guard; never substitute an allow-all stub.
 const ownerModule={exports:{}};
 vm.runInNewContext(compile(read('privacy/ownerDeletionFence.ts')),
-  {module:ownerModule,exports:ownerModule.exports});
+  {module:ownerModule,exports:ownerModule.exports,Object,Array,Error});
 const ownerFence=ownerModule.exports.assertOwnerDeletionFenceClear;
 assert.equal(typeof ownerFence,'function');
+const ownerTenantFence=ownerModule.exports.assertLifeMovieOwnerTenantAuthorityClear;
+assert.equal(typeof ownerTenantFence,'function');
 const absent={exists:false};
 const stored=active=>({exists:true,data:()=>({active})});
 const existing={exists:true,data:()=>({jobId:'prior-accepted-job'})};
@@ -34,7 +36,7 @@ function harness(mode,phase){
     async get(r){reads.push(r.path);
       if(r.path.startsWith('users/')){
         if(phase==='owner-missing')return {exists:false};
-        return {exists:true,data:()=>({dataRightsDeletionPendingCentralPrivacy:phase==='owner-pending'?true:phase==='owner-malformed'?'false':false})};
+        return {exists:true,data:()=>({uid:'owner-1',tenantId:'tenant-1',accountStatus:'active',deleted:false,markedForDeletion:false,disabled:false,dataRightsDeletionPendingCentralPrivacy:phase==='owner-pending'?true:phase==='owner-malformed'?'false':false})};
       }
       if(r.path.startsWith('jobConsentBlocks/')){
         if(phase==='error')throw Error('synthetic_firestore_unavailable');
@@ -46,6 +48,7 @@ function harness(mode,phase){
   })}};
   const env={module:{exports:{}},Error,Date,Promise,createHash,assertJobConsentBlockClear:block.exports.assertJobConsentBlockClear,
     assertOwnerDeletionFenceClear:ownerFence,
+    assertLifeMovieOwnerTenantAuthorityClear:ownerTenantFence,
     getFirestore:()=>db,consentBlockRef:()=>ref('jobConsentBlocks/owner-1'),requireLifeMovieCreationAdmission:async()=>{},
     assertStudioLifeMovieRenderPlanDigest:x=>x,assertLifeMovieTenantPaths:x=>x,assertStudioLifeMovieLongformPlanDigest:x=>x,assertLifeMovieLongformTenantPaths:x=>x,
     verifySceneTruthReceipt:()=>({expiresAt:'2030-01-01T00:00:00.000Z'}),assertSceneTruthReceiptValue:()=>({receiptId:'receipt',expiresAt:'2030-01-01T00:00:00.000Z'}),
