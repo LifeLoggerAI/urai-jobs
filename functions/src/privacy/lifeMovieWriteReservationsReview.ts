@@ -114,8 +114,18 @@ function checkedAttempt(data: unknown, scope: ReviewOutputScope, jobId: string, 
     r.tenantId !== scope.tenantId || r.projectId !== scope.projectId ||
     r.reviewOnlyEmulator !== true || r.productionAuthorized !== false ||
     !Number.isSafeInteger(r.epoch) || Number(r.epoch) <= 0 ||
-    !['RESERVED', 'SIMULATED_IN_FLIGHT', 'CANCELLED_BEFORE_UPLOAD'].includes(String(r.state))) {
+    !['RESERVED', 'SIMULATED_IN_FLIGHT', 'CANCELLED_BEFORE_UPLOAD',
+      'PHYSICAL_GENERATION_UNVERIFIED'].includes(String(r.state))) {
     throw new Error('life_movie_review_write_attempt_unverified');
+  }
+  if (r.state === 'PHYSICAL_GENERATION_UNVERIFIED' &&
+    (r.storageWriteFenceVerified !== false || r.productionAuthorized !== false ||
+      typeof r.physicalGeneration !== 'string' || !/^[1-9][0-9]*$/.test(r.physicalGeneration) ||
+      !Number.isSafeInteger(Number(r.physicalGeneration)) ||
+      r.objectPath !== reviewOnlySyntheticOutputObjectPath({
+        ...scope, jobId, attemptId,
+      }))) {
+    throw new Error('life_movie_review_write_physical_generation_unverified');
   }
   return { epoch: Number(r.epoch), state: String(r.state) };
 }
@@ -306,4 +316,107 @@ export async function reviewOnlyDrainStatus(scope: ReviewOutputScope) {
     revocationComplete: false, simulatedOnly: true, storageWriteFenceVerified: false,
     revocationAcknowledgementPermitted: false, productionAuthorized: false,
   };
+}
+
+
+/**
+ * R857 NONPRODUCTION: a deterministic object path used only by the disposable
+ * emulator broker fixture. This is not a production storage authority.
+ * Unlike a caller-supplied gs:// URI it cannot point outside the canonical
+ * owner/tenant/project output namespace.
+ */
+export function reviewOnlySyntheticOutputObjectPath(identity: ReviewAttemptIdentity): string {
+  const s = checkedScope(identity);
+  const jobId = segment(identity.jobId, 'job');
+  const attemptId = segment(identity.attemptId, 'attempt');
+  const suffix = createHash('sha256')
+    .update(['urai-r857-review-only-physical-broker', s.ownerUid, s.tenantId,
+      s.projectId, jobId, attemptId].join('\n')).digest('hex');
+  return `tenants/${s.tenantId}/life-movies/${s.projectId}/review-only-broker/${suffix}.bin`;
+}
+
+/**
+ * A last emulator-only veto immediately before a synthetic byte write.
+ * This is deliberately not a production grant: revocation can still race
+ * after a Firestore read and before Storage receives the bytes.
+ */
+export async function assertReviewOnlyBrokerPreByte(identity: ReviewAttemptIdentity): Promise<void> {
+  reviewedOnly();
+  const s = checkedScope(identity);
+  const jobId = segment(identity.jobId, 'job');
+  const attemptId = segment(identity.attemptId, 'attempt');
+  const { db, fence } = refs(s);
+  const item = attemptRef(s, jobId, attemptId);
+  await db.runTransaction(async (transaction) => {
+    const [fenceSnap, attemptSnap] = await Promise.all([
+      transaction.get(fence), transaction.get(item),
+    ]);
+    if (!fenceSnap.exists) throw new Error('life_movie_review_write_fence_missing');
+    const current = checkedFence(fenceSnap.data(), s);
+    const attempt = checkedAttempt(attemptSnap.data(), s, jobId, attemptId);
+    if (current.state !== 'OPEN' || current.epoch !== attempt.epoch ||
+      attempt.state !== 'SIMULATED_IN_FLIGHT') {
+      throw new Error('life_movie_review_write_fence_revoked_or_stale');
+    }
+  });
+}
+
+/**
+ * Stores a REAL emulator Storage generation as unresolved durable evidence.
+ * A byte stream may have committed after revocation, so this must be allowed
+ * during FENCING for reconciliation. The generation is not a deletion ACK,
+ * storage IAM proof, or caller-conferred upload authorization.
+ */
+export async function recordReviewOnlyBrokerPhysicalGeneration(
+  identity: ReviewAttemptIdentity, generation: string,
+) {
+  reviewedOnly();
+  const s = checkedScope(identity);
+  const jobId = segment(identity.jobId, 'job');
+  const attemptId = segment(identity.attemptId, 'attempt');
+  if (typeof generation !== 'string' || !/^[1-9][0-9]*$/.test(generation) ||
+    !Number.isSafeInteger(Number(generation))) {
+    throw new Error('life_movie_review_write_generation_invalid');
+  }
+  const objectPath = reviewOnlySyntheticOutputObjectPath(identity);
+  const { db, fence } = refs(s);
+  const item = attemptRef(s, jobId, attemptId);
+  return db.runTransaction(async (transaction) => {
+    const [fenceSnap, attemptSnap] = await Promise.all([
+      transaction.get(fence), transaction.get(item),
+    ]);
+    if (!fenceSnap.exists) throw new Error('life_movie_review_write_fence_missing');
+    const current = checkedFence(fenceSnap.data(), s);
+    const attempt = checkedAttempt(attemptSnap.data(), s, jobId, attemptId);
+    const data = attemptSnap.data() as Record<string, unknown>;
+    if (attempt.state === 'PHYSICAL_GENERATION_UNVERIFIED') {
+      if (data.physicalGeneration !== generation || data.objectPath !== objectPath) {
+        throw new Error('life_movie_review_write_generation_conflict');
+      }
+      return {
+        observed: true, alreadyRecorded: true,
+        withdrawalFenced: current.state === 'FENCING',
+        revocationAcknowledgementPermitted: false, productionAuthorized: false,
+      };
+    }
+    if (attempt.state !== 'SIMULATED_IN_FLIGHT' ||
+      (current.state === 'OPEN' && current.epoch !== attempt.epoch) ||
+      (current.state === 'FENCING' && current.epoch <= attempt.epoch)) {
+      throw new Error('life_movie_review_write_generation_state_unverified');
+    }
+    transaction.update(item, {
+      state: 'PHYSICAL_GENERATION_UNVERIFIED',
+      physicalGeneration: generation,
+      objectPath,
+      withdrawalFencedBeforeObservation: current.state === 'FENCING',
+      storageWriteFenceVerified: false,
+      productionAuthorized: false,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return {
+      observed: true, alreadyRecorded: false,
+      withdrawalFenced: current.state === 'FENCING',
+      revocationAcknowledgementPermitted: false, productionAuthorized: false,
+    };
+  });
 }
