@@ -1,0 +1,281 @@
+{
+  "schema_version": "1.0",
+  "audit": "R850 duplicate-blob byte batch 07",
+  "repo": "LifeLoggerAI/urai-jobs",
+  "source_commit": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+  "source_tree": "3e74b4b0d6e10df15f9ccd747e9e936218b7fc25",
+  "selection": "81 duplicate groups excluding 65 high-risk blob IDs, sorted by group multiplicity desc then SHA ascending; indices 31-47 inclusive",
+  "method": "Fetch one representative exact-commit base64 blob per group, decode actual bytes, compute SHA-1 Git object hash and SHA-256 content, compare source manifest SHA, connector SHA and all represented path sizes; SHA vectors independently checked",
+  "counts": {
+    "attempted": 17,
+    "verified": 17,
+    "errors": 0,
+    "unique_blob_bytes": 20856,
+    "represented_file_instances": 74,
+    "represented_path_bytes": 95020
+  },
+  "records": [
+    {
+      "git_blob_sha": "1b483b59afd55daabf8162279366fb60cfe8aa91",
+      "actual_git_blob_sha1": "1b483b59afd55daabf8162279366fb60cfe8aa91",
+      "sha256": "e26042624c260f6b75cd803f5d1837c8f928f879839656e2cf44f42a178318b5",
+      "byte_length": 3996,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/src/index.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/src/index.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/src/index.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/src/index.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/src/index.js",
+        "workers/src/index.js"
+      ],
+      "represented_file_instances": 5,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "2d82fe20440a83f8c8cfd33366fc60c98c95760b",
+      "actual_git_blob_sha1": "2d82fe20440a83f8c8cfd33366fc60c98c95760b",
+      "sha256": "c091651bdadf6c5b63eb7f81590fa592a71693e98649354aa1ac8240c023083f",
+      "byte_length": 2773,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/index.ts",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/index.ts",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/index.ts",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/index.ts",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/index.ts",
+        "workers/index.ts"
+      ],
+      "represented_file_instances": 5,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "4aebd2888d39c9b79502faa1be90810f23c639fd",
+      "actual_git_blob_sha1": "4aebd2888d39c9b79502faa1be90810f23c639fd",
+      "sha256": "da2b558a2ea2373d13d2d6b302a811d69948aa4b8982f573b520be97b8716a8e",
+      "byte_length": 448,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/package.json",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/package.json",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/package.json",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/package.json",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/package.json",
+        "_audit/20260416_151937_phase25_formalize_worker_runtime/workers/package.json"
+      ],
+      "represented_file_instances": 5,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "6c116120ce1812ae0b268e1ba5366258ec286ad8",
+      "actual_git_blob_sha1": "6c116120ce1812ae0b268e1ba5366258ec286ad8",
+      "sha256": "61bedfed3213cc15531f0c3ed88926d7f05f6a8a3093c3a2fc7e018bd691f50c",
+      "byte_length": 2704,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/index.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/index.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/index.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/index.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/index.js",
+        "workers/index.js"
+      ],
+      "represented_file_instances": 5,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "75fbc4967b8c7a68b39fb6987493c244b7aea915",
+      "actual_git_blob_sha1": "75fbc4967b8c7a68b39fb6987493c244b7aea915",
+      "sha256": "d30c28f8eb12d6694ed1fda1b2030fc142b6542e45a900f14000043c2ac4a0a9",
+      "byte_length": 1188,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/narrator-worker/index.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/narrator-worker/index.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/narrator-worker/index.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/narrator-worker/index.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/narrator-worker/index.js",
+        "workers/narrator-worker/index.js"
+      ],
+      "represented_file_instances": 5,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "d37786a30a2287d9e09d4303596b0b0c403ad493",
+      "actual_git_blob_sha1": "d37786a30a2287d9e09d4303596b0b0c403ad493",
+      "sha256": "22522a5b789a20ba6a315f3ed080917c7f671ba2ed9ad36f8495a700d687df73",
+      "byte_length": 487,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/Dockerfile",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/Dockerfile",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/Dockerfile",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/Dockerfile",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/Dockerfile",
+        "workers/Dockerfile"
+      ],
+      "represented_file_instances": 5,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "148b25a2faa10f77b45bcb0069c82dfc128d0232",
+      "actual_git_blob_sha1": "148b25a2faa10f77b45bcb0069c82dfc128d0232",
+      "sha256": "c5bb97cefc749ef5e81f7a94f90c8edc8213ef13da53c97876c23f27e09b018f",
+      "byte_length": 535,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/narrator-worker/package.json",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/narrator-worker/package.json",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/narrator-worker/package.json",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/narrator-worker/package.json",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/narrator-worker/package.json"
+      ],
+      "represented_file_instances": 4,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "281bc25083636a74472c03f39132288dfd10c99d",
+      "actual_git_blob_sha1": "281bc25083636a74472c03f39132288dfd10c99d",
+      "sha256": "2e27f9cbd084c7d5fc9420daab108b36c3743faaad2601ea7679b241548e5b78",
+      "byte_length": 197,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/studio-worker/package.json",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/studio-worker/package.json",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/studio-worker/package.json",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/studio-worker/package.json",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/studio-worker/package.json"
+      ],
+      "represented_file_instances": 4,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "6950da96d657d0a207a434fb02d4c241c221fdaa",
+      "actual_git_blob_sha1": "6950da96d657d0a207a434fb02d4c241c221fdaa",
+      "sha256": "cf1443b0ed59ea0c5b436726f50f3b1302c8a40d8b38b9303064cad39a84804c",
+      "byte_length": 1184,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/studio-worker/index.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/studio-worker/index.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/studio-worker/index.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/studio-worker/index.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/studio-worker/index.js"
+      ],
+      "represented_file_instances": 4,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "6d09a0531ab962fbf6e6dede0bfa0d63fa3c6e60",
+      "actual_git_blob_sha1": "6d09a0531ab962fbf6e6dede0bfa0d63fa3c6e60",
+      "sha256": "3d19b16fefeca4f87e70dde659e1313be483f0886af5959eb08c56bfd984d804",
+      "byte_length": 1182,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/asset-worker/index.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/asset-worker/index.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/asset-worker/index.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/asset-worker/index.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/asset-worker/index.js"
+      ],
+      "represented_file_instances": 4,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "7d6e325641d2a6423c1476119afbb57a9d4c8781",
+      "actual_git_blob_sha1": "7d6e325641d2a6423c1476119afbb57a9d4c8781",
+      "sha256": "6c12e55dd6f672f4bb137c5c49b55e366a725e191e0ce107929a5c99bfc9d3eb",
+      "byte_length": 196,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/asset-worker/package.json",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/asset-worker/package.json",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/asset-worker/package.json",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/asset-worker/package.json",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/asset-worker/package.json"
+      ],
+      "represented_file_instances": 4,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "893d3153ee01dae6b6e4660f6ad549e7de51d116",
+      "actual_git_blob_sha1": "893d3153ee01dae6b6e4660f6ad549e7de51d116",
+      "sha256": "7c5c76ac6d891cdd9ec9772597eba06a609a4f65082d67b97f4dc2b92c2135eb",
+      "byte_length": 1186,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/spatial-worker/index.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/spatial-worker/index.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/spatial-worker/index.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/spatial-worker/index.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/spatial-worker/index.js"
+      ],
+      "represented_file_instances": 4,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "929f7d6da81579da7477894118ec7bfc1907399e",
+      "actual_git_blob_sha1": "929f7d6da81579da7477894118ec7bfc1907399e",
+      "sha256": "247e7683352a1ec2dd7f54b76fe2de25e21c99c0f7689967de27dedb140e2750",
+      "byte_length": 399,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/narrator-worker/src/handlers/index.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/narrator-worker/src/handlers/index.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/narrator-worker/src/handlers/index.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/narrator-worker/src/handlers/index.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/narrator-worker/src/handlers/index.js"
+      ],
+      "represented_file_instances": 4,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "9618dc9d9855e5c3e807f637f93ec5cbcdd31854",
+      "actual_git_blob_sha1": "9618dc9d9855e5c3e807f637f93ec5cbcdd31854",
+      "sha256": "2b382fdc27f26a3b443c7e463eb8bdc4f0528a6921612395454d2642a14e1d97",
+      "byte_length": 219,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/narrator-worker/tsconfig.json",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/narrator-worker/tsconfig.json",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/narrator-worker/tsconfig.json",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/narrator-worker/tsconfig.json",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/narrator-worker/tsconfig.json"
+      ],
+      "represented_file_instances": 4,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "974d40f9409ae7c971d1baa93b746c1e01fdf021",
+      "actual_git_blob_sha1": "974d40f9409ae7c971d1baa93b746c1e01fdf021",
+      "sha256": "c470aaec75b13515620739ce0e57ba56efa89d903a9a8e03081139d3c317f270",
+      "byte_length": 1556,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/narrator-worker/src/handlers/narrator-tts.ts",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/narrator-worker/src/handlers/narrator-tts.ts",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/narrator-worker/src/handlers/narrator-tts.ts",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/narrator-worker/src/handlers/narrator-tts.ts",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/narrator-worker/src/handlers/narrator-tts.ts"
+      ],
+      "represented_file_instances": 4,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "ac08e5073f778714ef16a0a7d26057e51e675db4",
+      "actual_git_blob_sha1": "ac08e5073f778714ef16a0a7d26057e51e675db4",
+      "sha256": "2e5fab05721b0eccab99ba51bc943d82b804ce3a000cf33fdd65bb1679a2c334",
+      "byte_length": 2256,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/narrator-worker/src/index.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/narrator-worker/src/index.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/narrator-worker/src/index.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/narrator-worker/src/index.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/narrator-worker/src/index.js"
+      ],
+      "represented_file_instances": 4,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "b6c90b42a619272531a1fa8db8d9e198baa846d4",
+      "actual_git_blob_sha1": "b6c90b42a619272531a1fa8db8d9e198baa846d4",
+      "sha256": "666843d14eef46c25df36540b3811fa2dae88a1e4fbd9cd963f7a53eaa4eec3e",
+      "byte_length": 350,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/workers/tsconfig.json",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/workers/tsconfig.json",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/workers/tsconfig.json",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/workers/tsconfig.json",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/workers/tsconfig.json"
+      ],
+      "represented_file_instances": 4,
+      "status": "VERIFIED"
+    }
+  ],
+  "limitations": "Exact candidate tracked tree only; identical blob paths not fetched separately. No exhaustive history, runtime or production security certification."
+}

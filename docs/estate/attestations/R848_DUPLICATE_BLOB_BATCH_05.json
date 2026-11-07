@@ -1,0 +1,339 @@
+{
+  "schema_version": "1.0",
+  "title": "R848 duplicate Git-blob byte attestations batch 05",
+  "source_commit": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+  "source_tree": "3e74b4b0d6e10df15f9ccd747e9e936218b7fc25",
+  "manifest_blob_sha": "6b68e15bdca24c278eaa9c71d794f8eb374f8671",
+  "cohort_definition": "All R845 file instances, excluding verified R847 65-blob high-risk cohort, group by Git SHA-1, choose duplicate groups len>1 sorted count desc then SHA ascending, records 0..14",
+  "method": "For each distinct immutable Git blob, fetch representative path at exact source, base64 decode, independently recompute Git SHA-1 blob object hash & SHA-256 raw bytes; compare byte length across all listed manifest paths; one unique blob read represents each path entry mapped to same Git object. Does not re-fetch all duplicate paths independently.",
+  "counts": {
+    "unique_blobs_attempted": 15,
+    "unique_blobs_verified": 15,
+    "errors": 0,
+    "unique_bytes": 41755,
+    "represented_file_instances": 139,
+    "represented_path_bytes": 377381
+  },
+  "records": [
+    {
+      "git_blob_sha": "c8ad2e549bdc6801e0d1c80b0308d4b9bd4985ce",
+      "actual_git_blob_sha1": "c8ad2e549bdc6801e0d1c80b0308d4b9bd4985ce",
+      "sha256": "d43aa81f5bc89faa359e0f97c814ba25155591ff078fbb9bfd40f8c7c9683230",
+      "byte_length": 77,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/core/types.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/core/types.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/core/types.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/core/types.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/types/index.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/types/index.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/core/types.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/core/types.js",
+        "_audit/20260416_125414_import_recovery/src/core/types.js",
+        "_audit/20260416_125500_phase19/src/core/types.js",
+        "_audit/20260416_125635_phase20/src/core/types.js",
+        "functions/src/core/types.js",
+        "types/index.js"
+      ],
+      "represented_file_instances": 12,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "5c2b7623ed8d443e1a362b8851fc116910413d7b",
+      "actual_git_blob_sha1": "5c2b7623ed8d443e1a362b8851fc116910413d7b",
+      "sha256": "8ad294c0949bd36c6324d95d3d9a22858b10a4ceb1d01c7001c520f5775cc111",
+      "byte_length": 1355,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/shared-types/index.ts",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/shared-types/index.ts",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/shared-types/index.ts",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/shared-types/index.ts",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/packages/shared-types/src/index.ts",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/shared-types/index.ts",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/packages/shared-types/src/index.ts",
+        "_audit/20260416_125414_import_recovery/src/shared-types/index.ts",
+        "_audit/20260416_125500_phase19/src/shared-types/index.ts",
+        "_audit/20260416_125635_phase20/src/shared-types/index.ts",
+        "_audit/20260416_130901_phase24_add_seed_types/functions/src/shared-types/index.ts"
+      ],
+      "represented_file_instances": 10,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "062f460abb51d612f02e07f65ef18ec294b447f6",
+      "actual_git_blob_sha1": "062f460abb51d612f02e07f65ef18ec294b447f6",
+      "sha256": "4ed397523170fa96ae4b26339a3ceff33fb5e06f4fa19e3a9dfdc9254b83a397",
+      "byte_length": 3838,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/jobs/processQueueTick.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/jobs/processQueueTick.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/jobs/processQueueTick.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/jobs/processQueueTick.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/jobs/processQueueTick.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/jobs/processQueueTick.js",
+        "_audit/20260416_125414_import_recovery/src/jobs/processQueueTick.js",
+        "_audit/20260416_125500_phase19/src/jobs/processQueueTick.js",
+        "_audit/20260416_125635_phase20/src/jobs/processQueueTick.js",
+        "functions/src/jobs/processQueueTick.js"
+      ],
+      "represented_file_instances": 9,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "080a384a3198e43c36424263c36b24905cb19201",
+      "actual_git_blob_sha1": "080a384a3198e43c36424263c36b24905cb19201",
+      "sha256": "7f7729d472072f6a5739aed01660a93d560fcaa75f9c1b9debb33f7a0ecf491c",
+      "byte_length": 1918,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/core/firestore-paths.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/core/firestore-paths.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/core/firestore-paths.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/core/firestore-paths.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/core/firestore-paths.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/core/firestore-paths.js",
+        "_audit/20260416_125414_import_recovery/src/core/firestore-paths.js",
+        "_audit/20260416_125500_phase19/src/core/firestore-paths.js",
+        "_audit/20260416_125635_phase20/src/core/firestore-paths.js",
+        "functions/src/core/firestore-paths.js"
+      ],
+      "represented_file_instances": 9,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "08ea68eb038c9dc997c9886b887ec26a118b29b8",
+      "actual_git_blob_sha1": "08ea68eb038c9dc997c9886b887ec26a118b29b8",
+      "sha256": "6fba0b0c380808cd8b9da69e76004ed21e676b87f9325bb384b2c30f54425482",
+      "byte_length": 2228,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/seed.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/seed.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/seed.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/seed.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/seed.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/seed.js",
+        "_audit/20260416_125414_import_recovery/src/seed.js",
+        "_audit/20260416_125500_phase19/src/seed.js",
+        "_audit/20260416_125635_phase20/src/seed.js",
+        "functions/src/seed.js"
+      ],
+      "represented_file_instances": 9,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "10f2e61f5d910ec3193e79006f78935912e85928",
+      "actual_git_blob_sha1": "10f2e61f5d910ec3193e79006f78935912e85928",
+      "sha256": "a18a37d45620a68e9f5e11e4240c6c559998fc37806a1b87ccba21db3bcdd434",
+      "byte_length": 3638,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/jobs/executeJob.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/jobs/executeJob.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/jobs/executeJob.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/jobs/executeJob.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/jobs/executeJob.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/jobs/executeJob.js",
+        "_audit/20260416_125414_import_recovery/src/jobs/executeJob.js",
+        "_audit/20260416_125500_phase19/src/jobs/executeJob.js",
+        "_audit/20260416_125635_phase20/src/jobs/executeJob.js",
+        "functions/src/jobs/executeJob.js"
+      ],
+      "represented_file_instances": 9,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "33df9b2a2e80965d1ffaf890ac244aa58da71fc6",
+      "actual_git_blob_sha1": "33df9b2a2e80965d1ffaf890ac244aa58da71fc6",
+      "sha256": "b39e6dd87335f47455ef4a837345a82b35ce3a2e64d63d961f7333dacaf9e168",
+      "byte_length": 1995,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/core/jobs.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/core/jobs.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/core/jobs.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/core/jobs.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/core/jobs.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/core/jobs.js",
+        "_audit/20260416_125414_import_recovery/src/core/jobs.js",
+        "_audit/20260416_125500_phase19/src/core/jobs.js",
+        "_audit/20260416_125635_phase20/src/core/jobs.js",
+        "functions/src/core/jobs.js"
+      ],
+      "represented_file_instances": 9,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "3be315a81851f2d76fa4a8d46abcf70abac2826d",
+      "actual_git_blob_sha1": "3be315a81851f2d76fa4a8d46abcf70abac2826d",
+      "sha256": "d22300c65dd6abe56d7b5ed5cb0c1414f23d540bd3d012ffccbcf1e10f09d816",
+      "byte_length": 2774,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/events/onJobTerminalEvent.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/events/onJobTerminalEvent.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/events/onJobTerminalEvent.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/events/onJobTerminalEvent.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/events/onJobTerminalEvent.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/events/onJobTerminalEvent.js",
+        "_audit/20260416_125414_import_recovery/src/events/onJobTerminalEvent.js",
+        "_audit/20260416_125500_phase19/src/events/onJobTerminalEvent.js",
+        "_audit/20260416_125635_phase20/src/events/onJobTerminalEvent.js",
+        "functions/src/events/onJobTerminalEvent.js"
+      ],
+      "represented_file_instances": 9,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "3bfcd46f2be84a0c09df71306aca5713a5bbf34f",
+      "actual_git_blob_sha1": "3bfcd46f2be84a0c09df71306aca5713a5bbf34f",
+      "sha256": "77dbe523c7b315bdf760f0465c7ae088a1453dfa4f411f1f0e05b44851ead804",
+      "byte_length": 1984,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/core/idempotency.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/core/idempotency.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/core/idempotency.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/core/idempotency.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/core/idempotency.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/core/idempotency.js",
+        "_audit/20260416_125414_import_recovery/src/core/idempotency.js",
+        "_audit/20260416_125500_phase19/src/core/idempotency.js",
+        "_audit/20260416_125635_phase20/src/core/idempotency.js",
+        "functions/src/core/idempotency.js"
+      ],
+      "represented_file_instances": 9,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "426357a9d91936c337a72f2bedb0cf2de78bc3dd",
+      "actual_git_blob_sha1": "426357a9d91936c337a72f2bedb0cf2de78bc3dd",
+      "sha256": "81d7a895f86161b8aa1ec07b4893cc68d3d678e13965a26a76e8aefeedac67ad",
+      "byte_length": 6087,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/jobs/systemReconcile.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/jobs/systemReconcile.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/jobs/systemReconcile.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/jobs/systemReconcile.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/jobs/systemReconcile.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/jobs/systemReconcile.js",
+        "_audit/20260416_125414_import_recovery/src/jobs/systemReconcile.js",
+        "_audit/20260416_125500_phase19/src/jobs/systemReconcile.js",
+        "_audit/20260416_125635_phase20/src/jobs/systemReconcile.js",
+        "functions/src/jobs/systemReconcile.js"
+      ],
+      "represented_file_instances": 9,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "54de01eb21ef77e24cb50d292a6e596218dc6d51",
+      "actual_git_blob_sha1": "54de01eb21ef77e24cb50d292a6e596218dc6d51",
+      "sha256": "6b1689e3d3e8ac854aa7139a1339f5031c7d263bf5935308d0088377827a8943",
+      "byte_length": 2993,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/jobs/getJobStatus.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/jobs/getJobStatus.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/jobs/getJobStatus.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/jobs/getJobStatus.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/jobs/getJobStatus.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/jobs/getJobStatus.js",
+        "_audit/20260416_125414_import_recovery/src/jobs/getJobStatus.js",
+        "_audit/20260416_125500_phase19/src/jobs/getJobStatus.js",
+        "_audit/20260416_125635_phase20/src/jobs/getJobStatus.js",
+        "functions/src/jobs/getJobStatus.js"
+      ],
+      "represented_file_instances": 9,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "5a4ebc090e6af5cff127071b6694356905a5e1e6",
+      "actual_git_blob_sha1": "5a4ebc090e6af5cff127071b6694356905a5e1e6",
+      "sha256": "30bb8091310dc45e6a16d44d1774fe1fcd0fa696d2838541c779d7d7562a1f2f",
+      "byte_length": 3375,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/jobs/cancelJob.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/jobs/cancelJob.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/jobs/cancelJob.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/jobs/cancelJob.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/jobs/cancelJob.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/jobs/cancelJob.js",
+        "_audit/20260416_125414_import_recovery/src/jobs/cancelJob.js",
+        "_audit/20260416_125500_phase19/src/jobs/cancelJob.js",
+        "_audit/20260416_125635_phase20/src/jobs/cancelJob.js",
+        "functions/src/jobs/cancelJob.js"
+      ],
+      "represented_file_instances": 9,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "630893c2f6775acd020d27232d9a88c6e14f7b8f",
+      "actual_git_blob_sha1": "630893c2f6775acd020d27232d9a88c6e14f7b8f",
+      "sha256": "f83f64ac0b074529f0819c26329f11268e618863e662fb59dd67d70242e5cb2a",
+      "byte_length": 2062,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/core/results.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/core/results.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/core/results.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/core/results.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/core/results.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/core/results.js",
+        "_audit/20260416_125414_import_recovery/src/core/results.js",
+        "_audit/20260416_125500_phase19/src/core/results.js",
+        "_audit/20260416_125635_phase20/src/core/results.js",
+        "functions/src/core/results.js"
+      ],
+      "represented_file_instances": 9,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "78e7e33a814f605ab77fb776c890ae7bed75ce9c",
+      "actual_git_blob_sha1": "78e7e33a814f605ab77fb776c890ae7bed75ce9c",
+      "sha256": "160414ca7562fe9dd119836c616fb7a34f37620c7aad5f67bb6d17aaf6484cc1",
+      "byte_length": 3040,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/jobs/cleanupTerminalJobs.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/jobs/cleanupTerminalJobs.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/jobs/cleanupTerminalJobs.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/jobs/cleanupTerminalJobs.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/jobs/cleanupTerminalJobs.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/jobs/cleanupTerminalJobs.js",
+        "_audit/20260416_125414_import_recovery/src/jobs/cleanupTerminalJobs.js",
+        "_audit/20260416_125500_phase19/src/jobs/cleanupTerminalJobs.js",
+        "_audit/20260416_125635_phase20/src/jobs/cleanupTerminalJobs.js",
+        "functions/src/jobs/cleanupTerminalJobs.js"
+      ],
+      "represented_file_instances": 9,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    },
+    {
+      "git_blob_sha": "83dfd32ccf3be14222267a4e24987c576aa451ac",
+      "actual_git_blob_sha1": "83dfd32ccf3be14222267a4e24987c576aa451ac",
+      "sha256": "3b2434fd603abd7fe4be6c1c41449906965aff3eb868c9f9ea1303c6d0330bb1",
+      "byte_length": 4391,
+      "representative_path": "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/core/jobRegistry.js",
+      "represented_paths": [
+        "_audit/20260416_124345_phase16_full_esm_enforcement/functions/src/core/jobRegistry.js",
+        "_audit/20260416_124546_phase16_full_esm_enforcement/functions/src/core/jobRegistry.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/lib/functions/src/core/jobRegistry.js",
+        "_audit/20260416_124837_phase17_full_esm_hard_reset/functions/src/core/jobRegistry.js",
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/src/core/jobRegistry.js",
+        "_audit/20260416_125414_import_recovery/src/core/jobRegistry.js",
+        "_audit/20260416_125500_phase19/src/core/jobRegistry.js",
+        "_audit/20260416_125635_phase20/src/core/jobRegistry.js",
+        "functions/src/core/jobRegistry.js"
+      ],
+      "represented_file_instances": 9,
+      "blob_occurrences_derived_from_manifest": true,
+      "status": "VERIFIED"
+    }
+  ],
+  "certification": "File content integrity only. Full historic byte/object coverage, semantic correctness, deployment and production authorization unverified."
+}

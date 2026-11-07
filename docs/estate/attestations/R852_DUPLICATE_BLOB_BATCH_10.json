@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "audit": "R852 final repeated-blob group 80",
+  "repository": "LifeLoggerAI/urai-jobs",
+  "source_commit": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+  "source_tree": "3e74b4b0d6e10df15f9ccd747e9e936218b7fc25",
+  "group_index": 80,
+  "source_manifest_sha": "6b68e15bdca24c278eaa9c71d794f8eb374f8671",
+  "method": "base64 bytes from immutable commit, independently recomputed Git blob SHA-1 and raw SHA-256, length checked; empty blob and abc SHA-256 vectors tested",
+  "records": [
+    {
+      "git_blob_sha": "f602f5ca93dbcfbc969019cc8249ef111035162d",
+      "actual_git_blob_sha1": "f602f5ca93dbcfbc969019cc8249ef111035162d",
+      "sha256": "21080d45e8f9c30b768e21d8c8854a115b084a035c785cbf15477593b73c1ce2",
+      "byte_length": 304,
+      "representative_path": "functions/tsconfig.json",
+      "represented_paths": [
+        "_audit/20260416_124938_phase17_full_esm_hard_reset/functions/tsconfig.json",
+        "functions/tsconfig.json"
+      ],
+      "represented_file_instances": 2,
+      "status": "VERIFIED"
+    }
+  ],
+  "counts": {
+    "attempted": 1,
+    "verified": 1,
+    "failed": 0,
+    "unique_blob_bytes": 304,
+    "represented_file_instances": 2,
+    "represented_path_bytes": 608
+  },
+  "limitations": "shared Git object verified once, not each occurrence independently redownloaded; no full historical audit"
+}

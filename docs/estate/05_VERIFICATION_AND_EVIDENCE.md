@@ -1,0 +1,14 @@
+# Exact-source evidence status and independent verification boundary
+
+| Original source/run | Recorded outcome | Evidence limits |
+|---|---|---|
+| Jobs #320 `ea8f0165ac74511a4e4196919ddd3109d0c1ff2e` original full four Firebase services | PASS, frozen installs/typecheck/build, owner Rules 29/29 | [R844 receipt](https://github.com/LifeLoggerAI/urai-jobs/pull/320#issuecomment-6702148975): worker original log SHA256 `fc013a0ee7e5c3ee742f687a11f28fca4b6aa5ba45de2cc197d95939fc98b6af`; independent audit did not recover entire log |
+| Jobs #320 + Studio #179 `153d6c35557c66a8b9f8629778ca796b83730464` | PASS ten real HTTP **negative** checks | [R844](https://github.com/LifeLoggerAI/urai-jobs/pull/320#issuecomment-6702148975), success `positiveConsent=false movieRendered=false`; [founder Cloud Shell independent excerpt](https://github.com/LifeLoggerAI/urai-jobs/pull/320#issuecomment-6702436392) |
+| Jobs #320 + Privacy #236 `5daa194148c1f0b157062ca09b8f1b6e629d6d29` | PASS **16/16 native stages** including original full Jobs verify/typecheck/build, Privacy builds and 4-emulator negative + review-only issuer | [Original native receipt](https://github.com/LifeLoggerAI/urai-privacy/pull/236#issuecomment-6702091783). Reported log digest `94cf99dfbc5136bdbcbee4b9b1fac7aec11aceb200c4ae28822dc7f0232a`; full logs unavailable to current audit |
+| Spatial #2069 `ad0dcf7412e6c6f84724b030660275f29ef4dfee` | R849 technical stages PASS, four emulator fictional 43/43; final production_go **BLOCKED intentionally** | [Exact head evidence](https://github.com/LifeLoggerAI/urai-spatial/pull/2069#issuecomment-6702429023) |
+| Privacy #233 `fd110526e07d7dd6d0bd408f77f762c2ba8c16b5` separate Cloud Shell | Jobs frozen install exit **137**, native runtime not reached | [Failed run](https://github.com/LifeLoggerAI/urai-privacy/pull/233#issuecomment-6702689426); no inferred OOM root cause |
+| Jobs P0 #252 | **OPEN** | [Revocation sole-writer gap](https://github.com/LifeLoggerAI/urai-jobs/issues/252); privileged old Admin can create post-revoke bytes in emulator |
+
+All these runtime PASS values are **original source-pinned receipts from parallel workers**, not independently reexecuted by this documentation worker. Runpod R843, R844, R849 pods were independently checked EXITED, and read-only list showed 274 exited/0 active at observation. Production IAM, consent signed issuer, native device acceptance, official owner review and launch are **not** covered.
+
+For exact byte audit: one worker interlock blob of 1,177 files was independently rehashed to Git SHA1 and byte SHA256, with value recorded in `MANIFEST.json`; 1,176 others have GitHub metadata identities only. 22 workflow sources and 109 Markdown files previously fetched in R840–R842, but a complete semantic/all-bytes certification is not claimed.

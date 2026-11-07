@@ -1,0 +1,148 @@
+{
+  "schema_version": "1.0",
+  "audit": "R846 high-risk byte batch 03",
+  "repository": "LifeLoggerAI/urai-jobs",
+  "source_commit": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+  "source_tree": "3e74b4b0d6e10df15f9ccd747e9e936218b7fc25",
+  "source_manifest_commit": "f51c39b6c348326b76d35b43c66f23a948df9b44",
+  "scope": "high-risk ordered indices 34 through 49 of 65",
+  "method": "Exact-source GitHub base64 fetched and raw bytes decoded. Independently rehashed Git blob SHA-1 and content SHA-256, verified API/blob metadata and byte length. SHA-256 abc and Git empty-blob vectors pass.",
+  "counts": {
+    "attempted": 16,
+    "verified": 16,
+    "failed": 0,
+    "verified_bytes": 110346,
+    "unique_verified_blob_ids": 16
+  },
+  "records": [
+    {
+      "path": "functions/src/privacy/dataRightsExecution.ts",
+      "expected_git_blob_sha": "00cc1b9d4804099a7035dcf90ea6009bdc53098d",
+      "actual_git_blob_sha": "00cc1b9d4804099a7035dcf90ea6009bdc53098d",
+      "byte_length": 19968,
+      "sha256": "a62eadac50afd349f3a19cfdeca8c98280d5ff2e720cfd1c8895984e28f99cf4",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/dataRightsRequestExport.ts",
+      "expected_git_blob_sha": "436e28e26bf0d1190c6c2edf335a10213eb2d4ff",
+      "actual_git_blob_sha": "436e28e26bf0d1190c6c2edf335a10213eb2d4ff",
+      "byte_length": 4785,
+      "sha256": "73a04a8b9736ec75360164e1bcac9c9e7e6936068f60428606e4621973d23235",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieAdmissionPreflight.ts",
+      "expected_git_blob_sha": "ed9d6289d3443aa634748649a2df19c64016c02f",
+      "actual_git_blob_sha": "ed9d6289d3443aa634748649a2df19c64016c02f",
+      "byte_length": 12401,
+      "sha256": "dc0ea5d73e260507d4bb0b23dd355c547eddd09bbc14a22f7e95f2f22eb3335e",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieArtifactRefs.ts",
+      "expected_git_blob_sha": "4afbdac9f903a5d4e296cee405864a6407d57201",
+      "actual_git_blob_sha": "4afbdac9f903a5d4e296cee405864a6407d57201",
+      "byte_length": 3393,
+      "sha256": "928a3cf31d09c5187565da222d9de7d915d32c296d73dfe65453d29d685abc48",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieBoundedResponse.ts",
+      "expected_git_blob_sha": "88b5c3117b9c8d5d8d903efc015b58bc17590b0d",
+      "actual_git_blob_sha": "88b5c3117b9c8d5d8d903efc015b58bc17590b0d",
+      "byte_length": 2126,
+      "sha256": "950e11e7c45552224f44ee69bdd5430d6690b70c6d293c15fafa3ac1adf2e452",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieConsentDecision.ts",
+      "expected_git_blob_sha": "67d0ed28abdbfd33e537b45b262bf4ce4509c2e3",
+      "actual_git_blob_sha": "67d0ed28abdbfd33e537b45b262bf4ce4509c2e3",
+      "byte_length": 7919,
+      "sha256": "4a813745e3b83ff1d6b36828233794acdc776c6074e89b050de3d5b920c659c1",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieConsentGate.ts",
+      "expected_git_blob_sha": "53761ac0f5c0340563b13fdd9a12a90e75409d42",
+      "actual_git_blob_sha": "53761ac0f5c0340563b13fdd9a12a90e75409d42",
+      "byte_length": 932,
+      "sha256": "cc7b677f35e38583bb851f6396cea76afa928b3449d23ef15900599472c76072",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieConsentTransport.ts",
+      "expected_git_blob_sha": "c1bdbb0f196f2f678bdf2d377d1aa0eea0cc56ae",
+      "actual_git_blob_sha": "c1bdbb0f196f2f678bdf2d377d1aa0eea0cc56ae",
+      "byte_length": 9015,
+      "sha256": "053a18b4aeeb2df8bcdb7463c772a0822f453afbdbfe26da3102edbbf286ea8d",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieCreationAdmission.ts",
+      "expected_git_blob_sha": "1750ed9ab4ca2beef135a0cc2926a2d7f7afc3a0",
+      "actual_git_blob_sha": "1750ed9ab4ca2beef135a0cc2926a2d7f7afc3a0",
+      "byte_length": 1756,
+      "sha256": "3f1aa92b9584c199ba8e040888f729ca1215498dee316b0328ab6c2016c53f62",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieDerivativeRevocation.ts",
+      "expected_git_blob_sha": "da3111e659423d537eae254928dd118f2e8315e2",
+      "actual_git_blob_sha": "da3111e659423d537eae254928dd118f2e8315e2",
+      "byte_length": 19425,
+      "sha256": "33ffcf3806d9e80ce26a918d820af2b486e3101535fee35335f7105168487d8d",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieFirebaseOwnerState.ts",
+      "expected_git_blob_sha": "d2480062402ee8e81ae1c37a896b6acb2aa813a3",
+      "actual_git_blob_sha": "d2480062402ee8e81ae1c37a896b6acb2aa813a3",
+      "byte_length": 5425,
+      "sha256": "54e16d9d7261e885b0d15c749ed7a45197bcc966ad4e33904f86a3ec017a8c2a",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieFirebaseSourceRightsAdapter.ts",
+      "expected_git_blob_sha": "2cccc1009a8d18323d9feaf42f3f0df35b9edabd",
+      "actual_git_blob_sha": "2cccc1009a8d18323d9feaf42f3f0df35b9edabd",
+      "byte_length": 3199,
+      "sha256": "fa0b483ff208dcb986ba9e00d001c1bed3868c7351562d29cb3bfd92f3c798fb",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieJobsPrivacyClient.ts",
+      "expected_git_blob_sha": "73d65b003f4141cd471db1e6a0edff9d7a1c747f",
+      "actual_git_blob_sha": "73d65b003f4141cd471db1e6a0edff9d7a1c747f",
+      "byte_length": 1130,
+      "sha256": "6f6667f677ee905713817276a1e2f5b5dbd93332a738c78f2eea15a517b8aca8",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieJobsTokenProvider.ts",
+      "expected_git_blob_sha": "648225708e055592ee697e0dc342bfcf1bc144e4",
+      "actual_git_blob_sha": "648225708e055592ee697e0dc342bfcf1bc144e4",
+      "byte_length": 4216,
+      "sha256": "a6f6d713e9e87ba8111a4d2c61f7bbf29651c6fbaaa9ae489a12231766edd16e",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieOutputGeneration.ts",
+      "expected_git_blob_sha": "33a4f4b9a9be234df05ba33afe0fc78f8c549d8c",
+      "actual_git_blob_sha": "33a4f4b9a9be234df05ba33afe0fc78f8c549d8c",
+      "byte_length": 512,
+      "sha256": "13cf10f0e9ed8fefc1e9e9fb184e35d51202a9f2ed290e874722ba10b039a1f0",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/lifeMovieSourceRightsVerifier.ts",
+      "expected_git_blob_sha": "26e5547232a2f204aaf5c4720d5f24cc022ac3b5",
+      "actual_git_blob_sha": "26e5547232a2f204aaf5c4720d5f24cc022ac3b5",
+      "byte_length": 14144,
+      "sha256": "52ed0ddfe496ccf7f03631454fff8d4a71345035253738757b71cd91019e58b2",
+      "status": "VERIFIED"
+    }
+  ],
+  "certification": "Raw source bytes only; not full history or production acceptance"
+}

@@ -1,0 +1,147 @@
+{
+  "schema_version": "1.0",
+  "audit": "R860_SINGLETON_BATCH_18",
+  "repository": "LifeLoggerAI/urai-jobs",
+  "source_commit": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+  "source_tree": "3e74b4b0d6e10df15f9ccd747e9e936218b7fc25",
+  "source_manifest_sha": "6b68e15bdca24c278eaa9c71d794f8eb374f8671",
+  "selection": "Fixed 685 unique-blob singleton cohort, index 96 through 111, preferred source prefixes then lexical full path",
+  "method": "GitHub exact-source base64 raw bytes decoded; independent Git blob SHA-1 and raw SHA-256; compared SHA and bytes against immutable R845 manifest; known SHA vectors pass.",
+  "counts": {
+    "attempted": 16,
+    "verified": 16,
+    "failed": 0,
+    "unique_bytes_verified": 117631
+  },
+  "records": [
+    {
+      "path": "scripts/capture-studio-storage-iam-evidence.test.mjs",
+      "git_blob_sha": "66d9341bdac729b5d7669b06db83d9fb678f0b68",
+      "actual_git_blob_sha1": "66d9341bdac729b5d7669b06db83d9fb678f0b68",
+      "sha256": "dbcd08e9e9c0d0352dd9a30f4d3ec5985e391956b1ddee44edd3bb2fca9459e1",
+      "byte_length": 13130,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/capture-worker-build-provenance.mjs",
+      "git_blob_sha": "cdcb1509d47ac6cce61831f60194d370ed715a50",
+      "actual_git_blob_sha1": "cdcb1509d47ac6cce61831f60194d370ed715a50",
+      "sha256": "0ab1283a87d8194add3dae92fee5b921bc009afe35b6de15f79740142eecd563",
+      "byte_length": 16952,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/captured-reality-consent-block-contract.mjs",
+      "git_blob_sha": "ec1d625271e51e5f65f2e3c3c7267e7d3292c0ab",
+      "actual_git_blob_sha1": "ec1d625271e51e5f65f2e3c3c7267e7d3292c0ab",
+      "sha256": "00f8a1121307b5d9a095603d09d35a9bab9e504897d7d69d4093512f5745a9cd",
+      "byte_length": 6952,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/captured-reality-job-contract.mjs",
+      "git_blob_sha": "0362d11c9f199a462905ae10c702c83e5caa728c",
+      "actual_git_blob_sha1": "0362d11c9f199a462905ae10c702c83e5caa728c",
+      "sha256": "903402ebcd81513465e342d5ce1c86806e5f9c2841dbcbaf7bd6953b836b0cb0",
+      "byte_length": 3015,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/captured-reality-worker-contract.mjs",
+      "git_blob_sha": "6d430ed210bd9b47731c2b28db3f93ba774f0dce",
+      "actual_git_blob_sha1": "6d430ed210bd9b47731c2b28db3f93ba774f0dce",
+      "sha256": "904f8de71f833b7cbd8d9683a27ab5e01b53b1b2afe29db7ae5697732fc2c3fd",
+      "byte_length": 4564,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/career-launch-gate.mjs",
+      "git_blob_sha": "32d622c645230f7143091fed7203b197f5059d0d",
+      "actual_git_blob_sha1": "32d622c645230f7143091fed7203b197f5059d0d",
+      "sha256": "3466bcd90d9915b35aaa2670eb9c937ed367aca900177eef15aede16ed5091b2",
+      "byte_length": 2611,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/career-prod-preflight.mjs",
+      "git_blob_sha": "d9fdb82d2115d7f48cce263574181f6347fc67db",
+      "actual_git_blob_sha1": "d9fdb82d2115d7f48cce263574181f6347fc67db",
+      "sha256": "b2561eb6a4302833767dc54e2fb6a11ff6ce2012f9ff3672a1325cbfbe3a4214",
+      "byte_length": 1693,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/career-release-evidence.mjs",
+      "git_blob_sha": "5c4a0901be9b591041887b1ca24aec33c12a69c8",
+      "actual_git_blob_sha1": "5c4a0901be9b591041887b1ca24aec33c12a69c8",
+      "sha256": "1f24b5e33acb7cb58b33e3d91c2a8f2625bdee056d2349a6e58b335eb4126399",
+      "byte_length": 723,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/career-runtime-smoke.mjs",
+      "git_blob_sha": "6e41f489a84ba4d6555cc0fa26ad893ad740c455",
+      "actual_git_blob_sha1": "6e41f489a84ba4d6555cc0fa26ad893ad740c455",
+      "sha256": "5f13bf114287d597cf3bd881996639515df19557258c84ec65fd027687c3452e",
+      "byte_length": 4177,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/career-surfaces-verify.mjs",
+      "git_blob_sha": "bcea2e709b3853182e671afc4c49c7318a5d345e",
+      "actual_git_blob_sha1": "bcea2e709b3853182e671afc4c49c7318a5d345e",
+      "sha256": "53be1af024c0e6e471823ab2bd6e2d47eb5c8b372693b65163b7c7ced58beb5c",
+      "byte_length": 5752,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/check-firebase-runtime-identity.mjs",
+      "git_blob_sha": "b59bfa6343af81ba59b310ca4c4c05e6c832d931",
+      "actual_git_blob_sha1": "b59bfa6343af81ba59b310ca4c4c05e6c832d931",
+      "sha256": "572751c3d0792d04af19a339a8868eb0e4b155208922bab911d3700a4f2b92f0",
+      "byte_length": 3888,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/check-required-ci-exact-head.mjs",
+      "git_blob_sha": "ca3a31ba97ffad69eba262088c916ea4433e6134",
+      "actual_git_blob_sha1": "ca3a31ba97ffad69eba262088c916ea4433e6134",
+      "sha256": "d9ebaaf2e0b48dd4e7a9435b96612f94cb3016a5b4ad0dd7f6227df0180111f8",
+      "byte_length": 9813,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/check-rollback-provenance.mjs",
+      "git_blob_sha": "39aec6cfc72590852dcdb982c37c6194e471dc93",
+      "actual_git_blob_sha1": "39aec6cfc72590852dcdb982c37c6194e471dc93",
+      "sha256": "c9462af4fb03e021ac7053827619e7558aad8dcdc2091a00648adcd84b44d244",
+      "byte_length": 5191,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/check-secure-worker-deploy.mjs",
+      "git_blob_sha": "49283af8a7e0912bddacef8a5bea3366ad82aa26",
+      "actual_git_blob_sha1": "49283af8a7e0912bddacef8a5bea3366ad82aa26",
+      "sha256": "78a0df4d31aaf6a56a22042f4a38b8d0d7ba1dcc9e22d06b4251ec1980d20b8b",
+      "byte_length": 29728,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/check-worker-build-provenance.mjs",
+      "git_blob_sha": "5572ce0e0b37d431bd4a0b8637d4fa4e4b0ca008",
+      "actual_git_blob_sha1": "5572ce0e0b37d431bd4a0b8637d4fa4e4b0ca008",
+      "sha256": "fe1e784be9cc8e5a890e1e9d5dcc4abdbf2817fe65d2b9f5473ca1bf6e25e64f",
+      "byte_length": 5579,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/communications-tenant-authority-contract.mjs",
+      "git_blob_sha": "809061c4ec7ede73a3a9e2bcaf40f0373c83536c",
+      "actual_git_blob_sha1": "809061c4ec7ede73a3a9e2bcaf40f0373c83536c",
+      "sha256": "a65d35e84bd59a6d5eee933fae2eeafbb3b1aa0bc4e44327ccfd4ecf3ed5035e",
+      "byte_length": 3863,
+      "status": "VERIFIED"
+    }
+  ],
+  "limitations": "Current tracked-tree source integrity only; release and history separate."
+}
