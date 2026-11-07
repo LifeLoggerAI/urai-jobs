@@ -55,7 +55,8 @@ check_blob 'scripts/owner_authority_rules.static.test.mjs' '3c1dcedbdb5d988da32e
 check_blob 'scripts/r883-create-job-quota-ledger.test.mjs' '52598f8ab1e84e40e6f3246ca65a8dca8df776c0'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' '71e1387a6df3c9ed51c1f92b94e17dc2d4ed75c0'
+check_blob 'package.json' '73e051933c274ab12b49e8aaf4e8bd2b3800361e'
+check_blob 'scripts/r887-disposable-project-handoff.test.mjs' '5d6aa48ab8111280f983f05821209c60b9a92299'
 check_blob 'firestore.indexes.json' '7690ab3a4db2d7e83de5d6d13ebd7100cecde5bd'
 check_blob 'scripts/r885-firestore-quota-index-contract.test.mjs' '9df8b168f6636ba141f17a15b4e5659361910369'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
@@ -132,10 +133,12 @@ stage owner_callable_16_source 120s node --experimental-strip-types --test scrip
 stage create_quota_12_source 120s node --experimental-strip-types --test scripts/r883-create-job-quota-ledger.test.mjs
 stage quota_index_5_source 120s node --test scripts/r885-firestore-quota-index-contract.test.mjs
 stage emulator_env_10_source 120s node --test scripts/r884-emulator-env-isolation.test.mjs
+stage project_handoff_4_source 120s node --test scripts/r887-disposable-project-handoff.test.mjs
 grep -q '# pass 16' "$OUT/owner_callable_16_source.log" || hold '16 owner-callable behavioral source tests not recorded'
 grep -q '# pass 12' "$OUT/create_quota_12_source.log" || hold '12 exact-source quota tests not recorded'
 grep -q '# pass 5' "$OUT/quota_index_5_source.log" || hold 'R885 index source checks not recorded'
 grep -q '# pass 10' "$OUT/emulator_env_10_source.log" || hold 'R884 emulator env isolation checks not recorded'
+grep -q '# pass 4' "$OUT/project_handoff_4_source.log" || hold 'R887 project handoff checks not recorded'
 
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \
