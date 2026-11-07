@@ -173,6 +173,24 @@ try{
     await deny(()=>cancelUnstartedReviewOnlyAttempt(b),'cannot_reconcile');
   });
 
+  await check('a live replacement generation is not an idempotent replay of retired Storage bytes',async()=>{
+    const previous=(await db.collection('lifeMovieWriteAttemptsReviewOnly')
+      .where('scopeId','==',reviewOnlyScopeId(bScope)).get()).docs[0].data().physicalGeneration;
+    const file=bucket.file(reviewOnlySyntheticOutputObjectPath(b));
+    await file.save(Buffer.from('R872-disposable-replacement'),{
+      resumable:false,metadata:{contentType:'application/octet-stream'}
+    });
+    const [newMeta]=await file.getMetadata();
+    assert.notEqual(String(newMeta.generation),previous,'replacement must be different');
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,previous),
+      'generation_replaced_unverified');
+    const ledger=(await db.collection('lifeMovieWriteAttemptsReviewOnly')
+      .where('scopeId','==',reviewOnlyScopeId(bScope)).get()).docs[0].data();
+    assert.equal(ledger.physicalGeneration,previous);
+    assert.equal(ledger.storageMetadataReadbackVerified,true);
+    assert.equal((await reviewOnlyDrainStatus(bScope)).revocationAcknowledgementPermitted,false);
+  });
+
   const cScope=scope('unattributed'),c=attempt(cScope,'unattributed');
   await fixture(cScope,c);
   await check('unknown old Admin writer can still bypass broker: never certify exclusive IAM',async()=>{
