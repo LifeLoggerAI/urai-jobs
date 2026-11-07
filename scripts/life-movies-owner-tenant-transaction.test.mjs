@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
@@ -140,13 +141,21 @@ test('long-form status transaction rechecks current owner before private segment
   const decl = name => ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
   const owner = decl('assertPlanOwner');
   const reader = decl('readPlanStatus');
-  assert.ok(owner?.body && reader?.body, 'long-form owner and status functions must exist');
-  const output = ts.transpileModule(owner.getText(ast) + '\n' + reader.getText(ast), {
+  const makeChild = decl('makeChildId');
+  const makeAssembly = decl('makeAssemblyJobId');
+  const validatePlan = decl('assertPlanStructure');
+  assert.ok([owner, reader, makeChild, makeAssembly, validatePlan].every(fn => fn?.body),
+    'long-form status must retain exact original owner, plan structure and child binding functions');
+  const output = ts.transpileModule([owner, makeChild, makeAssembly, validatePlan, reader]
+    .map(fn => fn.getText(ast)).join('\n'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  const plan = { planId: 'synthetic-plan-1', tenantId: 'tenant-1', ownerUid: 'owner-1',
-    consent: { purpose: 'life-movie.render' }, childJobIds: ['synthetic-child-1'],
-    segments: [{ index: 0 }], renderPlanDigest: 'a'.repeat(64), sceneTruthDigest: 'b'.repeat(64) };
+  const planId = 'synthetic-plan-1';
+  const childId = 'lms_' + createHash('sha256').update(planId + ':0000').digest('hex').slice(0, 32) + '_0000';
+  const plan = { planId, tenantId: 'tenant-1', ownerUid: 'owner-1',
+    consent: { purpose: 'life-movie.render' }, childJobIds: [childId],
+    segments: [{ jobId: childId, index: 0 }],
+    renderPlanDigest: 'a'.repeat(64), sceneTruthDigest: 'b'.repeat(64) };
   let currentPlan = plan;
   let currentOwner = { ...fixture };
   let consentReads = 0;
@@ -173,7 +182,7 @@ test('long-form status transaction rechecks current owner before private segment
   };
   const longformModule = { exports: {} };
   vm.runInNewContext(output + '\nmodule.exports.readPlanStatus = readPlanStatus;', {
-    module: longformModule, Object, Array, Promise, Error, Set,
+    module: longformModule, Object, Array, Promise, Error, Set, createHash,
     getFirestore: () => db,
     planRef: id => ({ kind: 'plan', id }),
     jobDoc: id => ({ kind: 'job', id }),
@@ -205,6 +214,30 @@ test('long-form status transaction rechecks current owner before private segment
     assert.equal(segmentReads, 0, 'owner denial must precede private segment metadata');
   }
   currentOwner = { ...fixture };
+  // Malformed persisted plans must not cause unbounded or mismatched
+  // per-child Firestore lookups, even if their historical owner matches.
+  const malformed = [
+    { ...plan, childJobIds: [], segments: [] },
+    { ...plan, childJobIds: [childId, childId], segments: [
+      { jobId: childId, index: 0 }, { jobId: childId, index: 1 },
+    ] },
+    { ...plan, childJobIds: [childId], segments: [{ jobId: 'foreign-job', index: 0 }] },
+    { ...plan, childJobIds: [childId], segments: [{ jobId: childId, index: 1 }] },
+    { ...plan, childJobIds: [childId], segments: [] },
+    { ...plan, assemblyJobId: 'foreign-assembly' },
+    { ...plan, childJobIds: Array(181).fill(childId),
+      segments: Array.from({ length: 181 }, (_, index) => ({ jobId: childId, index })) },
+  ];
+  for (const corrupt of malformed) {
+    currentPlan = corrupt;
+    txReads.length = 0;
+    consentReads = 0;
+    segmentReads = 0;
+    await assert.rejects(load(), /longform_plan_structure_invalid/);
+    assert.deepEqual(txReads, ['plan'], 'invalid child plan must fail before owner metadata');
+    assert.equal(consentReads, 0, 'invalid plan must not read consent details');
+    assert.equal(segmentReads, 0, 'invalid plan must not read child-job metadata');
+  }
   currentPlan = { ...plan, tenantId: 'foreign' };
   txReads.length = 0;
   consentReads = 0;
