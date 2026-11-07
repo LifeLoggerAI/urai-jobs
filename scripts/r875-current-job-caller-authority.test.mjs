@@ -10,7 +10,7 @@ const root=new URL('../', import.meta.url);
 const requireFunctions=createRequire(new URL('../functions/package.json', import.meta.url));
 const ts=requireFunctions('typescript');
 class HttpsError extends Error{constructor(code,message){super(message);this.code=code;}}
-function compile(path){const f=new URL(path,root);return ts.transpileModule(readFileSync(f,'utf8'),{fileName:f.pathname,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;}
+function compile(path){const f=new URL(path,root);const result=ts.transpileModule(readFileSync(f,'utf8'),{fileName:f.pathname,reportDiagnostics:true,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}});const diagnostics=(result.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);if(diagnostics.length)throw Error('TypeScript parse failed for '+path+': '+diagnostics.map(d=>'TS'+d.code+' '+ts.flattenDiagnosticMessageText(d.messageText,' ')).join('; '));return result.outputText;}
 function runModule(source,stubs){const mod={exports:{}};new Function('require','module','exports',source)((name)=>{if(!(name in stubs))throw Error('unexpected module '+name);return stubs[name];},mod,mod.exports);return mod.exports;}
 const helper=runModule(compile('functions/src/jobs/currentJobCallerAuthority.ts'),{});
 function fixture({status='RUNNING',ownerUid='victim',user={uid:'caller',role:'user',disabled:true}}={}){
@@ -30,6 +30,17 @@ const stale={uid:'caller',token:{role:'operator',uraiJobsAdmin:true}};
 const activeToken={uid:'caller',token:{role:'user'}};
 const active={uid:'caller',role:'operator',disabled:false,accountStatus:'active'};
 const denied=e=>e?.code==='permission-denied';
+test('R876: actual admin callable TypeScript parses and brace-loss mutant is rejected',()=>{
+ for(const path of ['functions/src/jobs/admin.ts','functions/src/jobs/admin-v2.ts']){
+  const f=new URL(path,root);
+  const parsed=ts.createSourceFile(f.pathname,readFileSync(f,'utf8'),ts.ScriptTarget.ES2022,true,ts.ScriptKind.TS);
+  assert.deepEqual(parsed.parseDiagnostics.map(d=>({code:d.code,message:ts.flattenDiagnosticMessageText(d.messageText,' ')})),[],path);
+ }
+ const malformed='export const bad = onCall(async () =>\\n const uid = 1;\\n});'.replaceAll('\\n','\n');
+ const parsed=ts.createSourceFile('malformed.ts',malformed,ts.ScriptTarget.ES2022,true,ts.ScriptKind.TS);
+ assert.ok(parsed.parseDiagnostics.some(d=>d.code===1005),'missing callback brace must trigger TS1005');
+});
+
 test('R875 authority helper rejects stale claim override, deleted user and deletion fence',()=>{
  assert.deepEqual(helper.checkedCurrentJobCaller(stale,{uid:'caller',role:'user',disabled:false}),{uid:'caller',operator:false});
  assert.deepEqual(helper.checkedCurrentJobCaller(activeToken,active),{uid:'caller',operator:true});
