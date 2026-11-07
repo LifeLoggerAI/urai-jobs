@@ -51,7 +51,8 @@ check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d53
 check_blob 'functions/src/jobs/createJob.ts' '03433ab35ce0374cae58dac572985c75c3abf3b3'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' 'f1a05d4c8ba3f4f980043229e5647f2288c66fd3'
+check_blob 'package.json' 'f8550771dd33ac82bd639179387ef816609d3607'
+check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
   FIREBASE_TOKEN FIREBASE_CLI_TOKEN GOOGLE_OAUTH_ACCESS_TOKEN \
@@ -115,6 +116,10 @@ stage current_callable_18_source 120s node --test \
   scripts/r875-current-job-caller-authority.test.mjs \
   scripts/r876-current-getJobStatus-lifecycle.test.mjs
 grep -q '# pass 18' "$OUT/current_callable_18_source.log" || hold '18 current-callable source tests not recorded'
+
+# R881 synthetic current owner / tenant scoped callable acceptance (not native Firebase).
+stage owner_callable_16_source 120s node --experimental-strip-types --test scripts/r881-owner-scope-callable-behavior.test.mjs
+grep -q '# pass 16' "$OUT/owner_callable_16_source.log" || hold '16 owner-callable behavioral source tests not recorded'
 
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \
