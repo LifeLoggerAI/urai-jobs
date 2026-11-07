@@ -19,6 +19,9 @@ export type LifeMovieDerivativeInvalidationSummary = {
   jobsInvalidated: number;
   plansInvalidated: number;
   storageObjectsDeleted: number;
+  /** A point-in-time cleanup cannot certify that a legacy GCS writer was stopped. */
+  privateOutputDeletionAcknowledged: false;
+  storageWriteFenceVerified: false;
 };
 
 const TERMINAL = new Set(['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED']);
@@ -165,6 +168,8 @@ export async function invalidateLifeMovieDerivativesForConsent(
     jobsInvalidated: 0,
     plansInvalidated: 0,
     storageObjectsDeleted: 0,
+    privateOutputDeletionAcknowledged: false,
+    storageWriteFenceVerified: false,
   };
 
   if (event.purpose !== 'life-movie.render') return summary;
@@ -368,9 +373,17 @@ export async function invalidateLifeMovieDerivativesForConsent(
         throw new Error('life_movie_revocation_output_changed');
       }
       const now = FieldValue.serverTimestamp();
+      // Generation-fenced deletion plus an empty prefix inventory was only
+      // observed at one instant. An existing privileged Storage client can
+      // recreate this derivative later, so never claim permanent deletion.
+      // Remove legacy success fields from consent-cleaned jobs as well.
       transaction.update(fenced.ref, {
         output: FieldValue.delete(), result: FieldValue.delete(),
-        outputDeletedAt: now, outputDeletedBy: 'consent-revocation', updatedAt: now,
+        outputDeletedAt: FieldValue.delete(), outputDeletedBy: FieldValue.delete(),
+        outputCleanupObservedAt: now, outputCleanupActor: 'consent-revocation',
+        privateOutputDeletionAcknowledged: false,
+        storageWriteFenceVerified: false,
+        updatedAt: now,
       });
     });
   });
@@ -385,7 +398,15 @@ export async function invalidateLifeMovieDerivativesForConsent(
         throw new Error('life_movie_revocation_plan_changed');
       }
       const now = FieldValue.serverTimestamp();
-      transaction.update(snapshot.ref, { outputDeletedAt: now, outputDeletedBy: 'consent-revocation', updatedAt: now });
+      // Long-form plan status obeys the same unverified future-write fence
+      // as its Jobs children. Never expose a misleading deletion success.
+      transaction.update(snapshot.ref, {
+        outputDeletedAt: FieldValue.delete(), outputDeletedBy: FieldValue.delete(),
+        outputCleanupObservedAt: now, outputCleanupActor: 'consent-revocation',
+        privateOutputDeletionAcknowledged: false,
+        storageWriteFenceVerified: false,
+        updatedAt: now,
+      });
     });
   });
   summary.plansInvalidated = affectedPlans.length;

@@ -183,17 +183,37 @@ export const ingestConsentRevocation = onRequest({
   const ack = outcome.ack;
   // Generation fences are internal recovery state, not part of the
   // acknowledgement contract; especially on retries they may be large.
-  const responseAck: Record<string, unknown> = { ...ack };
+  // The authenticated receipt only acknowledges the consent BLOCK. A
+  // point-in-time derivative sweep cannot prove no former privileged Storage
+  // writer can finalize a late upload. Never replay historical "completed"
+  // fields or let an ordinary HTTP 200 imply a physical deletion ACK.
+  const responseAck: Record<string, unknown> = {
+    ...ack,
+    privateOutputDeletionAcknowledged: false,
+    storageWriteFenceVerified: false,
+    derivativeInvalidationStatus: 'STORAGE_WRITE_FENCE_UNVERIFIED',
+  };
   delete responseAck.storageGenerationFences;
+  delete responseAck.derivativeInvalidationCompletedAt;
+  delete responseAck.derivativeInvalidation;
+  delete responseAck.derivativeInvalidationAttemptedAt;
 
   try {
     // Re-run derivative invalidation even for a replayed event receipt. The consent
     // block is already fail-closed, while repeated propagation makes cleanup
     // retryable after transient Storage or Firestore failures.
     const derivativeInvalidation = await invalidateLifeMovieDerivativesForConsent(lifeMovieRevocationEvent);
+    // Preserve useful point-in-time cleanup counts, but explicitly do not
+    // certify physical private output deletion while old direct GCS writers
+    // and in-flight streams have no independently verified storage fence.
+    // Delete legacy completion timestamps during exact authenticated retries.
     await receiptRef.set({
       derivativeInvalidation,
-      derivativeInvalidationCompletedAt: FieldValue.serverTimestamp(),
+      derivativeInvalidationAttemptedAt: FieldValue.serverTimestamp(),
+      derivativeInvalidationCompletedAt: FieldValue.delete(),
+      derivativeInvalidationStatus: 'STORAGE_WRITE_FENCE_UNVERIFIED',
+      privateOutputDeletionAcknowledged: false,
+      storageWriteFenceVerified: false,
     }, { merge: true });
     response.status(200).json({
       ok: true,

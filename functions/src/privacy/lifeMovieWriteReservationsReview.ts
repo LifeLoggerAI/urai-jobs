@@ -15,6 +15,8 @@
 import { createHash } from 'node:crypto';
 import { getApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { assertReviewOnlyHistoricalObservationClaim, assessReviewOnlyGenerationEvidence, canonicalReviewOnlyStorageGeneration } from './lifeMovieGenerationEvidenceReview.js';
+import { getStorage } from 'firebase-admin/storage';
 
 const PROJECT = 'urai-staging-test';
 const PURPOSE = 'life-movie.render';
@@ -22,7 +24,6 @@ const FENCES = 'lifeMovieWriteFencesReviewOnly';
 const ATTEMPTS = 'lifeMovieWriteAttemptsReviewOnly';
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const HOST = /^(?:127\.0\.0\.1|localhost):[1-9][0-9]{0,4}$/;
-
 export type ReviewOutputScope = {
   ownerUid: string;
   tenantId: string;
@@ -114,8 +115,18 @@ function checkedAttempt(data: unknown, scope: ReviewOutputScope, jobId: string, 
     r.tenantId !== scope.tenantId || r.projectId !== scope.projectId ||
     r.reviewOnlyEmulator !== true || r.productionAuthorized !== false ||
     !Number.isSafeInteger(r.epoch) || Number(r.epoch) <= 0 ||
-    !['RESERVED', 'SIMULATED_IN_FLIGHT', 'CANCELLED_BEFORE_UPLOAD'].includes(String(r.state))) {
+    !['RESERVED', 'SIMULATED_IN_FLIGHT', 'CANCELLED_BEFORE_UPLOAD',
+      'PHYSICAL_GENERATION_UNVERIFIED'].includes(String(r.state))) {
     throw new Error('life_movie_review_write_attempt_unverified');
+  }
+  if (r.state === 'PHYSICAL_GENERATION_UNVERIFIED' &&
+    (r.storageWriteFenceVerified !== false || r.productionAuthorized !== false ||
+      r.storageMetadataReadbackVerified !== true ||
+      !canonicalReviewOnlyStorageGeneration(r.physicalGeneration) ||
+      r.objectPath !== reviewOnlySyntheticOutputObjectPath({
+        ...scope, jobId, attemptId,
+      }))) {
+    throw new Error('life_movie_review_write_physical_generation_unverified');
   }
   return { epoch: Number(r.epoch), state: String(r.state) };
 }
@@ -306,4 +317,138 @@ export async function reviewOnlyDrainStatus(scope: ReviewOutputScope) {
     revocationComplete: false, simulatedOnly: true, storageWriteFenceVerified: false,
     revocationAcknowledgementPermitted: false, productionAuthorized: false,
   };
+}
+
+
+/**
+ * R857 NONPRODUCTION: a deterministic object path used only by the disposable
+ * emulator broker fixture. This is not a production storage authority.
+ * Unlike a caller-supplied gs:// URI it cannot point outside the canonical
+ * owner/tenant/project output namespace.
+ */
+export function reviewOnlySyntheticOutputObjectPath(identity: ReviewAttemptIdentity): string {
+  const s = checkedScope(identity);
+  const jobId = segment(identity.jobId, 'job');
+  const attemptId = segment(identity.attemptId, 'attempt');
+  const suffix = createHash('sha256')
+    .update(['urai-r857-review-only-physical-broker', s.ownerUid, s.tenantId,
+      s.projectId, jobId, attemptId].join('\n')).digest('hex');
+  return `tenants/${s.tenantId}/life-movies/${s.projectId}/review-only-broker/${suffix}.bin`;
+}
+
+/**
+ * A last emulator-only veto immediately before a synthetic byte write.
+ * This is deliberately not a production grant: revocation can still race
+ * after a Firestore read and before Storage receives the bytes.
+ */
+export async function assertReviewOnlyBrokerPreByte(identity: ReviewAttemptIdentity): Promise<void> {
+  reviewedOnly();
+  const s = checkedScope(identity);
+  const jobId = segment(identity.jobId, 'job');
+  const attemptId = segment(identity.attemptId, 'attempt');
+  const { db, fence } = refs(s);
+  const item = attemptRef(s, jobId, attemptId);
+  await db.runTransaction(async (transaction) => {
+    const [fenceSnap, attemptSnap] = await Promise.all([
+      transaction.get(fence), transaction.get(item),
+    ]);
+    if (!fenceSnap.exists) throw new Error('life_movie_review_write_fence_missing');
+    const current = checkedFence(fenceSnap.data(), s);
+    const attempt = checkedAttempt(attemptSnap.data(), s, jobId, attemptId);
+    if (current.state !== 'OPEN' || current.epoch !== attempt.epoch ||
+      attempt.state !== 'SIMULATED_IN_FLIGHT') {
+      throw new Error('life_movie_review_write_fence_revoked_or_stale');
+    }
+  });
+}
+
+/**
+ * Stores a REAL emulator Storage generation as unresolved durable evidence.
+ * A byte stream may have committed after revocation, so this must be allowed
+ * during FENCING for reconciliation. The generation is not a deletion ACK,
+ * storage IAM proof, or caller-conferred upload authorization.
+ */
+export async function recordReviewOnlyBrokerPhysicalGeneration(
+  identity: ReviewAttemptIdentity, generation: string,
+) {
+  reviewedOnly();
+  const s = checkedScope(identity);
+  const jobId = segment(identity.jobId, 'job');
+  const attemptId = segment(identity.attemptId, 'attempt');
+  if (!canonicalReviewOnlyStorageGeneration(generation)) {
+    throw new Error('life_movie_review_write_generation_invalid');
+  }
+  const objectPath = reviewOnlySyntheticOutputObjectPath(identity);
+  // This ledger must NOT accept a caller's claimed physical generation
+  // without a real emulator Storage read. A Firestore-only declaration can
+  // fabricate an object that never existed at the bound canonical path.
+  // Storage metadata and Firestore are not atomic: this is observation only,
+  // with every attempt permanently unresolved for deletion ACK.
+  let observedGeneration: unknown = null;
+  let storageNotFound = false;
+  try {
+    const [metadata] = await getStorage().bucket(PROJECT + '.appspot.com')
+      .file(objectPath).getMetadata();
+    observedGeneration = metadata?.generation;
+  } catch (error) {
+    if ((error as { code?: unknown })?.code === 404) {
+      storageNotFound = true;
+    } else {
+      throw new Error('life_movie_review_write_storage_unverified');
+    }
+  }
+  const { db, fence } = refs(s);
+  const item = attemptRef(s, jobId, attemptId);
+  return db.runTransaction(async (transaction) => {
+    const [fenceSnap, attemptSnap] = await Promise.all([
+      transaction.get(fence), transaction.get(item),
+    ]);
+    if (!fenceSnap.exists) throw new Error('life_movie_review_write_fence_missing');
+    const current = checkedFence(fenceSnap.data(), s);
+    const attempt = checkedAttempt(attemptSnap.data(), s, jobId, attemptId);
+    const data = attemptSnap.data() as Record<string, unknown>;
+    // Reject a forged historical claim before classifying the current GCS
+    // object. This preserves the original generation_conflict contract.
+    if (attempt.state === 'PHYSICAL_GENERATION_UNVERIFIED') {
+      assertReviewOnlyHistoricalObservationClaim(
+        generation, data.physicalGeneration, objectPath, data.objectPath,
+      );
+    }
+    // An actual live replacement is distinct from missing after exact cleanup.
+    const { storageCurrentlyObserved } = assessReviewOnlyGenerationEvidence(
+      generation, observedGeneration, storageNotFound,
+      attempt.state === 'PHYSICAL_GENERATION_UNVERIFIED',
+    );
+    if (attempt.state === 'PHYSICAL_GENERATION_UNVERIFIED') {
+      // checkedAttempt insists this record was physically verified under R869.
+      // Historical replay after exact cleanup grants no current write or ACK.
+      return {
+        observed: true, alreadyRecorded: true,
+        storageCurrentlyObserved,
+        withdrawalFenced: current.state === 'FENCING',
+        revocationAcknowledgementPermitted: false, productionAuthorized: false,
+      };
+    }
+    if (attempt.state !== 'SIMULATED_IN_FLIGHT' ||
+      (current.state === 'OPEN' && current.epoch !== attempt.epoch) ||
+      (current.state === 'FENCING' && current.epoch <= attempt.epoch)) {
+      throw new Error('life_movie_review_write_generation_state_unverified');
+    }
+    transaction.update(item, {
+      state: 'PHYSICAL_GENERATION_UNVERIFIED',
+      physicalGeneration: generation,
+      objectPath,
+      storageMetadataReadbackVerified: true,
+      withdrawalFencedBeforeObservation: current.state === 'FENCING',
+      storageWriteFenceVerified: false,
+      productionAuthorized: false,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return {
+      observed: true, alreadyRecorded: false,
+      storageCurrentlyObserved: true,
+      withdrawalFenced: current.state === 'FENCING',
+      revocationAcknowledgementPermitted: false, productionAuthorized: false,
+    };
+  });
 }
