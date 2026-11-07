@@ -533,6 +533,7 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
     for (const [index, childSnapshot] of snapshots.entries()) {
       if (!childSnapshot.exists) throw new Error('longform_child_not_found');
       const child = childSnapshot.data() as Job;
+      assertLifeMovieJobPlanOrg(plan, child);
       validateOwnedMovieJob(child as unknown as Record<string, unknown>,
         boundPlanJob(plan, plan.childJobIds[index], 'segment'));
       if (!isDeepStrictEqual(child.consent, plan.consent)) throw new Error('life_movie_owner_job_boundary_mismatch');
@@ -540,6 +541,7 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
     if (plan.assemblyJobId) {
       if (!assemblySnapshot?.exists) throw new Error('longform_child_not_found');
       const assembly = assemblySnapshot.data() as Job;
+      assertLifeMovieJobPlanOrg(plan, assembly);
       validateOwnedMovieJob(assembly as unknown as Record<string, unknown>,
         boundPlanJob(plan, plan.assemblyJobId, 'assembly'));
       if (!isDeepStrictEqual(assembly.consent, plan.consent)) throw new Error('life_movie_owner_job_boundary_mismatch');
@@ -691,6 +693,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
 
     if (existing.exists) {
       const current = existing.data() as Job;
+      assertLifeMovieJobPlanOrg(currentPlan, current);
       if (current.ownerUid !== userId || current.tenantId !== tenantId
         || (current.jobType || current.type) !== 'studio.assemble.video'
         || buildRequestFingerprint('studio.assemble.video', current.payload) !== buildRequestFingerprint('studio.assemble.video', payload)) {
@@ -918,6 +921,7 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
     for (const [index, snapshot] of snapshots.entries()) {
       if (!snapshot.exists) throw new Error('longform_child_not_found');
       const child = snapshot.data() as Job;
+      assertLifeMovieJobPlanOrg(currentPlan, child);
       validateOwnedMovieJob(child as unknown as Record<string, unknown>,
         boundPlanJob(currentPlan, currentPlan.childJobIds[index], 'segment'));
       const descriptor = currentPlan.segments[index];
@@ -933,6 +937,7 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
     if (currentPlan.assemblyJobId) {
       if (!assemblySnapshot?.exists) throw new Error('longform_child_not_found');
       const assembly = assemblySnapshot.data() as Job;
+      assertLifeMovieJobPlanOrg(currentPlan, assembly);
       validateOwnedMovieJob(assembly as unknown as Record<string, unknown>,
         boundPlanJob(currentPlan, currentPlan.assemblyJobId, 'assembly'));
       const assemblyPayload = assembly.payload as Record<string, unknown> | undefined;
@@ -1036,6 +1041,7 @@ async function deletePlanOutputs(planId: string, tenantId: string, userId: strin
   for (const [index, snapshot] of snapshots.entries()) {
     if (!snapshot.exists) throw new Error('longform_child_not_found');
     const job = snapshot.data() as Record<string, unknown>;
+    assertLifeMovieJobPlanOrg(plan, job);
     preflightOwnedMovieOutputs(job, owners[index]);
   }
   let deletedObjectCount = 0;
@@ -1074,10 +1080,12 @@ async function cancelPlan(planId: string, tenantId: string, userId: string) {
     // Validate every child before any writes, including already-terminal jobs.
     for (const [index, snapshot] of childSnapshots.entries()) {
       if (!snapshot.exists) throw new Error('longform_child_not_found');
+      assertLifeMovieJobPlanOrg(plan, snapshot.data());
       validateOwnedMovieJob(snapshot.data() as Record<string, unknown>, boundPlanJob(plan, plan.childJobIds[index], 'segment'));
     }
     if (plan.assemblyJobId) {
       if (!assemblySnapshot?.exists) throw new Error('longform_child_not_found');
+      assertLifeMovieJobPlanOrg(plan, assemblySnapshot.data());
       validateOwnedMovieJob(assemblySnapshot.data() as Record<string, unknown>, boundPlanJob(plan, plan.assemblyJobId, 'assembly'));
     }
     const now = FieldValue.serverTimestamp();
