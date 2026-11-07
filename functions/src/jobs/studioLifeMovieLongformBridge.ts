@@ -374,6 +374,10 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
           throw new Error('idempotency_conflict');
         }
       }
+      const boundPlan = await transaction.get(planRef(bound.planId as string));
+      if (!boundPlan.exists) throw new Error('longform_plan_not_found');
+      const prior = assertPlanOwner(boundPlan.data() as StoredPlan, input.tenantId, input.userId);
+      assertLifeMoviePlanCurrentOrg(prior, ownerSnapshot.data());
       return { planId: bound.planId as string, deduplicated: true, segmentCount: segments.length };
     }
 
@@ -382,6 +386,10 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
       if (!bindingMatches(binding, expectedBinding) || typeof binding.jobId !== 'string' || !binding.jobId) {
         throw new Error('idempotency_conflict');
       }
+      const boundPlan = await transaction.get(planRef(binding.jobId));
+      if (!boundPlan.exists) throw new Error('longform_plan_not_found');
+      const prior = assertPlanOwner(boundPlan.data() as StoredPlan, input.tenantId, input.userId);
+      assertLifeMoviePlanCurrentOrg(prior, ownerSnapshot.data());
       return { planId: binding.jobId, deduplicated: true, segmentCount: segments.length };
     }
 
