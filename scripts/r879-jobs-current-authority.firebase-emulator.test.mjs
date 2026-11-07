@@ -16,6 +16,8 @@ const FIRESTORE_HOST = '127.0.0.1:8080';
 const FUNCTIONS_HOST = '127.0.0.1:5001';
 const STORAGE_HOST = '127.0.0.1:9199';
 assert.equal(process.env.R879_JOBS_EMULATOR_APPROVED, '1', 'R879 requires explicit demo-emulator opt-in');
+assert.ok(!process.env.URAI_JOBS_CREATE_RATE_LIMIT_PER_MINUTE || process.env.URAI_JOBS_CREATE_RATE_LIMIT_PER_MINUTE === '10',
+  'R879 quota assertion requires the original 10/min admission limit');
 for (const [key, value] of Object.entries({
   GCLOUD_PROJECT: PROJECT,
   GOOGLE_CLOUD_PROJECT: PROJECT,
@@ -102,13 +104,29 @@ before(async () => {
   quotaToken = await tokenFor(ids.quota);
 });
 after(async () => {
-  await Promise.allSettled(Object.values(ids).map(uid => db.collection('users').doc(uid).delete()));
-  await Promise.allSettled([...touchedJobs].map(async id => {
-    await db.collection('jobs').doc(id).delete();
-    await db.collection('jobQueue').doc(id).delete();
-  }));
-  await Promise.allSettled(Object.values(ids).map(uid => auth.deleteUser(uid)));
-  await deleteApp(app);
+  // Synthetic users are uniquely namespaced. Delete their jobs recursively
+  // (including audit logs) and idempotency bindings, even after test failure.
+  // Never scan or delete records belonging to unrelated emulator accounts.
+  const failures = [];
+  for (const uid of Object.values(ids)) {
+    try {
+      const owned = await db.collection('jobs').where('ownerUid', '==', uid).get();
+      for (const job of owned.docs) {
+        touchedJobs.add(job.id);
+        await db.recursiveDelete(job.ref);
+        await db.collection('jobQueue').doc(job.id).delete();
+      }
+      const bindings = await db.collection('jobIdempotencyBindings')
+        .where('ownerUid', '==', uid).get();
+      for (const binding of bindings.docs) await binding.ref.delete();
+      await db.collection('users').doc(uid).delete();
+      await auth.deleteUser(uid);
+    } catch (error) {
+      failures.push(uid + ': ' + String(error));
+    }
+  }
+  try { await deleteApp(app); } catch (error) { failures.push('app: ' + String(error)); }
+  assert.deepEqual(failures, [], 'R879 emulator teardown must not silently leave synthetic records');
 });
 test('R879 original native Auth/Firestore/Functions caller and owner-scope acceptance', async t => {
   await t.test('active owner creates and reads a bound job', async () => {
