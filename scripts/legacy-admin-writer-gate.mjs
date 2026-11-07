@@ -33,7 +33,8 @@ export function assertDisposableLegacyWriter(env = process.env) {
   if (new Set(declared).size !== 1) {
     reject('all declared Firebase/GCP project IDs must agree');
   }
-  if (env.GOOGLE_APPLICATION_CREDENTIALS || env.GOOGLE_CLOUD_BUCKET || env.FIREBASE_STORAGE_BUCKET) {
+  if (env.GOOGLE_APPLICATION_CREDENTIALS || env.FIREBASE_CONFIG ||
+      env.GOOGLE_CLOUD_BUCKET || env.FIREBASE_STORAGE_BUCKET || env.GOOGLE_CLOUD_QUOTA_PROJECT) {
     reject('cloud credentials or Storage bucket environment variables are forbidden');
   }
   return Object.freeze({ projectId: declared[0], firestoreHost: host });
