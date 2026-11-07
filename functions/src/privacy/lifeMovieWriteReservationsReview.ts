@@ -15,6 +15,7 @@
 import { createHash } from 'node:crypto';
 import { getApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
 const PROJECT = 'urai-staging-test';
 const PURPOSE = 'life-movie.render';
@@ -22,6 +23,14 @@ const FENCES = 'lifeMovieWriteFencesReviewOnly';
 const ATTEMPTS = 'lifeMovieWriteAttemptsReviewOnly';
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const HOST = /^(?:127\.0\.0\.1|localhost):[1-9][0-9]{0,4}$/;
+const MAX_GCS_GENERATION = (1n << 64n) - 1n;
+
+// Generation is a decimal 64-bit identifier, not a JS Number. Validation must
+// preserve every decimal digit even when a real generation exceeds 2^53-1.
+function canonicalGeneration(value: unknown): value is string {
+  return typeof value === 'string' && /^[1-9][0-9]{0,19}$/.test(value)
+    && BigInt(value) <= MAX_GCS_GENERATION;
+}
 
 export type ReviewOutputScope = {
   ownerUid: string;
@@ -120,8 +129,7 @@ function checkedAttempt(data: unknown, scope: ReviewOutputScope, jobId: string, 
   }
   if (r.state === 'PHYSICAL_GENERATION_UNVERIFIED' &&
     (r.storageWriteFenceVerified !== false || r.productionAuthorized !== false ||
-      typeof r.physicalGeneration !== 'string' || !/^[1-9][0-9]*$/.test(r.physicalGeneration) ||
-      !Number.isSafeInteger(Number(r.physicalGeneration)) ||
+      !canonicalGeneration(r.physicalGeneration) ||
       r.objectPath !== reviewOnlySyntheticOutputObjectPath({
         ...scope, jobId, attemptId,
       }))) {
@@ -374,11 +382,35 @@ export async function recordReviewOnlyBrokerPhysicalGeneration(
   const s = checkedScope(identity);
   const jobId = segment(identity.jobId, 'job');
   const attemptId = segment(identity.attemptId, 'attempt');
-  if (typeof generation !== 'string' || !/^[1-9][0-9]*$/.test(generation) ||
-    !Number.isSafeInteger(Number(generation))) {
+  if (!canonicalGeneration(generation)) {
     throw new Error('life_movie_review_write_generation_invalid');
   }
   const objectPath = reviewOnlySyntheticOutputObjectPath(identity);
+  // This ledger must NOT accept a caller's claimed physical generation
+  // without a real emulator Storage read. A Firestore-only declaration can
+  // fabricate an object that never existed at the bound canonical path.
+  // Storage metadata and Firestore are not atomic: this is observation only,
+  // with every attempt permanently unresolved for deletion ACK.
+  let observedGeneration: unknown;
+  try {
+    const [metadata] = await getStorage().bucket(PROJECT + '.appspot.com')
+      .file(objectPath).getMetadata();
+    observedGeneration = metadata?.generation;
+  } catch (error) {
+    if ((error as { code?: unknown })?.code === 404) {
+      throw new Error('life_movie_review_write_generation_not_observed');
+    }
+    throw new Error('life_movie_review_write_storage_unverified');
+  }
+  // Firebase Admin SDK's GCS generation is ordinarily a decimal string.
+  // Reject unsafe JS numbers rather than introducing precision loss.
+  if (typeof observedGeneration === 'number') {
+    observedGeneration = Number.isSafeInteger(observedGeneration)
+      ? String(observedGeneration) : null;
+  }
+  if (!canonicalGeneration(observedGeneration) || observedGeneration !== generation) {
+    throw new Error('life_movie_review_write_generation_not_observed');
+  }
   const { db, fence } = refs(s);
   const item = attemptRef(s, jobId, attemptId);
   return db.runTransaction(async (transaction) => {
