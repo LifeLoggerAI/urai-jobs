@@ -46,6 +46,9 @@ check_blob 'functions/src/jobs/getJob.ts' 'fd7d04c76907bbd819568336f2c237b8819d7
 check_blob 'functions/src/jobs/cancelJob.ts' '3c126dd251a6ad241fb6a5a63b1294e5b8a4403c'
 check_blob 'functions/src/jobs/getJobStatus.ts' 'a198db9694e7352f470c8dbd399dd4af01bd65a4'
 check_blob 'scripts/r875-current-job-caller-authority.test.mjs' 'dc06b34c56693d7ee8496740c158102e5ebce917'
+check_blob 'scripts/r876-current-getJobStatus-lifecycle.test.mjs' '6e36a31f9ba17dbf10ba90c79ecd4571b163319f'
+check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d533'
+check_blob 'functions/src/jobs/createJob.ts' '03433ab35ce0374cae58dac572985c75c3abf3b3'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
 check_blob 'package.json' 'f1a05d4c8ba3f4f980043229e5647f2288c66fd3'
@@ -105,6 +108,13 @@ stage owner_scope_17_source 120s node --experimental-strip-types --test \
   scripts/r877-owner-scope-guard.test.mjs \
   scripts/r878-owner-scope-read-cancel.test.mjs
 grep -q '# pass 17' "$OUT/owner_scope_17_source.log" || hold '17 owner-scope source tests not recorded'
+
+# R880 independently re-executes the original source-matched callable
+# role/downgrade/status suites as an explicit acceptance receipt.
+stage current_callable_18_source 120s node --test \
+  scripts/r875-current-job-caller-authority.test.mjs \
+  scripts/r876-current-getJobStatus-lifecycle.test.mjs
+grep -q '# pass 18' "$OUT/current_callable_18_source.log" || hold '18 current-callable source tests not recorded'
 
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \
