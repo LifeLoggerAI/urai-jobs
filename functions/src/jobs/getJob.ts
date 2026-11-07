@@ -1,30 +1,12 @@
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { checkedCurrentJobCaller } from "./currentJobCallerAuthority.js";
 
 if (getApps().length === 0) initializeApp();
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-}
-
-function hasOperatorAccess(auth: unknown): boolean {
-  const authRecord = asRecord(auth);
-  const token = asRecord(authRecord.token);
-  const role = token.role;
-  const roles = Array.isArray(token.roles) ? token.roles : [];
-
-  return (
-    role === "admin" ||
-    role === "operator" ||
-    token.uraiJobsAdmin === true ||
-    roles.includes("admin") ||
-    roles.includes("operator")
-  );
-}
-
-function authUid(auth: unknown): string {
-  return String(asRecord(auth).uid || "");
 }
 
 export const getJob = onCall({ region: "us-central1" }, async (request) => {
@@ -37,23 +19,30 @@ export const getJob = onCall({ region: "us-central1" }, async (request) => {
     throw new HttpsError("invalid-argument", "jobId is required.");
   }
 
+  const uid = String(asRecord(request.auth).uid || "");
+  if (!uid) throw new HttpsError("unauthenticated", "Authenticated user ID is required.");
   const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
   const jobRef = db.collection("jobs").doc(jobId);
-  const jobSnap = await jobRef.get();
 
-  if (!jobSnap.exists) {
-    throw new HttpsError("not-found", `Job ${jobId} was not found.`);
-  }
+  // Authorization, job fields and log query share the same Firestore snapshot.
+  return db.runTransaction(async transaction => {
+    const [userSnap, jobSnap] = await Promise.all([
+      transaction.get(userRef), transaction.get(jobRef)
+    ]);
+    const caller = checkedCurrentJobCaller(request.auth, userSnap.exists ? userSnap.data() : null);
+    if (!caller) throw new HttpsError("permission-denied", "Current user authority is unavailable.");
+    if (!jobSnap.exists) throw new HttpsError("not-found", `Job ${jobId} was not found.`);
 
-  const job = { id: jobSnap.id, ...jobSnap.data() } as Record<string, unknown>;
-  const ownerUid = String(job.ownerUid || job.createdBy || "");
+    const job = { id: jobSnap.id, ...jobSnap.data() } as Record<string, unknown>;
+    const ownerUid = String(job.ownerUid || job.createdBy || "");
+    if (!caller.operator && ownerUid !== caller.uid) {
+      throw new HttpsError("permission-denied", "You do not have access to this job.");
+    }
 
-  if (!hasOperatorAccess(request.auth) && ownerUid !== authUid(request.auth)) {
-    throw new HttpsError("permission-denied", "You do not have access to this job.");
-  }
-
-  const logsSnap = await jobRef.collection("logs").orderBy("createdAt", "desc").limit(100).get();
-  const logs = logsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-
-  return { job, logs };
+    const logsQuery = jobRef.collection("logs").orderBy("createdAt", "desc").limit(100);
+    const logsSnap = await transaction.get(logsQuery);
+    const logs = logsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return { job, logs };
+  });
 });
