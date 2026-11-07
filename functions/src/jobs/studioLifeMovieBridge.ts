@@ -294,13 +294,21 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
 }
 
 async function loadBoundJob(tenantId: string, userId: string, jobId: string) {
-  const snapshot = await jobDoc(jobId).get();
-  if (!snapshot.exists) throw new Error('job_not_found');
-  const job = snapshot.data() as Job & { sourceSystem?: string };
-  if (job.jobId !== jobId || job.sourceSystem !== 'urai-studio' || job.tenantId !== tenantId || job.ownerUid !== userId || (job.jobType || job.type) !== 'studio.render.video') {
-    throw new Error('job_boundary_mismatch');
-  }
-  return job;
+  const db = getFirestore();
+  // A historical job binding cannot establish the current owner's authority.
+  // Check the owner and job in one Firestore read transaction before status
+  // metadata is returned. Cancel/delete cleanup remain independently available.
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(jobDoc(jobId));
+    if (!snapshot.exists) throw new Error('job_not_found');
+    const job = snapshot.data() as Job & { sourceSystem?: string };
+    if (job.jobId !== jobId || job.sourceSystem !== 'urai-studio' || job.tenantId !== tenantId || job.ownerUid !== userId || (job.jobType || job.type) !== 'studio.render.video') {
+      throw new Error('job_boundary_mismatch');
+    }
+    const ownerSnapshot = await transaction.get(db.collection('users').doc(userId));
+    assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, userId, tenantId);
+    return job;
+  });
 }
 
 function allowedLifeMovieOutputBuckets() {

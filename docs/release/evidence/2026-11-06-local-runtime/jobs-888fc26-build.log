@@ -1,0 +1,111 @@
+(node:313) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> urai-jobs@ build /workspace/scratch/80a9b7b328e5/jobs-current
+> npm run build --prefix packages/shared-types && npm run build --prefix functions && npm run build --prefix web --if-present && npm run build --prefix workers --if-present && npm run career-worker:build && npm run private-source-worker:build && npm run studio-worker:build && npm run captured-reality-worker:build && npm run private-life-model-index-provider:build
+
+(node:326) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @urai-jobs/shared-types@1.0.0 build
+> tsc
+
+(node:352) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> build
+> tsc -p tsconfig.json
+
+(node:378) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> build
+> tsc -p tsconfig.json && vite build
+
+(node:404) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v6.4.1 building for production...
+transforming...
+✓ 63 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.56 kB │ gzip:   0.31 kB
+dist/assets/index-B_bgAljj.css    7.05 kB │ gzip:   2.27 kB
+dist/assets/index-B-Ygl8UO.js   385.27 kB │ gzip: 104.16 kB
+✓ built in 1.55s
+(node:433) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> build
+> tsc -p tsconfig.json
+
+(node:459) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> career-worker:build
+> npm run build --prefix workers/career-worker
+
+(node:472) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> career-worker@1.0.0 build
+> rimraf dist && tsc
+
+(node:485) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:515) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> private-source-worker:build
+> npm run build --prefix workers/private-source-worker
+
+(node:528) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> private-source-worker@1.0.0 build
+> rimraf dist && tsc
+
+(node:541) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:571) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> studio-worker:build
+> npm run build --prefix workers/studio-worker
+
+(node:584) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> studio-worker@1.1.0 build
+> node --check index.js
+
+(node:597) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:605) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> captured-reality-worker:build
+> npm run build --prefix workers/captured-reality-worker
+
+(node:618) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> captured-reality-worker@1.0.0 build
+> node --check index.js
+
+(node:631) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:639) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> private-life-model-index-provider:build
+> npm run build --prefix workers/private-life-model-index-provider
+
+(node:652) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> private-life-model-index-provider@1.0.0 build
+> rimraf dist && tsc
+
+(node:665) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)

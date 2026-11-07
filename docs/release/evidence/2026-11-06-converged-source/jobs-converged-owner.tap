@@ -1,0 +1,80 @@
+(node:6) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:13) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: approved owner/tenant and clear account projection passes the independent transaction-local guard
+ok 1 - approved owner/tenant and clear account projection passes the independent transaction-local guard
+  ---
+  duration_ms: 2.327125
+  type: 'test'
+  ...
+# Subtest: wrong tenant, wrong owner, missing profile and missing identity fail closed
+ok 2 - wrong tenant, wrong owner, missing profile and missing identity fail closed
+  ---
+  duration_ms: 1.152052
+  type: 'test'
+  ...
+# Subtest: missing legacy owner/tenant/active state cannot be mistaken for authorization
+ok 3 - missing legacy owner/tenant/active state cannot be mistaken for authorization
+  ---
+  duration_ms: 0.449131
+  type: 'test'
+  ...
+# Subtest: disabled, deleted, pending deletion and malformed status fail closed
+ok 4 - disabled, deleted, pending deletion and malformed status fail closed
+  ---
+  duration_ms: 0.391357
+  type: 'test'
+  ...
+# Subtest: legacy absent disabled/central flag does not manufacture those states
+ok 5 - legacy absent disabled/central flag does not manufacture those states
+  ---
+  duration_ms: 0.340081
+  type: 'test'
+  ...
+# Subtest: inherited and accessor-backed tenant and deletion fields are rejected without executing getters
+ok 6 - inherited and accessor-backed tenant and deletion fields are rejected without executing getters
+  ---
+  duration_ms: 0.590033
+  type: 'test'
+  ...
+# Subtest: throwing profile or hostile snapshot fails closed
+ok 7 - throwing profile or hostile snapshot fails closed
+  ---
+  duration_ms: 0.226537
+  type: 'test'
+  ...
+# Subtest: both actual Studio bridges enforce the guard inside all enqueue/resume transactions
+ok 8 - both actual Studio bridges enforce the guard inside all enqueue/resume transactions
+  ---
+  duration_ms: 0.720275
+  type: 'test'
+  ...
+# Subtest: Studio status rechecks owner and tenant within one Firestore read transaction
+ok 9 - Studio status rechecks owner and tenant within one Firestore read transaction
+  ---
+  duration_ms: 47.385845
+  type: 'test'
+  ...
+# Subtest: long-form status atomically checks owner, consent and original job bindings
+ok 10 - long-form status atomically checks owner, consent and original job bindings
+  ---
+  duration_ms: 100.501866
+  type: 'test'
+  ...
+# Subtest: worker activation and consent availability remain hard closed
+ok 11 - worker activation and consent availability remain hard closed
+  ---
+  duration_ms: 0.558734
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 627.601473

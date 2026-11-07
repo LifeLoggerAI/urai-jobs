@@ -1,0 +1,141 @@
+i  emulators: Starting emulators: auth, functions, firestore, storage
+i  emulators: Detected demo project ID "demo-memory-media-playback", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail.
+i  firestore: Firestore Emulator logging to firestore-debug.log
+✔  firestore: Firestore Emulator was started in standard edition.
+✔  firestore: Firestore Emulator UI websocket is running on 9150.
+i  functions: Watching "/workspace/scratch/80a9b7b328e5/spatial/apps/functions" for Cloud Functions...
+⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory.
+⚠  functions: Please note that there will be breaking changes when you upgrade.
+✔  functions: Using node@22 from host.
+Serving at port 8538
+
+✔  functions: Loaded functions definitions from source: evaluateSpatialTierLock, createStripeCheckout, createStripeCustomerPortal, getStripeEntitlement, handleStripeWebhook, applyConsentPolicy, cancelSpatialDeletionRequest, cancelSpatialExportRequest, createSpatialDeletionRequest, createSpatialExportRequest, getOperationalExportDownloadUrl, downloadOperationalExportPackage, getPassportSnapshot, processDeletionGraceQueue, processDeletionQueueItem, processExportJob, processPrivacyEnforcementJob, createPossibleFuture, generatePossibleFutureBranches, getPossibleFuture, getPossibleFutureCouncilBundle, savePossibleFuture, discardPossibleFuture, comparePossibleFutureBranches, recordPossibleFutureOutcome, deletePossibleFuture, calibratePossibleFutureOutcome, getAILedgerEntries, ledgerScenarioCreated, ledgerScenarioOutcomeObserved, getGlobalEmotionalFieldSnapshot, getMemoryMediaUploadAuthority, registerMemoryMedia, reconcileMemoryMediaUploads, getMemoryMediaPlaybackAuthority, streamMemoryMediaPlayback, activateFirstPrivateMemory, createFirstPrivateMemory, elevenLabsVoiceProvider, openAiOrbProvider, adamFounderVoiceProvider, adamPresenceProvider, googleOAuthCallback, googleOAuthDisconnect, googleOAuthStart, googleOAuthStatus, getCapturedRealityAsset, getCapturedRealityRuntimeUrl, streamCapturedRealityRuntime, getCapturedRealityReplayEntry, getCapturedRealityMeshUrl, streamCapturedRealityMesh, getInterpretiveWorldAsset, getInterpretiveWorldRuntimeUrl, getInterpretiveWorldReplayEntry, recordPassiveSignal, grantSpeechPurposeLease, revokeSpeechPurposeLease, processSpeechPurgeQueueItem, retrySpeechPurgeQueue, upsertLifeMovieManifest, revokeLifeMovieManifest, anthropicCouncilProvider, geminiCouncilProvider, mistralCouncilProvider, xaiCouncilProvider, applyLifeCorrection, compileLifeCausalGraphSnapshot, compilePersonModelBundle, compileSceneTruthPacket, getCouncilLifeGraphEvidence, getReplayLifeModelAuthority, revokeLifeEntity, upsertLifeCausalEdge, upsertLifeClaim, upsertLifeEntity, upsertLifeEntityState, closePersonPresenceSession, getPersonPresenceCapabilities, preparePersonPresenceSession, promotePersonRenderBinding, revokePersonRenderBinding, personPresenceProvider, personPresenceVoiceProvider, mapsElevationProvider, resolveLifeModelPrivateInputs, reviewPrivateLifeModelCandidate.
+✔  functions[us-central1-evaluateSpatialTierLock]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/evaluateSpatialTierLock).
+✔  functions[us-central1-createStripeCheckout]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/createStripeCheckout).
+✔  functions[us-central1-createStripeCustomerPortal]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/createStripeCustomerPortal).
+✔  functions[us-central1-getStripeEntitlement]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getStripeEntitlement).
+✔  functions[us-central1-handleStripeWebhook]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/handleStripeWebhook).
+✔  functions[us-central1-applyConsentPolicy]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/applyConsentPolicy).
+✔  functions[us-central1-cancelSpatialDeletionRequest]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/cancelSpatialDeletionRequest).
+✔  functions[us-central1-cancelSpatialExportRequest]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/cancelSpatialExportRequest).
+✔  functions[us-central1-createSpatialDeletionRequest]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/createSpatialDeletionRequest).
+✔  functions[us-central1-createSpatialExportRequest]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/createSpatialExportRequest).
+✔  functions[us-central1-getOperationalExportDownloadUrl]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getOperationalExportDownloadUrl).
+✔  functions[us-central1-downloadOperationalExportPackage]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/downloadOperationalExportPackage).
+✔  functions[us-central1-getPassportSnapshot]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getPassportSnapshot).
+i  functions[us-central1-processDeletionGraceQueue]: function ignored because the pubsub emulator does not exist or is not running.
+✔  functions[us-central1-processDeletionQueueItem]: firestore function initialized.
+✔  functions[us-central1-processExportJob]: firestore function initialized.
+✔  functions[us-central1-processPrivacyEnforcementJob]: firestore function initialized.
+✔  functions[us-central1-createPossibleFuture]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/createPossibleFuture).
+✔  functions[us-central1-generatePossibleFutureBranches]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/generatePossibleFutureBranches).
+✔  functions[us-central1-getPossibleFuture]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getPossibleFuture).
+✔  functions[us-central1-getPossibleFutureCouncilBundle]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getPossibleFutureCouncilBundle).
+✔  functions[us-central1-savePossibleFuture]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/savePossibleFuture).
+✔  functions[us-central1-discardPossibleFuture]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/discardPossibleFuture).
+✔  functions[us-central1-comparePossibleFutureBranches]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/comparePossibleFutureBranches).
+✔  functions[us-central1-recordPossibleFutureOutcome]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/recordPossibleFutureOutcome).
+✔  functions[us-central1-deletePossibleFuture]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/deletePossibleFuture).
+✔  functions[us-central1-calibratePossibleFutureOutcome]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/calibratePossibleFutureOutcome).
+✔  functions[us-central1-getAILedgerEntries]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getAILedgerEntries).
+✔  functions[us-central1-ledgerScenarioCreated]: firestore function initialized.
+✔  functions[us-central1-ledgerScenarioOutcomeObserved]: firestore function initialized.
+✔  functions[us-central1-getGlobalEmotionalFieldSnapshot]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getGlobalEmotionalFieldSnapshot).
+✔  functions[us-central1-getMemoryMediaUploadAuthority]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getMemoryMediaUploadAuthority).
+✔  functions[us-central1-registerMemoryMedia]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/registerMemoryMedia).
+i  functions[us-central1-reconcileMemoryMediaUploads]: function ignored because the pubsub emulator does not exist or is not running.
+✔  functions[us-central1-getMemoryMediaPlaybackAuthority]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getMemoryMediaPlaybackAuthority).
+✔  functions[us-central1-streamMemoryMediaPlayback]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/streamMemoryMediaPlayback).
+✔  functions[us-central1-activateFirstPrivateMemory]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/activateFirstPrivateMemory).
+✔  functions[us-central1-createFirstPrivateMemory]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/createFirstPrivateMemory).
+✔  functions[us-central1-elevenLabsVoiceProvider]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/elevenLabsVoiceProvider).
+✔  functions[us-central1-openAiOrbProvider]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/openAiOrbProvider).
+✔  functions[us-central1-adamFounderVoiceProvider]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/adamFounderVoiceProvider).
+✔  functions[us-central1-adamPresenceProvider]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/adamPresenceProvider).
+✔  functions[us-central1-googleOAuthCallback]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/googleOAuthCallback).
+✔  functions[us-central1-googleOAuthDisconnect]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/googleOAuthDisconnect).
+✔  functions[us-central1-googleOAuthStart]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/googleOAuthStart).
+✔  functions[us-central1-googleOAuthStatus]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/googleOAuthStatus).
+✔  functions[us-central1-getCapturedRealityAsset]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getCapturedRealityAsset).
+✔  functions[us-central1-getCapturedRealityRuntimeUrl]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getCapturedRealityRuntimeUrl).
+✔  functions[us-central1-streamCapturedRealityRuntime]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/streamCapturedRealityRuntime).
+✔  functions[us-central1-getCapturedRealityReplayEntry]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getCapturedRealityReplayEntry).
+✔  functions[us-central1-getCapturedRealityMeshUrl]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getCapturedRealityMeshUrl).
+✔  functions[us-central1-streamCapturedRealityMesh]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/streamCapturedRealityMesh).
+✔  functions[us-central1-getInterpretiveWorldAsset]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getInterpretiveWorldAsset).
+✔  functions[us-central1-getInterpretiveWorldRuntimeUrl]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getInterpretiveWorldRuntimeUrl).
+✔  functions[us-central1-getInterpretiveWorldReplayEntry]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getInterpretiveWorldReplayEntry).
+✔  functions[us-central1-recordPassiveSignal]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/recordPassiveSignal).
+✔  functions[us-central1-grantSpeechPurposeLease]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/grantSpeechPurposeLease).
+✔  functions[us-central1-revokeSpeechPurposeLease]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/revokeSpeechPurposeLease).
+✔  functions[us-central1-processSpeechPurgeQueueItem]: firestore function initialized.
+i  functions[us-central1-retrySpeechPurgeQueue]: function ignored because the pubsub emulator does not exist or is not running.
+✔  functions[us-central1-upsertLifeMovieManifest]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/upsertLifeMovieManifest).
+✔  functions[us-central1-revokeLifeMovieManifest]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/revokeLifeMovieManifest).
+✔  functions[us-central1-anthropicCouncilProvider]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/anthropicCouncilProvider).
+✔  functions[us-central1-geminiCouncilProvider]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/geminiCouncilProvider).
+✔  functions[us-central1-mistralCouncilProvider]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/mistralCouncilProvider).
+✔  functions[us-central1-xaiCouncilProvider]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/xaiCouncilProvider).
+✔  functions[us-central1-applyLifeCorrection]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/applyLifeCorrection).
+✔  functions[us-central1-compileLifeCausalGraphSnapshot]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/compileLifeCausalGraphSnapshot).
+✔  functions[us-central1-compilePersonModelBundle]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/compilePersonModelBundle).
+✔  functions[us-central1-compileSceneTruthPacket]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/compileSceneTruthPacket).
+✔  functions[us-central1-getCouncilLifeGraphEvidence]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getCouncilLifeGraphEvidence).
+✔  functions[us-central1-getReplayLifeModelAuthority]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getReplayLifeModelAuthority).
+✔  functions[us-central1-revokeLifeEntity]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/revokeLifeEntity).
+✔  functions[us-central1-upsertLifeCausalEdge]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/upsertLifeCausalEdge).
+✔  functions[us-central1-upsertLifeClaim]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/upsertLifeClaim).
+✔  functions[us-central1-upsertLifeEntity]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/upsertLifeEntity).
+✔  functions[us-central1-upsertLifeEntityState]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/upsertLifeEntityState).
+✔  functions[us-central1-closePersonPresenceSession]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/closePersonPresenceSession).
+✔  functions[us-central1-getPersonPresenceCapabilities]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/getPersonPresenceCapabilities).
+✔  functions[us-central1-preparePersonPresenceSession]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/preparePersonPresenceSession).
+✔  functions[us-central1-promotePersonRenderBinding]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/promotePersonRenderBinding).
+✔  functions[us-central1-revokePersonRenderBinding]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/revokePersonRenderBinding).
+✔  functions[us-central1-personPresenceProvider]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/personPresenceProvider).
+✔  functions[us-central1-personPresenceVoiceProvider]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/personPresenceVoiceProvider).
+✔  functions[us-central1-mapsElevationProvider]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/mapsElevationProvider).
+✔  functions[us-central1-resolveLifeModelPrivateInputs]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/resolveLifeModelPrivateInputs).
+✔  functions[us-central1-reviewPrivateLifeModelCandidate]: http function initialized (http://127.0.0.1:5549/demo-memory-media-playback/us-central1/reviewPrivateLifeModelCandidate).
+i  Running script: node apps/functions/scripts/memory-media-playback-emulator-proof.cjs
+⬢  functions: Failed to handle request for function us-central1-getMemoryMediaPlaybackAuthority
+⬢  functions: Failed to start functions in /workspace/scratch/80a9b7b328e5/spatial/apps/functions: connect EPERM /tmp/fire_emu_87cc56eaa7dd9ad1.sock
+>  node:events:497
+>        throw er; // Unhandled 'error' event
+>        ^
+>  
+>  Error: listen EPERM: operation not permitted /tmp/fire_emu_87cc56eaa7dd9ad1.sock
+>      at Server.setupListenHandle [as _listen2] (node:net:1919:21)
+>      at listenInCluster (node:net:1998:12)
+>      at Server.listen (node:net:2120:5)
+>      at Function.listen (/workspace/scratch/80a9b7b328e5/spatial/node_modules/firebase-tools/node_modules/express/lib/application.js:635:24)
+>      at main (/workspace/scratch/80a9b7b328e5/spatial/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:601:9)
+>      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+>  Emitted 'error' event on Server instance at:
+>      at emitErrorNT (node:net:1977:8)
+>      at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+>    code: 'EPERM',
+>    errno: -1,
+>    syscall: 'listen',
+>    address: '/tmp/fire_emu_87cc56eaa7dd9ad1.sock',
+>    port: -1
+>  }
+>  
+>  Node.js v22.23.0
+DOMException [TimeoutError]: The operation was aborted due to timeout
+    at node:internal/deps/undici/undici:15141:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async call (/workspace/scratch/80a9b7b328e5/spatial/apps/functions/scripts/memory-media-playback-emulator-proof.cjs:29:20)
+    at async main (/workspace/scratch/80a9b7b328e5/spatial/apps/functions/scripts/memory-media-playback-emulator-proof.cjs:91:12)
+⚠  Script exited unsuccessfully (code 1)
+i  emulators: Shutting down emulators.
+i  functions: Stopping Functions Emulator
+i  firestore: Stopping Firestore Emulator
+i  auth: Stopping Authentication Emulator
+i  storage: Stopping Storage Emulator
+i  eventarc: Stopping Eventarc Emulator
+i  tasks: Stopping Cloud Tasks Emulator
+i  hub: Stopping emulator hub
+i  logging: Stopping Logging Emulator
+
+Error: Script "node apps/functions/scripts/memory-media-playback-emulator-proof.cjs" exited with code 1
