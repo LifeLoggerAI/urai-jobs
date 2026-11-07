@@ -28,3 +28,37 @@ export function checkedCurrentJobCaller(auth: unknown, serverUser: unknown): Cur
   if (user.accountStatus !== undefined && user.accountStatus !== 'active') return null;
   return Object.freeze({ uid, operator: role === 'admin' || role === 'operator' });
 }
+
+
+/** Normalized organization/tenant scope for Jobs-created records. */
+function scopeId(value: Record<string, unknown> | null, key: 'orgId' | 'tenantId'): string | null {
+  const raw = value?.[key];
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
+/**
+ * A handler may have read its user at callable entry, then waited on validation
+ * and rate-limit reads before beginning a Firestore write transaction.
+ * Reject if the server moved that user between tenants/orgs in that window.
+ */
+export function sameCurrentJobOwnerScope(initialUser: unknown, currentUser: unknown): boolean {
+  const initial = record(initialUser), current = record(currentUser);
+  return !!initial && !!current
+    && scopeId(initial, 'tenantId') === scopeId(current, 'tenantId')
+    && scopeId(initial, 'orgId') === scopeId(current, 'orgId');
+}
+
+/**
+ * Idempotency binding identity alone (ownerUid + job type + key) does not bind
+ * the historical job to the owner's CURRENT tenant/org after a transfer.
+ * Check the referenced original job inside the same read transaction.
+ */
+export function boundJobMatchesCurrentOwnerScope(
+  job: unknown, currentUser: unknown, ownerUid: string,
+): boolean {
+  const data = record(job), owner = record(currentUser);
+  return !!data && !!owner && typeof ownerUid === 'string' && ownerUid.length > 0
+    && data.ownerUid === ownerUid
+    && scopeId(data, 'tenantId') === scopeId(owner, 'tenantId')
+    && scopeId(data, 'orgId') === scopeId(owner, 'orgId');
+}
