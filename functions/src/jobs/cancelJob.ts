@@ -1,30 +1,12 @@
 import { getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { checkedCurrentJobCaller } from "./currentJobCallerAuthority.js";
 
 if (getApps().length === 0) initializeApp();
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-}
-
-function hasOperatorAccess(auth: unknown): boolean {
-  const authRecord = asRecord(auth);
-  const token = asRecord(authRecord.token);
-  const role = token.role;
-  const roles = Array.isArray(token.roles) ? token.roles : [];
-
-  return (
-    role === "admin" ||
-    role === "operator" ||
-    token.uraiJobsAdmin === true ||
-    roles.includes("admin") ||
-    roles.includes("operator")
-  );
-}
-
-function authUid(auth: unknown): string {
-  return String(asRecord(auth).uid || "");
 }
 
 export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
@@ -37,12 +19,20 @@ export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
     throw new HttpsError("invalid-argument", "jobId is required.");
   }
 
+  const uid = String(asRecord(request.auth).uid || "");
+  if (!uid) throw new HttpsError("unauthenticated", "Authenticated user ID is required.");
   const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
   const jobRef = db.collection("jobs").doc(jobId);
   const queueRef = db.collection("jobQueue").doc(jobId);
+  const logRef = jobRef.collection("logs").doc();
 
   await db.runTransaction(async (transaction) => {
-    const jobSnap = await transaction.get(jobRef);
+    const [userSnap, jobSnap] = await Promise.all([
+      transaction.get(userRef), transaction.get(jobRef)
+    ]);
+    const caller = checkedCurrentJobCaller(request.auth, userSnap.exists ? userSnap.data() : null);
+    if (!caller) throw new HttpsError("permission-denied", "Current user authority is unavailable.");
 
     if (!jobSnap.exists) {
       throw new HttpsError("not-found", `Job ${jobId} was not found.`);
@@ -52,7 +42,7 @@ export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
     const status = String(job.status || "");
     const ownerUid = String(job.ownerUid || job.createdBy || "");
 
-    if (!hasOperatorAccess(request.auth) && ownerUid !== authUid(request.auth)) {
+    if (!caller.operator && ownerUid !== caller.uid) {
       throw new HttpsError("permission-denied", "You do not have access to cancel this job.");
     }
 
@@ -78,13 +68,13 @@ export const cancelJob = onCall({ region: "us-central1" }, async (request) => {
       },
       { merge: true }
     );
-  });
-
-  await jobRef.collection("logs").add({
-    level: "info",
-    message: "Job cancelled from live admin callable.",
-    createdAt: FieldValue.serverTimestamp(),
-    source: "cancelJob"
+    // Keep the audit log in the same transaction; a late post-delete log is unsafe.
+    transaction.create(logRef, {
+      level: "info",
+      message: "Job cancelled from live admin callable.",
+      createdAt: FieldValue.serverTimestamp(),
+      source: "cancelJob"
+    });
   });
 
   return { jobId, status: "CANCELLED" };
