@@ -4,14 +4,14 @@
  * legacy-identity inventory, deletion, positive consent or production authority.
  *
  * CLI refuses I/O without an explicit out-of-repo private manifest, out-of-repo
- * nonexisting report, a fixed opt-in flag and a separate environment opt-in.
+ * nonexisting append-only journal, a fixed opt-in flag and a separate environment opt-in.
  * It performs ZERO IAM mutation, uses ZERO customer media, and uploads only
  * an empty, unique, generation-preconditioned staging sentinel on an unexpected
  * permission grant. It never silently deletes unexpected evidence.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { constants, closeSync, existsSync, fstatSync, fsyncSync, ftruncateSync, lstatSync, openSync, readFileSync, realpathSync, statSync, writeSync } from 'node:fs';
+import { constants, closeSync, existsSync, fstatSync, fsyncSync, lstatSync, openSync, readFileSync, realpathSync, writeSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -149,7 +149,12 @@ function pathOutsideRepo(filePath, checkExisting = false) {
   const repo = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), '../..'));
   const rel = relative(repo, directory);
   if (rel === '' || (rel !== '..' && !rel.startsWith('..' + sep))) throw Error('OUTPUT_OR_MANIFEST_INSIDE_REPO');
-  if (checkExisting && (!statSync(filePath).isFile() || (statSync(filePath).mode & 0o077) !== 0)) throw Error('PRIVATE_MANIFEST_MODE_REQUIRED');
+  if (checkExisting) {
+    const info = lstatSync(filePath);
+    if (!info.isFile() || info.isSymbolicLink() || (info.mode & 0o077) !== 0) {
+      throw Error('PRIVATE_MANIFEST_MODE_REQUIRED');
+    }
+  }
   if (!checkExisting && existsSync(filePath)) throw Error('REFUSE_REPORT_OVERWRITE');
   return filePath;
 }
@@ -170,25 +175,38 @@ function impersonatedCredential(email, projectId) {
   if (r.error || r.status !== 0) throw Error('SERVICE_ACCOUNT_IMPERSONATION_UNAVAILABLE');
   return (r.stdout||'').trim();
 }
-function persist(fd, value) {
-  const bytes = Buffer.from(JSON.stringify(value, null, 2) + '\n');
-  ftruncateSync(fd, 0);
-  let offset = 0;
-  while (offset < bytes.length) {
-    const written = writeSync(fd, bytes, offset, bytes.length - offset, offset);
-    if (written <= 0) throw Error('PRIVATE_REPORT_WRITE_UNVERIFIED');
-    offset += written;
+/**
+ * R866: an append-only, fsynced audit journal. Never truncate a live audit
+ * file: a crash halfway through rewriting the report can destroy the only
+ * surviving path of an unexpectedly allowed GCS object.
+ *
+ * One complete JSONL entry per stage. A torn LAST line after a crash may be
+ * ignored by a forensic reader; all preceding fsynced entries remain intact.
+ */
+export function appendReviewOnlyAuditEvent(fd, record) {
+  const data = Buffer.from(JSON.stringify(record) + '\n');
+  if (data.length > 16384) throw Error('PRIVATE_JOURNAL_ENTRY_TOO_LARGE');
+  let written = 0;
+  while (written < data.length) {
+    const count = writeSync(fd, data, written, data.length - written, null);
+    if (count <= 0) throw Error('PRIVATE_JOURNAL_APPEND_UNVERIFIED');
+    written += count;
   }
   fsyncSync(fd);
 }
 async function main() {
-  let reportFd;
-  let ledger = {schemaVersion:SCHEMA,status:'STARTED_INCOMPLETE',productionGo:false,
-    storageWriteFenceVerified:false, privateOutputDeletionAcknowledged:false,
-    preparedAttempts:[], results:[]};
+  let journalFd;
+  let seq = 0;
+  const append = (type, data = {}) => {
+    if (journalFd === undefined) throw Error('PRIVATE_JOURNAL_NOT_CREATED');
+    appendReviewOnlyAuditEvent(journalFd, {
+      schemaVersion:SCHEMA, sequence:++seq, type,
+      ...data, productionGo:false, storageWriteFenceVerified:false,
+      privateOutputDeletionAcknowledged:false,
+    });
+  };
   try {
     const args = cliArgs(process.argv.slice(2));
-    // Check all permissions and scope before acquiring credentials or sending bytes.
     assertExplicitStagingOptIn(args, process.env);
     const manifestPath = pathOutsideRepo(args.manifest, true);
     const reportPath = pathOutsideRepo(args.report, false);
@@ -196,36 +214,44 @@ async function main() {
     const manifest=validateStagingManifest(raw);
     const head=activeGitSource();
     if (head !== manifest.expectedJobsSourceSha) throw Error('EXACT_GIT_SOURCE_MISMATCH');
-    reportFd=openSync(reportPath, constants.O_CREAT | constants.O_EXCL | constants.O_RDWR, 0o600);
-    if ((fstatSync(reportFd).mode & 0o777) !== 0o600) throw Error('PRIVATE_REPORT_MODE_UNVERIFIED');
-    persist(reportFd,ledger);
+    journalFd=openSync(reportPath,
+      constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_APPEND |
+      (constants.O_NOFOLLOW || 0), 0o600);
+    if ((fstatSync(journalFd).mode & 0o777) !== 0o600) {
+      throw Error('PRIVATE_JOURNAL_MODE_UNVERIFIED');
+    }
+    append('STARTED_INCOMPLETE', {
+      projectId:manifest.projectId, bucket:manifest.bucket, sourceSha:head,
+      withdrawalEventId:manifest.withdrawalEventId,
+      authorizationRef:manifest.authorizationRef,
+      declaredPrincipals:manifest.serviceAccounts.length,
+    });
     const receipt=await runStagingDenialReview(manifest,{
       execute:true,env:process.env,sourceSha:head,
       getCredential:impersonatedCredential,fetchImpl:fetch,
       onPrepared:async attempt=>{
-        ledger.preparedAttempts.push({...attempt, resolution:'GCS_RESULT_UNVERIFIED'});
-        persist(reportFd,ledger);
+        // This event must be durable BEFORE a token or GCS request starts.
+        append('PREPARED_BEFORE_NETWORK', attempt);
       },
       onResult:async result=>{
-        const attempt=ledger.preparedAttempts.find(a=>a.objectName===result.objectName);
-        if (!attempt) throw Error('UNRECORDED_SENTINEL');
-        attempt.resolution=result.outcome;
-        attempt.cleanupMayBeRequired = result.outcome === 'WRITE_WAS_ALLOWED';
-        ledger.results.push(result);
-        persist(reportFd,ledger);
+        // A successful unexpected write is visible even if later steps crash.
+        append('HTTP_RESULT', result);
       },
     });
-    persist(reportFd,receipt);
-    console.log('R865_STAGING_NEGATIVE_PROBE_RECORDED status=' + receipt.status + ' checked=' + receipt.results.length + ' productionGo=false storageWriteFenceVerified=false');
+    append('FINISHED_HOLD', {receipt});
+    console.log('R866_STAGING_NEGATIVE_PROBE_RECORDED status=' + receipt.status +
+      ' checked=' + receipt.results.length +
+      ' productionGo=false storageWriteFenceVerified=false');
   } catch (e) {
-    if (reportFd !== undefined) {
-      try { persist(reportFd,{...ledger,status:'INCOMPLETE_BLOCKED'}); } catch {}
+    if (journalFd !== undefined) {
+      try { append('INCOMPLETE_BLOCKED', { reason:'UNVERIFIED_STOP' }); } catch {}
     }
-    console.error('R865_STAGING_PROBE_BLOCKED ' + (e instanceof Error ? e.message : 'UNVERIFIED'));
+    console.error('R866_STAGING_PROBE_BLOCKED ' +
+      (e instanceof Error ? e.message : 'UNVERIFIED'));
   } finally {
-    if (reportFd !== undefined) closeSync(reportFd);
+    if (journalFd !== undefined) closeSync(journalFd);
   }
-  // Deliberately always nonzero: a staged HTTP 403 cannot authorize production.
+  // Even a staging 403 cannot authorize production; always HOLD.
   process.exitCode=2;
 }
 

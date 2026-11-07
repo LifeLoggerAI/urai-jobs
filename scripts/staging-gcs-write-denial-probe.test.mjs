@@ -155,3 +155,60 @@ test('unexpected allowed write short-circuits other principals',async()=>{
   assert.equal(result.results[0].cleanupRequired,true);
   assert.equal(result.status,'BLOCKED_HOLD');
 });
+
+test('R866 append-only audit journal retains prepared sentinel after forced process death',async()=>{
+  const { mkdtempSync, readFileSync, rmSync }=await import('node:fs');
+  const { tmpdir }=await import('node:os');
+  const { join }=await import('node:path');
+  const dir=mkdtempSync(join(tmpdir(),'urai-r866-journal-'));
+  const file=join(dir,'one-attempt.jsonl');
+  const moduleUrl=new URL('./review-only/staging-gcs-write-denial-probe.mjs',import.meta.url).href;
+  try{
+    const child=spawnSync(process.execPath,['--input-type=module','-e',`
+      import {openSync,closeSync,constants} from 'node:fs';
+      import {appendReviewOnlyAuditEvent} from ${JSON.stringify(moduleUrl)};
+      const fd=openSync(${JSON.stringify(file)},constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|constants.O_APPEND,0o600);
+      appendReviewOnlyAuditEvent(fd,{type:'STARTED_INCOMPLETE',sequence:1,productionGo:false});
+      appendReviewOnlyAuditEvent(fd,{type:'PREPARED_BEFORE_NETWORK',sequence:2,objectName:'__urai_security_staging__/post-revocation-denial/known-empty.empty',productionGo:false});
+      process.kill(process.pid,'SIGKILL');
+    `],{encoding:'utf8',timeout:10000});
+    assert.equal(child.signal,'SIGKILL');
+    const rows=readFileSync(file,'utf8').trimEnd().split('\n').map(x=>JSON.parse(x));
+    assert.deepEqual(rows.map(x=>x.type),['STARTED_INCOMPLETE','PREPARED_BEFORE_NETWORK']);
+    assert.match(rows[1].objectName,/known-empty\.empty$/);
+    assert.equal(rows.every(x=>x.productionGo===false),true);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('R866 later audit appends never replace earlier sentinel evidence',async()=>{
+  const { mkdtempSync, openSync, closeSync, readFileSync, rmSync, constants }=await import('node:fs');
+  const { tmpdir }=await import('node:os');
+  const { join }=await import('node:path');
+  const { appendReviewOnlyAuditEvent }=await import('./review-only/staging-gcs-write-denial-probe.mjs');
+  const dir=mkdtempSync(join(tmpdir(),'urai-r866-append-'));
+  try{
+    const file=join(dir,'journal.jsonl');
+    const fd=openSync(file,constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|constants.O_APPEND,0o600);
+    appendReviewOnlyAuditEvent(fd,{type:'PREPARED_BEFORE_NETWORK',sequence:1,objectName:'survives'});
+    appendReviewOnlyAuditEvent(fd,{type:'HTTP_RESULT',sequence:2,outcome:'WRITE_WAS_ALLOWED',cleanupRequired:true});
+    appendReviewOnlyAuditEvent(fd,{type:'INCOMPLETE_BLOCKED',sequence:3,productionGo:false});
+    closeSync(fd);
+    const rows=readFileSync(file,'utf8').trim().split('\n').map(s=>JSON.parse(s));
+    assert.equal(rows.length,3);
+    assert.equal(rows[0].objectName,'survives');
+    assert.equal(rows[1].cleanupRequired,true);
+    assert.equal(rows[2].productionGo,false);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('R866 production CLI uses append-only fsync journal and refuses rewrite',async()=>{
+  const {readFileSync}=await import('node:fs');
+  const src=readFileSync(new URL('./review-only/staging-gcs-write-denial-probe.mjs',import.meta.url),'utf8');
+  assert.match(src,/constants\.O_APPEND/);
+  assert.match(src,/constants\.O_EXCL/);
+  assert.match(src,/fsyncSync\(fd\)/);
+  assert.match(src,/append\('PREPARED_BEFORE_NETWORK'/);
+  assert.match(src,/append\('FINISHED_HOLD'/);
+  assert.doesNotMatch(src,/ftruncateSync\(/);
+  assert.match(src,/info\.isSymbolicLink\(\)/);
+});
