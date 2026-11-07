@@ -51,7 +51,7 @@ check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d53
 check_blob 'functions/src/jobs/createJob.ts' '03433ab35ce0374cae58dac572985c75c3abf3b3'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' 'c83077b2558eb34b8fbc74138e3a149cc6be38ad'
+check_blob 'package.json' 'ccb141ca624186d4f67f664446e510ce1f1ef60f'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
@@ -130,6 +130,12 @@ grep -q '# pass 17' "$OUT/malformed_scope_17_source.log" || hold 'Malformed scop
 check_blob 'scripts/r883-admin-retry-owner-consent.test.mjs' '4b30782704b9e61207cdc5e0b08e2b9d1aebdf75'
 stage current_owner_retry_24_source 120s node --test scripts/r883-admin-retry-owner-consent.test.mjs
 grep -q '# pass 24' "$OUT/current_owner_retry_24_source.log" || hold '24 admin retry source tests not recorded'
+
+# R884 current-Firestore-role admission and transaction-time manual dispatch veto.
+check_blob 'functions/src/jobs/processQueueNow.ts' '88ad117cf0e63c0e43e6b7fc6990cde27bfd67de'
+check_blob 'scripts/r884-current-operator-manual-dispatch.test.mjs' 'd0e1ab2c621064268c75492b77510c948d29262f'
+stage current_operator_manual_dispatch_16_source 120s node --test scripts/r884-current-operator-manual-dispatch.test.mjs
+grep -q '# pass 16' "$OUT/current_operator_manual_dispatch_16_source.log" || hold '16 current-operator dispatch source tests not recorded'
 
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \
