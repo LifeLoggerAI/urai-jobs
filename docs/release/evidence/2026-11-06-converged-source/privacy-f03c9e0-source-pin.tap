@@ -1,0 +1,68 @@
+(node:16) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:23) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: R823 native runner pins fictional demo-only Firebase project
+ok 1 - R823 native runner pins fictional demo-only Firebase project
+  ---
+  duration_ms: 0.948141
+  type: 'test'
+  ...
+# Subtest: R823 native test pins exactly the same demo project and has no old project literal
+ok 2 - R823 native test pins exactly the same demo project and has no old project literal
+  ---
+  duration_ms: 0.310687
+  type: 'test'
+  ...
+# Subtest: R823 ephemeral test signing identity belongs to isolated demo project
+ok 3 - R823 ephemeral test signing identity belongs to isolated demo project
+  ---
+  duration_ms: 0.182516
+  type: 'test'
+  ...
+# Subtest: R834 runner and native transport pin same reviewed R833 Jobs commit
+ok 4 - R834 runner and native transport pin same reviewed R833 Jobs commit
+  ---
+  duration_ms: 0.308061
+  type: 'test'
+  ...
+# Subtest: R823 uses real four local Firebase emulators with single project enforcement
+ok 5 - R823 uses real four local Firebase emulators with single project enforcement
+  ---
+  duration_ms: 0.227599
+  type: 'test'
+  ...
+# Subtest: R823 retains credential and inherited project/host refusals
+ok 6 - R823 retains credential and inherited project/host refusals
+  ---
+  duration_ms: 0.132882
+  type: 'test'
+  ...
+# Subtest: R825 original scoped C6 issuer and Jobs denial test share disposable demo project
+ok 7 - R825 original scoped C6 issuer and Jobs denial test share disposable demo project
+  ---
+  duration_ms: 0.177476
+  type: 'test'
+  ...
+# Subtest: R825 composite four-emulator gate retains both originals and never admits production C6
+ok 8 - R825 composite four-emulator gate retains both originals and never admits production C6
+  ---
+  duration_ms: 0.289554
+  type: 'test'
+  ...
+# Subtest: R826 bounded original native gates retain fatal failure and source-pinned receipts
+ok 9 - R826 bounded original native gates retain fatal failure and source-pinned receipts
+  ---
+  duration_ms: 0.471506
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 112.907053

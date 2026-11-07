@@ -4,7 +4,64 @@
 
 **Status: GENESIS PRODUCTION HOLD.** This handoff records executed source builds and tests with their limits; it does not authorize production or certify a complete private-media user journey. All branches below are DRAFT and must be rechecked before working because parallel Chalk workers may advance them.
 
-## CURRENT — local full builds and runtime blockers (November 6, 2026 Central)
+## CURRENT — combined Jobs/Privacy source accepted; native runtime pending (November 6, 2026 Central)
+
+This supersedes earlier current-source pairings below, including the older Jobs #321/#322 and Privacy #228/#229 alternatives. **PRODUCTION HOLD.** Source installation, original verification and full source builds are now executed on the following pair; authenticated native runtime, private positive consent/delivery, device and release gates are not certified.
+
+| Current review | Exact executable SHA | Personally executed on this source |
+| --- | --- | --- |
+| Jobs [#320](https://github.com/LifeLoggerAI/urai-jobs/pull/320) | `ea8f0165ac74511a4e4196919ddd3109d0c1ff2e` | Standalone clean clone, pnpm8.15.9 frozen install PASS; original owner/status suite PASS; full `pnpm urai-jobs:verify` PASS (695 TAP cases, zero failures/skips/cancellations, plus script contracts); full workspace typecheck and build PASS. Final source CLEAN. |
+| Privacy [#230](https://github.com/LifeLoggerAI/urai-privacy/pull/230) | `f03c9e0e6cad153f5afbc61c2da0cfc6388f20b7` | Root + Functions frozen npm installs PASS; original source-pin test 9/9 PASS; Functions typecheck/build PASS; root frontend typecheck and optimized production build PASS. Final source CLEAN. All three original integration pins require exact Jobs `ea8f016...`. |
+| Spatial repair [#2068](https://github.com/LifeLoggerAI/urai-spatial/pull/2068) | `f2635a7f55192e3ed1a2892b412e1fd29425f34f` | Earlier current-source Functions build and 1787/1787 tests PASS; actual definitions load after required ESM emission repair. Original worker execution was blocked by sandbox Unix sockets. Its earlier parent frontend/231-suite results remain separately pinned below. |
+| Studio [#179](https://github.com/LifeLoggerAI/urai-studio/pull/179) | `153d6c35557c66a8b9f8629778ca796b83730464` | Recovered source; no new native Studio HTTP or complete frontend certificate in this pass. |
+
+### Actual reconciliation and defects repaired
+
+Jobs merge `4c5f4823a9f7f469a1798671b0dca97b88bf3dae`, tree `61c9c3d5f25e42daf4fd066337dc5b66a441bfc8`, has **two real Git parents**, verified from the Git object: our fully tested prior #320 `888fc26fdd5dfe31e654888e883a1659a6693b13` and parallel atomic #322 `1149d6e182dc487e8f29248e535d7f4d5dfee51f`. Compared to prior #320, the merge changes only the long-form status source and its original owner/transaction regression test. It preserves all prior workspace verification repairs and the complete older source histories.
+
+The merged status path uses the stricter unchanged original `validateOwnedMovieJob` plus `boundPlanJob`, including selected project binding and missing-child denial, in the **same** Firestore transaction as current owner, tenant, deletion, plan and consent. Revoked consent still returns no child identifiers, assembly or provenance and makes no child reads. The separate #321 post-read second-transaction strategy remains recoverable on its original branch; it is not layered on top of the adopted single-snapshot transaction. Actual Firestore retry/conflict behavior remains a native gate, not proved by a synthetic transaction double.
+
+The first executed original #322 owner/status suite failed **10 PASS / 1 FAIL** with `longform_plan_structure_invalid`. The donor fixture hashed `planId + ':0'` but the real `makeChildId`/plan validator uses zero-padded `':0000'`. Corrected the fixture only, keeping the product validator strict. Then **11/11 PASS**, also retaining the donor's complete tamper matrix and adding foreign-project cases for child and assembly.
+
+The full merged verification next exposed an inherited static marker `consentRevoked: revoked` that no longer exists when revoked responses return early and clear responses use false. A direct child commit `ea8f016...` updates the original orchestrator contract to require the actual early minimal revoked return **before** private reads, absence of digests/job lookups in that branch, and clear-consent projection afterward. No guard was replaced with an allow-all mock.
+
+Privacy #230 descends from #229 `79e71fd6137947d2ed7c416a2596090572fef978`. Its three original runner/native/static pins now all select Jobs `ea8f016...`, while preserving the mandatory original Jobs regression before builds, clean SHA/demo/credential guards, both original four-service tests, productionGrant=false and render=false. A fourth changed path is the **Next-generated** `root-params.d.ts` import in `next-env.d.ts`, emitted by the locked Next.js build and committed so subsequent exact-head builds remain clean. No Privacy application grant, IAM, issuer or delivery logic changed. Next.js 16.4.5 reports React 18 deprecation; the build exits 0.
+
+### Source/build evidence and remaining runtime boundary
+
+All final Jobs verification/build commands ran in a fresh standalone clone at exact `ea8f016...` with independently installed locked dependencies (no dependency symlink workaround). All final Privacy test/typecheck/build commands ran at exact `f03c9e0...`. Node 22.23.0. Root and Functions locks remained unchanged. Both final worktrees are clean.
+
+A **fresh actual OS probe** in this turn returned `unix_worker_socket=BLOCKED, errno=1, Operation not permitted` at AF_UNIX socket creation. This confirms the earlier Firebase worker socket failure is still an environment blocker. The new Jobs/Privacy pair's native four-service test was not reclassified or simulated as a pass; no substitute HTTP service was introduced. No browser/device acceptance was rerun or claimed. All 263 Runpod pods were EXITED at the fresh initial complete inventory; no paid resource was started.
+
+Raw outputs are saved beside this document under [`evidence/2026-11-06-converged-source/`](./evidence/2026-11-06-converged-source/):
+- `jobs-ea8f016-verify.log`: full original verification output, SHA256 `10b9053d5010897b4cd335b06019c4c9b5d87f819075c7b5e5f919ab2e1f9f1d`.
+- `privacy-f03c9e0-frontend-build.log`: SHA256 `6a7bddb1f539c1627c2a9cd7c087388327d88fb860a9e78a48bc1ad8feeee4b8`.
+- `privacy-f03c9e0-source-pin.tap`: 9/9, SHA256 `53d047659784976eca8a36bd3d298291ed6bf071b658c2b91a9bef68a5d4252a`.
+- `jobs-donor-fixture-failure.tap`: original 10/11 failure, SHA256 `50e30c712bd9ee44c592e366e1066786769c1ab5fcbf0e9720bac410ceccb059`.
+- `jobs-converged-owner.tap`: focused corrected 11/11 run, SHA256 `4ad8f1ad3f4e60a34901b9354392b279b38395e67e9f2f6ee394208375027b5b`.
+- `native-worker-capability.json`: SHA256 `c5b9a7a985e03aabad1f3ce7cbca1bff1da399dc43f2c71ecaad72a69dc418df`.
+
+Additional final execution SHA256 receipts (original local outputs, reproducible commands):
+| Gate | SHA256 |
+| --- | --- |
+| Jobs final frozen install | `343f9a95644e7b6f9452baaac465035cccf2f9d87de32d873ba9449a445df78a` |
+| Jobs full typecheck | `c17ac5887337a7fcea5f445cb30444561bdf0d4f6ff715bf11e97012e3e1ed58` |
+| Jobs full build | `399c7f381c66dfec2473ff365055e4f2b73be6c8b9ce111643344b0ac595d1c5` |
+| Privacy Functions typecheck | `57a51a27d57d66d70e20eda7648cfd51b082993466b8690522e6b8bd4ac209ce` |
+| Privacy Functions build | `dcef57762309d9e7cb2a45f75d120e46bd9996c96c8c15ab0abeef764f710314` |
+| Privacy root typecheck | `f628fe08480127a9979bb61861ec53458ed67738551da572ed27277ad44ab8a9` |
+
+### Precise next gate on a capable authorized runner
+
+Use clean standalone Privacy `f03c9e0e6cad153f5afbc61c2da0cfc6388f20b7` and Jobs `ea8f0165ac74511a4e4196919ddd3109d0c1ff2e` under a disposable `/tmp` directory, Node22/pnpm8.15.9/Java21/FFmpeg, local Unix socket support and working browser. Run Privacy's original:
+`URAI_EXPECTED_PRIVACY_SHA=f03c9e0e6cad153f5afbc61c2da0cfc6388f20b7 URAI_JOBS_SOURCE_DIR=<clean Jobs directory> bash scripts/run-r818-native-jobs-privacy-acceptance.sh`.
+Keep original exit codes, stage TSV and full logs/hashes. The Firebase CLI's explicit proxy configuration must not forward loopback to an HTTP proxy.
+
+Then execute original exact-head Jobs four-emulator + Studio HTTP, Spatial #2068 complete original source/native runner and real Home→Ascent→Life Map→Focus→Replay→Escape/device/accessibility journey. Positive owner C6/source rights, signed Jobs principal, revocation-safe private writer/delivery, protected playback/deletion, provider/CI/reviewer/rollback and founder production authorization remain P0. **Builds and source integration are now verified for this pair; production remains HOLD. No main merge, production deployment, paid compute, billing/IAM change or private memories used.**
+
+---
+
+## HISTORICAL — first local full builds and runtime blockers (November 6, 2026 Central)
 
 This section supersedes the current-state claims in the historical checkpoints below. **GENESIS PRODUCTION HOLD.** No production deployment, main merge, paid compute, IAM/billing change or private founder media was used.
 

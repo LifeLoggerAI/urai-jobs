@@ -1,0 +1,66 @@
+(node:94) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> urai-privacy@0.2.0-staging-scaffold build
+> next build
+
+(node:107) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▲ Next.js 16.4.5 (Turbopack)
+⚠ React 18 support is deprecated in Next.js 16 and will be removed in Next.js 17. Please upgrade to React 19. Learn more: https://nextjs.org/docs/messages/react-version
+✓ Running next.config.mjs took 22ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 288ms
+  Running TypeScript ...
+  Finished TypeScript in 2.8s ...
+  Collecting page data using 8 workers ...
+(node:150) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:176) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:162) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:149) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:156) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:168) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:189) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:193) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  Generating static pages using 8 workers (0/22) ...
+  Generating static pages using 8 workers (5/22) 
+  Generating static pages using 8 workers (10/22) 
+  Generating static pages using 8 workers (16/22) 
+✓ Generating static pages using 8 workers (22/22) in 759ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /admin
+├ ○ /admin/audit-log
+├ ○ /admin/policies
+├ ○ /admin/privacy-requests
+├ ○ /admin/retention
+├ ○ /consent
+├ ○ /data-controls
+├ ○ /delete-export
+├ ○ /passport
+├ ○ /privacy
+├ ○ /privacy-center
+├ ○ /privacy-center/audit-log
+├ ○ /privacy-center/consent
+├ ○ /privacy-center/delete
+├ ○ /privacy-center/export
+├ ○ /privacy-center/retention
+├ ○ /responsible-ai
+├ ○ /safety
+└ ○ /what-urai-does-not-do
+
+
+○  (Static)  prerendered as static content
+
