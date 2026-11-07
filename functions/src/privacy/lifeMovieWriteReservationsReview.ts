@@ -15,7 +15,7 @@
 import { createHash } from 'node:crypto';
 import { getApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
-import { assessReviewOnlyGenerationEvidence, canonicalReviewOnlyStorageGeneration } from './lifeMovieGenerationEvidenceReview';
+import { assessReviewOnlyGenerationEvidence, canonicalReviewOnlyStorageGeneration } from './lifeMovieGenerationEvidenceReview.js';
 import { getStorage } from 'firebase-admin/storage';
 
 const PROJECT = 'urai-staging-test';
