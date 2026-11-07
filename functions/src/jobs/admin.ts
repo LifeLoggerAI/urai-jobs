@@ -54,7 +54,7 @@ function serializeDoc(id: string, data: FirebaseFirestore.DocumentData): Record<
   };
 }
 
-export const listJobs = https.onCall(async (data, context) =>
+export const listJobs = https.onCall(async (data, context) => {
   const uid = uidFromAuth(context.auth);
   const input = asRecord(data);
   const statusRaw = String(input.status || "").trim();
@@ -74,7 +74,7 @@ export const listJobs = https.onCall(async (data, context) =>
   });
 });
 
-export const listJobLogs = https.onCall(async (data, context) =>
+export const listJobLogs = https.onCall(async (data, context) => {
   const uid = uidFromAuth(context.auth);
   const input = asRecord(data);
   const jobId = String(input.jobId || "").trim();
@@ -91,7 +91,7 @@ export const listJobLogs = https.onCall(async (data, context) =>
   });
 });
 
-export const retryJob = https.onCall(async (data, context) =>
+export const retryJob = https.onCall(async (data, context) => {
   const uid = uidFromAuth(context.auth);
   const input = asRecord(data);
   const jobId = String(input.jobId || "").trim();
