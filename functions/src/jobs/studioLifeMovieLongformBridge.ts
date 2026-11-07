@@ -486,6 +486,9 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
     const snapshot = await transaction.get(planRef(planId));
     if (!snapshot.exists) throw new Error('longform_plan_not_found');
     const plan = assertPlanOwner(snapshot.data() as StoredPlan, tenantId, userId);
+    // The recorded child identifiers and segment indexes are themselves
+    // security boundaries; validate before requesting any child documents.
+    assertPlanStructure(plan, planId);
     const ownerSnapshot = await transaction.get(db.collection('users').doc(userId));
     assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, userId, tenantId);
     const consentSnapshot = await transaction.get(consentBlockRef(plan.ownerUid, plan.consent.purpose));
@@ -507,6 +510,23 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
     const childRefs = plan.childJobIds.map((jobId) => jobDoc(jobId));
     const snapshots = childRefs.length ? await transaction.getAll(...childRefs) : [];
     const assemblySnapshot = plan.assemblyJobId ? await transaction.get(jobDoc(plan.assemblyJobId)) : null;
+    if (snapshots.length !== plan.childJobIds.length) throw new Error('longform_child_not_found');
+    // The plan binding alone is not proof that the underlying job still
+    // belongs to the same owner, tenant, source, or approved consent.
+    for (const [index, childSnapshot] of snapshots.entries()) {
+      if (!childSnapshot.exists) throw new Error('longform_child_not_found');
+      const child = childSnapshot.data() as Job;
+      validateOwnedMovieJob(child as unknown as Record<string, unknown>,
+        boundPlanJob(plan, plan.childJobIds[index], 'segment'));
+      if (!isDeepStrictEqual(child.consent, plan.consent)) throw new Error('life_movie_owner_job_boundary_mismatch');
+    }
+    if (plan.assemblyJobId) {
+      if (!assemblySnapshot?.exists) throw new Error('longform_child_not_found');
+      const assembly = assemblySnapshot.data() as Job;
+      validateOwnedMovieJob(assembly as unknown as Record<string, unknown>,
+        boundPlanJob(plan, plan.assemblyJobId, 'assembly'));
+      if (!isDeepStrictEqual(assembly.consent, plan.consent)) throw new Error('life_movie_owner_job_boundary_mismatch');
+    }
     const children = snapshots.map((childSnapshot, index) => {
       const data = childSnapshot.exists ? childSnapshot.data() : undefined;
       return {
