@@ -75,3 +75,37 @@ export function boundJobMatchesCurrentOwnerScope(
     && sameScope(data, owner, 'tenantId')
     && sameScope(data, owner, 'orgId');
 }
+
+/**
+ * Administrative retry must not restart work for deleted, suspended or
+ * transferred owners. Verify the actual owner record in the same transaction
+ * as the failed job; the operator's current authority alone is insufficient.
+ */
+export function currentJobOwnerEligibleForRetry(job: unknown, serverOwner: unknown): boolean {
+  const data = record(job);
+  const ownerUid = data?.ownerUid;
+  if (typeof ownerUid !== 'string' || !ownerUid.trim() || ownerUid !== ownerUid.trim()) return false;
+  const owner = checkedCurrentJobCaller({uid: ownerUid}, serverOwner);
+  return !!owner && boundJobMatchesCurrentOwnerScope(data, serverOwner, ownerUid);
+}
+
+/**
+ * A generic admin retry cannot prove a new positive consent/source decision,
+ * protected-output writer authority, or provider-side delivery idempotency.
+ * These jobs must use their dedicated authorized dispatch/admission surface.
+ */
+export function genericAdminRetryAllowed(job: unknown): boolean {
+  const data = record(job);
+  if (!data || data.consent !== undefined || data.consents !== undefined ||
+      data.sourceSystem === 'urai-studio') return false;
+  const declared = [data.jobType, data.type].filter(value => value !== undefined);
+  if (!declared.length || declared.some(value => typeof value !== 'string' || value.trim() !== value || !value)) return false;
+  if (declared.some(value => value !== declared[0])) return false;
+  const type = declared[0] as string;
+  if (type.startsWith('memory.private-source.') || type.startsWith('studio.') ||
+      type === 'narrator.tts' || type === 'web.agent' ||
+      type === 'communications.message.send' || type === 'asset.render' ||
+      type === 'asset-render') return false;
+  // Do not permit a malformed/unknown job type to evade the privacy veto.
+  return type === 'web.search' || type === 'web.fetch';
+}
