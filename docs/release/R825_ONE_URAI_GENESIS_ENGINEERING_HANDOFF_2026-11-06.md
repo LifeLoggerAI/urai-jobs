@@ -4,6 +4,14 @@
 
 **Status: GENESIS PRODUCTION HOLD.** This is a source-grounded handoff, *not* an authorization, deployment, or runtime receipt. All branches below are DRAFT and must be rechecked before working because parallel Chalk workers may advance them.
 
+## R828 NATIVE SPATIAL EVIDENCE ADDENDUM — recorded from parallel Runpod (2026-11-07 UTC)
+
+The already-existing CPU pod `474u9440fhcft9` (**`urai-spatial-r819c-python-native-genesis-acceptance`**) produced a real original `scripts/genesis-r799-exact-head-acceptance.sh` stage report. Its pinned SHA must be taken from the full saved source log; the latest bounded stream did **not** expose that source line, so **do not attribute this receipt to merged Spatial #2066 `e441033...`**.
+
+Observed real stages: source pin PASS, dependency preflight PASS, synthetic boundary PASS, synthetic four-service config preflight PASS, frozen pnpm install PASS, Functions TypeScript build PASS, original Functions **1787/1787 PASS**, original Firestore static Rules **22/22 PASS**, original native Firestore owner Rules **30/30 PASS**, Tier1 typecheck PASS, then **Tier1 unit FAIL exit 1** (40 recorded tests; **29 passed, 4 failed**, remaining cases cancelled/unfinished), downstream four-emulator Replay BLOCKED, **GENESIS HOLD**. Tail showed one cancellation in `urai-tier1/tests/replay-source-media-behavior.test.mjs`, with `cancelledByParent`; do not treat that as the only root failure without original TAP. Original top-level log SHA256 `2a9feccf9aa0ee93c00792f869eecf442f52fa4ddc2f72d3e6d3fae665b184cc`. Outer pod wrapper returned code 0 after printing the original HOLD report; its wrapper success is **not** suite acceptance. Pod was observed as RUNNING even after the report; owner worker should inspect and stop its compute once evidence is preserved.
+
+This result substantially reduces uncertainty in native Firestore security testing but **does not clear** the Tier1 or full protected Replay gates. Next owner worker: preserve the actual failed test stack/TAP and the exact source marker, repair only a proven source defect, then rerun all affected gates. No production C6, output broker or private media authorization is implied.
+
 ## CURRENT GENESIS R828 SOURCE-ALIGNED CHECKPOINT (2026-11-06 Central; supersedes older head IDs below)
 
 - **Jobs canonical review [PR #312](https://github.com/LifeLoggerAI/urai-jobs/pull/312) original source head before this documentation-only commit:** `6e56a2992d452f96c4397ce465cddbb60f588353`. A parallel worker added owner/tenant checks to the original Studio *longform* bridge in addition to transactional `loadBoundJob` status checks; source comparison against native-tested Jobs #310 `4755101eb1182ead9e89b5effcd91adef3e7b8aa` shows five changed files (workflow, handoff, studio bridge, longform bridge, owner tests). Historical R823 four-emulator/FFmpeg negative PASS still applies only to original #310 SHA, not this new head.
