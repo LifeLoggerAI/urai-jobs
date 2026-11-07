@@ -1,7 +1,7 @@
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { checkedCurrentJobCaller } from "./currentJobCallerAuthority.js";
+import { checkedCurrentJobCaller, boundJobMatchesCurrentOwnerScope } from "./currentJobCallerAuthority.js";
 
 if (getApps().length === 0) initializeApp();
 
@@ -35,8 +35,8 @@ export const getJob = onCall({ region: "us-central1" }, async (request) => {
     if (!jobSnap.exists) throw new HttpsError("not-found", `Job ${jobId} was not found.`);
 
     const job = { id: jobSnap.id, ...jobSnap.data() } as Record<string, unknown>;
-    const ownerUid = String(job.ownerUid || job.createdBy || "");
-    if (!caller.operator && ownerUid !== caller.uid) {
+    // Current tenant/org binding must match, not merely the owner UID.
+    if (!caller.operator && !boundJobMatchesCurrentOwnerScope(job, userSnap.data(), caller.uid)) {
       throw new HttpsError("permission-denied", "You do not have access to this job.");
     }
 
