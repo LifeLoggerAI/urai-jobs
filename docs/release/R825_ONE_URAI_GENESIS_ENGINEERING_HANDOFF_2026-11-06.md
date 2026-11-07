@@ -4,6 +4,31 @@
 
 **Status: GENESIS PRODUCTION HOLD.** This is a source-grounded handoff, *not* an authorization, deployment, or runtime receipt. All branches below are DRAFT and must be rechecked before working because parallel Chalk workers may advance them.
 
+## R833 — CURRENT REVIEW CANDIDATE / VERIFIED EVIDENCE PRECEDENCE (2026-11-07 UTC)
+
+**This section supersedes earlier “current” commit selections below, but preserves the original records as historical evidence.** R833's exact code-tested-by-GitHub-readback source was `636a3cea332dbefbd3ac149f8c367972dc25f73a`, PR [#321](https://github.com/LifeLoggerAI/urai-jobs/pull/321), based directly on R832 `3e118a3682f6343f6f936c4546ba9eb944a2eef1` PR [#319](https://github.com/LifeLoggerAI/urai-jobs/pull/319). This handoff text update adds a documentation-only descendant commit; **re-read #321 live head before running tests**. Original Jobs last fully native-tested source remains R823 `4755101eb1182ead9e89b5effcd91adef3e7b8aa`. These are distinct evidence levels, not one production release.
+
+**New implemented source repair** (no merge to main): Long-form `readPlanStatus` now additionally rechecks the live plan, owner tenant/deletion authority and current consent **after** reading private child/assembly status, denying changed owner/plan and returning a no-details `REVOKED` state if consent changed mid-read. It preserves both parallel Chalk contributions already converged in R832: original malformed-plan structure validator and current child/assembly owner+consent binding, plus revoked state zero-read redaction. This is bounded point-in-time checking, **not atomic authorization spanning arbitrary time** and not a new render capability.
+
+**Verified in this worker:** Connected GitHub commit/readback and comparison: 2 source/test files, code commit `636a3cea332dbefbd3ac149f8c367972dc25f73a`, blobs `69b6e141d73cd5b7c287f5d32baf2e9fe17afc51` and `4544b833e6de27909fdad874f2765990e7f660c5`; 10/10 inspected source-order/invariant assertions true. The enrolled original Node AST-derived regression adds six simulated in-flight authority mutations and checks a second owner transaction and second consent read. **The actual test command, frozen package installation, build, native 4-emulator runtime and Studio HTTP were NOT run** at this new source. The local container can run Node 22/TypeScript but cannot reach GitHub/npm to obtain full original source and dependencies. GitHub Actions nine R832 workflow runs finished **failure with no steps reported**; selected job log blobs unavailable, so this is an infrastructure/CI visibility gate, **not a demonstrated TypeScript or test failure**. Connected Vercel lists old `urai-app` deployment from historical UrAi `e94aba47...`, and other READY deployments whose metadata does not certify current integrated Genesis. Runpod account check: 263 pods listed, zero active; **no paid compute initiated**.
+
+**Current independent repositories, each with separate verification requirements:** Privacy PR [#227](https://github.com/LifeLoggerAI/urai-privacy/pull/227) at `3f336b346ea899062ede6f41bb8dad44ba6de7e3`; Studio [#179](https://github.com/LifeLoggerAI/urai-studio/pull/179) at `153d6c35557c66a8b9f8629778ca796b83730464`; Spatial [#2066](https://github.com/LifeLoggerAI/urai-spatial/pull/2066) at `9fee44065fe118b02f5083a34a39dc35d3b00567`; Staging [#175](https://github.com/LifeLoggerAI/urai-staging/pull/175) at `1e9b8c7f0044450c0a9f0750d33ab36d2324c851`; Asset Factory [#494](https://github.com/LifeLoggerAI/asset-factory/pull/494) at `09fb062643cbad7cd0576fb85bb05d2db97d7d49`. Recheck all PR heads and ancestry before transfer. The two prior parallel Jobs R831 (#312) and R832 (#319) histories are preserved under R833.
+
+**Exact next-worker task**: On a clean authorized no-surprise-charge runner, pin current PR #321 head, Node22/pnpm8.15.9/Java21/FFmpeg and run:
+```bash
+git rev-parse HEAD
+pnpm install --frozen-lockfile
+node --test scripts/life-movies-owner-tenant-transaction.test.mjs
+pnpm typecheck
+pnpm build
+URAI_ACCEPTANCE_SHA="$(git rev-parse HEAD)" bash scripts/run-four-emulator-acceptance.sh
+# Then a separate clean exact Studio #179 checkout:
+# URAI_STUDIO_SOURCE_DIR=<absolute-studio-path> URAI_ACCEPTANCE_SHA="$(git rev-parse HEAD)" bash scripts/run-studio-jobs-real-bridge-acceptance.sh
+```
+Capture actual command exits and log hashes; fix any first genuine failure and rerun affected downstream gates. Then prove positive founder-authorized C6/source rights and private Jobs→Replay lifecycle under separately approved cloud scope. Wave 210 explicitly authorizes **read-only nonproduction inventory only**, not paid positive cloud tests. **NO production grant, billable compute, merge, deployment, or GO. GENESIS HOLD.**
+
+---
+
 ## R831 — CURRENT CROSS-SERVICE SOURCE RECONCILIATION (2026-11-07 UTC; SUPERSEDES OLDER HEADS BELOW)
 
 **Founder status: PRODUCTION HOLD.** Real LifeLogger/LifeOS/UrAi software and historical assets are preserved. This is a committed source integration and evidence receipt, **not** an executed full original native or live owner-authorized private-media journey.
