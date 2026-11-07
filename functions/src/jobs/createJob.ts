@@ -4,6 +4,7 @@ import { HttpsError, type CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
 import { Job, JobQueueEntry, type JobConsentContext } from '@urai-jobs/shared-types';
 import { withAuthenticatedRole } from '../core/auth.js';
+import { checkedCurrentJobCaller, sameCurrentJobOwnerScope, boundJobMatchesCurrentOwnerScope } from './currentJobCallerAuthority.js';
 import { httpsError } from '../core/errors.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import {
@@ -151,8 +152,8 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     throw httpsError('unauthenticated', 'User must be authenticated.');
   }
 
-  if (!hasJobCreatePermission(user)) {
-    throw httpsError('permission-denied', 'User is not allowed to create runtime jobs.');
+  if (!checkedCurrentJobCaller(context.auth, user) || !hasJobCreatePermission(user)) {
+    throw httpsError('permission-denied', 'Current user is not allowed to create runtime jobs.');
   }
 
   // Fast fail before idempotency readback when the authenticated owner is fenced.
@@ -303,7 +304,32 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   if (bindingRef) {
     const existing = await bindingRef.get();
     if (existing.exists) {
-      return resolveExistingBinding(existing.data() as Partial<IdempotencyBinding>, expectedBinding);
+      // An idempotency hit must not bypass current owner/role/deletion authority.
+      // Re-read the owner and binding atomically before returning any job ID.
+      return db.runTransaction(async transaction => {
+        const owner = await transaction.get(ownerRef);
+        const current = owner.exists ? owner.data() : null;
+        if (!checkedCurrentJobCaller(context.auth, current) || !hasJobCreatePermission(current)) {
+          throw httpsError('permission-denied', 'Current user is not allowed to create runtime jobs.');
+        }
+        assertOwnerJobsNotDeleting(current);
+        if (!sameCurrentJobOwnerScope(user, current)) {
+          throw httpsError('failed-precondition', 'Owner tenant or organization changed during Jobs admission.');
+        }
+        const bound = await transaction.get(bindingRef);
+        if (!bound.exists) {
+          throw httpsError('failed-precondition', 'Idempotency binding changed during owner authority recheck.');
+        }
+        const existingJobId = bound.data()?.jobId;
+        if (typeof existingJobId !== 'string' || !existingJobId) {
+          throw httpsError('failed-precondition', 'Idempotency binding has no valid job reference.');
+        }
+        const originalJob = await transaction.get(jobDoc(existingJobId));
+        if (!originalJob.exists || !boundJobMatchesCurrentOwnerScope(originalJob.data(), current, uid)) {
+          throw httpsError('failed-precondition', 'Idempotency binding does not match current owner scope.');
+        }
+        return resolveExistingBinding(bound.data() as Partial<IdempotencyBinding>, expectedBinding);
+      });
     }
   }
 
@@ -345,10 +371,25 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
       if (!ownerSnap.exists) {
         throw httpsError('failed-precondition', 'Owner record missing during Jobs admission.');
       }
-      assertOwnerJobsNotDeleting(ownerSnap.data());
+      const currentOwner = ownerSnap.data();
+      if (!checkedCurrentJobCaller(context.auth, currentOwner) || !hasJobCreatePermission(currentOwner)) {
+        throw httpsError('permission-denied', 'Current user is not allowed to create runtime jobs.');
+      }
+      assertOwnerJobsNotDeleting(currentOwner);
+      if (!sameCurrentJobOwnerScope(user, currentOwner)) {
+        throw httpsError('failed-precondition', 'Owner tenant or organization changed during Jobs admission.');
+      }
       if (bindingRef) {
         const existing = await transaction.get(bindingRef);
         if (existing.exists) {
+          const existingJobId = existing.data()?.jobId;
+          if (typeof existingJobId !== 'string' || !existingJobId) {
+            throw httpsError('failed-precondition', 'Idempotency binding has no valid job reference.');
+          }
+          const originalJob = await transaction.get(jobDoc(existingJobId));
+          if (!originalJob.exists || !boundJobMatchesCurrentOwnerScope(originalJob.data(), currentOwner, uid)) {
+            throw httpsError('failed-precondition', 'Idempotency binding does not match current owner scope.');
+          }
           return resolveExistingBinding(existing.data() as Partial<IdempotencyBinding>, expectedBinding);
         }
       }
