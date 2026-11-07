@@ -9,6 +9,7 @@ import { isTerminalJobStatus } from './executionGuards.js';
 import { consentBlockRef, isConsentContext, checkedJobConsentBlockState } from '../privacy/consentBlocks.js';
 import { deferLifeMovieJob, LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS } from '../privacy/lifeMovieConsentGate.js';
 import { checkedCurrentJobCaller } from './currentJobCallerAuthority.js';
+import { currentJobOwnerEligibleForDispatch } from './currentJobCallerAuthority.js';
 
 const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
 const LEASE_DURATION_MS = 60 * 1000;
@@ -155,6 +156,21 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
       if (job.status !== 'PENDING') {
         return { lease: null, outcome: 'master-not-pending' as const };
       }
+      // Do not lease previously queued work if the original owner has been
+      // deleted, disabled or transferred to a different tenant or organization.
+      const ownerUid = typeof job.ownerUid === 'string' ? job.ownerUid : '';
+      const ownerSnapshot = ownerUid && ownerUid === ownerUid.trim()
+        ? await transaction.get(db.collection('users').doc(ownerUid))
+        : null;
+      if (!ownerSnapshot?.exists || !currentJobOwnerEligibleForDispatch(job, ownerSnapshot.data())) {
+        transaction.update(queueRef, {
+          availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+          updatedAt: now,
+          'dispatch.blockedReason': 'job_owner_authority_unavailable',
+        });
+        return { lease: null, outcome: 'owner-authority-unavailable' as const };
+      }
+
 
       if (deferLifeMovieJob(job)) {
         transaction.update(queueRef, {

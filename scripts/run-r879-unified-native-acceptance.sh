@@ -39,7 +39,7 @@ check_blob 'scripts/life-movie-generation-evidence-matrix.test.mjs' '39d73f87371
 check_blob 'scripts/life-movies-review-only-physical-broker.firebase-emulator.mjs' 'd7cf29fbfd70ffcdf942543a5da7478d9f6888eb'
 check_blob 'scripts/run-r854-private-storage-p0-negative-native.sh' '19d078daf110c1ac633aa535b583918a43e568a6'
 check_blob 'workers/studio-worker/private-output-write-authority.js' 'ea6b25f3949ec2c17f65a9da68fa9cf937e86e76'
-check_blob 'functions/src/jobs/currentJobCallerAuthority.ts' 'f054875d3c9725089a9b4bd3a596437ca7a63e59'
+check_blob 'functions/src/jobs/currentJobCallerAuthority.ts' 'b791017fcb291e8a793b2b85fa9ee37991277c9d'
 check_blob 'functions/src/jobs/admin.ts' '2dfa1eb4e2571f4645769407994641b1890eddb0'
 check_blob 'functions/src/jobs/admin-v2.ts' 'de5313ece6c6b2b3621da61147066fc0fccd511e'
 check_blob 'functions/src/jobs/getJob.ts' 'fd7d04c76907bbd819568336f2c237b8819d738a'
@@ -51,7 +51,7 @@ check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d53
 check_blob 'functions/src/jobs/createJob.ts' '03433ab35ce0374cae58dac572985c75c3abf3b3'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' 'ccb141ca624186d4f67f664446e510ce1f1ef60f'
+check_blob 'package.json' '4de466f92dc64bb40bbf0f1bf59f2da91109c251'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
@@ -132,10 +132,17 @@ stage current_owner_retry_24_source 120s node --test scripts/r883-admin-retry-ow
 grep -q '# pass 24' "$OUT/current_owner_retry_24_source.log" || hold '24 admin retry source tests not recorded'
 
 # R884 current-Firestore-role admission and transaction-time manual dispatch veto.
-check_blob 'functions/src/jobs/processQueueNow.ts' '88ad117cf0e63c0e43e6b7fc6990cde27bfd67de'
-check_blob 'scripts/r884-current-operator-manual-dispatch.test.mjs' 'd0e1ab2c621064268c75492b77510c948d29262f'
+check_blob 'functions/src/jobs/processQueueNow.ts' 'e41421296679ff2d863e055c929fd63b153c1b6f'
+check_blob 'scripts/r884-current-operator-manual-dispatch.test.mjs' 'f163f0af647c84cc26bb9f4bbcc451da286b8345'
 stage current_operator_manual_dispatch_16_source 120s node --test scripts/r884-current-operator-manual-dispatch.test.mjs
 grep -q '# pass 16' "$OUT/current_operator_manual_dispatch_16_source.log" || hold '16 current-operator dispatch source tests not recorded'
+
+# R886 original owner account authority must precede lease and worker start.
+check_blob 'functions/src/jobs/processQueueTick.ts' '9e2a9d019b3ca4f943757ead85127614b3952970'
+check_blob 'functions/src/jobs/executeJob.ts' '446aba4eac661b5e283476de7b7db5a1739284e2'
+check_blob 'scripts/r886-owner-admission-gates.test.mjs' '5309b02898b6080c395865fa15b526d1396b820e'
+stage current_owner_dispatch_19_source 120s node --experimental-strip-types --test scripts/r886-owner-admission-gates.test.mjs
+grep -q '# pass 19' "$OUT/current_owner_dispatch_19_source.log" || hold 'R886 original owner admission regressions not recorded'
 
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \

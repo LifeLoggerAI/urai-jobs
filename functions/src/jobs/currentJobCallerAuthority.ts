@@ -90,6 +90,15 @@ export function currentJobOwnerEligibleForRetry(job: unknown, serverOwner: unkno
 }
 
 /**
+ * Execution admission uses the same current, server-owned identity and
+ * tenant/org binding as retry. This is a revocation veto, not positive
+ * media/source consent or proof that an external writer has lost IAM rights.
+ */
+export function currentJobOwnerEligibleForDispatch(job: unknown, serverOwner: unknown): boolean {
+  return currentJobOwnerEligibleForRetry(job, serverOwner);
+}
+
+/**
  * A generic admin retry cannot prove a new positive consent/source decision,
  * protected-output writer authority, or provider-side delivery idempotency.
  * These jobs must use their dedicated authorized dispatch/admission surface.

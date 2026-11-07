@@ -25,13 +25,14 @@ let nextId=0;
 function fixture({token={uid:'op',token:{role:'operator',uraiJobsAdmin:true}},
   initialUser={uid:'op',role:'operator',disabled:false},
   currentUser=initialUser,
+  ownerUser={uid:'owner',role:'user'},
   queued=true,
   pendingJob={jobId:'job-1',ownerUid:'owner',type:'web.fetch',jobType:'web.fetch',status:'PENDING'},
 }={}){
  const state={preflightReads:0,transactionReads:[],writes:[],published:[],txStarted:0,queueQueryCount:0};
  const ref=(name,id)=>({name,id});
  const snapshots=(name,id,inTransaction)=>{
-  const data=name==='users'?(inTransaction?currentUser:initialUser):name==='jobs'?pendingJob:name==='jobQueue'?{jobId:'job-1',status:'PENDING'}:null;
+  const data=name==='users'?(id==='owner'?ownerUser:(inTransaction?currentUser:initialUser)):name==='jobs'?pendingJob:name==='jobQueue'?{jobId:'job-1',status:'PENDING'}:null;
   return {id,exists:data!==null&&data!==undefined,data:()=>data};
  };
  const db={collection(name){return {
