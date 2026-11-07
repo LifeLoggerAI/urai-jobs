@@ -38,7 +38,7 @@ function fixture({token={uid:'op',token:{role:'operator',uraiJobsAdmin:true}},
   doc(id){return {...ref(name,id),async get(){if(name==='users')state.preflightReads++;return snapshots(name,id,false)}}},
   where(){return this},orderBy(){return this},limit(){return this},
   async get(){state.queueQueryCount++;return {size:queued?1:0,docs:queued?[{id:'job-1',data:()=>({jobId:'job-1'})}]:[]}}
- },async runTransaction(fn){
+ }},async runTransaction(fn){
   state.txStarted++;
   const pending=[];
   const transaction={
