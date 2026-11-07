@@ -1,6 +1,7 @@
 import { getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { https } from "firebase-functions/v1";
+import { checkedCurrentJobCaller } from "./currentJobCallerAuthority.js";
 
 if (getApps().length === 0) initializeApp();
 
@@ -27,28 +28,15 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
-function hasOperatorAccess(auth: unknown): boolean {
-  const authRecord = asRecord(auth);
-  const token = asRecord(authRecord.token);
-  const role = token.role;
-  const roles = Array.isArray(token.roles) ? token.roles : [];
-
-  return (
-    role === "admin" ||
-    role === "operator" ||
-    token.uraiJobsAdmin === true ||
-    roles.includes("admin") ||
-    roles.includes("operator")
-  );
+function uidFromAuth(auth: unknown): string {
+  const uid = String(asRecord(auth).uid || "");
+  if (!uid) throw new https.HttpsError("unauthenticated", "Authentication is required.");
+  return uid;
 }
 
-function requireOperator(auth: unknown): void {
-  if (!auth) {
-    throw new https.HttpsError("unauthenticated", "Authentication is required.");
-  }
-
-  if (!hasOperatorAccess(auth)) {
-    throw new https.HttpsError("permission-denied", "Admin/operator access is required.");
+function requireCurrentOperator(auth: unknown, serverUser: unknown): void {
+  if (!checkedCurrentJobCaller(auth, serverUser)?.operator) {
+    throw new https.HttpsError("permission-denied", "Current admin/operator authority is required.");
   }
 }
 
@@ -66,111 +54,84 @@ function serializeDoc(id: string, data: FirebaseFirestore.DocumentData): Record<
   };
 }
 
-export const listJobs = https.onCall(async (data, context) => {
-  requireOperator(context.auth);
-
+export const listJobs = https.onCall(async (data, context) =>
+  const uid = uidFromAuth(context.auth);
   const input = asRecord(data);
   const statusRaw = String(input.status || "").trim();
   const limit = normalizeLimit(input.limit, 50);
-
-  let query: FirebaseFirestore.Query = getFirestore().collection("jobs");
-
-  if (statusRaw) {
-    if (!ALLOWED_STATUSES.has(statusRaw as JobStatus)) {
-      throw new https.HttpsError("invalid-argument", `Invalid job status: ${statusRaw}`);
-    }
-
-    query = query.where("status", "==", statusRaw);
-  }
-
-  const snap = await query.limit(limit).get();
-  const jobs = snap.docs.map((doc) => serializeDoc(doc.id, doc.data()));
-
-  return { jobs };
-});
-
-export const listJobLogs = https.onCall(async (data, context) => {
-  requireOperator(context.auth);
-
-  const input = asRecord(data);
-  const jobId = String(input.jobId || "").trim();
-  const limit = normalizeLimit(input.limit, 100);
-
-  if (!jobId) {
-    throw new https.HttpsError("invalid-argument", "jobId is required.");
-  }
-
-  const snap = await getFirestore()
-    .collection("jobs")
-    .doc(jobId)
-    .collection("logs")
-    .limit(limit)
-    .get();
-
-  const logs = snap.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data()
-  }));
-
-  return { logs };
-});
-
-export const retryJob = https.onCall(async (data, context) => {
-  requireOperator(context.auth);
-
-  const input = asRecord(data);
-  const jobId = String(input.jobId || "").trim();
-
-  if (!jobId) {
-    throw new https.HttpsError("invalid-argument", "jobId is required.");
+  if (statusRaw && !ALLOWED_STATUSES.has(statusRaw as JobStatus)) {
+    throw new https.HttpsError("invalid-argument", `Invalid job status: ${statusRaw}`);
   }
 
   const db = getFirestore();
+  return db.runTransaction(async transaction => {
+    const userSnap = await transaction.get(db.collection("users").doc(uid));
+    requireCurrentOperator(context.auth, userSnap.exists ? userSnap.data() : null);
+    let query: FirebaseFirestore.Query = db.collection("jobs");
+    if (statusRaw) query = query.where("status", "==", statusRaw);
+    const jobsSnap = await transaction.get(query.limit(limit));
+    return { jobs: jobsSnap.docs.map(doc => serializeDoc(doc.id, doc.data())) };
+  });
+});
+
+export const listJobLogs = https.onCall(async (data, context) =>
+  const uid = uidFromAuth(context.auth);
+  const input = asRecord(data);
+  const jobId = String(input.jobId || "").trim();
+  const limit = normalizeLimit(input.limit, 100);
+  if (!jobId) throw new https.HttpsError("invalid-argument", "jobId is required.");
+
+  const db = getFirestore();
+  return db.runTransaction(async transaction => {
+    const userSnap = await transaction.get(db.collection("users").doc(uid));
+    requireCurrentOperator(context.auth, userSnap.exists ? userSnap.data() : null);
+    const logsQuery = db.collection("jobs").doc(jobId).collection("logs").limit(limit);
+    const logsSnap = await transaction.get(logsQuery);
+    return { logs: logsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
+  });
+});
+
+export const retryJob = https.onCall(async (data, context) =>
+  const uid = uidFromAuth(context.auth);
+  const input = asRecord(data);
+  const jobId = String(input.jobId || "").trim();
+  if (!jobId) throw new https.HttpsError("invalid-argument", "jobId is required.");
+
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
   const jobRef = db.collection("jobs").doc(jobId);
   const queueRef = db.collection("jobQueue").doc(jobId);
-
-  await db.runTransaction(async (transaction) => {
-    const jobSnap = await transaction.get(jobRef);
-
-    if (!jobSnap.exists) {
-      throw new https.HttpsError("not-found", `Job ${jobId} was not found.`);
-    }
-
+  const logRef = jobRef.collection("logs").doc();
+  await db.runTransaction(async transaction => {
+    const [userSnap, jobSnap] = await Promise.all([
+      transaction.get(userRef), transaction.get(jobRef)
+    ]);
+    requireCurrentOperator(context.auth, userSnap.exists ? userSnap.data() : null);
+    if (!jobSnap.exists) throw new https.HttpsError("not-found", `Job ${jobId} was not found.`);
     const job = jobSnap.data() || {};
     const status = String(job.status || "");
-
     if (status !== "FAILED") {
       throw new https.HttpsError("failed-precondition", `Job ${jobId} cannot be retried from status ${status}.`);
     }
 
-    transaction.set(
-      jobRef,
-      {
-        status: "PENDING",
-        retryCount: Number(job.retryCount || 0),
-        retriedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp()
-      },
-      { merge: true }
-    );
-
-    transaction.set(
-      queueRef,
-      {
-        jobId,
-        status: "PENDING",
-        availableAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp()
-      },
-      { merge: true }
-    );
-  });
-
-  await jobRef.collection("logs").add({
-    level: "info",
-    message: "Job retry queued from live admin callable.",
-    createdAt: FieldValue.serverTimestamp(),
-    source: "retryJob"
+    transaction.set(jobRef, {
+      status: "PENDING",
+      retryCount: Number(job.retryCount || 0),
+      retriedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    transaction.set(queueRef, {
+      jobId,
+      status: "PENDING",
+      availableAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    transaction.create(logRef, {
+      level: "info",
+      message: "Job retry queued from live admin callable.",
+      createdAt: FieldValue.serverTimestamp(),
+      source: "retryJob"
+    });
   });
 
   return { jobId, status: "PENDING" };
