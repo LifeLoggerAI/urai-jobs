@@ -11,6 +11,8 @@ import {
   bindingMatches,
   buildIdempotencyBindingId,
   buildRequestFingerprint,
+  jobCreateRateLimitAllowsCount,
+  jobCreateRateLimitLockId,
   type IdempotencyBinding,
 } from '../core/jobsReliability.js';
 import { StudioLifeMovieRenderPayloadSchema } from './studioLifeMovieContract.js';
@@ -290,6 +292,9 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
 
   const db = getFirestore();
   const ownerRef = db.collection('users').doc(uid);
+  // Every job type for this UID must serialize on this server-only document.
+  // A separate preflight query is advisory; this shared lock is authoritative.
+  const quotaLockRef = db.collection('jobCreateRateLimitLocks').doc(jobCreateRateLimitLockId(uid));
   const fingerprintPayload = communicationsJob
     ? { payload, tenantId }
     : jobType === 'memory.private-source.reconstruct-place'
@@ -333,6 +338,7 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     }
   }
 
+  // Fast denial only; concurrent requests must recheck inside the write transaction.
   await assertCreateRateLimit(uid);
 
   const jobId = ulid();
@@ -394,9 +400,29 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
         }
       }
 
+      // Firestore transactions commit serializably. All successful admissions
+      // first read, then WRITE the same owner-specific lock document. This
+      // prevents two different job IDs from both committing against a stale
+      // pretransaction job count. All reads precede every transaction write.
+      await transaction.get(quotaLockRef);
+      const windowStart = Timestamp.fromMillis(Date.now() - 60_000);
+      const currentWindow = await transaction.get(db.collection('jobs')
+        .where('ownerUid', '==', uid)
+        .where('createdAt', '>=', windowStart)
+        .limit(MAX_CREATE_PER_MINUTE + 1));
+      if (!jobCreateRateLimitAllowsCount(currentWindow.size, MAX_CREATE_PER_MINUTE)) {
+        throw httpsError('resource-exhausted', 'Job create rate limit exceeded. Try again later.');
+      }
+
       const jobRef = jobDoc(jobId);
       const queueRef = jobQueueEntryDoc(jobId);
       const logRef = jobRef.collection('logs').doc('created');
+      // Minimal pseudonymous lock record: retain no raw UID, payload, media or
+      // consent reference. Governed Jobs owner deletion removes this record.
+      transaction.set(quotaLockRef, {
+        admissionCount: FieldValue.increment(1),
+        lastAdmittedAt: now,
+      }, { merge: true });
 
       transaction.create(jobRef, {
         ...newJob,
@@ -437,6 +463,14 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     });
   } catch (error: unknown) {
     if (error instanceof HttpsError) throw error;
+    // The shared owner lock can produce finite-retry Firestore contention
+    // under a heavy burst. Never allow a failed transaction to be mistaken
+    // for an accepted job, and don't disclose internal Firestore details.
+    const code = (error && typeof error === 'object' && 'code' in error)
+      ? (error as { code?: unknown }).code : undefined;
+    if (code === 10 || code === 'ABORTED' || code === 'aborted') {
+      throw httpsError('resource-exhausted', 'Job admission is busy. Retry later.');
+    }
     console.error('Error creating idempotent job transaction:', error);
     throw httpsError('internal', 'Failed to create job.');
   }
