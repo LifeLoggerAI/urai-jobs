@@ -133,7 +133,7 @@ grep -q '# pass 24' "$OUT/current_owner_retry_24_source.log" || hold '24 admin r
 
 # R884 current-Firestore-role admission and transaction-time manual dispatch veto.
 check_blob 'functions/src/jobs/processQueueNow.ts' '88ad117cf0e63c0e43e6b7fc6990cde27bfd67de'
-check_blob 'scripts/r884-current-operator-manual-dispatch.test.mjs' '8290146220c6789dbc63cf7f11fc54dfa0d72b61'
+check_blob 'scripts/r884-current-operator-manual-dispatch.test.mjs' 'd0e1ab2c621064268c75492b77510c948d29262f'
 stage current_operator_manual_dispatch_16_source 120s node --test scripts/r884-current-operator-manual-dispatch.test.mjs
 grep -q '# pass 16' "$OUT/current_operator_manual_dispatch_16_source.log" || hold '16 current-operator dispatch source tests not recorded'
 
