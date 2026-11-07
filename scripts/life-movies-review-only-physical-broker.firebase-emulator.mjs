@@ -100,14 +100,39 @@ try{
     assert.equal((await reviewOnlyDrainStatus(bScope)).activeOrUnproven,1);
   });
 
+  await check('forged and absent physical generations cannot create a durable ledger record',async()=>{
+    const noScope=scope('missing'),no=attempt(noScope,'missing');
+    await fixture(noScope,no);
+    await reserveReviewOnlyOutputAttempt(no,1);
+    await beginReviewOnlySimulatedUpload(no);
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(no,'1'),'generation_not_observed');
+    const snap=await db.collection('lifeMovieWriteAttemptsReviewOnly')
+      .where('scopeId','==',reviewOnlyScopeId(noScope)).get();
+    assert.equal(snap.size,1);
+    assert.equal(snap.docs[0].data().state,'SIMULATED_IN_FLIGHT');
+    assert.equal(snap.docs[0].data().physicalGeneration,undefined);
+
+    const real=await db.collection('lifeMovieWriteAttemptsReviewOnly')
+      .where('scopeId','==',reviewOnlyScopeId(bScope)).get();
+    const actual=real.docs[0].data().physicalGeneration;
+    const wrong=(BigInt(actual)===1n?'2':'1');
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,wrong),'generation_not_observed');
+    const unchanged=(await real.docs[0].ref.get()).data();
+    assert.equal(unchanged.physicalGeneration,actual);
+    assert.equal(unchanged.state,'PHYSICAL_GENERATION_UNVERIFIED');
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,'18446744073709551616'),'generation_invalid');
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,'9007199254740993x'),'generation_invalid');
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,'01'),'generation_invalid');
+  });
+
   await check('repeat same physical generation is idempotent but a new generation cannot replace it',async()=>{
     const snapshot=await db.collection('lifeMovieWriteAttemptsReviewOnly')
       .where('scopeId','==',reviewOnlyScopeId(bScope)).get();
     const gen=snapshot.docs[0].data().physicalGeneration;
     const replay=await recordReviewOnlyBrokerPhysicalGeneration(b,gen);
     assert.equal(replay.alreadyRecorded,true);
-    const other=String(Number(gen)+1);
-    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,other),'generation_conflict');
+    const other=String(BigInt(gen)+1n);
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,other),'generation_not_observed');
     await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,'0'),'generation_invalid');
   });
   await check('physical generation cannot be forged into acknowledged state even after file deletion',async()=>{
