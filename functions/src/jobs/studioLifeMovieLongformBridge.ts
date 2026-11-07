@@ -546,6 +546,44 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
     || !isDeepStrictEqual(assemblyData.consent, plan.consent))) {
     throw new Error('longform_assembly_status_boundary_mismatch');
   }
+  // Child reads are not atomic with the first owner/consent decision. Recheck
+  // both the live plan and current owner after all private child metadata has
+  // been fetched, then re-read consent before returning an owner-visible
+  // response. This remains point-in-time protection, not a lasting grant.
+  await db.runTransaction(async (transaction) => {
+    const planSnapshot = await transaction.get(planRef(planId));
+    if (!planSnapshot.exists) throw new Error('longform_plan_not_found');
+    const current = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
+    assertPlanStructure(current, planId);
+    if (current.projectId !== plan.projectId
+      || current.renderPlanDigest !== plan.renderPlanDigest
+      || current.sceneTruthDigest !== plan.sceneTruthDigest
+      || current.assemblyJobId !== plan.assemblyJobId
+      || !isDeepStrictEqual(current.childJobIds, plan.childJobIds)
+      || !isDeepStrictEqual(current.segments, plan.segments)
+      || !isDeepStrictEqual(current.consent, plan.consent)) {
+      throw new Error('longform_plan_changed');
+    }
+    const ownerSnapshot = await transaction.get(db.collection('users').doc(userId));
+    assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, userId, tenantId);
+  });
+  const latestConsent = checkedJobConsentBlockState(
+    await consentBlockRef(plan.ownerUid, plan.consent.purpose).get(),
+  );
+  if (latestConsent === 'unverified') throw new Error('life_movie_consent_block_unverified');
+  if (latestConsent === 'revoked') {
+    // Revocation during the child read must not disclose those child details.
+    return {
+      planId,
+      status: 'REVOKED',
+      consentRevoked: true,
+      segmentCount: 0,
+      counts: {},
+      children: [],
+      assembly: null,
+      publicReleaseAuthorized: false,
+    };
+  }
   const statuses = children.map((child) => child.status);
   const counts = statuses.reduce<Record<string, number>>((result, status) => {
     result[status] = (result[status] ?? 0) + 1;
