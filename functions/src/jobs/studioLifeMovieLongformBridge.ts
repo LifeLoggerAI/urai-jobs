@@ -503,12 +503,34 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
   const assemblySnapshot = plan.assemblyJobId ? await jobDoc(plan.assemblyJobId).get() : null;
   const children = snapshots.map((snapshot, index) => {
     const data = snapshot.exists ? snapshot.data() : undefined;
+    // The parent plan's historical child list is a locator, NOT authority
+    // over the present job record. Reject any existing foreign, replaced,
+    // stale-parent or reconsented child before returning its private status.
+    if (snapshot.exists && (!data || data.jobId !== plan.childJobIds[index]
+      || data.ownerUid !== plan.ownerUid || data.tenantId !== plan.tenantId
+      || data.sourceSystem !== 'urai-studio'
+      || (data.jobType || data.type) !== 'studio.render.video'
+      || data.execution?.rootJobId !== planId || data.execution?.parentJobId !== planId
+      || !isDeepStrictEqual(data.consent, plan.consent))) {
+      throw new Error('longform_child_status_boundary_mismatch');
+    }
     return {
       jobId: plan.childJobIds[index],
       status: (data?.status ?? 'DEAD') as JobStatus,
       index: plan.segments[index]?.index ?? index,
     };
   });
+  const assemblyData = assemblySnapshot?.exists ? assemblySnapshot.data() : undefined;
+  if (assemblySnapshot?.exists && (!assemblyData
+    || assemblyData.jobId !== plan.assemblyJobId
+    || assemblyData.ownerUid !== plan.ownerUid || assemblyData.tenantId !== plan.tenantId
+    || assemblyData.sourceSystem !== 'urai-studio'
+    || (assemblyData.jobType || assemblyData.type) !== 'studio.assemble.video'
+    || assemblyData.execution?.rootJobId !== planId
+    || assemblyData.execution?.parentJobId !== planId
+    || !isDeepStrictEqual(assemblyData.consent, plan.consent))) {
+    throw new Error('longform_assembly_status_boundary_mismatch');
+  }
   const statuses = children.map((child) => child.status);
   const counts = statuses.reduce<Record<string, number>>((result, status) => {
     result[status] = (result[status] ?? 0) + 1;
@@ -525,7 +547,7 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
     sceneTruthDigest: plan.sceneTruthDigest,
     assembly: plan.assemblyJobId ? {
       jobId: plan.assemblyJobId,
-      status: assemblySnapshot?.exists ? String(assemblySnapshot.data()?.status || 'DEAD') : 'DEAD',
+      status: assemblyData ? String(assemblyData.status || 'DEAD') : 'DEAD',
     } : null,
     publicReleaseAuthorized: false,
   };
@@ -1181,6 +1203,7 @@ export const studioLifeMovieLongformBridge = onRequest({
       'longform_plan_not_ready_for_assembly', 'longform_final_assembly_not_ready',
       'longform_segment_checksum_missing', 'longform_assembly_binding_mismatch', 'longform_plan_cancelled',
       'longform_plan_structure_invalid', 'longform_child_not_found', 'longform_plan_cancel_required', 'longform_plan_changed',
+      'longform_child_status_boundary_mismatch', 'longform_assembly_status_boundary_mismatch',
       'scene_truth_receipt_replay_conflict', 'idempotency_conflict', 'life_movie_longform_disabled',
       'life_movie_longform_consent_revoked', 'scene_truth_receipt_authority_unavailable',
       'scene_truth_receipt_expired', 'invalid_scene_truth_receipt_signature', 'life_movie_owner_job_boundary_mismatch',
@@ -1196,6 +1219,8 @@ export const studioLifeMovieLongformBridge = onRequest({
       : code === 'life_movie_owner_tenant_authority_unavailable' ? 503
       : code === 'longform_plan_not_found' ? 404
       : code === 'longform_plan_boundary_mismatch' ? 403
+      : code === 'longform_child_status_boundary_mismatch'
+        || code === 'longform_assembly_status_boundary_mismatch' ? 403
       : code === 'life_movie_owner_job_boundary_mismatch' || code === 'life_movie_output_boundary_mismatch' ? 403
       : code === 'longform_output_boundary_mismatch' ? 403
       : code === 'longform_output_bucket_authority_unavailable' || code === 'life_movie_output_bucket_authority_unavailable' ? 503
