@@ -158,7 +158,7 @@ grep -q '# pass 19' "$OUT/legacy_writer_refusal_19_source.log" || hold 'R887 leg
 # R888 Studio long-form owner organization is server-owned and never inherited
 # from user-supplied tenant; actual private GCS writer remains hard-off.
 check_blob 'functions/src/jobs/lifeMovieLongformOwnerOrg.ts' '36b809a8e599b288480800f4fc3248eb828b5911'
-check_blob 'functions/src/jobs/studioLifeMovieLongformBridge.ts' '58c4f232b475c138461ad35df00d220c515dd4eb'
+check_blob 'functions/src/jobs/studioLifeMovieLongformBridge.ts' '86d540ed110f1400470b5cbb7d432df0f38d10cf'
 check_blob 'scripts/r888-longform-owner-org.test.mjs' '5d33a2cf702fef990201bd6f519ae370d130c074'
 check_blob 'scripts/life-movies-longform-resume-transaction-contract.mjs' 'ef439bbe7a6a697ab04f2ebfc53b7e98d5466dd1'
 stage studio_longform_org_12_source 120s node --experimental-strip-types --test scripts/r888-longform-owner-org.test.mjs
