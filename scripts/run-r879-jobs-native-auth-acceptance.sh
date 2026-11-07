@@ -43,7 +43,20 @@ done
 # Reject ignored Functions environment files before any installation lifecycle
 # or build script. The preexisting file may contain production credentials.
 ENV_FILE="functions/.env.$PROJECT"
-[[ ! -e "$ENV_FILE" ]] || die "Preexisting emulator Functions environment configuration is forbidden"
+# Firebase Functions emulators load .env, project .env.*, .env.local and
+# .secret.local; Gen1 may also load .runtimeconfig.json. Any ignored file
+# here can silently override the disposable runner's no-provider policy.
+# Reject files OR symlinks before dependency installation and again after
+# build. A tracked functions/.env.example is documentation, not configuration.
+assert_no_functions_local_configuration() {
+  local found
+  found="$(find functions -maxdepth 1 \\( \\
+    -name '.env' -o -name '.env.*' -o \\
+    -name '.secret.local' -o -name '.runtimeconfig.json' \\
+  \\) ! -name '.env.example' -print -quit)"
+  [[ -z "$found" ]] || die "Functions local environment/secret configuration forbidden: $found"
+}
+assert_no_functions_local_configuration
 command -v ffmpeg >/dev/null || die "ffmpeg is required for original Life Movie worker smoke"
 command -v ffprobe >/dev/null || die "ffprobe is required for original Life Movie worker smoke"
 
@@ -68,7 +81,7 @@ pnpm build
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || die "Original build modified reviewed source"
 
 # An install/build that creates the ignored Functions env file is unsafe.
-[[ ! -e "$ENV_FILE" ]] || die "Frozen build created emulator Functions environment configuration"
+assert_no_functions_local_configuration
 cleanup() { rm -f -- "$ENV_FILE"; }
 trap cleanup EXIT
 printf '%s\n' \
