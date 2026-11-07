@@ -73,6 +73,67 @@ test('both actual Studio bridges enforce the guard inside all enqueue/resume tra
     assert.equal(matches.length,expected,name+' must bind every owner-relevant transaction');
   }
 });
+test('Studio status rechecks owner and tenant within one Firestore read transaction', async () => {
+  const source = fs.readFileSync(path.resolve('functions/src/jobs/studioLifeMovieBridge.ts'), 'utf8');
+  const ast = ts.createSourceFile('studioLifeMovieBridge.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const declaration = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'loadBoundJob');
+  assert.ok(declaration?.body, 'original Studio status loader must exist');
+  const js = ts.transpileModule(declaration.getText(ast), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const originalJob = { jobId: 'synthetic-job-1234567890', sourceSystem: 'urai-studio',
+    tenantId: 'tenant-1', ownerUid: 'owner-1', jobType: 'studio.render.video', status: 'SUCCESS' };
+  let jobValue = originalJob;
+  let ownerValue = { ...fixture };
+  const reads = [];
+  let transactions = 0;
+  const db = {
+    collection(name) {
+      assert.equal(name, 'users');
+      return { doc(uid) { return { kind: 'owner', uid }; } };
+    },
+    async runTransaction(fn) {
+      transactions++;
+      return fn({ async get(ref) {
+        reads.push(ref.kind);
+        if (ref.kind === 'job') return snap(jobValue);
+        if (ref.kind === 'owner') { assert.equal(ref.uid, 'owner-1'); return snap(ownerValue); }
+        throw Error('unexpected reference');
+      } });
+    },
+  };
+  const bridgeModule = { exports: {} };
+  vm.runInNewContext(js + '\nmodule.exports.loadBoundJob = loadBoundJob;', {
+    module: bridgeModule, Object, Array, Promise, Error,
+    getFirestore: () => db,
+    jobDoc: id => ({ kind: 'job', id }),
+    assertLifeMovieOwnerTenantAuthorityClear: check,
+  });
+  const load = () => bridgeModule.exports.loadBoundJob('tenant-1', 'owner-1', originalJob.jobId);
+  assert.strictEqual(await load(), originalJob);
+  assert.deepEqual(reads, ['job', 'owner']);
+  assert.equal(transactions, 1);
+  for (const invalid of [
+    { ...fixture, disabled: true }, { ...fixture, accountStatus: 'disabled' },
+    { ...fixture, tenantId: 'another-tenant' }, { ...fixture, deleted: true },
+    { ...fixture, dataRightsDeletionPendingCentralPrivacy: true }, null,
+  ]) {
+    reads.length = 0;
+    ownerValue = invalid;
+    await assert.rejects(load(), BLOCK);
+    assert.deepEqual(reads, ['job', 'owner'], 'both records must be read before status disclosure');
+  }
+  ownerValue = { ...fixture };
+  jobValue = { ...originalJob, tenantId: 'another-tenant' };
+  reads.length = 0;
+  await assert.rejects(load(), /job_boundary_mismatch/);
+  assert.deepEqual(reads, ['job'], 'wrong job binding must be rejected first');
+  jobValue = null;
+  reads.length = 0;
+  await assert.rejects(load(), /job_not_found/);
+  assert.deepEqual(reads, ['job'], 'missing job must not read owner profile');
+});
+
 test('worker activation and consent availability remain hard closed', () => {
   const source=fs.readFileSync('functions/src/privacy/lifeMovieConsentGate.ts','utf8');
   assert.match(source,/export function lifeMovieConsentAuthorityAvailable\(\): boolean \{\s*return false;/);
