@@ -1,7 +1,7 @@
 import { getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { checkedCurrentJobCaller } from "./currentJobCallerAuthority.js";
+import { checkedCurrentJobCaller, currentJobOwnerEligibleForRetry, genericAdminRetryAllowed } from "./currentJobCallerAuthority.js";
 
 if (getApps().length === 0) initializeApp();
 
@@ -117,6 +117,18 @@ export const retryJobV2 = onCall(callableOptions, async (request) => {
     const status = String(job.status || "");
     if (status !== "FAILED") {
       throw new HttpsError("failed-precondition", `Job ${jobId} cannot be retried from status ${status}.`);
+    }
+    // Generic retry is not an alternate path into protected or provider-bound work.
+    if (!genericAdminRetryAllowed(job)) {
+      throw new HttpsError("failed-precondition", "This job requires a dedicated fresh authorization or delivery path.");
+    }
+    const ownerUid = typeof job.ownerUid === "string" ? job.ownerUid : "";
+    if (!ownerUid || ownerUid !== ownerUid.trim()) {
+      throw new HttpsError("permission-denied", "Current job owner authority is unavailable.");
+    }
+    const ownerSnap = ownerUid === uid ? userSnap : await transaction.get(db.collection("users").doc(ownerUid));
+    if (!ownerSnap.exists || !currentJobOwnerEligibleForRetry(job, ownerSnap.data())) {
+      throw new HttpsError("permission-denied", "Current job owner authority is unavailable.");
     }
 
     transaction.set(jobRef, {

@@ -39,19 +39,19 @@ check_blob 'scripts/life-movie-generation-evidence-matrix.test.mjs' '39d73f87371
 check_blob 'scripts/life-movies-review-only-physical-broker.firebase-emulator.mjs' 'd7cf29fbfd70ffcdf942543a5da7478d9f6888eb'
 check_blob 'scripts/run-r854-private-storage-p0-negative-native.sh' '19d078daf110c1ac633aa535b583918a43e568a6'
 check_blob 'workers/studio-worker/private-output-write-authority.js' 'ea6b25f3949ec2c17f65a9da68fa9cf937e86e76'
-check_blob 'functions/src/jobs/currentJobCallerAuthority.ts' 'c01eda8d879c695b6642196f124550b3dd743c0a'
-check_blob 'functions/src/jobs/admin.ts' '67cb0e314a47d7ca075e9cb3c17b3b0d29cbe3e5'
-check_blob 'functions/src/jobs/admin-v2.ts' '84104f5697314a3bccda87d538ad1c5e21a26070'
+check_blob 'functions/src/jobs/currentJobCallerAuthority.ts' 'f054875d3c9725089a9b4bd3a596437ca7a63e59'
+check_blob 'functions/src/jobs/admin.ts' '2dfa1eb4e2571f4645769407994641b1890eddb0'
+check_blob 'functions/src/jobs/admin-v2.ts' 'de5313ece6c6b2b3621da61147066fc0fccd511e'
 check_blob 'functions/src/jobs/getJob.ts' 'fd7d04c76907bbd819568336f2c237b8819d738a'
 check_blob 'functions/src/jobs/cancelJob.ts' '3c126dd251a6ad241fb6a5a63b1294e5b8a4403c'
 check_blob 'functions/src/jobs/getJobStatus.ts' 'a198db9694e7352f470c8dbd399dd4af01bd65a4'
-check_blob 'scripts/r875-current-job-caller-authority.test.mjs' 'dc06b34c56693d7ee8496740c158102e5ebce917'
+check_blob 'scripts/r875-current-job-caller-authority.test.mjs' '747de36ed3318270a8b3bb944178e9fc8fb61115'
 check_blob 'scripts/r876-current-getJobStatus-lifecycle.test.mjs' '6e36a31f9ba17dbf10ba90c79ecd4571b163319f'
 check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d533'
 check_blob 'functions/src/jobs/createJob.ts' '03433ab35ce0374cae58dac572985c75c3abf3b3'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' 'c10d20f5abf8a68d754c241364fc708d57ce92be'
+check_blob 'package.json' 'c83077b2558eb34b8fbc74138e3a149cc6be38ad'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
@@ -125,6 +125,11 @@ grep -q '# pass 16' "$OUT/owner_callable_16_source.log" || hold '16 owner-callab
 check_blob 'scripts/r882-malformed-owner-scope.test.mjs' '59fa0441adbd960b322994a9db921932609f6460'
 stage malformed_scope_17_source 120s node --experimental-strip-types --test scripts/r882-malformed-owner-scope.test.mjs
 grep -q '# pass 17' "$OUT/malformed_scope_17_source.log" || hold 'Malformed scope source acceptance missing'
+
+# R883 original admin callable retry denial and current-owner recheck.
+check_blob 'scripts/r883-admin-retry-owner-consent.test.mjs' '4b30782704b9e61207cdc5e0b08e2b9d1aebdf75'
+stage current_owner_retry_24_source 120s node --test scripts/r883-admin-retry-owner-consent.test.mjs
+grep -q '# pass 24' "$OUT/current_owner_retry_24_source.log" || hold '24 admin retry source tests not recorded'
 
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \
