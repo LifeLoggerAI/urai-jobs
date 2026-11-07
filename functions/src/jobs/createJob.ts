@@ -1,5 +1,6 @@
 import { ulid } from 'ulid';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { reserveCreateJobRateLimit, JobCreateRateLimitError } from './jobCreateRateLimit.js';
 import { HttpsError, type CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
 import { Job, JobQueueEntry, type JobConsentContext } from '@urai-jobs/shared-types';
@@ -118,7 +119,12 @@ function hasJobCreatePermission(user: unknown): boolean {
   return record.role === 'admin' || record.role === 'operator' || permissions.includes('jobs:create');
 }
 
-async function assertCreateRateLimit(uid: string) {
+/**
+ * Temporary migration read for pre-ledger admissions. Used only when the
+ * server-owned quota field is missing. This is NOT admission authority:
+ * the transactional ledger on users/{uid} serializes all new writers.
+ */
+async function legacyCreateAdmissionTimes(uid: string): Promise<number[]> {
   const db = getFirestore();
   const windowStart = Timestamp.fromMillis(Date.now() - 60_000);
   const recent = await db
@@ -128,9 +134,13 @@ async function assertCreateRateLimit(uid: string) {
     .limit(MAX_CREATE_PER_MINUTE + 1)
     .get();
 
-  if (recent.size >= MAX_CREATE_PER_MINUTE) {
-    throw httpsError('resource-exhausted', 'Job create rate limit exceeded. Try again later.');
-  }
+  return recent.docs.map(snapshot => {
+    const timestamp = snapshot.data().createdAt;
+    if (!(timestamp instanceof Timestamp)) {
+      throw httpsError('failed-precondition', 'Legacy job rate limit timestamp is unavailable.');
+    }
+    return timestamp.toMillis();
+  });
 }
 
 function resolveExistingBinding(
@@ -333,7 +343,9 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     }
   }
 
-  await assertCreateRateLimit(uid);
+  // The historical query is a migration seed only. Quota enforcement itself
+  // occurs inside the job/queue/idempotency write transaction below.
+  const migrationAdmissions = await legacyCreateAdmissionTimes(uid);
 
   const jobId = ulid();
   const now = FieldValue.serverTimestamp();
@@ -394,9 +406,30 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
         }
       }
 
+      let nextRateLimit;
+      try {
+        nextRateLimit = reserveCreateJobRateLimit(
+          currentOwner?.jobsCreateRateLimit,
+          Date.now(),
+          MAX_CREATE_PER_MINUTE,
+          migrationAdmissions,
+        );
+      } catch (error) {
+        if (!(error instanceof JobCreateRateLimitError)) throw error;
+        if (error.reason === 'exhausted') {
+          throw httpsError('resource-exhausted', 'Job create rate limit exceeded. Try again later.');
+        }
+        throw httpsError('failed-precondition', 'Job creation rate limit authority is unavailable.');
+      }
+
       const jobRef = jobDoc(jobId);
       const queueRef = jobQueueEntryDoc(jobId);
       const logRef = jobRef.collection('logs').doc('created');
+
+      // Firestore writes commit atomically with the job and queue.
+      // Concurrent transactions on the same owner must retry against the
+      // updated rate-limit ledger rather than accepting stale counts.
+      transaction.update(ownerRef, { jobsCreateRateLimit: nextRateLimit });
 
       transaction.create(jobRef, {
         ...newJob,
