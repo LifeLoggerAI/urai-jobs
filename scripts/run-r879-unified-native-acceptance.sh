@@ -55,7 +55,9 @@ check_blob 'scripts/owner_authority_rules.static.test.mjs' '3c1dcedbdb5d988da32e
 check_blob 'scripts/r883-create-job-quota-ledger.test.mjs' '52598f8ab1e84e40e6f3246ca65a8dca8df776c0'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' '9e330c8c82903274c7f7d6a28aa608740f1b7549'
+check_blob 'package.json' '71e1387a6df3c9ed51c1f92b94e17dc2d4ed75c0'
+check_blob 'firestore.indexes.json' '7690ab3a4db2d7e83de5d6d13ebd7100cecde5bd'
+check_blob 'scripts/r885-firestore-quota-index-contract.test.mjs' '9df8b168f6636ba141f17a15b4e5659361910369'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 check_blob 'scripts/r879-jobs-current-authority.firebase-emulator.test.mjs' '89f9a65d3276d606975b7f5f5d285f6cb4906c18'
 check_blob 'scripts/run-r879-jobs-native-auth-acceptance.sh' '67bc0b80ccebac3ac0e397a7e791dfc8f000404e'
@@ -127,8 +129,10 @@ grep -q '# pass 18' "$OUT/current_callable_18_source.log" || hold '18 current-ca
 stage owner_callable_16_source 120s node --experimental-strip-types --test scripts/r881-owner-scope-callable-behavior.test.mjs
 # R883 atomic quota model/source regression. Native 14-way admission is separately mandatory.
 stage create_quota_12_source 120s node --experimental-strip-types --test scripts/r883-create-job-quota-ledger.test.mjs
+stage quota_index_5_source 120s node --test scripts/r885-firestore-quota-index-contract.test.mjs
 grep -q '# pass 16' "$OUT/owner_callable_16_source.log" || hold '16 owner-callable behavioral source tests not recorded'
 grep -q '# pass 12' "$OUT/create_quota_12_source.log" || hold '12 exact-source quota tests not recorded'
+grep -q '# pass 5' "$OUT/quota_index_5_source.log" || hold 'R885 index source checks not recorded'
 
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \
@@ -143,7 +147,7 @@ grep -q 'privateDeletionAcknowledged=false productionAuthorized=false' "$OUT/phy
 # Demo-only native runner rechecks all credentials/project settings and its
 # own exact external SHA, then builds + runs Auth/Firestore/Functions/Storage.
 stage jobs_authority_quota_native 7200s env \
-  GCLOUD_PROJECT=demo-urai-jobs GOOGLE_CLOUD_PROJECT=demo-urai-jobs \
+  URAI_EMULATOR_PROJECT=demo-urai-jobs GCLOUD_PROJECT=demo-urai-jobs GOOGLE_CLOUD_PROJECT=demo-urai-jobs \
   URAI_ACCEPTANCE_SHA="$EXPECTED" \
   bash scripts/run-r879-jobs-native-auth-acceptance.sh
 grep -q "R879_JOBS_NATIVE_AUTH_ACCEPTANCE_PASS source=$EXPECTED project=demo-urai-jobs" \
