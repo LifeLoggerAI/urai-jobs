@@ -51,7 +51,7 @@ export function reserveCreateJobRateLimit(
     }
     const value = stored as Record<string, unknown>;
     if (!Array.isArray(value.admissionsMs) || !validMillis(value.latestAdmissionMs) ||
-        value.admissionsMs.length < 1 || value.admissionsMs.length > maxPerMinute ||
+        value.admissionsMs.length < 1 || value.admissionsMs.length > 10000 ||
         !value.admissionsMs.every(validMillis)) {
       throw new JobCreateRateLimitError('invalid-ledger');
     }
