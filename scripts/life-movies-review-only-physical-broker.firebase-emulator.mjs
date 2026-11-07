@@ -182,6 +182,13 @@ try{
     });
     const [newMeta]=await file.getMetadata();
     assert.notEqual(String(newMeta.generation),previous,'replacement must be different');
+    // R874: a false caller claim must remain a ledger conflict even while a
+    // different live generation occupies this canonical Storage path.
+    const forged=(BigInt(previous)===1n || BigInt(newMeta.generation)===1n?'2':'1');
+    assert.notEqual(forged,previous);
+    assert.notEqual(forged,String(newMeta.generation));
+    await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,forged),
+      'generation_conflict');
     await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,previous),
       'generation_replaced_unverified');
     const ledger=(await db.collection('lifeMovieWriteAttemptsReviewOnly')
