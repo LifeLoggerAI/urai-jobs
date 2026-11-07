@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
@@ -140,15 +142,35 @@ test('long-form status transaction rechecks current owner before private segment
   const decl = name => ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
   const owner = decl('assertPlanOwner');
   const reader = decl('readPlanStatus');
-  assert.ok(owner?.body && reader?.body, 'long-form owner and status functions must exist');
-  const output = ts.transpileModule(owner.getText(ast) + '\n' + reader.getText(ast), {
+  const makeChild = decl('makeChildId');
+  const makeAssembly = decl('makeAssemblyJobId');
+  const validatePlan = decl('assertPlanStructure');
+  assert.ok([owner, reader, makeChild, makeAssembly, validatePlan].every(fn => fn?.body),
+    'long-form status must retain exact original owner, plan structure and child binding functions');
+  const output = ts.transpileModule([owner, makeChild, makeAssembly, validatePlan, reader]
+    .map(fn => fn.getText(ast)).join('\n'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  const plan = { planId: 'synthetic-plan-1', tenantId: 'tenant-1', ownerUid: 'owner-1',
-    consent: { purpose: 'life-movie.render' }, childJobIds: ['synthetic-child-1'],
-    segments: [{ index: 0 }], renderPlanDigest: 'a'.repeat(64), sceneTruthDigest: 'b'.repeat(64) };
+  const planId = 'synthetic-plan-1';
+  const childId = 'lms_' + createHash('sha256').update(planId + ':0000').digest('hex').slice(0, 32) + '_0000';
+  const plan = { planId, tenantId: 'tenant-1', ownerUid: 'owner-1',
+    consent: { purpose: 'life-movie.render' }, childJobIds: [childId],
+    segments: [{ jobId: childId, index: 0 }],
+    renderPlanDigest: 'a'.repeat(64), sceneTruthDigest: 'b'.repeat(64) };
+  const assemblyId = 'lma_' + createHash('sha256').update(planId + ':assembly-v1').digest('hex').slice(0, 40);
+  const child = { jobId: childId, ownerUid: 'owner-1', tenantId: 'tenant-1',
+    sourceSystem: 'urai-studio', jobType: 'studio.render.video',
+    execution: { rootJobId: planId, parentJobId: planId },
+    consent: plan.consent, status: 'SUCCESS' };
+  const assembly = { jobId: assemblyId, ownerUid: 'owner-1', tenantId: 'tenant-1',
+    sourceSystem: 'urai-studio', jobType: 'studio.assemble.video',
+    execution: { rootJobId: planId, parentJobId: planId },
+    consent: plan.consent, status: 'SUCCESS' };
+  let currentChild = child;
+  let currentAssembly = assembly;
   let currentPlan = plan;
   let currentOwner = { ...fixture };
+  let assemblyReads = 0;
   let consentReads = 0;
   let segmentReads = 0;
   let consentMode = 'clear';
@@ -169,15 +191,17 @@ test('long-form status transaction rechecks current owner before private segment
     async getAll(...refs) {
       segmentReads++;
       assert.equal(refs.length, 1);
-      return [snap({ status: 'SUCCESS' })];
+      return [snap(currentChild)];
     },
   };
   const longformModule = { exports: {} };
   vm.runInNewContext(output + '\nmodule.exports.readPlanStatus = readPlanStatus;', {
-    module: longformModule, Object, Array, Promise, Error, Set,
+    module: longformModule, Object, Array, Promise, Error, Set, createHash, isDeepStrictEqual,
     getFirestore: () => db,
     planRef: id => ({ kind: 'plan', id }),
-    jobDoc: id => ({ kind: 'job', id }),
+    jobDoc: id => ({ kind: 'job', id, async get() {
+      assemblyReads++; assert.equal(id, assemblyId); return snap(currentAssembly);
+    } }),
     consentBlockRef: () => ({ async get() { consentReads++; return snap({ blocked: false }); } }),
     checkedJobConsentBlockState: () => consentMode,
     deriveStatus: () => 'SUCCESS',
@@ -205,27 +229,97 @@ test('long-form status transaction rechecks current owner before private segment
     assert.equal(consentReads, 0, 'owner denial must precede consent detail');
     assert.equal(segmentReads, 0, 'owner denial must precede private segment metadata');
   }
-  // Consent revocation may expose only minimal revoked state, not child jobs,
-  // segment identifiers, assembly state or provenance digests.
   currentOwner = { ...fixture };
+  // Revocation is a minimal state, not permission to read child documents or
+  // return private segment IDs, render digests, or assembly metadata.
   consentMode = 'revoked';
   txReads.length = 0;
   consentReads = 0;
   segmentReads = 0;
-  const revokedStatus = await load();
+  assemblyReads = 0;
+  const redacted = await load();
+  assert.equal(redacted.status, 'REVOKED');
+  assert.equal(redacted.consentRevoked, true);
+  assert.equal(redacted.segmentCount, 0);
+  assert.deepEqual(Array.from(redacted.children), []);
+  assert.equal(redacted.assembly, null);
+  assert.equal(redacted.publicReleaseAuthorized, false);
+  assert.equal('renderPlanDigest' in redacted, false);
+  assert.equal('sceneTruthDigest' in redacted, false);
+  assert.equal(Object.keys(redacted.counts).length, 0);
   assert.deepEqual(txReads, ['plan', 'owner']);
   assert.equal(consentReads, 1);
-  assert.equal(segmentReads, 0, 'revoked status must not read private child jobs');
-  assert.equal(revokedStatus.status, 'REVOKED');
-  assert.equal(revokedStatus.consentRevoked, true);
-  assert.equal(revokedStatus.segmentCount, 0);
-  assert.deepEqual(Array.from(revokedStatus.children), []);
-  assert.equal(revokedStatus.assembly, null);
-  assert.equal(revokedStatus.publicReleaseAuthorized, false);
-  assert.equal('renderPlanDigest' in revokedStatus, false);
-  assert.equal('sceneTruthDigest' in revokedStatus, false);
-  assert.equal(Object.keys(revokedStatus.counts).length, 0);
+  assert.equal(segmentReads, 0);
+  assert.equal(assemblyReads, 0);
   consentMode = 'clear';
+  // Existing children can be replaced or reconsented after the parent plan
+  // was created. The status boundary must reject a foreign live job.
+  const tamperedChildren = [
+    { ...child, jobId: 'other-child' },
+    { ...child, ownerUid: 'foreign-owner' },
+    { ...child, tenantId: 'foreign-tenant' },
+    { ...child, sourceSystem: 'foreign-studio' },
+    { ...child, jobType: 'studio.assemble.video' },
+    { ...child, execution: { rootJobId: 'foreign-plan', parentJobId: planId } },
+    { ...child, execution: { rootJobId: planId, parentJobId: 'foreign-plan' } },
+    { ...child, consent: { ...plan.consent, decisionReceiptId: 'forged' } },
+    { ...child, consent: null },
+  ];
+  for (const foreign of tamperedChildren) {
+    currentPlan = plan;
+    currentChild = foreign;
+    txReads.length = 0;
+    consentReads = 0;
+    segmentReads = 0;
+    await assert.rejects(load(), /longform_child_status_boundary_mismatch/);
+    assert.deepEqual(txReads, ['plan', 'owner']);
+    assert.equal(segmentReads, 1);
+  }
+  currentChild = child;
+  currentPlan = { ...plan, assemblyJobId: assemblyId };
+  const validAssembly = await load();
+  assert.equal(validAssembly.assembly?.status, 'SUCCESS');
+  assert.ok(assemblyReads > 0);
+  const badAssemblies = [
+    { ...assembly, jobId: 'other-assembly' },
+    { ...assembly, ownerUid: 'foreign-owner' },
+    { ...assembly, tenantId: 'foreign-tenant' },
+    { ...assembly, sourceSystem: 'foreign-studio' },
+    { ...assembly, jobType: 'studio.render.video' },
+    { ...assembly, execution: { rootJobId: 'foreign-plan', parentJobId: planId } },
+    { ...assembly, execution: { rootJobId: planId, parentJobId: 'foreign-plan' } },
+    { ...assembly, consent: { purpose: 'other' } },
+  ];
+  for (const foreign of badAssemblies) {
+    currentAssembly = foreign;
+    await assert.rejects(load(), /longform_assembly_status_boundary_mismatch/);
+  }
+  currentAssembly = assembly;
+  currentPlan = plan;
+  // Malformed persisted plans must not cause unbounded or mismatched
+  // per-child Firestore lookups, even if their historical owner matches.
+  const malformed = [
+    { ...plan, childJobIds: [], segments: [] },
+    { ...plan, childJobIds: [childId, childId], segments: [
+      { jobId: childId, index: 0 }, { jobId: childId, index: 1 },
+    ] },
+    { ...plan, childJobIds: [childId], segments: [{ jobId: 'foreign-job', index: 0 }] },
+    { ...plan, childJobIds: [childId], segments: [{ jobId: childId, index: 1 }] },
+    { ...plan, childJobIds: [childId], segments: [] },
+    { ...plan, assemblyJobId: 'foreign-assembly' },
+    { ...plan, childJobIds: Array(181).fill(childId),
+      segments: Array.from({ length: 181 }, (_, index) => ({ jobId: childId, index })) },
+  ];
+  for (const corrupt of malformed) {
+    currentPlan = corrupt;
+    txReads.length = 0;
+    consentReads = 0;
+    segmentReads = 0;
+    await assert.rejects(load(), /longform_plan_structure_invalid/);
+    assert.deepEqual(txReads, ['plan'], 'invalid child plan must fail before owner metadata');
+    assert.equal(consentReads, 0, 'invalid plan must not read consent details');
+    assert.equal(segmentReads, 0, 'invalid plan must not read child-job metadata');
+  }
   currentPlan = { ...plan, tenantId: 'foreign' };
   txReads.length = 0;
   consentReads = 0;
