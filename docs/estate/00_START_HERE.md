@@ -1,24 +1,21 @@
-# One UrAi Genesis — repository continuity entrypoint
+# ONE URAI GENESIS — Jobs full tracked-tree estate pack (R845)
 
-**Repository:** `LifeLoggerAI/urai-jobs`  
-**Registry bootstrap date:** 2026-11-06 (America/Chicago)  
-**Status:** STARTER ONLY — no exhaustive file/byte/history audit or release certification is claimed.
+**Repository:** `LifeLoggerAI/urai-jobs`. **Status:** REVIEW-ONLY / raw-byte and all-history audit **PARTIAL** / production **HOLD**.
 
-This repository is in scope for the One UrAi 2024–present shared evidence and history reconciliation initiative. The provisional private central registry is maintained in `LifeLoggerAI/urai-labs-llc`, `docs/estate/`, proposed in draft PR [#262](https://github.com/LifeLoggerAI/urai-labs-llc/pull/262). Only authorized workers can access that private registry.
+This pack extends the Jobs documentation-only estate bootstrap PR #323, preserving its original commit `f10592ca8af4e2d5f0d15179fc3637c457286038`; it does **not** merge runtime Jobs PR #320 or overwrite PR #312. The source inventoried is candidate PR #320 `ea8f0165ac74511a4e4196919ddd3109d0c1ff2e`, tree `3e74b4b0d6e10df15f9ccd747e9e936218b7fc25`. Baseline main is `9d29be1bcd3a45a4b9a743df9c9706c00811f38b`.
 
-## Required continuation
+**Verified tree metadata:** 1,177 tracked files; 216 dirs; 5,137,055 Git-reported bytes; `truncated=false`. 1,049 baseline main file metadata paths, SHA-1 and lengths match the private central registry exactly. **Only one** current blob's bytes were independently rehashed SHA-1+SHA-256 by this worker; the other 1,176 paths remain metadata-verified, not complete byte-audited. See [MANIFEST.json](MANIFEST.json) and [coverage](09_COVERAGE_AND_LIMITATIONS.md).
 
-1. Read the central `docs/estate/README.md`, `WORKER_PROTOCOL.md`, `EVIDENCE_STANDARD.md`, and `WORKER_HANDOFF_TEMPLATE.md` and review existing repository documentation and all other active workers' changes.
-2. Compare the current default branch and open PRs against the latest master snapshot. Establish exact immutable commit SHAs and scope.
-3. Inventory every accessible ref/path/file/asset; hash actual bytes where accessible, including separately accounting for binary objects, LFS, historical commits, workflow evidence and missing/inaccessible data.
-4. Reconstruct original LifeLogger/LifeOS/UrAi/RuAi history, architecture, cross-system interfaces, verification evidence and release constraints as relevant to **this** repo.
-5. Produce the complete nine-document `docs/estate/` knowledge pack and a machine-readable manifest per the central protocol. Mark omissions explicitly.
-6. Submit reviewed changes, conflicts, dependencies, exact test provenance and next-worker handoff to the central registry through a separate review PR.
+## Durable knowledge pack
 
-## Safety / authority boundaries
+- [01_COMPLETE_INVENTORY.md](01_COMPLETE_INVENTORY.md) — all tracked file metadata and explicit unexamined bytes
+- [02_HISTORY_AND_PROVENANCE.md](02_HISTORY_AND_PROVENANCE.md) — retained phase snapshots and diverged worker histories
+- [03_ARCHITECTURE_AND_CONNECTIONS.md](03_ARCHITECTURE_AND_CONNECTIONS.md) — Jobs core, Privacy/Studio/Spatial links and denial boundaries
+- [04_IMPLEMENTED_CAPABILITIES.md](04_IMPLEMENTED_CAPABILITIES.md) — built features vs still-unconnected authority
+- [05_VERIFICATION_AND_EVIDENCE.md](05_VERIFICATION_AND_EVIDENCE.md) — exact original native workers' test receipts
+- [06_GAPS_CONFLICTS_AND_BLOCKERS.md](06_GAPS_CONFLICTS_AND_BLOCKERS.md) — P0 #252, independent acceptance and CI limitations
+- [07_WORKER_RECONCILIATION.md](07_WORKER_RECONCILIATION.md) — parallel branches and evidence preservation
+- [08_NEXT_WORKER_HANDOFF.md](08_NEXT_WORKER_HANDOFF.md) — exact source pins and safe continuation commands
+- [09_COVERAGE_AND_LIMITATIONS.md](09_COVERAGE_AND_LIMITATIONS.md) — evidence/provenance denominators and exclusions
 
-This entrypoint is **documentation only**. It does not modify runtime code, lift any release HOLD, create a deployment, authorize paid compute, inspect protected user media, or change production access.
-
-Previously verified functionality remains real; historical “LOCKED” or “DONE” claims are not automatically current integrated production proof. Preserve all source history and earlier worker contributions.
-
-**Next worker:** Start with the current repository README and active PRs, then update this entrypoint with actual source-pinned findings, not guessed certification.
+Central provisional private estate registry: `LifeLoggerAI/urai-labs-llc` draft PR #262 `04986dcdbeda9628852ff3ba933fea00e8bf6fbf`; not merged and not automatically certified. Documentation only: no source build, billing, cloud IAM, consent grant, protected user data, deployment or release GO is authorized by this pack. **Keep Studio private movie writes and positive consent hard-off until full real GCS/IAM revocation safety and independent approval.**
