@@ -4,6 +4,24 @@
 
 **Status: GENESIS PRODUCTION HOLD.** This handoff records executed source builds and tests with their limits; it does not authorize production or certify a complete private-media user journey. All branches below are DRAFT and must be rechecked before working because parallel Chalk workers may advance them.
 
+## CURRENT REVIEW R836 — cross-worker Privacy convergence (2026-11-07 UTC)
+
+**GENESIS PRODUCTION HOLD; this section supersedes the Privacy review-branch selection below, but not the earlier exact-source build/test receipts.** Jobs remains [#320](https://github.com/LifeLoggerAI/urai-jobs/pull/320) `ea8f0165ac74511a4e4196919ddd3109d0c1ff2e` as the tested full-workspace source candidate (frozen install, owner status suite 11/11, 695 reported TAP cases, full typecheck/build PASS, logs below).
+
+**Latest combined Privacy review line:** [PR #232](https://github.com/LifeLoggerAI/urai-privacy/pull/232) `e1e2dee63c39590d343d727aa53618ac97a52691`, a Git two-parent merge of [#230](https://github.com/LifeLoggerAI/urai-privacy/pull/230) `f03c9e0e6cad153f5afbc61c2da0cfc6388f20b7` (actually executed root+Functions frozen installs, 9/9 source-pin TAP, full Functions/frontend typecheck+optimized Next build PASS, includes generated root-params ref) AND [#231](https://github.com/LifeLoggerAI/urai-privacy/pull/231) `42aad96404c4f0de01a448031df80f7b5c06f7c0` (original stricter bounded Jobs owner-status TAP, complete Jobs typecheck and build prior to native four-emulator denial/issuer tests). Connector comparisons showed zero commits behind from **each** parent; relative to #230 only the three original native runner/test files change, relative to #231 only the generated `next-env.d.ts` differs. No competing worker contribution was overwritten.
+
+**Evidence on the new merged Privacy SHA:** exact GitHub file readback and 8/8 positive source/stage security checks (10 ordered stages; exact Jobs SHA pinned in all three source references; demo-only credentials denied; positive authority remains false). **No original Node TAP, full frozen install, native four-emulator HTTP/issuer run or physical device/browser acceptance has executed on R836 itself.** Earlier Privacy #230 and Jobs #320 green source builds are not transferable to the merge by assumption.
+
+**Next worker execute, not just audit:** run on an authorized no-surprise-cost workspace with GitHub/npm network, Node22, pnpm8.15.9, Java21, Firebase Functions Unix socket support (this session's local tool has working AF_UNIX but cannot resolve GitHub DNS). Clean Privacy HEAD at `e1e2dee63c39590d343d727aa53618ac97a52691`, clean Jobs HEAD at `ea8f0165ac74511a4e4196919ddd3109d0c1ff2e` under `/tmp/urai-jobs-pinned`. From Privacy root:
+```bash
+test "$(git rev-parse HEAD)" = e1e2dee63c39590d343d727aa53618ac97a52691
+test "$(git -C /tmp/urai-jobs-pinned rev-parse HEAD)" = ea8f0165ac74511a4e4196919ddd3109d0c1ff2e
+URAI_EXPECTED_PRIVACY_SHA=e1e2dee63c39590d343d727aa53618ac97a52691 URAI_JOBS_SOURCE_DIR=/tmp/urai-jobs-pinned bash scripts/run-r818-native-jobs-privacy-acceptance.sh
+```
+Collect stage TSV, log SHA256 and original exits. Then execute Jobs four-emulator + Studio HTTP, Spatial repaired [#2068](https://github.com/LifeLoggerAI/urai-spatial/pull/2068) `f2635a7f55192e3ed1a2892b412e1fd29425f34f` full original acceptance and physical-device protected Replay. Keep independent positive C6, signed workload principal, source generation rights, sole private writer, deletion/revocation and browser/accessibility/rollback as P0. Founder-authorized cloud scope remains read-only inventory, **no paid compute, production IAM, main merge, deployment, or GO**.
+
+---
+
 ## CURRENT — combined Jobs/Privacy source accepted; native runtime pending (November 6, 2026 Central)
 
 This supersedes earlier current-source pairings below, including the older Jobs #321/#322 and Privacy #228/#229 alternatives. **PRODUCTION HOLD.** Source installation, original verification and full source builds are now executed on the following pair; authenticated native runtime, private positive consent/delivery, device and release gates are not certified.
