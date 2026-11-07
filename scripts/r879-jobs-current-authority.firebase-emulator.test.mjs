@@ -213,30 +213,94 @@ test('R879 original native Auth/Firestore/Functions caller and owner-scope accep
     await denied('createJob', ownerToken, requestFor('after-transfer', 'r879-' + prefix + '-moved'));
     await denied('createJob', ownerToken, requestFor('no-permission', 'r879-' + prefix + '-no-permission'));
   });
-  await t.test('concurrent independent admission never exceeds the configured 10/minute quota', async () => {
-    // A separate synthetic owner ensures the window is empty. Fire all requests
-    // simultaneously: a pre-transaction read can otherwise count the same state.
+  await t.test('concurrent independent admission durably serializes all job, queue, log, binding and quota writes', async () => {
+    // A separate synthetic owner ensures the initial window is empty. This
+    // catches pre-transaction count races and verifies post-commit side effects.
     const attempts = 14;
     const results = await Promise.all(Array.from({ length: attempts }, (_, i) =>
       invoke('createJob', quotaToken,
         requestFor('quota-' + i, 'r879-' + prefix + '-quota-' + i))));
-    const accepted = results.filter(r => r.code === 200 && r.result?.jobId && !r.body.error);
+    const accepted = results.flatMap((result, attemptIndex) =>
+      result.code === 200 && result.result?.jobId && !result.body.error
+        ? [{ ...result, attemptIndex }] : []);
     for (const item of accepted) touchedJobs.add(item.result.jobId);
-    const blocked = results.filter(r => !(r.code === 200 && r.result?.jobId && !r.body.error));
+    const blocked = results.filter(result =>
+      !(result.code === 200 && result.result?.jobId && !result.body.error));
     const actualJobs = await db.collection('jobs').where('ownerUid', '==', ids.quota).get();
     for (const doc of actualJobs.docs) touchedJobs.add(doc.id);
+
+    assert.equal(accepted.length, 10,
+      'Exactly 10 of 14 distinct in-window requests must commit successfully; ' +
+      'transaction contention is NOT a permitted internal-error shortcut.');
+    assert.equal(blocked.length, attempts - 10);
     assert.equal(actualJobs.size, accepted.length,
       'Every accepted quota job must have exactly one durable Firestore job record');
-    assert.ok(accepted.length > 0, 'At least one legitimate demo quota request must work');
-    assert.ok(accepted.length <= 10,
-      'P2 quota failure: ' + accepted.length + ' concurrent creates exceeded 10/min; ' +
-      'new job IDs: ' + accepted.map(x => x.result.jobId).join(','));
-    assert.equal(blocked.length, attempts - accepted.length);
+    assert.deepEqual(new Set(actualJobs.docs.map(doc => doc.id)),
+      new Set(accepted.map(item => item.result.jobId)),
+      'No orphaned job record may exist for a denied quota request');
     for (const item of blocked) {
       const reason = JSON.stringify(item.body.error ?? {}).toLowerCase().replaceAll('_', '-');
       assert.match(reason, /resource-exhausted/,
-        'Rejected concurrent quota requests must carry a quota-specific denial, got: ' +
+        'Every denied concurrent admission must have quota-specific denial, got: ' +
         JSON.stringify(item.body));
     }
+
+    // All four atomic side effects must correspond 1:1 to committed jobs.
+    // Verify the actual native Firestore documents, not just return values.
+    const committedIds = new Set(accepted.map(item => item.result.jobId));
+    for (const jobId of committedIds) {
+      const [queue, log] = await Promise.all([
+        db.collection('jobQueue').doc(jobId).get(),
+        db.collection('jobs').doc(jobId).collection('logs').doc('created').get(),
+      ]);
+      assert.ok(queue.exists, 'Committed job missing queue entry: ' + jobId);
+      assert.equal(queue.data()?.jobId, jobId, 'Queue entry references incorrect job');
+      assert.ok(log.exists, 'Committed job missing original audit log: ' + jobId);
+      assert.equal(log.data()?.metadata?.ownerUid, ids.quota, 'Audit owner mismatch');
+    }
+    const bindings = await db.collection('jobIdempotencyBindings')
+      .where('ownerUid', '==', ids.quota).get();
+    assert.equal(bindings.size, 10, 'Failed quota admissions must not create idempotency bindings');
+    assert.deepEqual(new Set(bindings.docs.map(doc => doc.data().jobId)), committedIds,
+      'Idempotency bindings must reference exactly the admitted jobs');
+
+    const currentOwner = (await db.collection('users').doc(ids.quota).get()).data();
+    const ledger = currentOwner?.jobsCreateRateLimit;
+    assert.ok(ledger && Array.isArray(ledger.admissionsMs),
+      'Quota authority must persist on the existing protected owner document');
+    assert.equal(ledger.admissionsMs.length, 10,
+      'Exactly ten successful transactions must debit exactly ten admissions');
+    assert.equal(ledger.latestAdmissionMs, ledger.admissionsMs.at(-1),
+      'Ledger latest admission must match its final ordered timestamp');
+    assert.ok(ledger.admissionsMs.every((ms, i) =>
+      Number.isSafeInteger(ms) && (i === 0 || ms >= ledger.admissionsMs[i - 1])),
+    'Transactional quota ledger must remain ordered and valid');
+
+    // A matching request must replay its original job WITHOUT consuming
+    // another admission even when the owner is currently at the cap.
+    const original = accepted[0];
+    const replay = await succeeds('createJob', quotaToken,
+      requestFor('quota-' + original.attemptIndex,
+        'r879-' + prefix + '-quota-' + original.attemptIndex));
+    assert.equal(replay.jobId, original.result.jobId);
+    assert.equal(replay.deduplicated, true);
+    const afterReplay = (await db.collection('users').doc(ids.quota).get()).data();
+    assert.deepEqual(afterReplay?.jobsCreateRateLimit, ledger,
+      'An idempotent retry may not spend or mutate another quota admission');
+
+    // A new key once full must fail, and must leave job/binding counts intact.
+    const extra = await invoke('createJob', quotaToken,
+      requestFor('quota-overflow', 'r879-' + prefix + '-quota-overflow'));
+    assert.ok(extra.code >= 400 || extra.body.error,
+      'A new distinct job must not admit when all ten quota slots are full');
+    assert.match(JSON.stringify(extra.body.error ?? {}).toLowerCase().replaceAll('_', '-'),
+      /resource-exhausted/, 'A newly rejected quota job must return resource-exhausted');
+    assert.equal((await db.collection('jobs').where('ownerUid', '==', ids.quota).get()).size, 10,
+      'Quota denial must not create an eleventh job');
+    assert.equal((await db.collection('jobIdempotencyBindings')
+      .where('ownerUid', '==', ids.quota).get()).size, 10,
+      'Quota denial must not leave an orphaned binding');
+    assert.deepEqual((await db.collection('users').doc(ids.quota).get()).data()?.jobsCreateRateLimit,
+      ledger, 'Quota denial must not mutate the persistent quota ledger');
   });
 });
