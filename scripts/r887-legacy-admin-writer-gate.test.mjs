@@ -36,7 +36,7 @@ test('R887 cloud credential hints rejected', () => {
 test('R887 queue drain is unconditionally blocked, including emulator', () => {
   assert.throws(refuseLegacyManualQueueDrain,/URAI_LEGACY_WRITER_HOLD.*raw Admin SDK/);
 });
-for(const script of ['queue-job.mjs','requeue-dead.mjs','reclaim-stale-leases.mjs','admin-process-queue-now.mjs']) {
+for(const script of ['queue-job.mjs','requeue-dead.mjs','reclaim-stale-leases.mjs','admin-process-queue-now.mjs','run-worker.mjs']) {
   test('R887 '+script+' refuses default execution before SDK import or cloud writes', () => {
     const result=spawnSync(process.execPath,[new URL(script,import.meta.url).pathname],{
       encoding:'utf8',timeout:3000,
