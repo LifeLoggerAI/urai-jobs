@@ -59,3 +59,16 @@ test('R873: live path replacement is classified separately after exact claim bin
   assert.throws(()=>assess('15','16',false,true),/generation_replaced_unverified/);
   assert.deepEqual(assess('15',null,true,true),{storageCurrentlyObserved:false});
 });
+
+test('R874: forged claim wins conflict precedence while a replacement exists', () => {
+  const path='tenants/t/life-movies/p/review-only-broker/hash.bin';
+  const ledger='101', liveReplacement='202', forged='303';
+  assert.throws(() => {
+    assertClaim(forged, ledger, path, path);
+    assess(forged, liveReplacement, false, true);
+  }, /generation_conflict/);
+  assert.throws(() => {
+    assertClaim(ledger, ledger, path, path);
+    assess(ledger, liveReplacement, false, true);
+  }, /generation_replaced_unverified/);
+});
