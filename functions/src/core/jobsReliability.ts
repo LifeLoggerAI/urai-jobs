@@ -58,3 +58,27 @@ export function terminalEventId(jobId: string, status: string, transitionId: str
     .update(stableStringify({ jobId, status, transitionId }))
     .digest('hex');
 }
+
+
+/**
+ * Stable pseudonymous server-only Firestore lock key for serializing admission
+ * of all job types by the same Firebase user. Must be deleted during governed
+ * Jobs-scoped owner deletion; never expose it to a client or worker.
+ */
+export function jobCreateRateLimitLockId(ownerUid: string): string {
+  if (typeof ownerUid !== 'string' || !ownerUid.trim() || ownerUid !== ownerUid.trim()) {
+    throw new Error('job_create_rate_limit_owner_uid_invalid');
+  }
+  return createHash('sha256').update('urai-jobs:create-rate-limit-lock:v1\n' + ownerUid).digest('hex');
+}
+
+/**
+ * Pure fail-closed count predicate. The authoritative count must be read
+ * WITHIN a Firestore transaction, after reading the per-owner lock and before
+ * writing that lock and the new job. Never call this on a stale preflight read.
+ */
+export function jobCreateRateLimitAllowsCount(recentCount: number, limit: number): boolean {
+  return Number.isSafeInteger(recentCount) && recentCount >= 0
+    && Number.isSafeInteger(limit) && limit > 0 && limit <= 10000
+    && recentCount < limit;
+}
