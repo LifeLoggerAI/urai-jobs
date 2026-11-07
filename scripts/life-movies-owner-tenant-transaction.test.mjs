@@ -173,6 +173,7 @@ test('long-form status transaction rechecks current owner before private segment
   let assemblyReads = 0;
   let consentReads = 0;
   let segmentReads = 0;
+  let consentMode = 'clear';
   const txReads = [];
   const db = {
     collection(name) {
@@ -202,7 +203,7 @@ test('long-form status transaction rechecks current owner before private segment
       assemblyReads++; assert.equal(id, assemblyId); return snap(currentAssembly);
     } }),
     consentBlockRef: () => ({ async get() { consentReads++; return snap({ blocked: false }); } }),
-    checkedJobConsentBlockState: () => 'clear',
+    checkedJobConsentBlockState: () => consentMode,
     deriveStatus: () => 'SUCCESS',
     assertLifeMovieOwnerTenantAuthorityClear: check,
   });
@@ -229,6 +230,28 @@ test('long-form status transaction rechecks current owner before private segment
     assert.equal(segmentReads, 0, 'owner denial must precede private segment metadata');
   }
   currentOwner = { ...fixture };
+  // Revocation is a minimal state, not permission to read child documents or
+  // return private segment IDs, render digests, or assembly metadata.
+  consentMode = 'revoked';
+  txReads.length = 0;
+  consentReads = 0;
+  segmentReads = 0;
+  assemblyReads = 0;
+  const redacted = await load();
+  assert.equal(redacted.status, 'REVOKED');
+  assert.equal(redacted.consentRevoked, true);
+  assert.equal(redacted.segmentCount, 0);
+  assert.deepEqual(Array.from(redacted.children), []);
+  assert.equal(redacted.assembly, null);
+  assert.equal(redacted.publicReleaseAuthorized, false);
+  assert.equal('renderPlanDigest' in redacted, false);
+  assert.equal('sceneTruthDigest' in redacted, false);
+  assert.equal(Object.keys(redacted.counts).length, 0);
+  assert.deepEqual(txReads, ['plan', 'owner']);
+  assert.equal(consentReads, 1);
+  assert.equal(segmentReads, 0);
+  assert.equal(assemblyReads, 0);
+  consentMode = 'clear';
   // Existing children can be replaced or reconsented after the parent plan
   // was created. The status boundary must reject a foreign live job.
   const tamperedChildren = [
