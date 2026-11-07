@@ -4,7 +4,61 @@
 
 **Status: GENESIS PRODUCTION HOLD.** This is a source-grounded handoff, *not* an authorization, deployment, or runtime receipt. All branches below are DRAFT and must be rechecked before working because parallel Chalk workers may advance them.
 
-## R831 — CURRENT CROSS-SERVICE SOURCE RECONCILIATION (2026-11-07 UTC; SUPERSEDES OLDER HEADS BELOW)
+## CURRENT — local full builds and runtime blockers (November 6, 2026 Central)
+
+This section supersedes the current-state claims in the historical checkpoints below. **GENESIS PRODUCTION HOLD.** No production deployment, main merge, paid compute, IAM/billing change or private founder media was used.
+
+| Review candidate | Exact executable commit | Personally executed result |
+| --- | --- | --- |
+| Jobs [#320](https://github.com/LifeLoggerAI/urai-jobs/pull/320), descendant of combined R832 [#319](https://github.com/LifeLoggerAI/urai-jobs/pull/319) | `888fc26fdd5dfe31e654888e883a1659a6693b13` | Frozen install; full workspace typecheck and build PASS; complete `pnpm urai-jobs:verify` PASS (695 TAP cases, zero reported failures/skips, plus executable script contracts). |
+| Spatial [#2066](https://github.com/LifeLoggerAI/urai-spatial/pull/2066) | `9fee44065fe118b02f5083a34a39dc35d3b00567` | Original complete acceptance driver passed frozen install, Functions build, 1787/1787 Functions tests, 22 static Rules, 30 native owner Rules, Tier 1 typecheck, all 231 contract suites, and Next.js app build. Four-emulator stage FAILED on missing emitted ESM contract. |
+| Spatial repair [#2068](https://github.com/LifeLoggerAI/urai-spatial/pull/2068), direct child of #2066 | `f2635a7f55192e3ed1a2892b412e1fd29425f34f` | Functions build and all 1787 original tests PASS; built ESM contract loads and issuer readiness stays false. Four-emulator restart loads the complete actual Functions definitions, but worker socket is denied by this workspace; proof FAIL, not PASS. |
+| Privacy [#227](https://github.com/LifeLoggerAI/urai-privacy/pull/227) | `3f336b346ea899062ede6f41bb8dad44ba6de7e3` | Current GitHub head re-read. Its native integration still pins older Jobs `23ea52536ca0fd4fa7e16f814a69c2526c270279`; it does not include/certify Jobs #320. |
+| Studio [#179](https://github.com/LifeLoggerAI/urai-studio/pull/179) | `153d6c35557c66a8b9f8629778ca796b83730464` | Source re-read and clean checkout recovered. No new two-repo HTTP runtime certificate in this pass. |
+
+### Implemented fixes and proof boundaries
+
+Jobs #320 preserves both workers' R832 changes and moves the **entire** long-form status read/projection into the existing Firestore transaction: plan, current owner/tenant/deletion, current consent, every child and assembly. Revoked consent still returns minimum REVOKED with no child reads or provenance. Original owner/status tests were 11/11 before the repair. A new out-of-transaction-read regression failed on the old source, then all 11 passed after the repair. Historical test harnesses were missing newly introduced real security helpers; resolver-first preflight, dispatch and consent-smoke imports, current and retained donor resume, idempotent replay and creation-race fixtures now execute the real guards with complete synthetic profiles. No allow-all guard or production activation was introduced.
+
+Jobs final full verify ran from a clean source-pinned Git worktree using the frozen dependency graph installed in the primary checkout. Final full workspace typecheck/build also ran from a separate clean exact `888fc26...` checkout. Node 22.23.0, pnpm 8.15.9. Source and lockfiles remained clean.
+
+Spatial #2068 changes **only** `apps/functions/tsconfig.json`: `allowJs: true` and inclusion of `src/**/*.mjs`. Before the repair, successful tsc/test gates concealed that `adamFounderVoiceReceiptContract.mjs` was absent from the emitted runtime. The actual four-emulator loader found this. After the repair the complete Functions definitions load; the original founder consent contract is emitted and still denies unauthorized playback. Earlier frontend/typecheck/231-suite evidence remains pinned to parent `9fee440...`; do not label it a full fresh run of the child.
+
+### Actual environment failures; do not promote them to integration passes
+
+1. Original Jobs four-emulator attempts at `db4510ba8efc9d5f3ccc501595b0add366441c50` and `692b55e9f9117870acbc67e05afccab92a74b73a` completed full typecheck/build but failed at local Firestore trigger registration. Firebase CLI's `apiv2.js` explicitly creates a ProxyAgent from HTTP/HTTPS proxy variables even for loopback; disabling only Node's environment-proxy option did not fix that explicit agent.
+2. A Spatial four-emulator diagnostic rerun removed HTTP_PROXY, HTTPS_PROXY and lowercase/all-proxy variables **only for the local emulator command**, with no production credentials, unchanged demo config and original proof script. It passed Functions definition analysis after the ESM packaging fix, then failed with `connect EPERM /tmp/fire_emu_*.sock` / `listen EPERM`. The managed workspace refuses Firebase's Unix worker socket. This is a terminal failed native proof.
+3. Original nine-state browser runner failed on sandbox-denied `os.networkInterfaces()`. A scratch-only diagnostic copy specified localhost binding and installed Chromium (no product/test source change); the server started but Chromium aborted under process/ptrace restrictions. No browser/device acceptance or screenshots are certified. The built frontend was parent `9fee440...`.
+
+### Durable raw evidence and digests
+
+Raw outputs are committed on this shared handoff branch under [`docs/release/evidence/2026-11-06-local-runtime/`](./evidence/2026-11-06-local-runtime/). They contain synthetic-only source/test evidence.
+
+| File | SHA256 |
+| --- | --- |
+| `jobs-888fc26-verify.log` | `7b9edb757b05237c0442c0ca9e6c694b03e6a05f9a4f6800ee50ff248fe70135` |
+| `jobs-888fc26-typecheck.log` | `443bac037c0359c0da6a41cab64e59c0d0b25d63d40801b4e2434d2c0e2a9113` |
+| `jobs-888fc26-build.log` | `6aae5135f6b6715897d4c29c1c5e9393f13b55ed1bc7efd796de5a54f69089a9` |
+| `spatial-9fee-full-acceptance-stages.tsv` | `715bd7386a0688dc1d8278504732f8bfc6e3744c50ae626e2ed59fcb13c07e4c` |
+| `spatial-f263-functions-worker-socket-failure.log` | `015cd3ae563a3060997f23e8851a4c96a1315f0f282fd8ea4d05b3db80b74309` |
+
+Repair-head Functions test log (not separately stored here) SHA256 `4b71adaf63e1afc04935ff197af39bc12c15a1270a87cf71cd75a8d0775781b0`; observed 1787/1787 PASS. Reproduce it rather than substituting that digest for executable tests.
+
+### Exact continuation
+
+On an already authorized runner supporting local Unix sockets and Chromium, with Node22, Java21, Python3 and FFmpeg:
+- Spatial clean `f2635a7...`, pnpm10.0.0: `URAI_EXPECTED_HEAD=f2635a7f55192e3ed1a2892b412e1fd29425f34f bash scripts/genesis-r799-exact-head-acceptance.sh`; preserve all original logs/stages and failure exit. Local Firebase calls must not be forwarded through an HTTP proxy.
+- Jobs clean `888fc26...`, pnpm8.15.9: frozen install; `pnpm urai-jobs:verify`, `pnpm typecheck`, `pnpm build`; `URAI_ACCEPTANCE_SHA=888fc26fdd5dfe31e654888e883a1659a6693b13 bash scripts/run-four-emulator-acceptance.sh`; then `URAI_STUDIO_SOURCE_DIR=<clean Studio 153d6c35 checkout> URAI_ACCEPTANCE_SHA=888fc26fdd5dfe31e654888e883a1659a6693b13 bash scripts/run-studio-jobs-real-bridge-acceptance.sh`.
+- Reconcile Privacy's executable Jobs source pin to the newly reviewed candidate and run its original bounded nine-stage native suite. Current old pin is explicitly not the new repair.
+- Keep production HOLD until genuine owner/source-rights C6, trusted signed Jobs identity, revocation-safe sole-writer private delivery, protected Replay, physical-device/accessibility, release safeguards and founder authorization are proven.
+
+Provider observations in this pass: all 263 Runpod pods were EXITED at the inventory read (no new compute launched); Vercel's four listed projects and five latest deployments still do not certify the current integration. Latest urai-app record belongs to older UrAi/genesis-visual-supremacy `e94aba47...`. Gmail search for incoming GitHub Support case #4889576 messages in the preceding seven days returned no matches; this does not establish the support case's complete status.
+
+---
+
+## Historical checkpoints — retain for provenance; superseded as current state
+
+## R831 — HISTORICAL CROSS-SERVICE SOURCE RECONCILIATION (2026-11-07 UTC; SUPERSEDES OLDER HEADS BELOW)
 
 **Founder status: PRODUCTION HOLD.** Real LifeLogger/LifeOS/UrAi software and historical assets are preserved. This is a committed source integration and evidence receipt, **not** an executed full original native or live owner-authorized private-media journey.
 
