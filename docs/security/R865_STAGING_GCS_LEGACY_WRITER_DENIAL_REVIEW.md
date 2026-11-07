@@ -1,0 +1,66 @@
+# R865 - staging GCS retired-writer data-plane denial check (review only)
+
+**Status: SOURCE-ONLY REVIEW / NO LIVE GCS PROBE / NOT AN IAM CERTIFICATE / P0 #252 OPEN / GENESIS HOLD.**
+
+## Why this distinct check is needed
+
+The R854 native Firebase emulator negative proof reproduced `privilegedBypassObserved=true` after consent withdrawal and point-in-time cleanup. R855/R856 preserve block ACK without falsely certifying derivative deletion. R857 adds the review-only physical-generation ledger. None of these demonstrate that historical credentials cannot create a GCS object when Firestore is fenced.
+
+This independent, intentionally limited staging check uses an approved **retired or alternate service identity** to attempt to create one **zero-byte, uniquely named sentinel** under a dedicated staging-only test prefix. The JSON API request includes `ifGenerationMatch=0` so the attempt cannot overwrite an existing object. A 403 is recorded only as **one observed HTTP denial for that credential, bucket and moment**. A 401, credential-minting failure, malformed response, network failure, wrong source or absent proof of prior withdrawal is never considered a verified denial. HTTP 200/201 means the retired identity could still create a staging object: fail immediately and preserve a private cleanup-required record; do not automatically delete or continue testing other identities.
+
+This check intentionally **does not** implement a production broker, change GCS IAM, perform uploads of private movies, issue C6 consent, authenticate an owner, or enable protected Replay. Its report always has `storageWriteFenceVerified=false`, `effectiveIamVerified=false`, `privateOutputDeletionAcknowledged=false`, and `productionGo=false` even if every configured identity receives a 403.
+
+## Scope and execution protections
+
+The new `scripts/review-only/staging-gcs-write-denial-probe.mjs` is not invoked by application code or a release script. The default CLI denies without touching credentials or network. A *future independently authorized staging security reviewer*, not a production worker, must supply all of the following:
+
+- A separately approved, expendable GCP **staging or test** project and bucket whose actual names contain `staging`, `sandbox` or `test`, and not `prod`, `production` or `live`; no real customer data or production target is acceptable.
+- Evidence of a **completed earlier revocation**; a reviewer-owned authorization reference; an inventory of every specific historic/alternate writer selected for this probe; and the exact clean Jobs source SHA. These manifest fields are claims requiring independent review; the script does **not** cryptographically certify them.
+- GCP CLI access that can impersonate each **specified existing** service identity. Successful impersonation alone is *not* an effective IAM permission proof. A failed impersonation is `TOKEN_UNAVAILABLE`, never counted as a write-denial PASS.
+- A manifest file with mode 0600 and an unused report destination in a private directory **outside** the repository; an exact CLI execution flag; and an additional opt-in environment value. A 0600 report is created and fsynced **before** any credential or GCS request. Every unique sentinel path is durably logged before a request can be sent, including if the process later fails.
+
+Example *shape only* (replace all fabricated data in a private 0600 file; do not commit it):
+
+```json
+{
+  "schemaVersion": "urai-private-gcs-denial-staging-review-v1",
+  "environment": "STAGING",
+  "projectId": "urai-private-staging-test",
+  "bucket": "urai-private-staging-test-bucket",
+  "probePrefix": "__urai_security_staging__/post-revocation-denial/",
+  "authorizationRef": "R865-review-approved-123",
+  "withdrawalEventId": "withdraw-event-123",
+  "withdrawalCommittedAt": "2026-11-07T05:00:00.000Z",
+  "expectedJobsSourceSha": "REPLACE_WITH_EXACT_40_HEX_JOBS_SHA",
+  "serviceAccounts": [
+    {
+      "email": "legacy-worker@urai-private-staging-test.iam.gserviceaccount.com",
+      "kind": "retired-writer",
+      "identityEvidenceRef": "IAM-LEGACY-001"
+    },
+    {
+      "email": "alternate-writer@other-staging-test.iam.gserviceaccount.com",
+      "kind": "alternate-writer",
+      "identityEvidenceRef": "IAM-ALT-001"
+    }
+  ]
+}
+```
+
+**Only after independent staging authorization** and establishing those private paths, an approved reviewer can execute:
+
+```bash
+export URAI_GCS_STAGING_NEGATIVE_PROBE_CONSENT=I_AUTHORIZE_ONLY_STAGING_ZERO_BYTE_GCS_DENIAL_ATTEMPTS
+node scripts/review-only/staging-gcs-write-denial-probe.mjs \
+  --manifest /secure/outside/repo/staging-manifest.json \
+  --report /secure/outside/repo/new-denial-report.json \
+  --execute-staging-denial-probe
+```
+
+The process **always returns exit code 2 / HOLD**, even if all listed credentials were denied, and prints no bearer tokens or service-account addresses. Private report files may contain staging object names, hashed principal references, and selected authorization references; keep them outside GitHub. If an unexpected write succeeds, preserve its path and safely remediate under a separately authorized cleanup identity before any other testing. **Never run this example against a production bucket or real customer data.**
+
+## Current verification and blockers
+
+At authoring, Node 22 offline `node --test scripts/staging-gcs-write-denial-probe.test.mjs` **12/12 PASS** and `node --check` PASS. These cover staging-only scoping, exact manifest structure, principal uniqueness, withdrawal-before-attempt, double operator opt-in, zero generation overwrite precondition, 403-only observations, 401/credential/transport failure, unexpected success, durable pre-attempt ledger ordering and fail-closed CLI. **No live GCS call, IAM mutation, new paid compute or full workspace build was executed for this independent draft.**
+
+The actual P0 #252 cannot close until the service-account inventory is independently complete across projects/buckets, inherited IAM/groups/custom roles/impersonation are reviewed, old/alternate credentials receive actual data-plane denies, any active/resumable upload is drained or terminated, generation-pinned cleanup is complete, real positive signed owner C6 and source rights are connected, protected owner-only MP4/SRT Replay is proven, physical-device acceptance and protected CI pass, and explicit founder GO is authorized. This script alone can NEVER produce GO. Preserve other workers' R854/R855/R856/R857 paths and R861/R862 certificates as separate exact-source evidence.
