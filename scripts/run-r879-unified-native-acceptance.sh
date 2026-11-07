@@ -48,10 +48,14 @@ check_blob 'functions/src/jobs/getJobStatus.ts' 'a198db9694e7352f470c8dbd399dd4a
 check_blob 'scripts/r875-current-job-caller-authority.test.mjs' 'dc06b34c56693d7ee8496740c158102e5ebce917'
 check_blob 'scripts/r876-current-getJobStatus-lifecycle.test.mjs' '6e36a31f9ba17dbf10ba90c79ecd4571b163319f'
 check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d533'
-check_blob 'functions/src/jobs/createJob.ts' '03433ab35ce0374cae58dac572985c75c3abf3b3'
+check_blob 'functions/src/jobs/createJob.ts' 'c52f09900bb76a1fa71445a7fceb39c177c2c568'
+check_blob 'functions/src/jobs/jobCreateRateLimit.ts' '9b7a53c41c56681dfdf4cebbc00de9a962adf5d2'
+check_blob 'firestore.rules' 'cfa77a8fa5e69327ab352b31450c59a036d21e38'
+check_blob 'scripts/owner_authority_rules.static.test.mjs' '3c1dcedbdb5d988da32e85a8e06241bc0bda8bb2'
+check_blob 'scripts/r883-create-job-quota-ledger.test.mjs' '52598f8ab1e84e40e6f3246ca65a8dca8df776c0'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' 'f8550771dd33ac82bd639179387ef816609d3607'
+check_blob 'package.json' '9e330c8c82903274c7f7d6a28aa608740f1b7549'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
@@ -119,6 +123,8 @@ grep -q '# pass 18' "$OUT/current_callable_18_source.log" || hold '18 current-ca
 
 # R881 synthetic current owner / tenant scoped callable acceptance (not native Firebase).
 stage owner_callable_16_source 120s node --experimental-strip-types --test scripts/r881-owner-scope-callable-behavior.test.mjs
+# R883 atomic quota model/source regression. Native 14-way admission is separately mandatory.
+stage create_quota_12_source 120s node --experimental-strip-types --test scripts/r883-create-job-quota-ledger.test.mjs
 grep -q '# pass 16' "$OUT/owner_callable_16_source.log" || hold '16 owner-callable behavioral source tests not recorded'
 
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
