@@ -1,0 +1,212 @@
+(node:6121) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> urai-tier1@0.1.0 build /workspace/scratch/80a9b7b328e5/spatial/urai-tier1
+> node scripts/require-runtime-deps.mjs && next build
+
+(node:6134) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[URAI Spatial runtime deps] Required workspace dependencies resolved
+(node:6142) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+   ▲ Next.js 15.5.27
+   - Experiments (use with caution):
+     · cpus: 1
+     ✓ webpackBuildWorker
+     ✓ webpackMemoryOptimizations
+
+   Creating an optimized production build ...
+(node:6166) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6166) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6189) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6213) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6213) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ Compiled successfully in 39.9s
+   Linting and checking validity of types ...
+(node:6245) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6251) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ ⚠ The Next.js plugin was not detected in your ESLint configuration. See https://nextjs.org/docs/app/api-reference/config/eslint#migrating-existing-config
+   Collecting page data ...
+(node:6269) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+   Generating static pages (0/152) ...
+(node:6277) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+   Generating static pages (38/152) 
+   Generating static pages (76/152) 
+   Generating static pages (114/152) 
+ ✓ Generating static pages (152/152)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                        Size  First Load JS
+┌ ○ /                                             142 B         218 kB
+├ ○ /_not-found                                   304 B         104 kB
+├ ○ /about                                      1.05 kB         104 kB
+├ ○ /account-deletion                             776 B         104 kB
+├ ○ /adam                                         412 B         104 kB
+├ ○ /admin/invites                              3.56 kB         230 kB
+├ ƒ /api/body-biometric                           260 B         104 kB
+├ ƒ /api/entitlement                              260 B         104 kB
+├ ƒ /api/maps/elevation                           260 B         104 kB
+├ ƒ /api/orb-companion                            260 B         104 kB
+├ ƒ /api/stripe/create-checkout-session           260 B         104 kB
+├ ƒ /api/stripe/create-portal-session             260 B         104 kB
+├ ƒ /api/stripe/webhook                           260 B         104 kB
+├ ƒ /api/stripe/webhook-v2                        260 B         104 kB
+├ ○ /api/system/capabilities                      260 B         104 kB
+├ ○ /api/system/deploy-proof                      260 B         104 kB
+├ ○ /api/system/health                            260 B         104 kB
+├ ○ /api/system/integration-contract              260 B         104 kB
+├ ○ /api/system/launch-boundary                   260 B         104 kB
+├ ○ /api/system/life-map-universe                 260 B         104 kB
+├ ○ /api/system/manifest                          260 B         104 kB
+├ ○ /api/system/studio-spatial-handoff            260 B         104 kB
+├ ○ /api/system/tier2                             260 B         104 kB
+├ ○ /api/system/tier4                             260 B         104 kB
+├ ○ /api/system/tier5                             260 B         104 kB
+├ ○ /api/system/urai-spatial-3d-world             260 B         104 kB
+├ ○ /api/system/urai-spatial-lock                 260 B         104 kB
+├ ○ /api/universe                                 260 B         104 kB
+├ ○ /api/xr/signaling                             260 B         104 kB
+├ ○ /ascent                                       260 B         104 kB
+├ ○ /ascent/life-map                              260 B         104 kB
+├ ○ /brand-system                               2.66 kB         106 kB
+├ ○ /capture/focus                              1.61 kB         105 kB
+├ ○ /contact                                    1.05 kB         104 kB
+├ ○ /control                                      758 B         104 kB
+├ ○ /council                                    15.3 kB         658 kB
+├ ○ /demo                                         442 B         107 kB
+├ ● /demo/[slug]                                  260 B         104 kB
+├   └ /demo/replay-film
+├ ○ /demo/life-map                                260 B         104 kB
+├ ○ /demo/replay-film                             427 B         107 kB
+├ ○ /dream                                      1.07 kB         108 kB
+├ ○ /early-access                               3.07 kB         233 kB
+├ ○ /event                                      1.05 kB         104 kB
+├ ○ /focus                                        22 kB         621 kB
+├ ● /focus/session/[sessionId]                    751 B         217 kB
+├   ├ /focus/session/seed-memory-bloom
+├   ├ /focus/session/seed-recovery-arc
+├   ├ /focus/session/seed-threshold-storm
+├   └ [+4 more paths]
+├ ○ /glass                                      1.05 kB         104 kB
+├ ○ /ground                                     8.81 kB         476 kB
+├ ○ /home                                         142 B         218 kB
+├ ○ /internal/asset-candidates                  5.57 kB         372 kB
+├ ○ /internal/first-private-memory              7.28 kB         234 kB
+├ ○ /internal/locks                             5.01 kB         232 kB
+├ ● /invite/[code]                              2.94 kB         230 kB
+├   ├ /invite/URAI-DEMO
+├   ├ /invite/EARLY-ACCESS
+├   └ /invite/DEMO-INVITE
+├ ○ /launch                                       776 B         104 kB
+├ ○ /legacy                                       156 B         397 kB
+├ ○ /life-map                                     260 B         104 kB
+├ ○ /life-map/health                              260 B         104 kB
+├ ● /life-map/star/[starId]                       168 B         107 kB
+├   ├ /life-map/star/seed-memory-bloom
+├   ├ /life-map/star/seed-recovery-arc
+├   ├ /life-map/star/seed-threshold-storm
+├   └ [+4 more paths]
+├ ○ /life-movie                                 11.1 kB         252 kB
+├ ○ /location-map                               11.7 kB         479 kB
+├ ○ /location-map/geographic                     8.1 kB         348 kB
+├ ○ /login                                      4.69 kB         238 kB
+├ ○ /memory                                     1.05 kB         104 kB
+├ ○ /mirror                                     18.5 kB         502 kB
+├ ○ /offline                                    1.05 kB         104 kB
+├ ○ /onboarding                                   260 B         104 kB
+├ ○ /passport                                   8.49 kB         240 kB
+├ ● /place/[placeId]                            4.21 kB         353 kB
+├   ├ /place/place-seed-memory-bloom
+├   ├ /place/place-seed-recovery-arc
+├   ├ /place/place-seed-threshold-storm
+├   └ [+4 more paths]
+├ ● /place/[placeId]/replay                     1.01 kB         108 kB
+├   ├ /place/place-seed-memory-bloom/replay
+├   ├ /place/place-seed-recovery-arc/replay
+├   ├ /place/place-seed-threshold-storm/replay
+├   └ [+4 more paths]
+├ ○ /possible-futures                           11.3 kB         597 kB
+├ ○ /privacy                                      789 B         107 kB
+├ ○ /privacy-controls                           13.2 kB         494 kB
+├ ○ /privacy-policy                               776 B         104 kB
+├ ○ /proof                                      1.05 kB         104 kB
+├ ○ /receipts                                   1.05 kB         104 kB
+├ ○ /replay                                       36 kB         665 kB
+├ ● /replay/[replayId]                            168 B         107 kB
+├   ├ /replay/seed-memory-bloom
+├   ├ /replay/seed-recovery-arc
+├   ├ /replay/seed-threshold-storm
+├   └ [+4 more paths]
+├ ○ /report-bug                                 1.05 kB         104 kB
+├ ○ /robots.txt                                   260 B         104 kB
+├ ○ /settings                                   6.38 kB         357 kB
+├ ○ /settings/communications                    4.67 kB         235 kB
+├ ○ /settings/privacy                             260 B         104 kB
+├ ○ /shadow                                     13.1 kB         360 kB
+├ ○ /signup                                       260 B         104 kB
+├ ○ /sitemap.xml                                  260 B         104 kB
+├ ○ /sms-opt-in                                   789 B         107 kB
+├ ○ /spatial                                      260 B         104 kB
+├ ○ /spatial-fallback                             260 B         104 kB
+├ ○ /spatial/ar-vr                                177 B         296 kB
+├ ○ /spatial/biome                               2.6 kB         197 kB
+├ ○ /spatial/captured-reality                   26.3 kB         510 kB
+├ ○ /spatial/interpretive-world                 8.03 kB         487 kB
+├ ○ /spatial/legacy                               157 B         397 kB
+├ ○ /spatial/life-map                             260 B         104 kB
+├ ○ /spatial/life-map-orbit                       260 B         104 kB
+├ ○ /spatial/life-map-r3f                         260 B         104 kB
+├ ○ /spatial/memory-world                       17.9 kB         503 kB
+├ ● /spatial/memory/[nodeId]                      260 B         104 kB
+├   ├ /spatial/memory/seed-memory-bloom
+├   ├ /spatial/memory/seed-recovery-arc
+├   ├ /spatial/memory/seed-threshold-storm
+├   └ [+4 more paths]
+├ ○ /spatial/shadow                               260 B         104 kB
+├ ○ /spatial/v1                                   260 B         104 kB
+├ ○ /status                                     5.16 kB         112 kB
+├ ○ /support                                    1.05 kB         104 kB
+├ ○ /system                                       260 B         104 kB
+├ ○ /technology                                 1.05 kB         104 kB
+├ ○ /terms                                        789 B         107 kB
+├ ○ /tier3                                        208 B         296 kB
+├ ○ /tier4                                      1.05 kB         104 kB
+├ ○ /tier5                                      1.05 kB         104 kB
+├ ● /u/[handle]                                   260 B         104 kB
+├   └ /u/adamclamp
+├ ○ /u/adamclamp                                  260 B         104 kB
+├ ○ /unwind                                       260 B         104 kB
+├ ○ /v1                                           260 B         104 kB
+├ ○ /waitlist                                     260 B         104 kB
+├ ○ /world                                      4.05 kB         111 kB
+└ ○ /xr                                           177 B         296 kB
++ First Load JS shared by all                    103 kB
+  ├ chunks/3131-91d49a722b4670d9.js             46.6 kB
+  ├ chunks/c7879cf7-9feafa87d60caa99.js         54.2 kB
+  └ other shared chunks (total)                 2.44 kB
+
+Route (pages)                                      Size  First Load JS
+─ ○ /404 (574 ms)                               1.28 kB         101 kB
+    └ css/056c3f6563527fe9.css                  1.11 kB
++ First Load JS shared by all                   99.5 kB
+  ├ chunks/framework-f5a81512834a9a33.js        59.8 kB
+  ├ chunks/main-80d866a3601cdfca.js             37.3 kB
+  └ other shared chunks (total)                  2.4 kB
+
+ƒ Middleware                                    32.5 kB
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand
+

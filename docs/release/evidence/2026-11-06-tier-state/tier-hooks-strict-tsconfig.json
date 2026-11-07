@@ -1,0 +1,1 @@
+{"extends": "/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tsconfig.json", "compilerOptions": {"strict": true, "incremental": false}, "include": ["/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/src/spatial/hooks/useUraiPersistence.ts", "/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/src/spatial/hooks/useUraiAdaptiveLearning.ts"], "exclude": ["node_modules"]}

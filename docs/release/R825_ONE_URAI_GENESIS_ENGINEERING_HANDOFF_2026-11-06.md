@@ -4,7 +4,71 @@
 
 **Status: GENESIS PRODUCTION HOLD.** This handoff records executed source builds and tests with their limits; it does not authorize production or certify a complete private-media user journey. All branches below are DRAFT and must be rechecked before working because parallel Chalk workers may advance them.
 
-## CURRENT REVIEW R836 — cross-worker Privacy convergence (2026-11-07 UTC)
+## CURRENT — Tier 7/8 state repair, complete native build gate, and verified audit correction (November 6, 2026 Central)
+
+**PRODUCTION HOLD.** This is the latest executed source checkpoint; older sections remain historical evidence at their own exact SHAs. No main merge, production deployment, IAM/billing change, paid compute or private memories were used.
+
+| Tested review candidate | Exact SHA | Executed source acceptance |
+| --- | --- | --- |
+| Spatial [#2069](https://github.com/LifeLoggerAI/urai-spatial/pull/2069), child of #2068 | `892d87d6a4f05fa2daf84ff4625262e46cf0e036` | New hook regression 18/18 PASS after original 3/18 baseline; targeted **strict** TypeScript for both legacy hooks PASS; normal runtime typecheck PASS; all **232** original enrolled contract suites PASS; optimized Next application build PASS; frozen pnpm10 install PASS; source CLEAN. |
+| Privacy [#230](https://github.com/LifeLoggerAI/urai-privacy/pull/230) | `846d2ffa469af5634374bd77fbdc2d41bca8e964` | Source/order tests **10/10 PASS**; Functions typecheck/build and root frontend typecheck/build PASS on this exact source; source CLEAN. Uses unchanged locked installed dependencies. |
+| Jobs [#320](https://github.com/LifeLoggerAI/urai-jobs/pull/320) | `ea8f0165ac74511a4e4196919ddd3109d0c1ff2e` | Earlier exact-source frozen install, 695 reported TAP cases, full workspace typecheck/build PASS retained. Fresh existing Storytime private-playback source gate **8/8 PASS** in this pass. No Jobs code changed. |
+
+### Two state-change defects proved and repaired
+
+The R835 estate audit's Tier 7/8 omissions were reproduced against the **actual original hooks** at parent Spatial `f2635a7...`. Tier 7 compared a selected field subset plus memory count, so a same-count memory edit or omitted session/pattern/companion change could be skipped as already saved. Tier 8 omitted weight/intensity that the real profile algorithm consumes, and timestamp distinguishing later events. Both memoized keys could miss nested changes retaining the same object identity.
+
+The new enrolled `legacy-tier-state-change-behavior.test.mjs` executes the checked-in hooks and **real adaptive algorithm** with disclosed React commit, timer and storage doubles. Baseline: **18 tests, 3 PASS / 15 FAIL**, no cancellations/skips. Repairs: **18/18 PASS**. Coverage includes memory title/tone/position/weight/intensity/type/timestamp with unchanged count, session identity, pattern relationships, companion presence, retained-reference edits, new weight/intensity-only adaptive events, later timestamps, identical-event suppression, debounce and cleanup/disabled-write cancellation.
+
+Each hook now serializes the complete typed JSON snapshot/signal on each render instead of a partial count/key memo. Existing storage format, enabled defaults, debounce, cleanup and store API remain. Only four paths changed: the two hooks, the new actual-hook regression, and its enrollment in the original compact runner.
+
+**Important scope:** this does not mount legacy hooks into the live product or approve legacy local stores for authenticated data. Their browser keys remain unscoped, hydration/restoration integration is not certified, and serialization cost for very large snapshots has not been profiled. Caller data must remain JSON-compatible. Owner/consent isolation and an explicit migration into the modern owner-bound Life Graph remain P0 before authenticated admission. Do not call this complete Tier 7/8 release acceptance.
+
+The normal `tsconfig.runtime.json` includes only `useSceneAuthority.ts` from this historical hooks folder. Therefore normal runtime typecheck alone does **not** certify these hooks. A separate config extending the real Tier1 tsconfig with `strict:true`, `incremental:false` and exactly both changed hook files was executed successfully; its original config is archived with the evidence.
+
+### Privacy worker history converged without discarding tested generated types
+
+Privacy merge `846d2ffa...` has actual Git parents:
+1. Tested #230 `f03c9e0e6cad153f5afbc61c2da0cfc6388f20b7`.
+2. Parallel #231 `42aad96404c4f0de01a448031df80f7b5c06f7c0`.
+
+It adopts the donor's three original runner/native/static files at their exact blobs and retains the Next-generated root-params reference. The original native driver now requires Jobs owner/status TAP → **complete workspace typecheck** → **complete workspace build** before original four-emulator HTTP denial and scoped-issuer tests. All three source references still pin exact Jobs `ea8f016...`; synthetic C6 remains productionGrant=false/render=false.
+
+A parallel worker independently created #232 `e1e2dee63c39590d343d727aa53618ac97a52691`. Direct Git data GETs prove **both merges have exactly the same two parents and exactly the same tree `1fc2e1fd26415244fe9233ec1f11ed6d0fe76604`**. There is no remaining file-content divergence between these two Privacy candidates. Tests/builds in this pass are explicitly pinned to **846d2ffa**, not falsely labeled as fresh execution of e1e2dee. Both original branches and the peer R836 handoff are preserved. Prefer the exact tested source when starting the next native run.
+
+### Audit correction: Storytime signed playback is already denied in the cited blob
+
+R835 §4.4 describes a `playback()` function issuing a five-minute signed URL in Jobs Storytime blob `4c59c6e6258ea2571cef3805590a85886b03684f`. The exact same immutable blob, verified through GitHub and the current local source, has **no `async function playback(` or `.getSignedUrl(`**. Its HTTP handler unconditionally returns **503 `storytime_authenticated_delivery_required`** for the playback action after request/bridge validation and before private reads. The existing actual-handler source gate passed **8/8** here.
+
+This corrects that specific source claim; it is **not** a positive authenticated-delivery certificate. Storytime private delivery, current owner consent, generation pinning and residual access after revoke remain implementation/acceptance gates. Do not reopen signed bearer links or weaken the existing denial to make playback appear working.
+
+### Actual evidence and continuing limits
+
+Raw original outputs are stored under [`evidence/2026-11-06-tier-state/`](./evidence/2026-11-06-tier-state/):
+| File | SHA256 |
+| --- | --- |
+| `tier-hooks-before.tap` | `53bf09a33e8b93d5c07ae41cfb0e714e4383cb06d48e0648e2e260c3327b8276` |
+| `tier-hooks-after.tap` | `93a548f47c0f6261b38e81f82a136ab18c6b385dc8603be9b81a8865bd7ad633` |
+| `spatial-892d87-compact.log` | `63a79f52e9e51334f85d63019ffd7f6deed8d88f401407a5212025955fd08bef` |
+| `spatial-892d87-build.log` | `a1f53a1583b2f853faeb457155fab08d5f8ceb9a543163d965180b6b55c4780c` |
+| `privacy-846-source-pin.tap` | `2ceb7bd9d4903322a195e48326ab4dbea269d6a09cc4ff369f93c3800f99c34e` |
+| `storytime-ea8-playback-gate.tap` | `82eb7e577d6301881ea27c756f87c99154ea72bd14a09923fdd69e10fa612a95` |
+
+The targeted strict config is `tier-hooks-strict-tsconfig.json` (recorded absolute source paths describe this execution environment; adapt the root path to reproduce). Strict hook compiler exited 0. Normal runtime typecheck SHA256 `06cd0c3a56e2ed54ca5f32ffa371ded7141fcee50c5cff13eafa12e1389fc477`; frozen install `9edf3912df1bd63669bc308fd6fc36d9d9c3bd148cb16547ed8b9653a9a8c034`.
+
+Privacy exact-846 Functions typecheck/build digests: `cf8f140f4acafc578b41490ca792d64f2aa4d3e26f82f5775ab7aace703027e6` / `a95fff51dd4118de5b804114bf39dd096725dfa128d5ceb125e181dfb2e82827`. Root frontend typecheck/build: `16c8ce63a8ba57019c33a092e3eaacf7d6de61e91876bc743104d4682dc7a141` / `11fede9a4fa5f3b4ebef6f3dffdd8b0c8ecbbf0757d1ae6480a3ca8142bf614d`. These are current **source/build** checks, not a native four-service run.
+
+Fresh read-only operations: 263 Runpod pods, all EXITED, no continuation; no new compute started. Current Spatial exact-head hosted URAI Spatial CI run `42333583662` returned seven failed jobs with **steps=null and logs_url=null** (job ids `128285357243`, `128285357425`, `128285357470`, `128285357494`, `128285357767`, `128285357887`, `128285358285`). This is no recorded hosted code execution; do not infer a source assertion failure from the wrapper conclusion. Gmail case #4889576 search excluding sent/drafts over seven days returned no messages; no account recovery or support-resolution claim follows.
+
+### Next original execution
+
+On an already authorized no-surprise-cost runner with Node22, pnpm10, Java21, Python3, FFmpeg, working Unix sockets and Chromium, clean Spatial `892d87d6a4f05fa2daf84ff4625262e46cf0e036` and execute `URAI_EXPECTED_HEAD=892d87d6a4f05fa2daf84ff4625262e46cf0e036 bash scripts/genesis-r799-exact-head-acceptance.sh`. Preserve actual source/stage logs; new-source Functions/native results are still required even though Functions source is unchanged from the prior packaging fix. This workspace's previously observed Unix socket and Chromium restrictions remain a runtime boundary, not a global claim about other workers' environments.
+
+Separately, clean Privacy **846d2ffa** and Jobs **ea8f016** under `/tmp`, Node22/pnpm8.15.9/Java21, run the preserved exact-source `scripts/run-r818-native-jobs-privacy-acceptance.sh`; then original Jobs four-emulator + Studio HTTP and real authorized private Replay/revocation/device acceptance. Keep positive production C6, source rights, signed principal, sole private writer, CI/independent review, monitoring/rollback and founder production GO as unresolved release gates. R835's RuAi health, Studio install graph and other estate findings remain source-review leads to verify rather than newly proven fixes in this pass.
+
+---
+
+## HISTORICAL REVIEW R836 — cross-worker Privacy convergence (2026-11-07 UTC)
 
 **GENESIS PRODUCTION HOLD; this section supersedes the Privacy review-branch selection below, but not the earlier exact-source build/test receipts.** Jobs remains [#320](https://github.com/LifeLoggerAI/urai-jobs/pull/320) `ea8f0165ac74511a4e4196919ddd3109d0c1ff2e` as the tested full-workspace source candidate (frozen install, owner status suite 11/11, 695 reported TAP cases, full typecheck/build PASS, logs below).
 
@@ -22,7 +86,7 @@ Collect stage TSV, log SHA256 and original exits. Then execute Jobs four-emulato
 
 ---
 
-## CURRENT — combined Jobs/Privacy source accepted; native runtime pending (November 6, 2026 Central)
+## HISTORICAL — combined Jobs/Privacy source accepted; native runtime pending (November 6, 2026 Central)
 
 This supersedes earlier current-source pairings below, including the older Jobs #321/#322 and Privacy #228/#229 alternatives. **PRODUCTION HOLD.** Source installation, original verification and full source builds are now executed on the following pair; authenticated native runtime, private positive consent/delivery, device and release gates are not certified.
 
@@ -184,7 +248,7 @@ Observed real stages: source pin PASS, dependency preflight PASS, synthetic boun
 
 This result substantially reduces uncertainty in native Firestore security testing but **does not clear** the Tier1 or full protected Replay gates. Next owner worker: preserve the actual failed test stack/TAP and the exact source marker, repair only a proven source defect, then rerun all affected gates. No production C6, output broker or private media authorization is implied.
 
-## CURRENT GENESIS R828 SOURCE-ALIGNED CHECKPOINT (2026-11-06 Central; supersedes older head IDs below)
+## HISTORICAL GENESIS R828 SOURCE-ALIGNED CHECKPOINT (2026-11-06 Central; supersedes older head IDs below)
 
 - **Jobs canonical review [PR #312](https://github.com/LifeLoggerAI/urai-jobs/pull/312) original source head before this documentation-only commit:** `6e56a2992d452f96c4397ce465cddbb60f588353`. A parallel worker added owner/tenant checks to the original Studio *longform* bridge in addition to transactional `loadBoundJob` status checks; source comparison against native-tested Jobs #310 `4755101eb1182ead9e89b5effcd91adef3e7b8aa` shows five changed files (workflow, handoff, studio bridge, longform bridge, owner tests). Historical R823 four-emulator/FFmpeg negative PASS still applies only to original #310 SHA, not this new head.
 - **Privacy canonical review [PR #227](https://github.com/LifeLoggerAI/urai-privacy/pull/227) updated to `64030c8887740b1197635055409a8c3b95613197`.** The former Privacy source `c24c2f082df9362800b2f019a7dfb16f5db7b93e` was directly advanced **one commit**. Only three existing pin files changed: `scripts/run-r818-native-jobs-privacy-acceptance.sh`, `tests/integration/life-movie-jobs-native-transport.emulator.mjs` and `tests/integration/r823-demo-project-source-pin.static.test.mjs`. All now require the current Jobs exact source `6e56a2992d452f96c4397ce465cddbb60f588353`, verified via GitHub head/diff/blob readback. Original strict source checkout and time-bounded nine-stage runner, combined live four-emulator Jobs→Privacy denial and synthetic review-only C6 issuer, demo-only Firebase, productionGrant=false and render=false all preserved. **No frozen install/build/native execution has passed on this new Jobs+Privacy pairing.**
@@ -194,7 +258,7 @@ This result substantially reduces uncertainty in native Firestore security testi
 
 **Release decision: GENESIS PRODUCTION HOLD.** Next worker should check refreshed heads and the parallel pod outcome, then run the **original Privacy runner** with `URAI_EXPECTED_PRIVACY_SHA=64030c8887740b1197635055409a8c3b95613197` and `URAI_JOBS_SOURCE_DIR=/tmp/urai-jobs-pinned` pointing to clean Jobs `6e56a2992d452f96c4397ce465cddbb60f588353`; separately execute the original full Spatial #2066 exact-head command. Preserve all logs, hashes, native positive/negative scope and stopped pod status before any further integration.
 
-## CURRENT GENESIS BLOCKER RESOLUTION — R827 (2026-11-06 Central, 2026-11-07 UTC)
+## HISTORICAL GENESIS BLOCKER RESOLUTION — R827 (2026-11-06 Central, 2026-11-07 UTC)
 
 **Read this first.** This record supersedes older Spatial PR #2066 and Jobs #312 heads below. It is a source-and-execution evidence checkpoint, not a production approval.
 

@@ -1,0 +1,74 @@
+(node:7) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:14) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: R823 native runner pins fictional demo-only Firebase project
+ok 1 - R823 native runner pins fictional demo-only Firebase project
+  ---
+  duration_ms: 1.259139
+  type: 'test'
+  ...
+# Subtest: R823 native test pins exactly the same demo project and has no old project literal
+ok 2 - R823 native test pins exactly the same demo project and has no old project literal
+  ---
+  duration_ms: 0.469241
+  type: 'test'
+  ...
+# Subtest: R823 ephemeral test signing identity belongs to isolated demo project
+ok 3 - R823 ephemeral test signing identity belongs to isolated demo project
+  ---
+  duration_ms: 0.146101
+  type: 'test'
+  ...
+# Subtest: R835 runner and native transport pin same reviewed Jobs \#320 commit
+ok 4 - R835 runner and native transport pin same reviewed Jobs \#320 commit
+  ---
+  duration_ms: 0.362747
+  type: 'test'
+  ...
+# Subtest: R823 uses real four local Firebase emulators with single project enforcement
+ok 5 - R823 uses real four local Firebase emulators with single project enforcement
+  ---
+  duration_ms: 0.497173
+  type: 'test'
+  ...
+# Subtest: R823 retains credential and inherited project/host refusals
+ok 6 - R823 retains credential and inherited project/host refusals
+  ---
+  duration_ms: 0.133987
+  type: 'test'
+  ...
+# Subtest: R825 original scoped C6 issuer and Jobs denial test share disposable demo project
+ok 7 - R825 original scoped C6 issuer and Jobs denial test share disposable demo project
+  ---
+  duration_ms: 0.393943
+  type: 'test'
+  ...
+# Subtest: R825 composite four-emulator gate retains both originals and never admits production C6
+ok 8 - R825 composite four-emulator gate retains both originals and never admits production C6
+  ---
+  duration_ms: 0.295819
+  type: 'test'
+  ...
+# Subtest: R835 runs original Jobs atomic owner/status test and entire workspace build before native Privacy
+ok 9 - R835 runs original Jobs atomic owner/status test and entire workspace build before native Privacy
+  ---
+  duration_ms: 0.542833
+  type: 'test'
+  ...
+# Subtest: R826 bounded original native gates retain fatal failure and source-pinned receipts
+ok 10 - R826 bounded original native gates retain fatal failure and source-pinned receipts
+  ---
+  duration_ms: 1.454361
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 138.539852

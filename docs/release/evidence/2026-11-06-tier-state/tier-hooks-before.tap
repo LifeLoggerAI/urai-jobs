@@ -1,0 +1,422 @@
+(node:5) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:12) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:12) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Tier 7 saves changed memory title with unchanged memory count
+not ok 1 - Tier 7 saves changed memory title with unchanged memory count
+  ---
+  duration_ms: 88.048934
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:93:48'
+  failureType: 'testCodeFailure'
+  error: |-
+    changed snapshot must not be skipped as already saved
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:99:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: Tier 7 saves changed memory tone with unchanged memory count
+not ok 2 - Tier 7 saves changed memory tone with unchanged memory count
+  ---
+  duration_ms: 12.590213
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:93:48'
+  failureType: 'testCodeFailure'
+  error: |-
+    changed snapshot must not be skipped as already saved
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:99:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: Tier 7 saves changed memory position with unchanged memory count
+not ok 3 - Tier 7 saves changed memory position with unchanged memory count
+  ---
+  duration_ms: 38.44976
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:93:48'
+  failureType: 'testCodeFailure'
+  error: |-
+    changed snapshot must not be skipped as already saved
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:99:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Tier 7 saves changed memory weight with unchanged memory count
+not ok 4 - Tier 7 saves changed memory weight with unchanged memory count
+  ---
+  duration_ms: 10.263452
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:93:48'
+  failureType: 'testCodeFailure'
+  error: |-
+    changed snapshot must not be skipped as already saved
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:99:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Tier 7 saves changed memory intensity with unchanged memory count
+not ok 5 - Tier 7 saves changed memory intensity with unchanged memory count
+  ---
+  duration_ms: 8.551622
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:93:48'
+  failureType: 'testCodeFailure'
+  error: |-
+    changed snapshot must not be skipped as already saved
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:99:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Tier 7 saves changed memory type with unchanged memory count
+not ok 6 - Tier 7 saves changed memory type with unchanged memory count
+  ---
+  duration_ms: 7.456115
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:93:48'
+  failureType: 'testCodeFailure'
+  error: |-
+    changed snapshot must not be skipped as already saved
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:99:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Tier 7 saves changed memory timestamp with unchanged memory count
+not ok 7 - Tier 7 saves changed memory timestamp with unchanged memory count
+  ---
+  duration_ms: 7.794774
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:93:48'
+  failureType: 'testCodeFailure'
+  error: |-
+    changed snapshot must not be skipped as already saved
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:99:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Tier 7 saves changed session identity with unchanged memory count
+not ok 8 - Tier 7 saves changed session identity with unchanged memory count
+  ---
+  duration_ms: 7.524571
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:93:48'
+  failureType: 'testCodeFailure'
+  error: |-
+    changed snapshot must not be skipped as already saved
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:99:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Tier 7 saves changed pattern relationships with unchanged memory count
+not ok 9 - Tier 7 saves changed pattern relationships with unchanged memory count
+  ---
+  duration_ms: 17.599348
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:93:48'
+  failureType: 'testCodeFailure'
+  error: |-
+    changed snapshot must not be skipped as already saved
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:99:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Tier 7 saves changed companion presence with unchanged memory count
+not ok 10 - Tier 7 saves changed companion presence with unchanged memory count
+  ---
+  duration_ms: 7.746757
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:93:48'
+  failureType: 'testCodeFailure'
+  error: |-
+    changed snapshot must not be skipped as already saved
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:99:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Tier 7 also detects a nested edit when the snapshot reference is retained
+not ok 11 - Tier 7 also detects a nested edit when the snapshot reference is retained
+  ---
+  duration_ms: 8.177397
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:103:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:108:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Tier 7 identical snapshot does not duplicate storage writes
+ok 12 - Tier 7 identical snapshot does not duplicate storage writes
+  ---
+  duration_ms: 23.109546
+  type: 'test'
+  ...
+# Subtest: Tier 7 debounce stores only the latest pending snapshot and cleanup cancels it
+ok 13 - Tier 7 debounce stores only the latest pending snapshot and cleanup cancels it
+  ---
+  duration_ms: 11.384329
+  type: 'test'
+  ...
+# Subtest: Tier 8 applies changed memoryWeight without a phase or tone change
+not ok 14 - Tier 8 applies changed memoryWeight without a phase or tone change
+  ---
+  duration_ms: 14.703464
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:140:56'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:146:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Tier 8 applies changed auraIntensity without a phase or tone change
+not ok 15 - Tier 8 applies changed auraIntensity without a phase or tone change
+  ---
+  duration_ms: 7.324898
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:140:56'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:146:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Tier 8 distinguishes a later signal event with identical content
+not ok 16 - Tier 8 distinguishes a later signal event with identical content
+  ---
+  duration_ms: 9.274715
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:151:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:155:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Tier 8 detects in-place intensity changes as well as immutable updates
+not ok 17 - Tier 8 detects in-place intensity changes as well as immutable updates
+  ---
+  duration_ms: 12.064783
+  type: 'test'
+  location: '/workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:160:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/80a9b7b328e5/spatial/urai-tier1/tests/legacy-tier-state-change-behavior.test.mjs:165:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Tier 8 identical event does not count twice and disabled/unmounted work stays canceled
+ok 18 - Tier 8 identical event does not count twice and disabled/unmounted work stays canceled
+  ---
+  duration_ms: 13.870722
+  type: 'test'
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 3
+# fail 15
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1609.723686

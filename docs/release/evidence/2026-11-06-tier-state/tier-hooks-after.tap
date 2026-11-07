@@ -1,0 +1,124 @@
+(node:5) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:12) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:12) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Tier 7 saves changed memory title with unchanged memory count
+ok 1 - Tier 7 saves changed memory title with unchanged memory count
+  ---
+  duration_ms: 95.572414
+  type: 'test'
+  ...
+# Subtest: Tier 7 saves changed memory tone with unchanged memory count
+ok 2 - Tier 7 saves changed memory tone with unchanged memory count
+  ---
+  duration_ms: 10.156173
+  type: 'test'
+  ...
+# Subtest: Tier 7 saves changed memory position with unchanged memory count
+ok 3 - Tier 7 saves changed memory position with unchanged memory count
+  ---
+  duration_ms: 13.258478
+  type: 'test'
+  ...
+# Subtest: Tier 7 saves changed memory weight with unchanged memory count
+ok 4 - Tier 7 saves changed memory weight with unchanged memory count
+  ---
+  duration_ms: 7.72755
+  type: 'test'
+  ...
+# Subtest: Tier 7 saves changed memory intensity with unchanged memory count
+ok 5 - Tier 7 saves changed memory intensity with unchanged memory count
+  ---
+  duration_ms: 8.029035
+  type: 'test'
+  ...
+# Subtest: Tier 7 saves changed memory type with unchanged memory count
+ok 6 - Tier 7 saves changed memory type with unchanged memory count
+  ---
+  duration_ms: 6.856182
+  type: 'test'
+  ...
+# Subtest: Tier 7 saves changed memory timestamp with unchanged memory count
+ok 7 - Tier 7 saves changed memory timestamp with unchanged memory count
+  ---
+  duration_ms: 8.805455
+  type: 'test'
+  ...
+# Subtest: Tier 7 saves changed session identity with unchanged memory count
+ok 8 - Tier 7 saves changed session identity with unchanged memory count
+  ---
+  duration_ms: 11.553467
+  type: 'test'
+  ...
+# Subtest: Tier 7 saves changed pattern relationships with unchanged memory count
+ok 9 - Tier 7 saves changed pattern relationships with unchanged memory count
+  ---
+  duration_ms: 11.54609
+  type: 'test'
+  ...
+# Subtest: Tier 7 saves changed companion presence with unchanged memory count
+ok 10 - Tier 7 saves changed companion presence with unchanged memory count
+  ---
+  duration_ms: 11.672024
+  type: 'test'
+  ...
+# Subtest: Tier 7 also detects a nested edit when the snapshot reference is retained
+ok 11 - Tier 7 also detects a nested edit when the snapshot reference is retained
+  ---
+  duration_ms: 9.287483
+  type: 'test'
+  ...
+# Subtest: Tier 7 identical snapshot does not duplicate storage writes
+ok 12 - Tier 7 identical snapshot does not duplicate storage writes
+  ---
+  duration_ms: 6.205126
+  type: 'test'
+  ...
+# Subtest: Tier 7 debounce stores only the latest pending snapshot and cleanup cancels it
+ok 13 - Tier 7 debounce stores only the latest pending snapshot and cleanup cancels it
+  ---
+  duration_ms: 5.714232
+  type: 'test'
+  ...
+# Subtest: Tier 8 applies changed memoryWeight without a phase or tone change
+ok 14 - Tier 8 applies changed memoryWeight without a phase or tone change
+  ---
+  duration_ms: 7.32422
+  type: 'test'
+  ...
+# Subtest: Tier 8 applies changed auraIntensity without a phase or tone change
+ok 15 - Tier 8 applies changed auraIntensity without a phase or tone change
+  ---
+  duration_ms: 5.891691
+  type: 'test'
+  ...
+# Subtest: Tier 8 distinguishes a later signal event with identical content
+ok 16 - Tier 8 distinguishes a later signal event with identical content
+  ---
+  duration_ms: 5.579158
+  type: 'test'
+  ...
+# Subtest: Tier 8 detects in-place intensity changes as well as immutable updates
+ok 17 - Tier 8 detects in-place intensity changes as well as immutable updates
+  ---
+  duration_ms: 6.110304
+  type: 'test'
+  ...
+# Subtest: Tier 8 identical event does not count twice and disabled/unmounted work stays canceled
+ok 18 - Tier 8 identical event does not count twice and disabled/unmounted work stays canceled
+  ---
+  duration_ms: 6.621008
+  type: 'test'
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1424.587903

@@ -1,0 +1,62 @@
+(node:5) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:12) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: missing or wrong Studio/Storytime bridge identity cannot fetch private audio
+ok 1 - missing or wrong Studio/Storytime bridge identity cannot fetch private audio
+  ---
+  duration_ms: 1.309457
+  type: 'test'
+  ...
+# Subtest: legacy signed playback is explicitly denied before private storage operations
+ok 2 - legacy signed playback is explicitly denied before private storage operations
+  ---
+  duration_ms: 0.227286
+  type: 'test'
+  ...
+# Subtest: unknown bridge action is rejected before storage access
+ok 3 - unknown bridge action is rejected before storage access
+  ---
+  duration_ms: 0.288005
+  type: 'test'
+  ...
+# Subtest: oversized request denied before private data access
+ok 4 - oversized request denied before private data access
+  ---
+  duration_ms: 0.552175
+  type: 'test'
+  ...
+# Subtest: authorized create remains present, with consent enforcement delegated to original create
+ok 5 - authorized create remains present, with consent enforcement delegated to original create
+  ---
+  duration_ms: 0.497844
+  type: 'test'
+  ...
+# Subtest: authorized output deletion action still dispatches its existing owner-bound handler
+ok 6 - authorized output deletion action still dispatches its existing owner-bound handler
+  ---
+  duration_ms: 0.207607
+  type: 'test'
+  ...
+# Subtest: non-POST method denied
+ok 7 - non-POST method denied
+  ---
+  duration_ms: 0.201214
+  type: 'test'
+  ...
+# Subtest: production source must not mint unrevocable Storytime audio signed URLs
+ok 8 - production source must not mint unrevocable Storytime audio signed URLs
+  ---
+  duration_ms: 0.112586
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 396.812704
