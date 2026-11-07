@@ -69,3 +69,12 @@ An already-started parallel worker Runpod CPU pod `f8out0bg80mpnw` was **RUNNING
 
 Jobs R825 hosted CI run `42317166262` failed with `Validate runtime` and `Callable emulator E2E` skipped; inspect job steps before calling this a source test failure. The new CI native-Rules enrollment is **committed but not executed successfully** on R825. Recheck all branches because these workers are actively working in parallel.
 
+
+## 7. R818 Spatial post-run diagnostic: shell error, not source test failure
+
+After section 6, inspected independent Runpod pod `qgcsrjb2qkygop` (`urai-spatial-r818-functions-11-failure-diagnostic`), which is **EXITED**. Its container output shows `/bin/bash: -c: line 24: syntax error near unexpected token 'pass'`. The pod command was structured as an *outer* `bash -lc '...'` containing *inner* `grep -n -E '^not ok |^  error:|^# (pass|fail|tests)'` with unescaped single quotes. Those nested single quotes terminate the outer string, and the Bash parser fails before invoking frozen install, Functions build or tests. Local reproduction returned **exit 2** with exactly the same error; properly escaping the inner quoted regex (or avoiding nested shell text by storing a script file or using a quoted heredoc) parsed successfully. This is a **diagnostic harness failure, not 11 failing tests and not a passing suite**. Saved findings: [Spatial PR #2062 comment](https://github.com/LifeLoggerAI/urai-spatial/pull/2062#issuecomment-6699504044).
+
+The preceding Spatial #2062 pinned full acceptance pod `f8out0bg80mpnw` also reached EXITED. Source SHA pin and Node22/pnpm10/Java21 setup passed, but its complete internal stage output and digest were **not retrieved** in this checkpoint. Do not invent a source pass/fail from the absent logs. Before another CPU run, check for any newer worker receipts; fix the **diagnostic command itself** without touching consent gates, and use an exit-code-preserving script with a disk-independent durable log artifact. No extra pod was started or stopped by this review.
+
+Jobs R825 hosted Runtime CI run `42317166262` finished failed with `Validate runtime` failed, `Callable emulator E2E` skipped. The new native-Rules CI change has not executed successfully. Do not misrepresent a failed/skipped workflow as a completed test.
+
