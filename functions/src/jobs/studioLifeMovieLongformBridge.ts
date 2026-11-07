@@ -478,12 +478,23 @@ async function loadPlan(planId: string, tenantId: string, userId: string) {
 }
 
 async function readPlanStatus(planId: string, tenantId: string, userId: string) {
-  const plan = await loadPlan(planId, tenantId, userId);
+  const db = getFirestore();
+  // Long-form status cannot use a historical plan binding as current owner
+  // authority. Read both records in one Firestore read transaction before
+  // observing the consent block, segment states or provenance.
+  // Cancellation and deletion keep their separate cleanup paths.
+  const plan = await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(planRef(planId));
+    if (!snapshot.exists) throw new Error('longform_plan_not_found');
+    const current = assertPlanOwner(snapshot.data() as StoredPlan, tenantId, userId);
+    const ownerSnapshot = await transaction.get(db.collection('users').doc(userId));
+    assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, userId, tenantId);
+    return current;
+  });
   const consentSnapshot = await consentBlockRef(plan.ownerUid, plan.consent.purpose).get();
   const consentState = checkedJobConsentBlockState(consentSnapshot);
   if (consentState === 'unverified') throw new Error('life_movie_consent_block_unverified');
   const revoked = consentState === 'revoked';
-  const db = getFirestore();
   const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
   const assemblySnapshot = plan.assemblyJobId ? await jobDoc(plan.assemblyJobId).get() : null;
   const children = snapshots.map((snapshot, index) => {

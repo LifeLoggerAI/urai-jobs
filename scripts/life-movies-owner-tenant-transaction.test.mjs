@@ -134,6 +134,89 @@ test('Studio status rechecks owner and tenant within one Firestore read transact
   assert.deepEqual(reads, ['job'], 'missing job must not read owner profile');
 });
 
+test('long-form status transaction rechecks current owner before private segment reads', async () => {
+  const source = fs.readFileSync(path.resolve('functions/src/jobs/studioLifeMovieLongformBridge.ts'), 'utf8');
+  const ast = ts.createSourceFile('studioLifeMovieLongformBridge.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const decl = name => ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
+  const owner = decl('assertPlanOwner');
+  const reader = decl('readPlanStatus');
+  assert.ok(owner?.body && reader?.body, 'long-form owner and status functions must exist');
+  const output = ts.transpileModule(owner.getText(ast) + '\n' + reader.getText(ast), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const plan = { planId: 'synthetic-plan-1', tenantId: 'tenant-1', ownerUid: 'owner-1',
+    consent: { purpose: 'life-movie.render' }, childJobIds: ['synthetic-child-1'],
+    segments: [{ index: 0 }], renderPlanDigest: 'a'.repeat(64), sceneTruthDigest: 'b'.repeat(64) };
+  let currentPlan = plan;
+  let currentOwner = { ...fixture };
+  let consentReads = 0;
+  let segmentReads = 0;
+  const txReads = [];
+  const db = {
+    collection(name) {
+      assert.equal(name, 'users');
+      return { doc(uid) { return { kind: 'owner', uid }; } };
+    },
+    async runTransaction(fn) {
+      return fn({ async get(ref) {
+        txReads.push(ref.kind);
+        if (ref.kind === 'plan') return snap(currentPlan);
+        if (ref.kind === 'owner') { assert.equal(ref.uid, 'owner-1'); return snap(currentOwner); }
+        throw Error('unexpected transaction reference');
+      } });
+    },
+    async getAll(...refs) {
+      segmentReads++;
+      assert.equal(refs.length, 1);
+      return [snap({ status: 'SUCCESS' })];
+    },
+  };
+  const longformModule = { exports: {} };
+  vm.runInNewContext(output + '\nmodule.exports.readPlanStatus = readPlanStatus;', {
+    module: longformModule, Object, Array, Promise, Error, Set,
+    getFirestore: () => db,
+    planRef: id => ({ kind: 'plan', id }),
+    jobDoc: id => ({ kind: 'job', id }),
+    consentBlockRef: () => ({ async get() { consentReads++; return snap({ blocked: false }); } }),
+    checkedJobConsentBlockState: () => 'clear',
+    deriveStatus: () => 'SUCCESS',
+    assertLifeMovieOwnerTenantAuthorityClear: check,
+  });
+  const load = () => longformModule.exports.readPlanStatus(plan.planId, 'tenant-1', 'owner-1');
+  const valid = await load();
+  assert.equal(valid.status, 'SUCCESS');
+  assert.equal(valid.segmentCount, 1);
+  assert.deepEqual(txReads, ['plan', 'owner']);
+  assert.equal(consentReads, 1);
+  assert.equal(segmentReads, 1);
+
+  for (const blocked of [
+    { ...fixture, disabled: true }, { ...fixture, deleted: true },
+    { ...fixture, tenantId: 'foreign-tenant' }, { ...fixture, accountStatus: 'disabled' },
+    { ...fixture, dataRightsDeletionPendingCentralPrivacy: true }, null,
+  ]) {
+    currentOwner = blocked;
+    txReads.length = 0;
+    consentReads = 0;
+    segmentReads = 0;
+    await assert.rejects(load(), BLOCK);
+    assert.deepEqual(txReads, ['plan', 'owner'], 'current owner must be checked in transaction');
+    assert.equal(consentReads, 0, 'owner denial must precede consent detail');
+    assert.equal(segmentReads, 0, 'owner denial must precede private segment metadata');
+  }
+  currentOwner = { ...fixture };
+  currentPlan = { ...plan, tenantId: 'foreign' };
+  txReads.length = 0;
+  consentReads = 0;
+  await assert.rejects(load(), /longform_plan_boundary_mismatch/);
+  assert.deepEqual(txReads, ['plan'], 'wrong plan binding rejected before owner profile');
+  assert.equal(consentReads, 0);
+  currentPlan = null;
+  txReads.length = 0;
+  await assert.rejects(load(), /longform_plan_not_found/);
+  assert.deepEqual(txReads, ['plan'], 'missing plan rejected before owner profile');
+});
+
 test('worker activation and consent availability remain hard closed', () => {
   const source=fs.readFileSync('functions/src/privacy/lifeMovieConsentGate.ts','utf8');
   assert.match(source,/export function lifeMovieConsentAuthorityAvailable\(\): boolean \{\s*return false;/);
