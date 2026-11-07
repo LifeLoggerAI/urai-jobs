@@ -15,6 +15,7 @@
 import { createHash } from 'node:crypto';
 import { getApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { assessReviewOnlyGenerationEvidence, canonicalReviewOnlyStorageGeneration } from './lifeMovieGenerationEvidenceReview';
 import { getStorage } from 'firebase-admin/storage';
 
 const PROJECT = 'urai-staging-test';
@@ -23,15 +24,6 @@ const FENCES = 'lifeMovieWriteFencesReviewOnly';
 const ATTEMPTS = 'lifeMovieWriteAttemptsReviewOnly';
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const HOST = /^(?:127\.0\.0\.1|localhost):[1-9][0-9]{0,4}$/;
-const MAX_GCS_GENERATION = (1n << 64n) - 1n;
-
-// Generation is a decimal 64-bit identifier, not a JS Number. Validation must
-// preserve every decimal digit even when a real generation exceeds 2^53-1.
-function canonicalGeneration(value: unknown): value is string {
-  return typeof value === 'string' && /^[1-9][0-9]{0,19}$/.test(value)
-    && BigInt(value) <= MAX_GCS_GENERATION;
-}
-
 export type ReviewOutputScope = {
   ownerUid: string;
   tenantId: string;
@@ -130,7 +122,7 @@ function checkedAttempt(data: unknown, scope: ReviewOutputScope, jobId: string, 
   if (r.state === 'PHYSICAL_GENERATION_UNVERIFIED' &&
     (r.storageWriteFenceVerified !== false || r.productionAuthorized !== false ||
       r.storageMetadataReadbackVerified !== true ||
-      !canonicalGeneration(r.physicalGeneration) ||
+      !canonicalReviewOnlyStorageGeneration(r.physicalGeneration) ||
       r.objectPath !== reviewOnlySyntheticOutputObjectPath({
         ...scope, jobId, attemptId,
       }))) {
@@ -383,7 +375,7 @@ export async function recordReviewOnlyBrokerPhysicalGeneration(
   const s = checkedScope(identity);
   const jobId = segment(identity.jobId, 'job');
   const attemptId = segment(identity.attemptId, 'attempt');
-  if (!canonicalGeneration(generation)) {
+  if (!canonicalReviewOnlyStorageGeneration(generation)) {
     throw new Error('life_movie_review_write_generation_invalid');
   }
   const objectPath = reviewOnlySyntheticOutputObjectPath(identity);
@@ -393,26 +385,18 @@ export async function recordReviewOnlyBrokerPhysicalGeneration(
   // Storage metadata and Firestore are not atomic: this is observation only,
   // with every attempt permanently unresolved for deletion ACK.
   let observedGeneration: unknown = null;
+  let storageNotFound = false;
   try {
     const [metadata] = await getStorage().bucket(PROJECT + '.appspot.com')
       .file(objectPath).getMetadata();
     observedGeneration = metadata?.generation;
   } catch (error) {
-    // A previously verified generation may already have been precisely
-    // deleted during revocation. Absence does not revoke the HISTORICAL
-    // observation, but it must never admit a NEW generation record.
-    if ((error as { code?: unknown })?.code !== 404) {
+    if ((error as { code?: unknown })?.code === 404) {
+      storageNotFound = true;
+    } else {
       throw new Error('life_movie_review_write_storage_unverified');
     }
   }
-  // Firebase Admin SDK's GCS generation is ordinarily a decimal string.
-  // Reject unsafe JS numbers rather than introducing precision loss.
-  if (typeof observedGeneration === 'number') {
-    observedGeneration = Number.isSafeInteger(observedGeneration)
-      ? String(observedGeneration) : null;
-  }
-  const storageCurrentlyObserved = canonicalGeneration(observedGeneration)
-    && observedGeneration === generation;
   const { db, fence } = refs(s);
   const item = attemptRef(s, jobId, attemptId);
   return db.runTransaction(async (transaction) => {
@@ -423,6 +407,12 @@ export async function recordReviewOnlyBrokerPhysicalGeneration(
     const current = checkedFence(fenceSnap.data(), s);
     const attempt = checkedAttempt(attemptSnap.data(), s, jobId, attemptId);
     const data = attemptSnap.data() as Record<string, unknown>;
+    // Evaluate against the observed live object and the verified historical
+    // record. A live replacement generation is not a harmless 404 replay.
+    const { storageCurrentlyObserved } = assessReviewOnlyGenerationEvidence(
+      generation, observedGeneration, storageNotFound,
+      attempt.state === 'PHYSICAL_GENERATION_UNVERIFIED',
+    );
     if (attempt.state === 'PHYSICAL_GENERATION_UNVERIFIED') {
       // checkedAttempt already insists this record was physically verified
       // under R869. Preserve idempotency after an exact generation delete:
@@ -436,9 +426,6 @@ export async function recordReviewOnlyBrokerPhysicalGeneration(
         withdrawalFenced: current.state === 'FENCING',
         revocationAcknowledgementPermitted: false, productionAuthorized: false,
       };
-    }
-    if (!storageCurrentlyObserved) {
-      throw new Error('life_movie_review_write_generation_not_observed');
     }
     if (attempt.state !== 'SIMULATED_IN_FLIGHT' ||
       (current.state === 'OPEN' && current.epoch !== attempt.epoch) ||
