@@ -184,7 +184,9 @@ try{
     assert.notEqual(String(newMeta.generation),previous,'replacement must be different');
     // R874: a false caller claim must remain a ledger conflict even while a
     // different live generation occupies this canonical Storage path.
-    const forged=(BigInt(previous)===1n || BigInt(newMeta.generation)===1n?'2':'1');
+    const occupied=new Set([previous,String(newMeta.generation)]);
+    const forged=['1','2','3'].find(candidate=>!occupied.has(candidate));
+    assert.ok(forged,'fixture must have a third, distinct generation');
     assert.notEqual(forged,previous);
     assert.notEqual(forged,String(newMeta.generation));
     await deny(()=>recordReviewOnlyBrokerPhysicalGeneration(b,forged),
