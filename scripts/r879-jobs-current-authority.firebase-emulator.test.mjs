@@ -39,9 +39,9 @@ assert.ok(!process.env.FUNCTIONS_EMULATOR_ORIGIN ||
 const app = initializeApp({ projectId: PROJECT }, 'r879-' + randomUUID());
 const auth = getAuth(app), db = getFirestore(app);
 const prefix = randomUUID().replaceAll('-', '').slice(0, 18);
-const ids = { owner: 'r879-owner-' + prefix, operator: 'r879-operator-' + prefix, foreign: 'r879-foreign-' + prefix };
+const ids = { owner: 'r879-owner-' + prefix, operator: 'r879-operator-' + prefix, foreign: 'r879-foreign-' + prefix, quota: 'r879-quota-' + prefix };
 const credentials = new Map(), touchedJobs = new Set();
-let ownerToken, operatorToken, foreignToken, originalId;
+let ownerToken, operatorToken, foreignToken, quotaToken, originalId;
 const oldKey = 'r879-' + prefix + '-original';
 function profile(uid, role, extra = {}) {
   return { uid, role, disabled: false, deleted: false, markedForDeletion: false,
@@ -95,9 +95,11 @@ before(async () => {
   await db.collection('users').doc(ids.owner).set(profile(ids.owner, 'user'));
   await db.collection('users').doc(ids.operator).set(profile(ids.operator, 'operator'));
   await db.collection('users').doc(ids.foreign).set(profile(ids.foreign, 'user', { permissions: [] }));
+  await db.collection('users').doc(ids.quota).set(profile(ids.quota, 'user', { tenantId: 'tenant-r879-quota', orgId: 'org-r879-quota' }));
   ownerToken = await tokenFor(ids.owner);
   operatorToken = await tokenFor(ids.operator); // intentionally retained after demotion
   foreignToken = await tokenFor(ids.foreign);
+  quotaToken = await tokenFor(ids.quota);
 });
 after(async () => {
   await Promise.allSettled(Object.values(ids).map(uid => db.collection('users').doc(uid).delete()));
@@ -179,5 +181,31 @@ test('R879 original native Auth/Firestore/Functions caller and owner-scope accep
     await db.collection('users').doc(ids.owner).update({ permissions: [] });
     await denied('createJob', ownerToken, requestFor('after-transfer', 'r879-' + prefix + '-moved'));
     await denied('createJob', ownerToken, requestFor('no-permission', 'r879-' + prefix + '-no-permission'));
+  });
+  await t.test('concurrent independent admission never exceeds the configured 10/minute quota', async () => {
+    // A separate synthetic owner ensures the window is empty. Fire all requests
+    // simultaneously: a pre-transaction read can otherwise count the same state.
+    const attempts = 14;
+    const results = await Promise.all(Array.from({ length: attempts }, (_, i) =>
+      invoke('createJob', quotaToken,
+        requestFor('quota-' + i, 'r879-' + prefix + '-quota-' + i))));
+    const accepted = results.filter(r => r.code === 200 && r.result?.jobId && !r.body.error);
+    for (const item of accepted) touchedJobs.add(item.result.jobId);
+    const blocked = results.filter(r => !(r.code === 200 && r.result?.jobId && !r.body.error));
+    const actualJobs = await db.collection('jobs').where('ownerUid', '==', ids.quota).get();
+    for (const doc of actualJobs.docs) touchedJobs.add(doc.id);
+    assert.equal(actualJobs.size, accepted.length,
+      'Every accepted quota job must have exactly one durable Firestore job record');
+    assert.ok(accepted.length > 0, 'At least one legitimate demo quota request must work');
+    assert.ok(accepted.length <= 10,
+      'P2 quota failure: ' + accepted.length + ' concurrent creates exceeded 10/min; ' +
+      'new job IDs: ' + accepted.map(x => x.result.jobId).join(','));
+    assert.equal(blocked.length, attempts - accepted.length);
+    for (const item of blocked) {
+      const reason = JSON.stringify(item.body.error ?? {}).toLowerCase().replaceAll('_', '-');
+      assert.match(reason, /resource-exhausted/,
+        'Rejected concurrent quota requests must carry a quota-specific denial, got: ' +
+        JSON.stringify(item.body));
+    }
   });
 });
