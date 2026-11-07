@@ -104,10 +104,12 @@ test('an unexpected successful zero-byte upload remains a critical HOLD and dema
 
 test('failed network or malformed GCS response cannot be confused with denial',async()=>{
   const net=await runStagingDenialReview(manifest(),options(async()=>{throw Error('credential details');}));
-  assert.deepEqual(net.results.map(x=>x.outcome),['TRANSPORT_UNVERIFIED','TRANSPORT_UNVERIFIED']);
+  assert.deepEqual(net.results.map(x=>x.outcome),['TRANSPORT_UNVERIFIED']);
+  assert.equal(net.results[0].cleanupRequired,true);
   assert.ok(!JSON.stringify(net).includes('credential details'));
   const mal=await runStagingDenialReview(manifest(),options(async()=>({status:'403'})));
-  assert.deepEqual(mal.results.map(x=>x.outcome),['UNVERIFIED_RESPONSE','UNVERIFIED_RESPONSE']);
+  assert.deepEqual(mal.results.map(x=>x.outcome),['UNVERIFIED_RESPONSE']);
+  assert.equal(mal.results[0].cleanupRequired,true);
 });
 
 test('source mismatch and missing explicit gate make zero credential and HTTP calls',async()=>{
@@ -211,4 +213,62 @@ test('R866 production CLI uses append-only fsync journal and refuses rewrite',as
   assert.match(src,/append\('FINISHED_HOLD'/);
   assert.doesNotMatch(src,/ftruncateSync\(/);
   assert.match(src,/info\.isSymbolicLink\(\)/);
+});
+
+
+test('R867 after-request network loss may have committed bytes; record cleanup and stop immediately',async()=>{
+  let sent=0, prepared=[],recorded=[];
+  const deps=options(async(_url,request)=>{
+    sent++;
+    assert.equal(request.method,'POST');
+    assert.equal(request.body.length,0);
+    // A real endpoint can persist the object and then the connection dies.
+    throw new Error('ECONNRESET after possible object commit');
+  });
+  deps.onPrepared=async rec=>prepared.push(rec);
+  deps.onResult=async rec=>recorded.push(rec);
+  const out=await runStagingDenialReview(manifest(),deps);
+  assert.equal(sent,1,'do not risk more probes after ambiguous remote write');
+  assert.equal(prepared.length,1);
+  assert.equal(recorded.length,1);
+  assert.equal(recorded[0].objectName,prepared[0].objectName);
+  assert.equal(recorded[0].outcome,'TRANSPORT_UNVERIFIED');
+  assert.equal(recorded[0].cleanupRequired,true);
+  assert.equal(out.productionGo,false);
+  assert.equal(out.privateOutputDeletionAcknowledged,false);
+  assert.equal(out.status,'BLOCKED_HOLD');
+  assert.ok(!JSON.stringify(out).includes('ECONNRESET'));
+});
+
+test('R867 any successful 2xx upload means WRITE_WAS_ALLOWED and requires cleanup',async()=>{
+  for(const status of [200,201,202,204,206,299]){
+    let seen=0;
+    const out=await runStagingDenialReview(manifest(),options(async()=>{seen++;return response(status)}));
+    assert.equal(seen,1,'must stop after write: '+status);
+    assert.deepEqual(out.results.map(r=>r.outcome),['WRITE_WAS_ALLOWED']);
+    assert.equal(out.results[0].cleanupRequired,true);
+    assert.equal(out.status,'BLOCKED_HOLD');
+    assert.equal(out.privateOutputDeletionAcknowledged,false);
+  }
+});
+
+test('R867 412 or 401 may not prove a new object; require inspection and never probe more',async()=>{
+  for(const status of [401,404,409,412,429,500]){
+    let seen=0;
+    const result=await runStagingDenialReview(manifest(),options(async()=>{seen++;return response(status)}));
+    assert.equal(seen,1,'stop after ambiguous response: '+status);
+    assert.equal(result.results[0].outcome,'UNVERIFIED_RESPONSE');
+    assert.equal(result.results[0].cleanupRequired,true);
+    assert.equal(result.storageWriteFenceVerified,false);
+    assert.equal(result.privateOutputDeletionAcknowledged,false);
+  }
+});
+
+test('R867 confirmed 403 is the only post-request status permitting next identity',async()=>{
+  let count=0;
+  const result=await runStagingDenialReview(manifest(),options(async()=>{count++;return response(403)}));
+  assert.equal(count,2);
+  assert.equal(result.status,'STAGING_403_OBSERVED_HOLD');
+  assert.deepEqual(result.results.map(r=>r.cleanupRequired),[false,false]);
+  assert.equal(result.productionGo,false);
 });

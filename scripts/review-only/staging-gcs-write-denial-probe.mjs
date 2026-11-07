@@ -85,7 +85,9 @@ export function buildGcsInsertUrl(bucket, objectName) {
 const hashed = value => createHash('sha256').update(value).digest('hex');
 function observedStatus(status) {
   if (status === 403) return 'DENIED_OBSERVED';
-  if (status === 200 || status === 201) return 'WRITE_WAS_ALLOWED';
+  // A successful upload can return any 2xx code. Never misclassify an
+  // unexpectedly permitted mutation as a harmless malformed response.
+  if (Number.isInteger(status) && status >= 200 && status <= 299) return 'WRITE_WAS_ALLOWED';
   return 'UNVERIFIED_RESPONSE';
 }
 
@@ -105,7 +107,12 @@ export async function runStagingDenialReview(rawManifest, dependencies) {
     // after an unexpectedly authorized request must not lose cleanup evidence.
     if (dependencies.onPrepared) await dependencies.onPrepared(Object.freeze(base));
     const record = async (outcome, httpStatus = null) => {
-      const item = Object.freeze({ ...base, outcome, httpStatus, cleanupRequired:outcome === 'WRITE_WAS_ALLOWED' });
+      // A lost/ambiguous response can follow a COMMITTED remote object.
+      // Record the sentinel for independent generation-pinned inventory and
+      // cleanup review, never a deletion acknowledgment.
+      const cleanupRequired = outcome === 'WRITE_WAS_ALLOWED' ||
+        outcome === 'TRANSPORT_UNVERIFIED' || outcome === 'UNVERIFIED_RESPONSE';
+      const item = Object.freeze({ ...base, outcome, httpStatus, cleanupRequired });
       results.push(item);
       if (dependencies.onResult) await dependencies.onResult(item);
       return item;
@@ -123,14 +130,20 @@ export async function runStagingDenialReview(rawManifest, dependencies) {
         headers:{ authorization:'Bearer ' + token, accept:'application/json', 'content-type':'application/octet-stream', 'content-length':'0' },
         body:Buffer.alloc(0), signal:AbortSignal.timeout(15000),
       });
-    } catch { await record('TRANSPORT_UNVERIFIED'); continue; }
+    } catch {
+      // The request may have reached GCS and committed before its response
+      // disappeared. Preserve the unknown sentinel and STOP further probes.
+      await record('TRANSPORT_UNVERIFIED');
+      break;
+    }
     const status = Number.isInteger(response?.status) && response.status >= 100 && response.status <= 599 ? response.status : null;
     const outcome = observedStatus(status);
     if (!RESULT_CODES.has(outcome)) throw Error('UNEXPECTED_PROBE_OUTCOME');
     await record(outcome, status);
-    // The first unexpected write proves the boundary failed. No reason to
-    // risk creating further sentinel objects under alternate identities.
-    if (outcome === 'WRITE_WAS_ALLOWED') break;
+    // Only a definite HTTP 403 can continue to the next identity. A 2xx,
+    // 412 (possibly pre-existing object), 401, or malformed response is
+    // an unresolved attempt: fail closed and stop additional writes.
+    if (outcome !== 'DENIED_OBSERVED') break;
   }
   const all403 = results.length === manifest.serviceAccounts.length && results.every(r => r.outcome === 'DENIED_OBSERVED');
   return Object.freeze({ schemaVersion:SCHEMA, status:all403 ? 'STAGING_403_OBSERVED_HOLD' : 'BLOCKED_HOLD',
