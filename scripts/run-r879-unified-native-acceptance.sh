@@ -173,6 +173,16 @@ grep -q 'R857_REVIEW_ONLY_PHYSICAL_GENERATION_LEDGER_PASS checks=9' "$OUT/physic
 grep -q 'actualFirestoreEmulator=true actualStorageEmulator=true' "$OUT/physical_generation_9_native.log" || hold 'Actual emulator assertion missing'
 grep -q 'privilegedBypassObserved=true exclusiveIAMVerified=false' "$OUT/physical_generation_9_native.log" || hold 'Storage-level bypass/unknown IAM not established'
 grep -q 'privateDeletionAcknowledged=false productionAuthorized=false' "$OUT/physical_generation_9_native.log" || hold 'Incorrect native production scope'
+# Execute the separate original real Auth/Firestore/Functions/Storage Jobs
+# callable and 14-way admission suite. Use the nested runner's own demo-only
+# project and exact-head checks; no production credentials or providers.
+stage current_jobs_authority_quota_native 7200s env \
+  GCLOUD_PROJECT=demo-urai-jobs GOOGLE_CLOUD_PROJECT=demo-urai-jobs \
+  URAI_EMULATOR_PROJECT=demo-urai-jobs URAI_ACCEPTANCE_SHA="$EXPECTED" \
+  bash scripts/run-r879-jobs-native-auth-acceptance.sh
+grep -q "R879_JOBS_NATIVE_AUTH_ACCEPTANCE_PASS source=$EXPECTED project=demo-urai-jobs" \
+  "$OUT/current_jobs_authority_quota_native.log" || hold 'Missing real Jobs native caller/quota acceptance marker'
+
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || hold 'Acceptance changed the pinned working tree'
 
 printf 'URAI_R879_SOURCE_LEVEL_AND_DISPOSABLE_NATIVE_REVIEW_PASS head=%s\n' "$EXPECTED"
