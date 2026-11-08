@@ -1,4 +1,7 @@
-import admin from 'firebase-admin';
+import { assertDisposableLegacyWriter } from './legacy-admin-writer-gate.mjs';
+
+assertDisposableLegacyWriter();
+const { default: admin } = await import('firebase-admin');
 
 if (!admin.apps.length) {
   admin.initializeApp();
