@@ -51,7 +51,7 @@ check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d53
 check_blob 'functions/src/jobs/createJob.ts' '03433ab35ce0374cae58dac572985c75c3abf3b3'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' 'cc69417fe5f4a93fbf1576286c0c551fca4e5492'
+check_blob 'package.json' '68db418cd8748fe001e2475374a0a82403e9ca61'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
@@ -158,7 +158,7 @@ grep -q '# pass 19' "$OUT/legacy_writer_refusal_19_source.log" || hold 'R887 leg
 # R888 Studio long-form owner organization is server-owned and never inherited
 # from user-supplied tenant; actual private GCS writer remains hard-off.
 check_blob 'functions/src/jobs/lifeMovieLongformOwnerOrg.ts' '36b809a8e599b288480800f4fc3248eb828b5911'
-check_blob 'functions/src/jobs/studioLifeMovieLongformBridge.ts' '86d540ed110f1400470b5cbb7d432df0f38d10cf'
+check_blob 'functions/src/jobs/studioLifeMovieLongformBridge.ts' '888e9645e78d1bd723df883e0a73f042143f1e03'
 check_blob 'scripts/r888-longform-owner-org.test.mjs' '5d33a2cf702fef990201bd6f519ae370d130c074'
 check_blob 'scripts/life-movies-longform-resume-transaction-contract.mjs' 'ef439bbe7a6a697ab04f2ebfc53b7e98d5466dd1'
 check_blob 'scripts/r417-original-donor-longform-resume-transaction-contract.mjs' '19969a9aa34fc19c0ebc520d39f4a368a8402a24'
@@ -171,6 +171,11 @@ grep -q '# pass 12' "$OUT/studio_longform_org_12_source.log" || hold 'R888 organ
 stage longform_resume_source 180s node --test \
   scripts/r417-original-donor-longform-resume-transaction-contract.mjs \
   scripts/life-movies-longform-resume-transaction-contract.mjs
+
+# R890 current server-owner cancellation boundary; source-only before native Firebase.
+check_blob 'scripts/r890-cancel-authority-regression.test.mjs' '8ef3f1e799016eafd3f254f5fa2805f0e6ba2c18'
+stage private_movie_cancel_14_source 120s node --experimental-strip-types --test scripts/r890-cancel-authority-regression.test.mjs
+grep -q '# pass 14' "$OUT/private_movie_cancel_14_source.log" || hold 'R890 private cancellation authority regressions missing'
 
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \
