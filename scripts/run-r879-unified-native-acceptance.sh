@@ -165,6 +165,13 @@ check_blob 'scripts/r417-original-donor-longform-resume-transaction-contract.mjs
 stage studio_longform_org_12_source 120s node --experimental-strip-types --test scripts/r888-longform-owner-org.test.mjs
 grep -q '# pass 12' "$OUT/studio_longform_org_12_source.log" || hold 'R888 organization binding source tests missing'
 
+# R889 retain both source-derived longform transactional resume fixtures:
+# the original R417 donor and modern R888 bridge fixture must execute together
+# against the actual owner/org helper rather than permissive test stubs.
+stage longform_resume_source 180s node --test \
+  scripts/r417-original-donor-longform-resume-transaction-contract.mjs \
+  scripts/life-movies-longform-resume-transaction-contract.mjs
+
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \
   --only auth,firestore,storage \
