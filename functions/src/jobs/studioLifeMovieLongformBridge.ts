@@ -1072,6 +1072,13 @@ async function cancelPlan(planId: string, tenantId: string, userId: string) {
     if (!planSnapshot.exists) throw new Error('longform_plan_not_found');
     const plan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
     assertPlanStructure(plan, planId);
+    // Normal cancellation cannot use a stale plan as current account authority.
+    // Read owner in this transaction before inspecting children or mutating jobs.
+    // Privacy-driven deletion uses its dedicated revocation/cleanup flow.
+    const ownerSnapshot = await transaction.get(db.collection('users').doc(userId));
+    assertOwnerDeletionFenceClear(ownerSnapshot);
+    assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, userId, tenantId);
+    assertLifeMoviePlanCurrentOrg(plan, ownerSnapshot.data());
     const childRefs = plan.childJobIds.map((jobId) => jobDoc(jobId));
     const [childSnapshots, assemblySnapshot] = await Promise.all([
       childRefs.length ? transaction.getAll(...childRefs) : Promise.resolve([]),
