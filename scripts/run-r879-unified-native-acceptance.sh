@@ -48,10 +48,10 @@ check_blob 'functions/src/jobs/getJobStatus.ts' 'a198db9694e7352f470c8dbd399dd4a
 check_blob 'scripts/r875-current-job-caller-authority.test.mjs' '747de36ed3318270a8b3bb944178e9fc8fb61115'
 check_blob 'scripts/r876-current-getJobStatus-lifecycle.test.mjs' '6e36a31f9ba17dbf10ba90c79ecd4571b163319f'
 check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d533'
-check_blob 'functions/src/jobs/createJob.ts' '03433ab35ce0374cae58dac572985c75c3abf3b3'
+check_blob 'functions/src/jobs/createJob.ts' 'c52f09900bb76a1fa71445a7fceb39c177c2c568'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' '68db418cd8748fe001e2475374a0a82403e9ca61'
+check_blob 'package.json' '0e6dcac476c8e54b3b49e0d9e3e517b49d0ae058'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
@@ -177,6 +177,28 @@ check_blob 'scripts/r890-cancel-authority-regression.test.mjs' '8ef3f1e799016eaf
 stage private_movie_cancel_14_source 120s node --experimental-strip-types --test scripts/r890-cancel-authority-regression.test.mjs
 grep -q '# pass 14' "$OUT/private_movie_cancel_14_source.log" || hold 'R890 private cancellation authority regressions missing'
 
+# R891: independently preserve the peer's atomic owner quota, composite
+# migration index, and nested four-emulator identity isolation. All checks
+# refer to unchanged original Git blobs from the R887 peer parent.
+check_blob 'functions/src/jobs/jobCreateRateLimit.ts' '9b7a53c41c56681dfdf4cebbc00de9a962adf5d2'
+check_blob 'firestore.indexes.json' '7690ab3a4db2d7e83de5d6d13ebd7100cecde5bd'
+check_blob 'firestore.rules' 'cfa77a8fa5e69327ab352b31450c59a036d21e38'
+check_blob 'scripts/owner_authority_rules.static.test.mjs' '3c1dcedbdb5d988da32e85a8e06241bc0bda8bb2'
+check_blob 'scripts/r883-create-job-quota-ledger.test.mjs' '52598f8ab1e84e40e6f3246ca65a8dca8df776c0'
+check_blob 'scripts/r885-firestore-quota-index-contract.test.mjs' '9df8b168f6636ba141f17a15b4e5659361910369'
+check_blob 'scripts/r884-emulator-env-isolation.test.mjs' 'edbb4fc44f026d1d972021020ca4198d0561c79b'
+check_blob 'scripts/r887-disposable-project-handoff.test.mjs' '5d6aa48ab8111280f983f05821209c60b9a92299'
+check_blob 'scripts/r879-jobs-current-authority.firebase-emulator.test.mjs' '89f9a65d3276d606975b7f5f5d285f6cb4906c18'
+check_blob 'scripts/run-r879-jobs-native-auth-acceptance.sh' '67ae8515bd206456c8d181ff52ef173e67f65cc2'
+stage create_quota_12_source 120s node --experimental-strip-types --test scripts/r883-create-job-quota-ledger.test.mjs
+grep -q '# pass 12' "$OUT/create_quota_12_source.log" || hold 'R883 exact-source quota tests missing'
+stage quota_index_5_source 120s node --test scripts/r885-firestore-quota-index-contract.test.mjs
+grep -q '# pass 5' "$OUT/quota_index_5_source.log" || hold 'R885 composite index source tests missing'
+stage emulator_env_10_source 120s node --test scripts/r884-emulator-env-isolation.test.mjs
+grep -q '# pass 10' "$OUT/emulator_env_10_source.log" || hold 'R884 nested emulator env isolation tests missing'
+stage project_handoff_4_source 120s node --test scripts/r887-disposable-project-handoff.test.mjs
+grep -q '# pass 4' "$OUT/project_handoff_4_source.log" || hold 'R887 nested project handoff tests missing'
+
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \
   --only auth,firestore,storage \
@@ -185,6 +207,19 @@ grep -q 'R857_REVIEW_ONLY_PHYSICAL_GENERATION_LEDGER_PASS checks=9' "$OUT/physic
 grep -q 'actualFirestoreEmulator=true actualStorageEmulator=true' "$OUT/physical_generation_9_native.log" || hold 'Actual emulator assertion missing'
 grep -q 'privilegedBypassObserved=true exclusiveIAMVerified=false' "$OUT/physical_generation_9_native.log" || hold 'Storage-level bypass/unknown IAM not established'
 grep -q 'privateDeletionAcknowledged=false productionAuthorized=false' "$OUT/physical_generation_9_native.log" || hold 'Incorrect native production scope'
+# R891: the original four-emulator signed-in Auth/Firestore/Functions/Storage
+# suite must execute, including current-operator role downgrade and the
+# 14-concurrent-request createJob quota race. A source test is not acceptance.
+# Outer negative Storage project is intentionally NOT the inner demo project.
+# Clear both inherited project selectors before setting the inner identity.
+stage jobs_authority_quota_native 7200s env \
+  -u FIREBASE_PROJECT_ID -u CLOUDSDK_CORE_PROJECT \
+  URAI_EMULATOR_PROJECT=demo-urai-jobs GCLOUD_PROJECT=demo-urai-jobs GOOGLE_CLOUD_PROJECT=demo-urai-jobs \
+  URAI_ACCEPTANCE_SHA="$EXPECTED" \
+  bash scripts/run-r879-jobs-native-auth-acceptance.sh
+grep -q "R879_JOBS_NATIVE_AUTH_ACCEPTANCE_PASS source=$EXPECTED project=demo-urai-jobs" \
+  "$OUT/jobs_authority_quota_native.log" || hold 'Authenticated Jobs owner/quota native evidence missing'
+
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || hold 'Acceptance changed the pinned working tree'
 
 printf 'URAI_R879_SOURCE_LEVEL_AND_DISPOSABLE_NATIVE_REVIEW_PASS head=%s\n' "$EXPECTED"
