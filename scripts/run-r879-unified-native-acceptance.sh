@@ -48,10 +48,16 @@ check_blob 'functions/src/jobs/getJobStatus.ts' 'a198db9694e7352f470c8dbd399dd4a
 check_blob 'scripts/r875-current-job-caller-authority.test.mjs' '747de36ed3318270a8b3bb944178e9fc8fb61115'
 check_blob 'scripts/r876-current-getJobStatus-lifecycle.test.mjs' '6e36a31f9ba17dbf10ba90c79ecd4571b163319f'
 check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d533'
-check_blob 'functions/src/jobs/createJob.ts' '03433ab35ce0374cae58dac572985c75c3abf3b3'
+check_blob 'functions/src/jobs/createJob.ts' 'c52f09900bb76a1fa71445a7fceb39c177c2c568'
+check_blob 'functions/src/jobs/jobCreateRateLimit.ts' '9b7a53c41c56681dfdf4cebbc00de9a962adf5d2'
+check_blob 'firestore.rules' 'cfa77a8fa5e69327ab352b31450c59a036d21e38'
+check_blob 'firestore.indexes.json' '7690ab3a4db2d7e83de5d6d13ebd7100cecde5bd'
+check_blob 'scripts/r879-jobs-current-authority.firebase-emulator.test.mjs' '89f9a65d3276d606975b7f5f5d285f6cb4906c18'
+check_blob 'scripts/run-r879-jobs-native-auth-acceptance.sh' '67ae8515bd206456c8d181ff52ef173e67f65cc2'
+check_blob 'scripts/r884-emulator-env-isolation.test.mjs' 'edbb4fc44f026d1d972021020ca4198d0561c79b'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' 'd24fb1048d776774912e7145d91efa4f00bcb246'
+check_blob 'package.json' 'f52ecefc3ca9483cb761b95a9d6c79f17c8b71e6'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
@@ -152,6 +158,10 @@ check_blob 'scripts/requeue-dead.mjs' 'fa56f43e016a1eb6a426e199d72ae47ff690bd2e'
 check_blob 'scripts/reclaim-stale-leases.mjs' 'b6e5b640c9bb3a85afa24682ed5ebe3ae318499c'
 check_blob 'scripts/admin-process-queue-now.mjs' '0a2c843726952b6ca62fe745c3b296e95e928b0d'
 check_blob 'scripts/run-worker.mjs' '5d05c0bc16ece743390042b6b492de9dec8abd50'
+stage create_quota_ledger_source 120s node --experimental-strip-types --test scripts/r883-create-job-quota-ledger.test.mjs
+stage firestore_quota_index_source 120s node --test scripts/r885-firestore-quota-index-contract.test.mjs
+stage admin_parser_source 120s node --test scripts/r881-admin-callable-parser.test.mjs
+stage emulator_env_preflight_source 120s node --test scripts/r884-emulator-env-isolation.test.mjs
 stage legacy_writer_refusal_19_source 120s node --test scripts/r887-legacy-admin-writer-gate.test.mjs
 grep -q '# pass 19' "$OUT/legacy_writer_refusal_19_source.log" || hold 'R887 legacy writer refusal regressions not recorded'
 
@@ -163,6 +173,16 @@ grep -q 'R857_REVIEW_ONLY_PHYSICAL_GENERATION_LEDGER_PASS checks=9' "$OUT/physic
 grep -q 'actualFirestoreEmulator=true actualStorageEmulator=true' "$OUT/physical_generation_9_native.log" || hold 'Actual emulator assertion missing'
 grep -q 'privilegedBypassObserved=true exclusiveIAMVerified=false' "$OUT/physical_generation_9_native.log" || hold 'Storage-level bypass/unknown IAM not established'
 grep -q 'privateDeletionAcknowledged=false productionAuthorized=false' "$OUT/physical_generation_9_native.log" || hold 'Incorrect native production scope'
+# Execute the separate original real Auth/Firestore/Functions/Storage Jobs
+# callable and 14-way admission suite. Use the nested runner's own demo-only
+# project and exact-head checks; no production credentials or providers.
+stage current_jobs_authority_quota_native 7200s env \
+  GCLOUD_PROJECT=demo-urai-jobs GOOGLE_CLOUD_PROJECT=demo-urai-jobs \
+  URAI_EMULATOR_PROJECT=demo-urai-jobs URAI_ACCEPTANCE_SHA="$EXPECTED" \
+  bash scripts/run-r879-jobs-native-auth-acceptance.sh
+grep -q "R879_JOBS_NATIVE_AUTH_ACCEPTANCE_PASS source=$EXPECTED project=demo-urai-jobs" \
+  "$OUT/current_jobs_authority_quota_native.log" || hold 'Missing real Jobs native caller/quota acceptance marker'
+
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || hold 'Acceptance changed the pinned working tree'
 
 printf 'URAI_R879_SOURCE_LEVEL_AND_DISPOSABLE_NATIVE_REVIEW_PASS head=%s\n' "$EXPECTED"
