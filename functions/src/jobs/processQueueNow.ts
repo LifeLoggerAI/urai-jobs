@@ -8,6 +8,8 @@ import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { isTerminalJobStatus } from './executionGuards.js';
 import { consentBlockRef, isConsentContext, checkedJobConsentBlockState } from '../privacy/consentBlocks.js';
 import { deferLifeMovieJob, LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS } from '../privacy/lifeMovieConsentGate.js';
+import { checkedCurrentJobCaller } from './currentJobCallerAuthority.js';
+import { currentJobOwnerEligibleForDispatch } from './currentJobCallerAuthority.js';
 
 const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
 const LEASE_DURATION_MS = 60 * 1000;
@@ -22,28 +24,20 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
-function rolesToStrings(values: unknown[]): string[] {
-  return values.map((value) => String(value));
-}
-
-function hasOperatorAccess(auth: unknown): boolean {
-  const authRecord = asRecord(auth);
-  const token = asRecord(authRecord.token);
-  const role = token.role;
-  const roles = Array.isArray(token.roles) ? rolesToStrings(token.roles) : [];
-
-  return (
-    role === 'admin' ||
-    role === 'operator' ||
-    token.uraiJobsAdmin === true ||
-    roles.includes('admin') ||
-    roles.includes('operator')
-  );
-}
-
-function requireOperator(auth: unknown): void {
+function authenticatedOperatorUid(auth: unknown): string {
   if (!auth) throw new HttpsError('unauthenticated', 'Authentication is required.');
-  if (!hasOperatorAccess(auth)) throw new HttpsError('permission-denied', 'Admin/operator access is required.');
+  const uid = asRecord(auth).uid;
+  if (typeof uid !== 'string' || !uid.trim() || uid !== uid.trim()) {
+    throw new HttpsError('unauthenticated', 'Authenticated operator ID is required.');
+  }
+  return uid;
+}
+
+function requireCurrentOperator(auth: unknown, serverUser: unknown): void {
+  // Firebase token custom claims can remain stale after a role downgrade.
+  if (!checkedCurrentJobCaller(auth, serverUser)?.operator) {
+    throw new HttpsError('permission-denied', 'Current admin/operator authority is required.');
+  }
 }
 
 function normalizeLimit(value: unknown, fallback = 10): number {
@@ -94,11 +88,15 @@ function jobConsentContexts(job: Job) {
 }
 
 export const processQueueNow = onCall(callableOptions, async (request) => {
-  requireOperator(request.auth);
+  const uid = authenticatedOperatorUid(request.auth);
+  const db = getFirestore();
+  const operatorRef = db.collection('users').doc(uid);
+  // Refuse stale token claims before listing queue jobs, even when the queue is empty.
+  const initialOperator = await operatorRef.get();
+  requireCurrentOperator(request.auth, initialOperator.exists ? initialOperator.data() : null);
 
   const input = asRecord(request.data);
   const limit = normalizeLimit(input.limit, 10);
-  const db = getFirestore();
   const workerId = `operator-${ulid()}`;
 
   const pendingJobsSnapshot = await db
@@ -121,10 +119,14 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
     const result = await db.runTransaction(async (transaction) => {
       const queueRef = jobQueueEntryDoc(jobId);
       const masterJobRef = jobDoc(jobId);
-      const [queueDoc, masterJobDoc] = await Promise.all([
+      const [queueDoc, masterJobDoc, operatorSnapshot] = await Promise.all([
         transaction.get(queueRef),
         transaction.get(masterJobRef),
+        transaction.get(operatorRef),
       ]);
+      // Same transactional snapshot as the job/lease, so a role withdrawal
+      // conflicts with leasing rather than authorizing a stale token.
+      requireCurrentOperator(request.auth, operatorSnapshot.exists ? operatorSnapshot.data() : null);
 
       if (!queueDoc.exists || queueDoc.data()?.status !== 'PENDING') {
         return { lease: null, outcome: 'queue-not-pending' as const };
@@ -154,6 +156,21 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
       if (job.status !== 'PENDING') {
         return { lease: null, outcome: 'master-not-pending' as const };
       }
+      // Do not lease previously queued work if the original owner has been
+      // deleted, disabled or transferred to a different tenant or organization.
+      const ownerUid = typeof job.ownerUid === 'string' ? job.ownerUid : '';
+      const ownerSnapshot = ownerUid && ownerUid === ownerUid.trim()
+        ? await transaction.get(db.collection('users').doc(ownerUid))
+        : null;
+      if (!ownerSnapshot?.exists || !currentJobOwnerEligibleForDispatch(job, ownerSnapshot.data())) {
+        transaction.update(queueRef, {
+          availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+          updatedAt: now,
+          'dispatch.blockedReason': 'job_owner_authority_unavailable',
+        });
+        return { lease: null, outcome: 'owner-authority-unavailable' as const };
+      }
+
 
       if (deferLifeMovieJob(job)) {
         transaction.update(queueRef, {
