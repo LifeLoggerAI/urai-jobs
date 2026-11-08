@@ -20,6 +20,8 @@ export function checkedCurrentJobCaller(auth: unknown, serverUser: unknown): Cur
   if (user.uid !== undefined && user.uid !== uid) return null;
   const role = user.role;
   if (role !== 'admin' && role !== 'operator' && role !== 'user') return null;
+  // Malformed scope data cannot silently become unscoped access (including operators).
+  if (scopeId(user, 'tenantId') === INVALID_SCOPE || scopeId(user, 'orgId') === INVALID_SCOPE) return null;
   for (const flag of ['disabled', 'deleted', 'markedForDeletion']) {
     if (Object.prototype.hasOwnProperty.call(user, flag) && user[flag] !== false) return null;
   }
@@ -31,9 +33,20 @@ export function checkedCurrentJobCaller(auth: unknown, serverUser: unknown): Cur
 
 
 /** Normalized organization/tenant scope for Jobs-created records. */
-function scopeId(value: Record<string, unknown> | null, key: 'orgId' | 'tenantId'): string | null {
+const INVALID_SCOPE = Symbol('malformed-job-owner-scope');
+
+function scopeId(value: Record<string, unknown> | null, key: 'orgId' | 'tenantId'): string | null | typeof INVALID_SCOPE {
   const raw = value?.[key];
-  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+  // Historical records can omit scope, store null or have a blank string.
+  // A non-string object/number/boolean, however, is not a legacy missing scope.
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== 'string') return INVALID_SCOPE;
+  return raw.trim() || null;
+}
+
+function sameScope(left: Record<string, unknown>, right: Record<string, unknown>, key: 'orgId' | 'tenantId'): boolean {
+  const a = scopeId(left, key), b = scopeId(right, key);
+  return a !== INVALID_SCOPE && b !== INVALID_SCOPE && a === b;
 }
 
 /**
@@ -44,8 +57,8 @@ function scopeId(value: Record<string, unknown> | null, key: 'orgId' | 'tenantId
 export function sameCurrentJobOwnerScope(initialUser: unknown, currentUser: unknown): boolean {
   const initial = record(initialUser), current = record(currentUser);
   return !!initial && !!current
-    && scopeId(initial, 'tenantId') === scopeId(current, 'tenantId')
-    && scopeId(initial, 'orgId') === scopeId(current, 'orgId');
+    && sameScope(initial, current, 'tenantId')
+    && sameScope(initial, current, 'orgId');
 }
 
 /**
@@ -59,6 +72,49 @@ export function boundJobMatchesCurrentOwnerScope(
   const data = record(job), owner = record(currentUser);
   return !!data && !!owner && typeof ownerUid === 'string' && ownerUid.length > 0
     && data.ownerUid === ownerUid
-    && scopeId(data, 'tenantId') === scopeId(owner, 'tenantId')
-    && scopeId(data, 'orgId') === scopeId(owner, 'orgId');
+    && sameScope(data, owner, 'tenantId')
+    && sameScope(data, owner, 'orgId');
+}
+
+/**
+ * Administrative retry must not restart work for deleted, suspended or
+ * transferred owners. Verify the actual owner record in the same transaction
+ * as the failed job; the operator's current authority alone is insufficient.
+ */
+export function currentJobOwnerEligibleForRetry(job: unknown, serverOwner: unknown): boolean {
+  const data = record(job);
+  const ownerUid = data?.ownerUid;
+  if (typeof ownerUid !== 'string' || !ownerUid.trim() || ownerUid !== ownerUid.trim()) return false;
+  const owner = checkedCurrentJobCaller({uid: ownerUid}, serverOwner);
+  return !!owner && boundJobMatchesCurrentOwnerScope(data, serverOwner, ownerUid);
+}
+
+/**
+ * Execution admission uses the same current, server-owned identity and
+ * tenant/org binding as retry. This is a revocation veto, not positive
+ * media/source consent or proof that an external writer has lost IAM rights.
+ */
+export function currentJobOwnerEligibleForDispatch(job: unknown, serverOwner: unknown): boolean {
+  return currentJobOwnerEligibleForRetry(job, serverOwner);
+}
+
+/**
+ * A generic admin retry cannot prove a new positive consent/source decision,
+ * protected-output writer authority, or provider-side delivery idempotency.
+ * These jobs must use their dedicated authorized dispatch/admission surface.
+ */
+export function genericAdminRetryAllowed(job: unknown): boolean {
+  const data = record(job);
+  if (!data || data.consent !== undefined || data.consents !== undefined ||
+      data.sourceSystem === 'urai-studio') return false;
+  const declared = [data.jobType, data.type].filter(value => value !== undefined);
+  if (!declared.length || declared.some(value => typeof value !== 'string' || value.trim() !== value || !value)) return false;
+  if (declared.some(value => value !== declared[0])) return false;
+  const type = declared[0] as string;
+  if (type.startsWith('memory.private-source.') || type.startsWith('studio.') ||
+      type === 'narrator.tts' || type === 'web.agent' ||
+      type === 'communications.message.send' || type === 'asset.render' ||
+      type === 'asset-render') return false;
+  // Do not permit a malformed/unknown job type to evade the privacy veto.
+  return type === 'web.search' || type === 'web.fetch';
 }
