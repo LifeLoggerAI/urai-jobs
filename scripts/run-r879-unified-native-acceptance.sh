@@ -57,7 +57,9 @@ check_blob 'scripts/run-r879-jobs-native-auth-acceptance.sh' '67ae8515bd206456c8
 check_blob 'scripts/r884-emulator-env-isolation.test.mjs' 'edbb4fc44f026d1d972021020ca4198d0561c79b'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' 'f52ecefc3ca9483cb761b95a9d6c79f17c8b71e6'
+check_blob 'package.json' '0e13c1e1c389bcdbb99938aeaa588bf08c71b589'
+check_blob 'functions/src/privacy/dataRightsExecution.ts' '756547684397788d8051acace70ac0e5c03e2e17'
+check_blob 'scripts/r888-quota-ledger-deletion-contract.test.mjs' '54ec923386f973ecae75554accf802b4c280d656'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
@@ -162,6 +164,7 @@ stage create_quota_ledger_source 120s node --experimental-strip-types --test scr
 stage firestore_quota_index_source 120s node --test scripts/r885-firestore-quota-index-contract.test.mjs
 stage admin_parser_source 120s node --test scripts/r881-admin-callable-parser.test.mjs
 stage emulator_env_preflight_source 120s node --test scripts/r884-emulator-env-isolation.test.mjs
+stage quota_delete_6_source 120s node --test scripts/r888-quota-ledger-deletion-contract.test.mjs
 stage legacy_writer_refusal_19_source 120s node --test scripts/r887-legacy-admin-writer-gate.test.mjs
 grep -q '# pass 19' "$OUT/legacy_writer_refusal_19_source.log" || hold 'R887 legacy writer refusal regressions not recorded'
 
