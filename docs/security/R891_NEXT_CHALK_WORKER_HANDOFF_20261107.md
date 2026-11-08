@@ -9,6 +9,14 @@
 
 This is a **continuity and evidence-index artifact**, not a fresh exhaustive all-branch/all-byte audit, full native test report, new source-security certification or authorization. Treat every test as tied to its original exact source/ref and environment. Historical “PASS” cannot be transferred to a newer PR head.
 
+## Parallel worker coordination — do NOT interrupt other workers
+
+**The other Chalk/engineering workers are already independently working on their assigned repositories, tasks, PRs and review branches.** This handoff does **not** instruct the next Chalk to tell them what to do, contact them, send assignments, request status updates, restart their work, or take ownership of their branches. There is no need to message or direct another worker to continue Jobs.
+
+The next Chalk should independently **read the latest source and PR state** for context; treat in-progress peer work as live and potentially changing, not abandoned. Continue the **Jobs lane only** from its own existing review branch or a carefully isolated child branch. Reuse verified artifacts, avoid duplicating existing tasks, and **never overwrite, force-push, merge, or edit another worker's branch**. If the next needed work overlaps a peer's active changes, preserve the conflict and advance a different, nonoverlapping Jobs verification or evidence task. Coordinate by inspecting the existing Git history and recording only its own completed evidence in the established Jobs handoff; **do not ping other workers or create unnecessary task requests**.
+
+This is a **parallel-work rule**, not a dependency that prevents local progress. Existing peer work continues on its own. No production authorization is implied.
+
 ## 1. Resume here, not from older worker branches
 
 1. Read THIS file and the existing [R891 convergence details](R891_UNIFIED_JOBS_QUOTA_OWNER_SECURITY_HOLD.md); fetch and inspect PR #368 head, its parents, its full diff, the guarded runner, package verify command and all parent PRs. The branch is a **review-only** child of R890, NOT merged to `main`.
