@@ -161,6 +161,7 @@ check_blob 'functions/src/jobs/lifeMovieLongformOwnerOrg.ts' '36b809a8e599b28848
 check_blob 'functions/src/jobs/studioLifeMovieLongformBridge.ts' '86d540ed110f1400470b5cbb7d432df0f38d10cf'
 check_blob 'scripts/r888-longform-owner-org.test.mjs' '5d33a2cf702fef990201bd6f519ae370d130c074'
 check_blob 'scripts/life-movies-longform-resume-transaction-contract.mjs' 'ef439bbe7a6a697ab04f2ebfc53b7e98d5466dd1'
+check_blob 'scripts/r417-original-donor-longform-resume-transaction-contract.mjs' '19969a9aa34fc19c0ebc520d39f4a368a8402a24'
 stage studio_longform_org_12_source 120s node --experimental-strip-types --test scripts/r888-longform-owner-org.test.mjs
 grep -q '# pass 12' "$OUT/studio_longform_org_12_source.log" || hold 'R888 organization binding source tests missing'
 
