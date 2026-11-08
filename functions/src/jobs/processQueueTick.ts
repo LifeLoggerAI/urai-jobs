@@ -7,6 +7,7 @@ import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { canRequeueUnstartedLease, isTerminalJobStatus } from './executionGuards.js';
 import { consentBlockRef, isConsentContext, checkedJobConsentBlockState } from '../privacy/consentBlocks.js';
 import { deferLifeMovieJob, LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS } from '../privacy/lifeMovieConsentGate.js';
+import { currentJobOwnerEligibleForDispatch } from './currentJobCallerAuthority.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
 const MAX_DISPATCH_RETRIES = 3;
@@ -278,6 +279,21 @@ export const processQueueTick = onSchedule('every 1 minutes', async () => {
         return null;
       }
       if (job.status !== 'PENDING') return null;
+      // Do not lease previously queued work if the original owner has been
+      // deleted, disabled or transferred to a different tenant or organization.
+      const ownerUid = typeof job.ownerUid === 'string' ? job.ownerUid : '';
+      const ownerSnapshot = ownerUid && ownerUid === ownerUid.trim()
+        ? await transaction.get(db.collection('users').doc(ownerUid))
+        : null;
+      if (!ownerSnapshot?.exists || !currentJobOwnerEligibleForDispatch(job, ownerSnapshot.data())) {
+        transaction.update(queueRef, {
+          availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+          updatedAt: now,
+          'dispatch.blockedReason': 'job_owner_authority_unavailable',
+        });
+        return null;
+      }
+
 
       if (deferLifeMovieJob(job)) {
         transaction.update(queueRef, {
