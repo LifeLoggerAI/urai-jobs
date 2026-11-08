@@ -13,6 +13,7 @@ import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvai
 import { parseLifeMoviePrivateDeliveryRequest } from './lifeMoviePrivateDeliveryContract.js';
 import { requireLifeMovieCreationAdmission } from '../privacy/lifeMovieCreationAdmission.js';
 import { assertLifeMovieOwnerTenantAuthorityClear, assertOwnerDeletionFenceClear } from '../privacy/ownerDeletionFence.js';
+import { serverLifeMovieOwnerOrgId, assertLifeMoviePlanCurrentOrg, assertLifeMovieJobPlanOrg } from './lifeMovieLongformOwnerOrg.js';
 import { requirePinnedMovieOutputGeneration } from '../privacy/lifeMovieOutputGeneration.js';
 import { deleteOwnedMovieOutputs, preflightOwnedMovieOutputs, validateOwnedMovieJob } from './lifeMovieOwnerDeletion.js';
 import {
@@ -127,6 +128,7 @@ type StoredPlan = {
   status: 'PENDING' | 'CANCELLED';
   ownerUid: string;
   tenantId: string;
+  orgId?: string;
   projectId: string;
   renderPlanDigest: string;
   sceneTruthDigest: string;
@@ -185,6 +187,7 @@ function assertPlanOwner(plan: StoredPlan, tenantId: string, userId: string) {
 }
 
 function assertPlanStructure(plan: StoredPlan, planId: string) {
+  assertLifeMovieJobPlanOrg(plan, plan);
   if (plan.planId !== planId || !Array.isArray(plan.childJobIds) || !Array.isArray(plan.segments)
     || plan.childJobIds.length < 1 || plan.childJobIds.length > 180
     || plan.segments.length !== plan.childJobIds.length
@@ -227,6 +230,7 @@ function assertBoundSegmentForUse(plan: StoredPlan, job: Job, index: number) {
   // Reuse the owner-bound deletion preflight: it checks the exact child output
   // prefix (including segment index), permitted buckets, unsafe object paths,
   // live in-flight flags and any unrecognized derivative refs.
+  assertLifeMovieJobPlanOrg(plan, job);
   preflightOwnedMovieOutputs(job as unknown as Record<string, unknown>, boundPlanJob(plan, jobId, 'segment'));
   const payload = job.payload as Record<string, unknown> | undefined;
   const output = job.output as WorkerOutput | undefined;
@@ -247,6 +251,7 @@ function assertBoundSegmentForUse(plan: StoredPlan, job: Job, index: number) {
 /** Require the same complete authority binding for final assembled media. */
 function assertBoundAssemblyForUse(plan: StoredPlan, job: Job) {
   if (!plan.assemblyJobId) throw new Error('longform_assembly_binding_mismatch');
+  assertLifeMovieJobPlanOrg(plan, job);
   preflightOwnedMovieOutputs(job as unknown as Record<string, unknown>,
     boundPlanJob(plan, plan.assemblyJobId, 'assembly'));
   const payload = job.payload as Record<string, unknown> | undefined;
@@ -342,6 +347,7 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
     ]);
     assertOwnerDeletionFenceClear(ownerSnapshot);
     assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, input.userId, input.tenantId);
+    const orgId = serverLifeMovieOwnerOrgId(ownerSnapshot.data());
     assertJobConsentBlockClear(liveConsentBlock, 'life_movie_longform_consent_revoked');
 
     if (receiptInside.exists) {
@@ -368,6 +374,10 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
           throw new Error('idempotency_conflict');
         }
       }
+      const boundPlan = await transaction.get(planRef(bound.planId as string));
+      if (!boundPlan.exists) throw new Error('longform_plan_not_found');
+      const prior = assertPlanOwner(boundPlan.data() as StoredPlan, input.tenantId, input.userId);
+      assertLifeMoviePlanCurrentOrg(prior, ownerSnapshot.data());
       return { planId: bound.planId as string, deduplicated: true, segmentCount: segments.length };
     }
 
@@ -376,6 +386,10 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
       if (!bindingMatches(binding, expectedBinding) || typeof binding.jobId !== 'string' || !binding.jobId) {
         throw new Error('idempotency_conflict');
       }
+      const boundPlan = await transaction.get(planRef(binding.jobId));
+      if (!boundPlan.exists) throw new Error('longform_plan_not_found');
+      const prior = assertPlanOwner(boundPlan.data() as StoredPlan, input.tenantId, input.userId);
+      assertLifeMoviePlanCurrentOrg(prior, ownerSnapshot.data());
       return { planId: binding.jobId, deduplicated: true, segmentCount: segments.length };
     }
 
@@ -394,6 +408,7 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
       status: 'PENDING',
       ownerUid: input.userId,
       tenantId: input.tenantId,
+      ...(orgId ? { orgId } : {}),
       projectId: payload.projectId,
       renderPlanDigest: payload.renderPlanDigest,
       sceneTruthDigest: payload.sceneTruthDigest,
@@ -422,6 +437,7 @@ async function createPlan(input: z.infer<typeof CreateSchema>) {
         payload: segment.payload,
         ownerUid: input.userId,
         tenantId: input.tenantId,
+        ...(orgId ? { orgId } : {}),
         consent: {
           purpose: input.consent.purpose,
           policyVersion: input.consent.policyVersion,
@@ -491,6 +507,7 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
     assertPlanStructure(plan, planId);
     const ownerSnapshot = await transaction.get(db.collection('users').doc(userId));
     assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, userId, tenantId);
+    assertLifeMoviePlanCurrentOrg(plan, ownerSnapshot.data());
     const consentSnapshot = await transaction.get(consentBlockRef(plan.ownerUid, plan.consent.purpose));
     const consentState = checkedJobConsentBlockState(consentSnapshot);
     if (consentState === 'unverified') throw new Error('life_movie_consent_block_unverified');
@@ -516,6 +533,7 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
     for (const [index, childSnapshot] of snapshots.entries()) {
       if (!childSnapshot.exists) throw new Error('longform_child_not_found');
       const child = childSnapshot.data() as Job;
+      assertLifeMovieJobPlanOrg(plan, child);
       validateOwnedMovieJob(child as unknown as Record<string, unknown>,
         boundPlanJob(plan, plan.childJobIds[index], 'segment'));
       if (!isDeepStrictEqual(child.consent, plan.consent)) throw new Error('life_movie_owner_job_boundary_mismatch');
@@ -523,6 +541,7 @@ async function readPlanStatus(planId: string, tenantId: string, userId: string) 
     if (plan.assemblyJobId) {
       if (!assemblySnapshot?.exists) throw new Error('longform_child_not_found');
       const assembly = assemblySnapshot.data() as Job;
+      assertLifeMovieJobPlanOrg(plan, assembly);
       validateOwnedMovieJob(assembly as unknown as Record<string, unknown>,
         boundPlanJob(plan, plan.assemblyJobId, 'assembly'));
       if (!isDeepStrictEqual(assembly.consent, plan.consent)) throw new Error('life_movie_owner_job_boundary_mismatch');
@@ -638,9 +657,11 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
     ]);
     assertOwnerDeletionFenceClear(ownerSnapshot);
     assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, userId, tenantId);
+    assertLifeMoviePlanCurrentOrg(plan, ownerSnapshot.data());
     assertJobConsentBlockClear(liveConsentBlock, 'life_movie_longform_consent_revoked');
     if (!planSnapshot.exists) throw new Error('longform_plan_not_found');
     const currentPlan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
+    assertLifeMoviePlanCurrentOrg(currentPlan, ownerSnapshot.data());
     assertPlanStructure(currentPlan, planId);
     if (currentPlan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
     if (currentPlan.status !== 'PENDING') throw new Error('longform_plan_changed');
@@ -672,6 +693,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
 
     if (existing.exists) {
       const current = existing.data() as Job;
+      assertLifeMovieJobPlanOrg(currentPlan, current);
       if (current.ownerUid !== userId || current.tenantId !== tenantId
         || (current.jobType || current.type) !== 'studio.assemble.video'
         || buildRequestFingerprint('studio.assemble.video', current.payload) !== buildRequestFingerprint('studio.assemble.video', payload)) {
@@ -691,6 +713,7 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
       payload,
       ownerUid: userId,
       tenantId,
+      ...(currentPlan.orgId ? { orgId: currentPlan.orgId } : {}),
       consent: currentPlan.consent,
       retryCount: 0,
       execution: {
@@ -719,8 +742,12 @@ async function assemblePlan(planId: string, tenantId: string, userId: string) {
 async function readPlanPlayback(planId: string, tenantId: string, userId: string, disposition: 'inline' | 'attachment' = 'inline') {
   const plan = await loadPlan(planId, tenantId, userId);
   assertPlanStructure(plan, planId);
-  await assertPlanConsentActive(plan);
   const db = getFirestore();
+  // This read is a fail-closed privacy preflight, not a cross-service revoke fence.
+  const ownerSnapshot = await db.collection('users').doc(userId).get();
+  assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, userId, tenantId);
+  assertLifeMoviePlanCurrentOrg(plan, ownerSnapshot.data());
+  await assertPlanConsentActive(plan);
   const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
   const jobs = snapshots.map((snapshot) => snapshot.exists ? snapshot.data() : undefined);
   const statuses = jobs.map((job) => (job?.status ?? 'DEAD') as JobStatus);
@@ -867,9 +894,11 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
     ]);
     assertOwnerDeletionFenceClear(ownerSnapshot);
     assertLifeMovieOwnerTenantAuthorityClear(ownerSnapshot, userId, tenantId);
+    assertLifeMoviePlanCurrentOrg(plan, ownerSnapshot.data());
     assertJobConsentBlockClear(liveConsentBlock, 'life_movie_longform_consent_revoked');
     if (!planSnapshot.exists) throw new Error('longform_plan_not_found');
     const currentPlan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
+    assertLifeMoviePlanCurrentOrg(currentPlan, ownerSnapshot.data());
     assertPlanStructure(currentPlan, planId);
     if (currentPlan.status === 'CANCELLED') throw new Error('longform_plan_cancelled');
     // Child refs came from the earlier plan snapshot; stale membership,
@@ -892,6 +921,7 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
     for (const [index, snapshot] of snapshots.entries()) {
       if (!snapshot.exists) throw new Error('longform_child_not_found');
       const child = snapshot.data() as Job;
+      assertLifeMovieJobPlanOrg(currentPlan, child);
       validateOwnedMovieJob(child as unknown as Record<string, unknown>,
         boundPlanJob(currentPlan, currentPlan.childJobIds[index], 'segment'));
       const descriptor = currentPlan.segments[index];
@@ -907,6 +937,7 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
     if (currentPlan.assemblyJobId) {
       if (!assemblySnapshot?.exists) throw new Error('longform_child_not_found');
       const assembly = assemblySnapshot.data() as Job;
+      assertLifeMovieJobPlanOrg(currentPlan, assembly);
       validateOwnedMovieJob(assembly as unknown as Record<string, unknown>,
         boundPlanJob(currentPlan, currentPlan.assemblyJobId, 'assembly'));
       const assemblyPayload = assembly.payload as Record<string, unknown> | undefined;
@@ -1010,6 +1041,7 @@ async function deletePlanOutputs(planId: string, tenantId: string, userId: strin
   for (const [index, snapshot] of snapshots.entries()) {
     if (!snapshot.exists) throw new Error('longform_child_not_found');
     const job = snapshot.data() as Record<string, unknown>;
+    assertLifeMovieJobPlanOrg(plan, job);
     preflightOwnedMovieOutputs(job, owners[index]);
   }
   let deletedObjectCount = 0;
@@ -1048,10 +1080,12 @@ async function cancelPlan(planId: string, tenantId: string, userId: string) {
     // Validate every child before any writes, including already-terminal jobs.
     for (const [index, snapshot] of childSnapshots.entries()) {
       if (!snapshot.exists) throw new Error('longform_child_not_found');
+      assertLifeMovieJobPlanOrg(plan, snapshot.data());
       validateOwnedMovieJob(snapshot.data() as Record<string, unknown>, boundPlanJob(plan, plan.childJobIds[index], 'segment'));
     }
     if (plan.assemblyJobId) {
       if (!assemblySnapshot?.exists) throw new Error('longform_child_not_found');
+      assertLifeMovieJobPlanOrg(plan, assemblySnapshot.data());
       validateOwnedMovieJob(assemblySnapshot.data() as Record<string, unknown>, boundPlanJob(plan, plan.assemblyJobId, 'assembly'));
     }
     const now = FieldValue.serverTimestamp();

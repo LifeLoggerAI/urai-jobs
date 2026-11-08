@@ -23,12 +23,19 @@ function section(start, end) {
   assert.ok(a >= 0 && b > a);
   return realSource.slice(a,b);
 }
+const orgCode=readFileSync(new URL('../functions/src/jobs/lifeMovieLongformOwnerOrg.ts',import.meta.url),'utf8');
+const orgModule={exports:{}};
+vm.runInNewContext(ts.transpileModule(orgCode,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,
+ {module:orgModule,exports:orgModule.exports,Object,Array,Error});
+const originalOrg=orgModule.exports;
+assert.equal(typeof originalOrg.assertLifeMovieJobPlanOrg,'function');
+assert.equal(typeof originalOrg.assertLifeMoviePlanCurrentOrg,'function');
 const guards = section('function makeChildId(', 'type WorkerArtifact') + '\n' +
   section('function assertPlanOwner(', '/**');
 const gm = {exports:{}};
 vm.runInNewContext(ts.transpileModule(guards + '\nmodule.exports={makeChildId,makeAssemblyJobId,assertPlanStructure,assertPlanOwner,boundPlanJob};', {
   compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
-}).outputText,{module:gm,createHash,Error,Array,Set,String});
+}).outputText,{module:gm,createHash,Error,Array,Set,String,assertLifeMovieJobPlanOrg:originalOrg.assertLifeMovieJobPlanOrg});
 const shape = gm.exports;
 const moduleBlock = {exports:{}};
 const blockSource = readFileSync(new URL('../functions/src/privacy/consentBlocks.ts', import.meta.url),'utf8');
@@ -151,6 +158,7 @@ function make(phase){
   assertOwnerDeletionFenceClear:verifiedOwnerFence,
   assertLifeMovieOwnerTenantAuthorityClear:verifiedOwnerTenantFence,
   assertPlanOwner:shape.assertPlanOwner,
+  assertLifeMoviePlanCurrentOrg:originalOrg.assertLifeMoviePlanCurrentOrg,
   assertPlanStructure:shape.assertPlanStructure,
   boundPlanJob:shape.boundPlanJob,validateOwnedMovieJob:owners.exports,buildRequestFingerprint:fingerprint,
   isDeepStrictEqual,consentBlockRef:()=>ref('jobConsentBlocks/'+owner),
