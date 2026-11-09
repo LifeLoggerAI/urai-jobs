@@ -1,0 +1,126 @@
+{
+  "schema_version": "one_urai_genesis_jobs_r953_checkpoint_v1",
+  "checkpoint_utc": "2026-11-09",
+  "release_decision": "PRODUCTION_HOLD_NO_GO",
+  "cost_usd": 0,
+  "source": {
+    "repo": "LifeLoggerAI/urai-jobs",
+    "main_sha": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+    "main_branch_protected_flag": false,
+    "engineering_pr": 389,
+    "engineering_head_sha": "b865209cc352241602d8b9714672f3401aed7669",
+    "engineering_review_only": true,
+    "engineering_merged": false,
+    "parent_pr": 388,
+    "parent_sha": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
+    "forensic_pr": 379,
+    "genesis_labs_registry_pr": 262,
+    "genesis_crosschat_pr": 304,
+    "git_tree_total_entries": 1464,
+    "git_tree_truncated": false,
+    "r879_exact_git_blob_pins": 58,
+    "r879_pins_matched": 58,
+    "r879_pin_mismatches": 0,
+    "root_commands_enrolled": 78,
+    "root_commands_unique": 78,
+    "root_commands_full_execution": false,
+    "package_blob": "bd50af6bead1c62f36ada6c012123fe0c5d94da7",
+    "runner_blob": "8a42dcad4416d5896b4886d6c5bad079463d5324",
+    "auth_standalone_test_blob": "d27cc3880aa2ae0387f81bb660ca340d830e22dc"
+  },
+  "r953_actual_local_execution": {
+    "test_source_exact_original_git_hash_verified": true,
+    "test_source_file": "scripts/r951-worker-emulator-auth-precedence.test.mjs",
+    "worker_files": "source-matched SHORT EXCERPTS, not byte-exact complete worker modules",
+    "node_version": "v22.16.0",
+    "original_node_test_command": "node --test scripts/r951-worker-emulator-auth-precedence.test.mjs",
+    "source_excerpts_original_test_pass": 4,
+    "source_excerpts_original_test_fail": 0,
+    "source_excerpts_original_test_exit": 0,
+    "original_node_test_tap_sha256": "8303246bea76d86a95fb5306823957d1fb1703cebacec3f419cffd3a2687d1a2",
+    "original_node_test_tap_bytes": 1136,
+    "mutation_target": "Asset localBypass predicate",
+    "mutation": "remove !productionRuntime && gate in isolated local EXCERPT only",
+    "mutation_test_pass": 3,
+    "mutation_test_fail": 1,
+    "mutation_exit_code": 1,
+    "mutation_expected_red": true,
+    "mutation_tap_sha256": "f5d3340a0e218716740a3bf9b68a83b3e2a8a8b8735d0cc475732c7e41e321",
+    "mutation_tap_bytes": 2270,
+    "restored_original_pass": 4,
+    "full_repository_test_execution": false,
+    "http_auth_test_execution": false,
+    "firebase_emulator_execution": false
+  },
+  "ci": {
+    "head_sha": "b865209cc352241602d8b9714672f3401aed7669",
+    "github_actions_workflows": 10,
+    "github_actions_workflows_failed": 10,
+    "github_check_runs": 14,
+    "github_checks_failed": 13,
+    "github_checks_skipped": 1,
+    "sampled_run_id": 42589887656,
+    "sampled_failed_job_id": 129068673620,
+    "sampled_job_recorded_steps": 0,
+    "sampled_job_logs": "HTTP_404_BlobNotFound",
+    "ci_failure_cause": "UNKNOWN",
+    "protected_ci_green": false
+  },
+  "cloud": {
+    "project_alias": "urai-jobs",
+    "project_number": "UNKNOWN",
+    "firebase_apps": "UNKNOWN",
+    "firestore_database_indexes_effective_rules": "UNKNOWN",
+    "actual_storage_buckets_and_principals": "UNKNOWN",
+    "cloud_run_services_revisions_and_ingress": "UNKNOWN",
+    "functions_gen1_gen2_revisions": "UNKNOWN",
+    "scheduled_jobs_pubsub_tasks_eventarc": "UNKNOWN",
+    "billing_and_quotas": "UNKNOWN",
+    "deployed_source_sha": "UNKNOWN",
+    "effective_storage_iam_verified": false,
+    "live_resource_inventory_performed": false,
+    "note": "UNKNOWN does not imply zero resources"
+  },
+  "p0": [
+    {
+      "issue": 252,
+      "gate": "Real stale/alternate privileged GCS writer must receive 403 after revoke; in-flight drain; generation-pinned physical deletion and downstream ACK"
+    },
+    {
+      "issue": null,
+      "gate": "Authenticated positive owner-signed C6 Privacy > Studio > Jobs private MP4/SRT > Spatial Replay > revoke/delete and protected purge"
+    }
+  ],
+  "p1": [
+    {
+      "issue": 376,
+      "gate": "Post-admission data rights operator/role continuation policy"
+    },
+    {
+      "issue": 380,
+      "gate": "Real signed ID token Firestore Rules add/change/remove deletionRequestId must be denied"
+    },
+    {
+      "issue": null,
+      "gate": "Full root 78 commands, native Firebase 4 emulators, build/typecheck, protected CI/independent reviewer, verified rollback"
+    }
+  ],
+  "p2": [
+    {
+      "issue": 345,
+      "gate": "Native 14-concurrent create quota race and effective Firestore index"
+    }
+  ],
+  "p3": [
+    {
+      "gate": "Actual provider read-only resource metadata, deployments, IAM, logs, quotas and billing"
+    }
+  ],
+  "no_payment_or_prod_actions": true,
+  "handoff_paths": [
+    "docs/estate/JOBS_R953_CANONICAL_NEXT_CHALK_FULL_RECONCILIATION_20261109.md",
+    "docs/estate/JOBS_R953_MACHINE_CHECKPOINT_20261109.json",
+    "docs/estate/JOBS_R944_START_NEXT_CHALK_20261109.md"
+  ],
+  "next_required": "Complete exact source original Node test + 78 root commands + guarded R879 four disposable Firebase emulators on a fully credential-free approved host; separately provider IAM and positive C6 authorization before GO"
+}

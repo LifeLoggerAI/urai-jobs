@@ -1,0 +1,87 @@
+{
+  "schema_version": "one_urai_jobs_r945_review_checkpoint_1",
+  "date_utc": "2026-11-09",
+  "production_status": "HOLD_NO_GO",
+  "cost_increment_usd": 0,
+  "source_review": {
+    "repo": "LifeLoggerAI/urai-jobs",
+    "pr": 383,
+    "head_sha": "1e70418b86ad56c209aa06a5d2d7f6a7bc4e102c",
+    "branch": "review/chalk-r945-r942-sibling-test-convergence-20261109",
+    "base_pr": 381,
+    "base_sha": "a295fd834c1cc01710a36b04523b023de2283240",
+    "sibling_pr": 382,
+    "sibling_sha": "d87cc22b798b6894861a344125f57747e016c1ba",
+    "donor_parent_pr": 378,
+    "donor_parent_sha": "5881a650230c55245c87a001c58f3ebc6835196b",
+    "actual_git_two_parent_merge": false,
+    "source_reconciliation": "exact donor test blob copied into independent child of #381",
+    "main_unchanged": true
+  },
+  "source_blobs": {
+    "firestore.rules": "d30c3e8fbbfcbf25767501e351edcb18d6080c6d",
+    "scripts/owner_authority_rules.static.test.mjs": "45c9e80c0aca2b8288d2e6ddf0650873dc4bdb75",
+    "scripts/user_authority_rules.firebase-emulator.test.mjs": "95f4b72b1d7260a191b0cdc77c5cf008b57011e0",
+    "scripts/life-movies-idempotency-revocation-race-contract.mjs": "9af97cd9b2bd7e2a8e5e66d805c90791da60a52c",
+    "package.json": "4804276332491e1e57a95a2a0cec7050df3a595c",
+    "scripts/run-r879-unified-native-acceptance.sh": "29a3d2877ff97e7707eaf5a33f7d3f2c39aa416b",
+    "functions/src/jobs/studioLifeMovieLongformBridge.ts": "888e9645e78d1bd723df883e0a73f042143f1e03",
+    "functions/src/privacy/dataRightsExecution.ts": "756547684397788d8051acace70ac0e5c03e2e17"
+  },
+  "verification": {
+    "original_static_test": "node --test scripts/owner_authority_rules.static.test.mjs",
+    "static_pass": 15,
+    "static_total": 15,
+    "static_fail": 0,
+    "static_skipped": 0,
+    "static_log_sha256": "00fb4ae0bf5b39442ab165549e1422f3ee5e7c95b48772763710b4a3893f6877",
+    "local_original_blobs_git_hashed": 3,
+    "original_native_emulator_script_syntax_pass": true,
+    "source_pin_match_observed": true,
+    "root_enrolled_commands": 77,
+    "root_commands_executed": false,
+    "original_17_case_idempotency_executed": false,
+    "four_emulator_executed": false,
+    "full_build_executed": false,
+    "real_provider_iam_tested": false,
+    "actual_cloud_resource_inventory_verified": false,
+    "protected_ci_green": false,
+    "independent_reviewer_signed": false
+  },
+  "security_hold": [
+    {
+      "priority": "P0",
+      "issue": 252,
+      "status": "actual privileged GCS storage-level stale/alternate writer denial, upload drain, generation pinned deletion ACK unavailable"
+    },
+    {
+      "priority": "P0",
+      "status": "signed C6 owner consent through Privacy Studio Jobs Spatial private Replay revoke delete ACK unavailable"
+    },
+    {
+      "priority": "P1",
+      "issue": 376,
+      "status": "data-rights post-admission durable authority unresolved"
+    },
+    {
+      "priority": "P1",
+      "issue": 380,
+      "status": "Rules binding fix unmerged and native ID-token denial unverified"
+    },
+    {
+      "priority": "P2",
+      "issue": 345,
+      "status": "concurrent create-job rate limit/index effective deployment unverified"
+    }
+  ],
+  "permanent_handoff": {
+    "jobs_audit_pr": 379,
+    "master_cross_chat_pr": 304,
+    "original_r944_start": "docs/estate/JOBS_R944_START_NEXT_CHALK_20261109.md",
+    "r945_relay": "docs/estate/JOBS_R945_SOURCE_CONVERGENCE_RELAY_20261109.md",
+    "r945_engineering": "docs/security/R945_JOBS_SIBLING_CONVERGENCE_ORIGINAL_TEST_ENROLLMENT_HOLD_20261109.md"
+  },
+  "next_action": "run original 17-case and 77-command complete source verify on one immutable #383 head in credential-free safe environment; real Firebase emulators and IAM/cross-service separate gates",
+  "cloud_project_seed": "urai-jobs",
+  "paid_tools_permitted": false
+}

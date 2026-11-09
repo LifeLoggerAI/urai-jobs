@@ -1,0 +1,142 @@
+{
+  "schema": "one-urai-genesis-next-chalk-checkpoint-v1",
+  "checkpoint": "R967",
+  "date_utc": "2026-11-09",
+  "release": {
+    "status": "PRODUCTION_HOLD",
+    "go": false
+  },
+  "repository": "LifeLoggerAI/urai-jobs",
+  "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
+  "forensic_pr": 379,
+  "source_refs": {
+    "jobs_main": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
+    "jobs_r923_pr371": "df19633466eaebdda844569ed0d562245bd31dc6",
+    "jobs_r900_pr377": "f8578ea281e818b01811aecc2fe4dfb8c3dc8203",
+    "jobs_r951_pr388": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
+    "jobs_r952_pr389": "b865209cc352241602d8b9714672f3401aed7669",
+    "jobs_r932_pr390": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+    "privacy_r506_pr192": "7f5f4ad2f157a9d3eb4ed12b679d499fe5888bdc",
+    "privacy_r583_pr213": "4a4656d6283aa7e627bf220b447436df82865f99",
+    "privacy_r647_pr214": "cc0692053db3b1b8df8267d43856b1a3357de8a0",
+    "privacy_r818": "f9e7786854f7ec70cab9a6e22d2c90ad95b834ed",
+    "privacy_r819": "dbe0b9df13cf7c25f1390fe13ae649908c695a15",
+    "privacy_r823": "2fe7ae334eb669af7d45cd1f4741a1be87ce9f73",
+    "privacy_r824": "03e48cbe8e1aaf25934b0e6cbf504552472f03bb",
+    "privacy_r825": "3f336b346ea899062ede6f41bb8dad44ba6de7e3",
+    "privacy_r826": "ccf5f5b2a2370ec25f5c32f37ce5d33e29ed2da9",
+    "privacy_r834": "79e71fd6137947d2ed7c416a2596090572fef978",
+    "privacy_r836": "e1e2dee63c39590d343d727aa53618ac97a52691",
+    "privacy_r17": "90a4e581e8494f52d85eab3c576d02b926e7d0d9",
+    "privacy_r18": "dbc193763dc112210c20b5b680e8eb08fdf8396c",
+    "privacy_r19": "a4d7e4ffb76fa2dbbf7348e2b66faa991761509a",
+    "privacy_r20": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6",
+    "jobs_main_tree": "282bd75464cc23d9a6add6a1340c6ae7d3adfc9a",
+    "jobs_main_revert_parent": "792d063b9d894bb9cb872e2c3c6dd71e37804f6a"
+  },
+  "source_blobs": {
+    "jobs_three_case_harness": "e9662a979a72a0e39a61fe896a79f8379658d963",
+    "jobs_derivative_cleanup": "d441b4971d456f2e861b2640067cbde6a2dfff32",
+    "jobs_replay_doc": "31886c5ce46a39f2a0424aa377c157874a62ac84",
+    "r647_dispatcher": "4126167b4350ba8afe6b19d7b60dec1ca891189f",
+    "r647_contract": "6cca2b9456319927cf22511c7d51c1f16ddf051c"
+  },
+  "missing_harness_modules": {
+    "paths": [
+      "functions/src/consent-jobs-delivery.ts",
+      "functions/src/consent-jobs-http.ts",
+      "functions/src/consent-jobs-dispatch.ts"
+    ],
+    "absent_from_inspected_trees": [
+      "R506/#192",
+      "R583/#213",
+      "R647/#214",
+      "R818",
+      "R819",
+      "R823",
+      "R824",
+      "R825",
+      "R826",
+      "R834",
+      "R836",
+      "R20/#256"
+    ],
+    "github_path_history_empty": true,
+    "status": "exact source provenance not recovered; absence only scoped to inspected trees/history",
+    "github_code_search_zero_results": [
+      "consent-jobs-delivery.ts",
+      "consent-jobs-http.ts",
+      "consent-jobs-dispatch.ts"
+    ],
+    "additional_direct_branch_checks": [
+      "review/chalk-converged-jobs-native-source-20261106",
+      "review/chalk-r818-native-jobs-privacy-callable-20261106",
+      "review/chalk-r823-demo-project-r822-jobs-privacy-20261106",
+      "review/chalk-r824-scoped-grant-lifecycle-profile-fences-20261106",
+      "review/chalk-r825-privacy-issuer-transport-demo-convergence-20261106",
+      "review/chalk-r826-privacy-jobs-r823-immutable-pin-20261106",
+      "review/r495-jobs-rights-to-privacy-review-bridge",
+      "review/r506-privacy-revoke-to-jobs-storage-derivative",
+      "review/r548-current-jobs-private-derivative-four-emulators-20261104",
+      "review/r575-jobs264-privacy-native-bridge-20261104",
+      "review/r579-jobs264-privacy208-crossrepo-bridge-20261104",
+      "review/r583-jobs264-dual-artifact-attestation-convergence-20261104"
+    ],
+    "additional_direct_branch_result": "All three expected paths returned not found in each listed branch; not exhaustive of all historical Git objects."
+  },
+  "r967_execution": {
+    "pr_metadata_and_trees_read": true,
+    "privacy_branch_inventory_pages": 3,
+    "branch_count": 217,
+    "path_commit_history_queries": 3,
+    "remote_git_exit": 128,
+    "remote_git_error": "Could not resolve host: github.com",
+    "donor_node_tests": false,
+    "jobs_emulator_harness": false,
+    "r818_r836_native_runner": false,
+    "install_build_typecheck": false,
+    "cloud_inventory": false,
+    "gcs_iam_test": false,
+    "app_source_changed": false,
+    "github_read_only_search_only": true,
+    "github_code_search_zero_hits": 3,
+    "additional_branch_path_checks": 12,
+    "current_main_ref_corrected": true,
+    "tests_run": false,
+    "cloud_mutations": false
+  },
+  "critical_distinctions": [
+    "Jobs three-case harness expects consent-jobs-* API and is distinct from R647 consent-revocation-jobs-dispatcher API.",
+    "R818/R836 runner and integration test are a separate native acceptance lineage; don't conflate with Jobs #371 harness.",
+    "Jobs harness has local Firestore/Storage emulator behavior with mocked wrappers/auth and synthetic grant fixtures, not production acceptance.",
+    "Jobs derivative cleanup generation pins and refuses unknown objects, but point-in-time listing is not future-write denial and full historical erasure isn't proven.",
+    "Privacy issue #83 remains open for protected runtime, downstream ACK and provider-call prevention; July body is stale as source-status description, newer comments update status."
+  ],
+  "next_steps": [
+    "Recover exact original provenance of consent-jobs-delivery.ts, consent-jobs-http.ts and consent-jobs-dispatch.ts only from identified source archive/workspace/repository.",
+    "Compare Jobs #371 harness, R818/R836 maintained runner and R647 donor as distinct integration architectures; choose one after source review.",
+    "Keep Privacy issue #83 open until protected deployed consent decision/revocation runtime, downstream ACK and provider-call suppression evidence exists.",
+    "On connected host obtain clean exact checkouts; verify commit/tree/blob identities and lockfiles.",
+    "Run R647 dispatcher and contract tests separately, Jobs #371 three-case emulator harness only with compatible Privacy source, and R818/R836 runner separately; preserve raw logs and exact versions/exits.",
+    "Use demo-only projects and synthetic fixtures; do not treat direct Firestore grant fixture as positive authorization.",
+    "Separately verify deployed functions, workload identities, endpoint secrets, ingress/effective IAM, nonproduction stale/alternate GCS writer 403, upload drain, generation cleanup and durable purge ACK.",
+    "Keep worker auth, operator withdrawal, CI, rollback, C6, device/accessibility/visual and founder GO as independent gates."
+  ],
+  "prohibitions": [
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO DISPATCH",
+    "NO PRIVATE MEDIA",
+    "NO IAM CHANGE",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ],
+  "main_governance": {
+    "protected": false,
+    "protection_enabled": false,
+    "required_status_checks_enforcement": "off",
+    "required_contexts": [],
+    "required_checks": [],
+    "rulesets_including_parents": []
+  }
+}

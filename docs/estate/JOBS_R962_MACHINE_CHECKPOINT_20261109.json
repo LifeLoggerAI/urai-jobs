@@ -1,0 +1,73 @@
+{
+  "schema": "one-urai-genesis-next-chalk-checkpoint-v1",
+  "checkpoint": "R962",
+  "date_utc": "2026-11-09",
+  "release": {
+    "status": "PRODUCTION_HOLD",
+    "go": false
+  },
+  "repository": "LifeLoggerAI/urai-jobs",
+  "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
+  "forensic_pr": 379,
+  "evidence": {
+    "jobs_main": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+    "jobs_forensic_docs_head": "01a0266674e05cd8ec2d6f69e3dfba15b7c6e746",
+    "privacy_r647_head": "cc0692053db3b1b8df8267d43856b1a3357de8a0",
+    "privacy_r20_head": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6",
+    "donor_blobs": {
+      "dispatcher": "4126167b4350ba8afe6b19d7b60dec1ca891189f",
+      "contract": "6cca2b9456319927cf22511c7d51c1f16ddf051c",
+      "dispatcher_test": "def1048aa4838f7ff990d792a27d1fb94e7f6441",
+      "jobs_contract_test": "fd60261f1518a31a476e2e5fdfbe62f9d8acf2aa",
+      "donor_publisher": "5b069b79d657b5c2006dd0ab45c8e60709ff0a89",
+      "functions_package": "e7c9036117ce7b4f3a59c10f80617a6165afb288",
+      "root_package": "115d4ff9cbd646e6313e2de0590359a02f71e68f"
+    },
+    "r20_blobs": {
+      "publisher": "84f1e77d5c1cf55f80aaa0a559b6a3eac781386e",
+      "transition": "0ddee615f1284a58459aae48b915a574da7c9c9e"
+    }
+  },
+  "r962_results": {
+    "source_pin_readback": "6/6 MATCH",
+    "dispatcher_test_declarations": 10,
+    "jobs_contract_test_declarations": 16,
+    "combined_test_cases": 26,
+    "tests_executed": false,
+    "typecheck_executed": false,
+    "emulator_executed": false,
+    "cloud_accessed": false,
+    "reason": "GitHub clone attempt failed: Could not resolve host github.com; no clean checkout or locked dependencies.",
+    "important_boundary": "Both donor test files use Node VM/transpileModule and mocked database/transport. They are not Firebase emulator acceptance or live HTTP/provider tests."
+  },
+  "findings": [
+    "R647 dispatcher is prepared donor code explicitly NOT DEPLOYED and not exported.",
+    "R647 mechanics worth preserving: bounded batches, UUID leases, stale lease protection, retry/backoff, integrity checks, pinned HTTPS and verified Jobs ACK.",
+    "R20 queue metadata absent relative to old dispatcher query.",
+    "R20 publisher integrity hash adds prior grant receipt/evidence fields; old dispatcher integrity check rejects it.",
+    "R647 v2 projection drops priorGrantReceiptHash/priorGrantEvidenceState.",
+    "R647 derives revokedAt from outbox createdAt rather than source transition time.",
+    "Jobs R923 receiver does not persist prior grant pair and explicitly leaves physical deletion/storage fence false.",
+    "ACK mechanisms require a deliberate single source of truth."
+  ],
+  "next_steps": [
+    "On host with GitHub access, clean detached checkout exact R647 head and verify commit/tree/source hashes.",
+    "Run node --test tests/consent-revocation-jobs-contract.test.mjs and node --test tests/consent-revocation-dispatcher-contract.test.mjs separately; record TAP, exit, Node version and hashes.",
+    "Run Functions typecheck; do not treat Functions package test as donor tests.",
+    "Design new event version binding prior lineage and source transition time separately from outbox creation time.",
+    "Define legacy event disposition and canonical ACK semantics.",
+    "Implement only in separate review-only Privacy/Jobs branches preserving donor ancestry.",
+    "Run same-SHA Firebase emulator producer-dispatcher-Jobs-ACK integration.",
+    "Separately verify real nonproduction GCS late-writer denial, upload drain, generation purge and durable ACK."
+  ],
+  "prohibited": [
+    "NO CHERRY-PICK UNCHANGED",
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO DISPATCH",
+    "NO PRIVATE MEDIA",
+    "NO IAM CHANGE",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ]
+}

@@ -1,0 +1,195 @@
+{
+  "schema": "one-urai-genesis-r972-source-authority-verification-v1",
+  "checkpoint": "R972",
+  "date": "2026-11-09",
+  "status": "PRODUCTION_HOLD_NO_GO",
+  "report": "docs/estate/JOBS_R972_SOURCE_AUTHORITY_VERIFICATION_NEXT_CHALK_HOLD_20261109.md",
+  "report_commit": "06c7eaa33859eacf07fe6680d24da13877cc617a",
+  "live_refs": {
+    "jobs_main": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
+    "jobs_main_tree": "282bd75464cc23d9a6add6a1340c6ae7d3adfc9a",
+    "privacy_main": "1163d6f32a123ef9a6638e092a3eee5ec4a3b317",
+    "spatial_main": "da94837c2457b0a7590e26a7a644cd728de8afb8",
+    "jobs378": "5881a650230c55245c87a001c58f3ebc6835196b",
+    "jobs379_pre_r972": "ca7f88f4c7f47b9a200f70e86184f03792ca26b2",
+    "jobs389": "b865209cc352241602d8b9714672f3401aed7669",
+    "jobs390": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+    "jobs391": "9f5759f072370fbd42a82560ff6c5d4f37169c6b",
+    "labs261": "2980ca804fe04c37256a00af6e291a79a05004e4",
+    "labs284": "6e1f9c8ae8ac2d80835da008d46cf1d6d089ef23",
+    "privacy186": "2d0c7b621b63ac63ae83e44f5c40ac2ca5344cdc",
+    "spatial1964": "e3347d0e1ee57eaabafcfd50e2b033f7476aecf8"
+  },
+  "rules_publishers": {
+    "target": "urai-4dc1d/(default)",
+    "spatial": {
+      "firebaserc": "0d4fc68d65f23254829cc0502621a6ffe2215788",
+      "firebase_json": "2466dd32ddb52c672f9d6700cf1470c451c55b7c",
+      "rules": "26330636a18a3675da049aa4bdadb34c82293882",
+      "rules_path": "firebase/firestore.rules"
+    },
+    "admin": {
+      "firebaserc": "48b58a1e42c3554ead35cba801e980f0afdeaf2f",
+      "firebase_json": "9cdb6bfa298c46376fbdd1b1604df5b530ccd39b",
+      "rules": "1b9926316d2c5f5911bbbd52b000967f5e935030",
+      "rules_path": "firestore.rules"
+    },
+    "b2bportal": {
+      "firebaserc": "ea4ae23452b00fea090b411114cfd164200205fd",
+      "firebase_json": "f93da458dc32acd6b4217a24f0d2db902deb086a",
+      "rules": "b17ec9f4ef896870722905a279ac0d8206fcf24a",
+      "rules_path": "firestore.rules"
+    },
+    "classification": "source-level potential publisher collision; provider-effective deployed state UNKNOWN"
+  },
+  "privacy": {
+    "main": "1163d6f32a123ef9a6638e092a3eee5ec4a3b317",
+    "root_firebaserc": "not found at inspected ref",
+    "firebase_json": "04a0a54c96abde147a61ab800d924a8c56130109",
+    "guarded_deploy_scope": "functions:privacy only",
+    "privacy_rules_deployment_by_that_wrapper": false,
+    "real_project_and_region": "UNKNOWN"
+  },
+  "jobs380": {
+    "issue": "OPEN",
+    "main_rules_blob": "7dc63626c6e1a2e7b20ded280ea2dd070f16abc9",
+    "review_rules_blob": "cfa77a8fa5e69327ab352b31450c59a036d21e38",
+    "protected_field_missing": "dataRightsDeletionRequestId",
+    "rules_path_in_jobs378_pr_diff": false,
+    "jobs378_changed_file_count": 7,
+    "native_rules_engine_test": false,
+    "live_rules_state": "UNKNOWN"
+  },
+  "issues": {
+    "jobs-252": "OPEN P0",
+    "jobs-345": "OPEN P2",
+    "jobs-376": "OPEN P1",
+    "jobs-380": "OPEN P1",
+    "privacy-83": "OPEN; source implementation exists; deployed runtime, downstream ACK and provider suppression unproven"
+  },
+  "ci": {
+    "sampled_conclusions": "failure",
+    "sampled_steps": "null/empty",
+    "logs": "BlobNotFound 404",
+    "application_test_result": "UNKNOWN",
+    "protected_ci_certificate": false
+  },
+  "actions": {
+    "tests_run": false,
+    "builds": false,
+    "typecheck": false,
+    "firebase_emulators": false,
+    "ci_reruns": false,
+    "provider_inventory": false,
+    "effective_iam_or_rules": false,
+    "deployment": false,
+    "merge": false,
+    "private_media": false,
+    "paid_compute": false
+  },
+  "next": "Owner-authorized read-only provider inventory for urai-4dc1d/(default); assign one Rules publisher or approved DB separation; separate Jobs #380 Rules fix including dataRightsDeletionRequestId with native signed-in Rules emulator tests; diagnose protected CI; prove P0 GCS future-write denial, upload drain, exact-generation delete and durable purge ACK.",
+  "prohibitions": [
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO RULES/IAM MUTATION",
+    "NO CI BYPASS",
+    "NO PRIVATE MEDIA",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ],
+  "supplemental_cross_lineage_reconciliation": {
+    "report": "docs/estate/JOBS_R972_FULL_SYSTEM_RECONCILIATION_RULES_CONSENT_JOBS_PRIVACY_HOLD_20261109.md",
+    "report_commit": "bdf4d1975839a6d39c77d651c1f5ac32a9bb557c",
+    "jobs381": {
+      "head": "a295fd834c1cc01710a36b04523b023de2283240",
+      "base": "review/chalk-r934-consent-smoke-original-authority-review-20261109",
+      "fixed_rules_blob": "d30c3e8fbbfcbf25767501e351edcb18d6080c6d",
+      "static_test_blob": "45c9e80c0aca2b8288d2e6ddf0650873dc4bdb75",
+      "native_rules_test_blob": "95f4b72b1d7260a191b0cdc77c5cf008b57011e0",
+      "runner_blob": "67ae8515bd206456c8d181ff52ef173e67f65cc2",
+      "original_static_node_test": {
+        "passed": 15,
+        "failed": 0,
+        "exit": 0,
+        "node": "22.16.0",
+        "tap_sha256": "a68a5b4e7709387bcaa8aa1d856824817efa4b53104bea91d29525664e13da9e"
+      },
+      "native_rules_emulator": "NOT_RUN"
+    },
+    "jobs383": {
+      "head": "1e70418b86ad56c209aa06a5d2d7f6a7bc4e102c",
+      "base": "a295fd834c1cc01710a36b04523b023de2283240",
+      "root_commands_enrolled": 77,
+      "longform_test_blob": "9af97cd9b2bd7e2a8e5e66d805c90791da60a52c",
+      "full_root_and_native_acceptance": "NOT_RUN"
+    },
+    "jobs391": {
+      "head": "9f5759f072370fbd42a82560ff6c5d4f37169c6b",
+      "base": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+      "compare": {
+        "status": "diverged",
+        "ahead": 1,
+        "behind": 2,
+        "merge_base": "a7a1ef61ac1f219567131abec0b9d4f2"
+      },
+      "corrected_test_blob": "74e94da0a118a043ab76af611474f3f73d329cea",
+      "root_package_blob": "bd50af6bead1c62f36ada6c012123fe0c5d94da7",
+      "root_verify_enrolled": false,
+      "r879_runner_blob": "8a42dcad4416d5896b4886d6c5bad079463d5324",
+      "r879_enrolled": false,
+      "test_executed": false
+    },
+    "privacy257": {
+      "head": "a3f7119497fe1d9c6dc61e104a1da0a583d247f8",
+      "base": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6",
+      "ahead": 13,
+      "behind": 0,
+      "consent_api_blob": "d54a7636f7e6421577eb17a6316f1a4bc9fde8e7",
+      "decision_blob": "3cb3232d0334691c820575e8626c34e25d0c987e",
+      "functions_entry_blob": "f81171feb058be606be19134928c4baf9830f664",
+      "boundary_test_blob": "5376f6359229645907e4b2668a0e28516785b8f6",
+      "workflow_blob": "10b45cbdc75356adba76afdd6fd14f562c4e358a",
+      "life_movie_purpose_registered": false,
+      "forced_allowed": false,
+      "grant_write": false,
+      "receipt_capability": false,
+      "render_enabled": false,
+      "workflow_run_id": 42613095876,
+      "job_id": 129146191449,
+      "job_steps": [],
+      "tests_typecheck_build": "NOT_CERTIFIED"
+    },
+    "admin_source_deploy_collision": {
+      "workflow_blob": "582d9322353d60b6061ac3ce603630810b41a8bd",
+      "script_blob": "17abe4b59f45ea253660d3b65965d8db5ee4bddc",
+      "command": "firebase deploy --only hosting,functions,firestore,storage -P urai-4dc1d",
+      "source_capability_only": true,
+      "workflow_execution_or_deployed_rules_change": "NOT_ESTABLISHED"
+    },
+    "actions_391": {
+      "run_ids": [
+        42597933940,
+        42597933956,
+        42597933825,
+        42597933788,
+        42597933872,
+        42597933869,
+        42597933827,
+        42597933779,
+        42597933870
+      ],
+      "all_workflow_conclusions_failure": true,
+      "sample_job_id": 129095052789,
+      "job_steps": [],
+      "raw_test_failure_cause": "UNKNOWN"
+    },
+    "hard_distinctions": [
+      "Rules-source correction in #381/#383 is not a deployed Rules fix until effective provider readback and authorized deployment.",
+      "R943 original static Node 15/15 pass is not native Firebase Rules emulator acceptance.",
+      "#391 regex fix is test-only, not yet enrolled or executed.",
+      "Privacy #257 is denial-only and deliberately never issues C6 consent or render authority.",
+      "Admin broad deploy command is a source capability, not evidence that it ran or overwrote deployed Rules.",
+      "Jobs receipt, Privacy ACK and physical Storage purge evidence are separate."
+    ]
+  }
+}

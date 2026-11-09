@@ -1,0 +1,142 @@
+{
+  "schema": "one-urai-genesis-next-chalk-checkpoint-v1",
+  "checkpoint": "R968",
+  "date_utc": "2026-11-09",
+  "project": "ONE URAI GENESIS",
+  "release": {
+    "status": "PRODUCTION_HOLD",
+    "go": false
+  },
+  "repository": "LifeLoggerAI/urai-jobs",
+  "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
+  "forensic_pr": 379,
+  "refreshed_review_heads": {
+    "jobs_379": "bcb7c187a8c5f5d228721779d5479d6cebb224c6",
+    "jobs_371": "df19633466eaebdda844569ed0d562245bd31dc6",
+    "jobs_377": "f8578ea281e818b01811aecc2fe4dfb8c3dc8203",
+    "jobs_388": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
+    "jobs_389": "b865209cc352241602d8b9714672f3401aed7669",
+    "jobs_390": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+    "jobs_384": "fd05a376f876f9b835929a2074c09f47638659e2",
+    "jobs_386": "fd1c8d85acd5cc96ef9fcb300173e362b004eb54",
+    "jobs_387": "04592f8573c708954f95f87ddca1e168efde51f4",
+    "privacy_192": "7f5f4ad2f157a9d3eb4ed12b679d499fe5888bdc",
+    "privacy_213": "4a4656d6283aa7e627bf220b447436df82865f99",
+    "privacy_214": "cc0692053db3b1b8df8267d43856b1a3357de8a0",
+    "privacy_229": "79e71fd6137947d2ed7c416a2596090572fef978",
+    "privacy_230": "846d2ffa469af5634374bd77fbdc2d41bca8e964",
+    "privacy_231": "42aad96404c4f0de01a448031df80f7b5c06f7c0",
+    "privacy_232": "e1e2dee63c39590d343d727aa53618ac97a52691",
+    "privacy_253": "90a4e581e8494f52d85eab3c576d02b926e7d0d9",
+    "privacy_254": "dbc193763dc112210c20b5b51189573a954873593",
+    "privacy_255": "a4d7e4ffb76fa2dbbf7348e2b66faa991761509a",
+    "privacy_256": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6"
+  },
+  "main_heads_last_read": {
+    "jobs": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
+    "privacy": "1163d6f32a123ef9a6638e092a3eee5ec4a3b317",
+    "jobs_tree": "282bd75464cc23d9a6add6a1340c6ae7d3adfc9a",
+    "jobs_parent": "792d063b9d894bb9cb872e2c3c6dd71e37804f6a",
+    "jobs_revert_unsigned": true,
+    "jobs_protected": false,
+    "jobs_required_checks": "off",
+    "jobs_rulesets_including_parents": []
+  },
+  "source_pins": {
+    "r647_dispatcher": "4126167b4350ba8afe6b19d7b60dec1ca891189f",
+    "r647_contract": "6cca2b9456319927cf22511c7d51c1f16ddf051c",
+    "r647_dispatcher_test": "def1048aa4838f7ff990d792a27d1fb94e7f6441",
+    "r647_jobs_contract_test": "fd60261f1518a31a476e2e5fdfbe62f9d8acf2aa",
+    "jobs371_three_case_harness": "e9662a979a72a0e39a61fe896a79f8379658d963",
+    "jobs371_derivative_cleanup": "d441b4971d456f2e861b2640067cbde6a2dfff32",
+    "jobs_replay_doc": "31886c5ce46a39f2a0424aa377c157874a62ac84",
+    "privacy_r20_publisher": "84f1e77d5c1cf55f80aaa0a559b6a3eac781386e",
+    "privacy_r20_transition": "0ddee615f1284a58459aae48b915a574da7c9c9e",
+    "privacy_r836_runner": "589fbbb8cb4903946b3adc1b2aa707038e61d3df",
+    "privacy_r836_callable_test": "cafd32784b4c95f72214938290637b819557f3bb"
+  },
+  "lineage_reconciliation": {
+    "track_a": "Privacy R647 prepared dispatcher donor; exports dispatchPendingJobsRevocations; NOT DEPLOYED.",
+    "track_b": "Jobs #371 three-case synthetic Storage revocation emulator harness; expects deliverJobsConsentRevocation from missing consent-jobs-dispatch.ts.",
+    "track_c": "Privacy R818/R836 Jobs-to-Privacy callable denial/review-only issuer native runner; not an outbox dispatcher or revocation purge harness.",
+    "missing_track_b_modules": [
+      "functions/src/consent-jobs-delivery.ts",
+      "functions/src/consent-jobs-http.ts",
+      "functions/src/consent-jobs-dispatch.ts"
+    ],
+    "inspected_privacy_trees_without_missing_modules": [
+      "R506/#192",
+      "R583/#213",
+      "R647/#214",
+      "R818",
+      "R819",
+      "R823",
+      "R824",
+      "R825",
+      "R826",
+      "R834",
+      "R836",
+      "R20/#256"
+    ],
+    "github_exact_path_commit_history_empty": true,
+    "limitation": "Scoped absence in searched repo tree/history only. Does not prove no equivalent in local archive, other source system, differently named module or external service."
+  },
+  "test_status": {
+    "r647_dispatcher_tests": 10,
+    "r647_contract_tests": 16,
+    "r647_tests_executed": false,
+    "jobs371_harness_cases": 3,
+    "jobs371_harness_executed": false,
+    "privacy_r836_runner_executed_on_exact_r836": false,
+    "cause": "git ls-remote exit 128, could not resolve github.com",
+    "no_build_or_typecheck": true,
+    "no_emulators_started": true
+  },
+  "privacy_issue_83": {
+    "state": "OPEN",
+    "title": "RUNTIME GATE: deploy and prove consent decision + revocation enforcement",
+    "classification": "Canonical source implementation exists; protected deployed runtime, downstream consumer acknowledgements, provider-call suppression and exact deployment/rollback evidence remain unproven.",
+    "original_issue_body_stale": true
+  },
+  "other_release_gates": [
+    "Jobs #377 operator post-admission withdrawal requires Privacy/legal/security policy.",
+    "Worker auth #388/#389 review-only and deployed middleware unknown.",
+    "Rollback exact previous healthy revision not rehearsed.",
+    "Studio private consent/output authority remain hard-off.",
+    "R879 source pins/command segments are enrollment, not executed acceptance.",
+    "Protected CI, branch rules, independent reviewer and deployment provenance open.",
+    "Real GCS stale/alternate writer 403, upload drain and generation-bound purge ACK open.",
+    "Full C6 lifecycle, device/accessibility/visual, external operations and founder GO open."
+  ],
+  "next_actions": [
+    "Recover exact provenance for Jobs #371 harness's missing Privacy modules; if unavailable, propose clearly labelled reviewed harness rewrite.",
+    "Compare tracks A/B/C APIs and evidence; choose one delivery architecture and keep others as separate acceptance tracks.",
+    "On connected host clean-checkout exact source refs and verify commit/tree/blob/lockfile.",
+    "Run R647 two Node suites separately (10 and 16 declarations).",
+    "Run Jobs #371 three-case emulator test only when compatible Privacy source is recovered or reviewed harness rewrite is approved.",
+    "Run Privacy R836 runner separately with exact Privacy and Jobs pins; do not transfer parent passes.",
+    "Review and approve v3 event/ACK design with Privacy/legal/security before source edits.",
+    "Perform read-only deployment inventory and separately approved nonproduction GCS late-write 403, upload drain, exact-generation purge and durable ACK."
+  ],
+  "prohibitions": [
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO DISPATCH",
+    "NO PRIVATE MEDIA",
+    "NO IAM CHANGE",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ],
+  "main_heads_last_read_note": "Corrected via live branch readback in R967 continuation; earlier R968 consolidated report recorded stale 9d29be1 SHA.",
+  "execution_boundary": {
+    "r968_supplemental_audit": "source readback only",
+    "tests_run": false,
+    "emulators_run": false,
+    "build_typecheck_run": false,
+    "cloud_inventory": false,
+    "gcs_provider_test": false,
+    "production_mutations": false
+  },
+  "supplemental_report": "docs/estate/JOBS_R968_PRIVACY_JOBS_THREE_LINEAGES_AND_RELEASE_GATES_HOLD_20261109.md",
+  "next_start_prompt": "docs/estate/JOBS_R968_START_NEXT_CHALK_R969_20261109.md"
+}

@@ -1,0 +1,78 @@
+{
+  "schema": "one-urai-genesis-r978-cross-chat-v1",
+  "checkpoint": "R978",
+  "date": "2026-11-09",
+  "release": "PRODUCTION_HOLD_NO_GO",
+  "report": "docs/estate/JOBS_R978_COMPLETE_CROSS_CHAT_RECONCILIATION_AND_INTEGRATION_HANDOFF_20261109.md",
+  "report_commit": "74c5485397d103ea70c51f1af669f9805d06a2c6",
+  "observed_heads": {
+    "labs262": "5be84013d406299872610ca423090a16760e62b9",
+    "jobs379_before_write": "dd388e96357c06226a44321517f59923efd19466",
+    "jobs383": "1e70418b86ad56c209aa06a5d2d7f6a7bc4e102c",
+    "jobs384": "fd05a376f876f9b835929a2074c09f47638659e2",
+    "privacy257": "fbdc590376376b758be968f174d71709f326c61f",
+    "jobs391": "9f5759f072370fbd42a82560ff6c5d4f37169c6b",
+    "studio201": "a6187abfd12ffc8f534ddf66246da91ed032e1dc",
+    "jobs_main_previous_report": "de1ee2539021dbba75722b0a31ed99556c24bb0d"
+  },
+  "verified_receipts": {
+    "privacy_r945": {
+      "unit": "200/200",
+      "r27": "10/10",
+      "emulator_rules": "13/13",
+      "emulator_smoke": "3/3",
+      "direct_callable": "NOT_RUN",
+      "forced_deny": true
+    },
+    "jobs391": {
+      "producer_candidate_zod": "3/3",
+      "full_suite": "NOT_RUN",
+      "main_contract": "INCOMPATIBLE"
+    },
+    "storage_p0": {
+      "worker_hardoff": "4/4",
+      "reservation_emulator": "11/11",
+      "race_model": "17/17",
+      "late_write_negative": "10/10",
+      "privileged_bypass_observed": true,
+      "storage_level_fence_verified": false,
+      "real_gcs_403": "NOT_RUN",
+      "durable_purge_ack": false
+    },
+    "jobs381_rules": {
+      "static": "15/15",
+      "native_authenticated": "NOT_RUN"
+    },
+    "jobs383": {
+      "enrolled_segments": 77,
+      "full_suite": "NOT_RUN"
+    }
+  },
+  "blockers": [
+    "Jobs #252 P0 Storage fence",
+    "Jobs #380 P1 Rules",
+    "Jobs #376 P1 operator continuation",
+    "Jobs #372 P1 legacy authority",
+    "Jobs #337 P1 stale claims",
+    "Jobs #345 P2 quota",
+    "Privacy consent/identity and consumer ACK",
+    "Studio/Jobs schema convergence",
+    "Hosted protected CI",
+    "effective Firebase Rules/IAM",
+    "Replay and purge",
+    "devices/accessibility/AAA visuals",
+    "independent review and founder GO"
+  ],
+  "execution": {
+    "github_read": true,
+    "github_docs_only_write": true,
+    "new_native_tests": false,
+    "application_source_change": false,
+    "merge": false,
+    "deploy": false,
+    "provider_mutation": false,
+    "private_media": false,
+    "paid_compute": false
+  },
+  "next": "Read R978 report, refresh all 19 repos and active PRs, implement review-only P0 broker, exact emulator/identity tests, source-pinned integration, preserve hard-offs."
+}

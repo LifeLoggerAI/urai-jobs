@@ -1,0 +1,75 @@
+{
+  "schema": "one-urai-genesis-next-chalk-checkpoint-v1",
+  "checkpoint": "R963",
+  "date_utc": "2026-11-09",
+  "release": {
+    "status": "PRODUCTION_HOLD",
+    "go": false
+  },
+  "repository": "LifeLoggerAI/urai-jobs",
+  "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
+  "forensic_pr": 379,
+  "source_refs": {
+    "jobs_main": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+    "privacy_r647_head": "cc0692053db3b1b8df8267d43856b1a3357de8a0",
+    "privacy_r20_head": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6",
+    "jobs_r923_head": "df19633466eaebdda844569ed0d562245bd31dc6"
+  },
+  "donor_test_status": {
+    "dispatcher_top_level_tests": 10,
+    "contract_top_level_tests": 16,
+    "executed": false,
+    "reason": "R962 git ls-remote failed with DNS could not resolve github.com; no checkout or locked dependency install.",
+    "test_type": "Node test with TypeScript transpileModule, VM, fake Firestore and mocked contract/transport; not Firebase emulator or live HTTP."
+  },
+  "r963_design": {
+    "artifact": "docs/estate/JOBS_R963_CANONICAL_REVOCATION_EVENT_ACK_DESIGN_PROPOSAL_20261109.md",
+    "proposal_only": true,
+    "proposed_schema_version": "consent.revoked.v3",
+    "core_fields": [
+      "eventId",
+      "consentRecordId",
+      "ownerUid",
+      "purpose",
+      "consentTier",
+      "policyVersion",
+      "sourceReceiptHash",
+      "priorGrantReceiptHash",
+      "priorGrantEvidenceState",
+      "sourceTransitionAt",
+      "sourceTimeProvenance",
+      "correlationId",
+      "contractVersion",
+      "immutableDigest",
+      "integrityHash"
+    ],
+    "timestamp_rule": "Never derive sourceTransitionAt from outbox createdAt; preserve provenance or mark unknown and quarantine.",
+    "ack_model_proposal": "Privacy per-consumer ACK subdocument is canonical consumer-application ACK; Jobs HTTP ACK is authenticated transport evidence; outbox delivery state is scheduling projection. Requires review and approval.",
+    "ack_semantics": "Jobs ACK only means the precise owner/purpose consent-block action. It does not mean GCS write denial, upload drain, physical deletion or downstream purge."
+  },
+  "compatibility_defects": [
+    "R20 does not set legacy R647 dispatcher queue fields.",
+    "R20 integrity hash includes prior-grant fields; R647 verifies old digest.",
+    "R647 event mapping drops priorGrantReceiptHash and priorGrantEvidenceState.",
+    "R647 maps outbox createdAt to Jobs revokedAt."
+  ],
+  "next_steps": [
+    "Review R963 design with Privacy/legal/security owners; do not code until source-time, lineage and ACK semantics are approved.",
+    "When GitHub connectivity is available, clean detached checkout exact R647 head and verify commit/tree/blobs.",
+    "Run two original Node donor tests separately and Functions typecheck; record raw logs, exit codes, versions and hashes.",
+    "Prepare separate review-only Privacy and Jobs v3 contract changes after approval.",
+    "Implement dispatcher delivery metadata, mapper, Jobs receiver and ACK reconciliation under one versioned contract.",
+    "Run same-SHA native Firebase Auth/Firestore/Functions/Storage emulator flow with duplicate, timeout, stale lease, changed consent, conflicting lineage and conflicting ACK tests.",
+    "Separately perform authorized real nonproduction GCS stale/alternate writer 403, upload drain, generation deletion and durable purge ACK.",
+    "Close CI, deployment provenance, independent review, devices/accessibility/visual and founder GO gates."
+  ],
+  "prohibitions": [
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO DISPATCH",
+    "NO PRIVATE MEDIA",
+    "NO IAM CHANGE",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ]
+}

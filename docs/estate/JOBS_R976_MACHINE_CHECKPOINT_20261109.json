@@ -1,0 +1,106 @@
+{
+  "schema": "one-urai-genesis-r976-continuity-v1",
+  "checkpoint": "R976",
+  "observed": "2026-11-09",
+  "status": "PRODUCTION_HOLD_NO_GO",
+  "report": "docs/estate/JOBS_R976_DOCUMENTATION_CONTINUITY_AND_NEXT_CHALK_HOLD_20261109.md",
+  "jobs_main": {
+    "sha": "de1ee2539021dbba75722b0a31ed99556c24bb0d",
+    "tree": "ad57cbda366a8e3d57ef3ba6c83a1537cfa64d64",
+    "parent": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
+    "change": "one documentation-only R975 report, 205 additions, zero deletions",
+    "protected": false,
+    "commit_verified": false
+  },
+  "jobs_prs": {
+    "379": {
+      "last_observed": "fbc853362c4cc453a3a7f1f184f4838c9dcbd592",
+      "moving": true
+    },
+    "381": "a295fd834c1cc01710a36b04523b023de2283240",
+    "382": "abdc13016fd83fbb4a3d7589645c1310d2344be0",
+    "383": {
+      "head": "1e70418b86ad56c209aa06a5d2d7f6a7bc4e102c",
+      "open_draft": true,
+      "root_verify_segments": 77,
+      "longform_expected": 17,
+      "longform_executed": false,
+      "root_executed": false,
+      "native_emulators_executed": false
+    },
+    "389": "b865209cc352241602d8b9714672f3401aed7669",
+    "390": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+    "391": "9f5759f072370fbd42a82560ff6c5d4f37169c6b"
+  },
+  "privacy257": {
+    "head": "fbdc590376376b758be968f174d71709f326c61f",
+    "open_draft": true,
+    "own_claims_hardened": true,
+    "life_movie_allowed": false,
+    "exact_head_acceptance": "NOT_ESTABLISHED"
+  },
+  "labs262": {
+    "last_observed": "738f55bb9cc8d98b903fa65626555ab741f3443d",
+    "moving": true
+  },
+  "labs304": {
+    "last_observed": "b01c2b4602246b1dc1d0d4d7da45b600a45bf80e",
+    "moving": true
+  },
+  "historical_receipts": {
+    "jobs_R943_static": "15/15 PASS; not native",
+    "privacy_R939": "199/199 unit PASS; emulator exit 0 with trigger/socket caveats; older source"
+  },
+  "actions": {
+    "jobs383": {
+      "run": 42577924383,
+      "job": 129029735536,
+      "conclusion": "failure",
+      "runner_id": 0,
+      "steps": null,
+      "artifacts": []
+    },
+    "privacy257": {
+      "run": 42613806005,
+      "job": 129149557711,
+      "conclusion": "failure",
+      "runner_id": 0,
+      "steps": null,
+      "artifacts": []
+    },
+    "source_test_failure_proven": false
+  },
+  "open_issues": [
+    "Jobs #252 GCS write fence, drain and purge ACK",
+    "Jobs #376 post-admission continuation",
+    "Jobs #380 native Rules",
+    "Jobs #345 concurrency/index",
+    "Privacy #83 deployed revocation and ACK"
+  ],
+  "performed": [
+    "GitHub PR/head refresh",
+    "R975 report/checkpoint/start verification",
+    "main commit diff verification",
+    "CI workflow metadata/artifact refresh",
+    "R976 report committed to forensic branch"
+  ],
+  "not_performed": [
+    "no application test/build/emulator",
+    "no CI rerun",
+    "no provider inventory",
+    "no GCS revocation proof",
+    "no merge/deploy/dispatch",
+    "no private media",
+    "no paid compute"
+  ],
+  "next": "R977 exact #383 acceptance and #257 current-head denial path; preserve raw logs; obtain owner-approved provider read-only inventory; physical GCS revocation and ACK; independent CI/review",
+  "boundaries": [
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO IAM/RULES MUTATION",
+    "NO CI BYPASS",
+    "NO POSITIVE LIFE MOVIE GRANT",
+    "NO PRIVATE MEDIA",
+    "NO PRODUCTION GO"
+  ]
+}

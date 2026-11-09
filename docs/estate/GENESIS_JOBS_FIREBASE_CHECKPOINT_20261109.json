@@ -1,0 +1,184 @@
+{
+  "schema_version": "1.0",
+  "title": "One UrAi Genesis Jobs Firebase/GCP forensic source checkpoint",
+  "checkpoint_utc": "2026-11-09T06:31:00Z",
+  "production_release": "HOLD_NO_GO",
+  "spend_policy": "zero_incremental_spend_no_paid_browser_or_compute",
+  "audit_scope": {
+    "provider_control_plane_access": false,
+    "provider_reason": "Paid TinyFish browser did not start; no other authenticated Firebase/GCP metadata connector available",
+    "container_full_clone": false,
+    "container_clone_reason": "github.com DNS resolution failed exit 128",
+    "executed_native_emulators": false,
+    "executed_source_suites": false,
+    "source_inspection": true,
+    "github_metadata_inspection": true,
+    "static_checks": true,
+    "google_drive_selected_historical_documents": true,
+    "exhaustive_drive_audit": false
+  },
+  "repo": {
+    "full_name": "LifeLoggerAI/urai-jobs",
+    "source_main_sha": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+    "main_branch_protected_api_field": false,
+    "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
+    "report": "docs/estate/GENESIS_JOBS_FIREBASE_RECONCILIATION_20261109.md"
+  },
+  "firebase": {
+    "project_seed": "urai-jobs",
+    "alias_from_source": "urai-jobs",
+    "site_from_source": "urai-jobs-563121397472",
+    "functions_runtime": "nodejs22",
+    "configured_firestore_composite_indexes": 8,
+    "configured_firebase_function_exports": 27,
+    "configured_active_job_types": 12,
+    "live_project_number": null,
+    "live_resource_ids_verified": [],
+    "live_deployed_sha": null,
+    "live_bucket_ids_verified": [],
+    "live_iam_policy_verified": false,
+    "live_rules_verified": false
+  },
+  "static_source_results": {
+    "default_project_alias": true,
+    "node22": true,
+    "firestore_jobs_client_write_deny": true,
+    "firestore_queue_client_deny": true,
+    "firestore_catchall_deny": true,
+    "storage_job_client_write_deny": true,
+    "storage_catchall_deny": true,
+    "rate_limit_read_outside_create_transaction_on_main": true,
+    "worker_direct_gcs_writes_main_count": 2,
+    "longform_feature_flag_required": true
+  },
+  "observed_source_blobs": {
+    ".firebaserc": "b5e4aa9f41a4ba80f1524d34510c9ba8465bf801",
+    "firebase.json": "f001d5130f4b2583c0d5030c393586180e38172e",
+    "firestore.rules": "7dc63626c6e1a2e7b20ded280ea2dd070f16abc9",
+    "firestore.indexes.json": "61c1bcb10a7ab570cb219d772daae27017ad8f4c",
+    "storage.rules": "eedbbe45545ecd09d8867c9d702cd00bb3b7d7be",
+    "functions/src/index.ts": "8ab440758ad10ccdc40a5f2cbfaa1cc412fe3a86",
+    "functions/src/core/runtimeJobTypes.ts": "849fd1ee6c875a4caeae258d9f82ae156ab71057",
+    "functions/src/jobs/createJob.ts": "3859a209b4992d29f248eebeb338505f44e7c75e",
+    "workers/studio-worker/index.js": "ae09a89d80a024301ba9df41db4265216bd6eb6b",
+    "functions/src/jobs/studioLifeMovieLongformBridge.ts": "885a75001ba654cf423be92310ab8b5620e0d9dc"
+  },
+  "related_review_prs": [
+    {
+      "repo": "LifeLoggerAI/urai-jobs",
+      "number": 320,
+      "head": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+      "classification": "historical_exact_head_test_receipt"
+    },
+    {
+      "repo": "LifeLoggerAI/urai-jobs",
+      "number": 331,
+      "head": "ff23ab3fe1f9f5179ecc2c7f1f3df3e0a81ff96a",
+      "classification": "offline_security_reconciliation_not_live"
+    },
+    {
+      "repo": "LifeLoggerAI/urai-jobs",
+      "number": 371,
+      "head": "df19633466eaebdda844569ed0d562245bd31dc6",
+      "classification": "unmerged_two_parent_source_review"
+    },
+    {
+      "repo": "LifeLoggerAI/urai-jobs",
+      "number": 373,
+      "head": "da0f242ccf35e5e718a3a6c36d5a3009651ecdd6",
+      "classification": "transactional_operator_check_review"
+    },
+    {
+      "repo": "LifeLoggerAI/urai-jobs",
+      "number": 374,
+      "head": "37a118dd46804561ead61d4df772e47328b2ecd6",
+      "classification": "native_source_fixture_tests_partial_fail"
+    },
+    {
+      "repo": "LifeLoggerAI/urai-jobs",
+      "number": 375,
+      "head": "3791617efc8fc9b974210ae09c18764e57670b3e",
+      "classification": "synthetic_23_of_23"
+    },
+    {
+      "repo": "LifeLoggerAI/urai-jobs",
+      "number": 377,
+      "head": "f8578ea281e818b01811aecc2fe4dfb8c3dc8203",
+      "classification": "expected_red_4_fail"
+    },
+    {
+      "repo": "LifeLoggerAI/urai-jobs",
+      "number": 378,
+      "head": "5881a650230c55245c87a001c58f3ebc6835196b",
+      "classification": "R940_13_of_14_focused_cases_one_fixture_missing_plan",
+      "code_checkpoint": "52cac02c22cc7e19e3e3f9a81dc2bac854086d2b"
+    },
+    {
+      "repo": "LifeLoggerAI/urai-labs-llc",
+      "number": 262,
+      "head": "8975076471bb1fa085fc5e69e93c593d02056169",
+      "classification": "master_maintained_moving_head_check_again"
+    }
+  ],
+  "live_ci_observed": [
+    {
+      "run_id": 42573320186,
+      "job_id": 129015426972,
+      "head": "5881a650230c55245c87a001c58f3ebc6835196b",
+      "conclusion": "failure",
+      "reported_step_count": 0,
+      "job_log_available": false
+    },
+    {
+      "run_id": 42570462765,
+      "job_id": 129006408293,
+      "head": "f8578ea281e818b01811aecc2fe4dfb8c3dc8203",
+      "conclusion": "failure",
+      "reported_step_count": 0,
+      "job_log_available": false
+    }
+  ],
+  "blockers": [
+    {
+      "priority": "P0",
+      "issue": 252,
+      "problem": "storage enforced post-revocation future-write and active upload drain not certified"
+    },
+    {
+      "priority": "P0",
+      "problem": "signed consent private Studio render and owner-only Spatial Replay through deletion ACK unverified"
+    },
+    {
+      "priority": "P1",
+      "issue": 337,
+      "problem": "current operator role and owner authority unmerged and native acceptance incomplete"
+    },
+    {
+      "priority": "P1",
+      "issue": 376,
+      "problem": "post-admission data rights continuation authority policy unresolved"
+    },
+    {
+      "priority": "P1",
+      "problem": "exact head full verification and protected CI missing"
+    },
+    {
+      "priority": "P2",
+      "issue": 345,
+      "problem": "concurrent createJob quota native proof missing"
+    },
+    {
+      "priority": "P2",
+      "pr": 378,
+      "problem": "13/14 idempotency fixture missing owner-bound persisted plan"
+    }
+  ],
+  "next_steps": [
+    "Re-read master registry, Jobs R940 handoff and latest PR 378 head; do not use a moving branch as immutable evidence",
+    "Preserve original security invariants and repair test-only R940 missing persisted plan fixture on independently reviewed branch",
+    "Execute frozen exact head root verification, typecheck/build and guarded R879 disposable four emulator tests in an already authorized free environment",
+    "Obtain read-only live cloud resources IAM bucket principal and deployment revisions without spending or creating jobs",
+    "Require live GCS stale and alternate privileged writer 403 plus in-flight drain under separately approved security plan",
+    "Require authenticated owner rights C6 consent through private Replay and deletion ACK, protected CI independent signoff and founder decision"
+  ]
+}

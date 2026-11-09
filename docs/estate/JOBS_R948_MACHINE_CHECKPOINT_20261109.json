@@ -1,0 +1,144 @@
+{
+  "schema_version": "one_urai_genesis_jobs_r948_checkpoint_v1",
+  "checkpoint_date": "2026-11-09",
+  "release": "NO_GO_PRODUCTION_HOLD",
+  "scope": "read-only GitHub source, exact immutable Git-tree inventory and locally executed original offline Node Git test",
+  "cost_usd": 0,
+  "permitted_actions_used": [
+    "github_read",
+    "github_review_documentation_write",
+    "local_offline_original_test"
+  ],
+  "disallowed_actions_performed": [],
+  "registry": {
+    "jobs_documentation_pr": 379,
+    "labs_cross_chat_pr": 304,
+    "labs_master_registry_pr": 262
+  },
+  "source": {
+    "repo": "LifeLoggerAI/urai-jobs",
+    "main_sha": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+    "main_protected_api_field": false,
+    "preferred_pr": 384,
+    "preferred_sha": "fd05a376f876f9b835929a2074c09f47638659e2",
+    "status": "open_unmerged_draft",
+    "parent_pr": 383,
+    "parent_sha": "1e70418b86ad56c209aa06a5d2d7f6a7bc4e102c",
+    "git_tree_entry_count": 1458,
+    "tree_truncated": false,
+    "verified_r879_blob_pins": 57,
+    "total_r879_blob_pins": 57,
+    "pin_duplicates": 0,
+    "pinned_r879_runner_sha": "145641d4de868945deadb577540571783bf74eab",
+    "git_parent_ancestor": "99b0481f0512bd5f0206ea15ae1cdb8b192f34d1",
+    "github_compare_ahead_commits": 187
+  },
+  "original_local_test": {
+    "test_file": "scripts/r946-preflight.test.mjs",
+    "test_git_blob": "918260ac8ab90aecb5170673f14aeda094a767cc",
+    "helper_file": "scripts/r946-r879-source-pin-preflight.mjs",
+    "helper_git_blob": "73b69cb02c5708a2fa581dea965b5c3c55a449e2",
+    "local_git_hash_object_matches": true,
+    "command": "node --test scripts/r946-preflight.test.mjs",
+    "node": "v22.16.0",
+    "git": "2.47.3",
+    "pass": 5,
+    "total": 5,
+    "fail": 0,
+    "skip": 0,
+    "exit_code": 0,
+    "log_sha256": "d68d60202b792411d70c7cc33e93d463d0305a4ad554df60ebaeb8b3f9b897fa",
+    "log_length_bytes": 840,
+    "persisted_raw_tap_path": "docs/estate/receipts/R948_original_r946_source_preflight_node22.tap",
+    "scope_limit": "synthetic local Git fixture only, NOT executed against complete Jobs workspace Git HEAD, NOT native Firebase"
+  },
+  "root_manifest": {
+    "source": "package.json",
+    "git_blob": "4804276332491e1e57a95a2a0cec7050df3a595c",
+    "top_level_commands": 77,
+    "unique_top_level_commands": 77,
+    "breakdown": {
+      "ordinary_node_scripts": 34,
+      "node_test": 28,
+      "typescript_strip_types_node_test": 9,
+      "npm_aliases": 6
+    },
+    "referenced_direct_script_paths": 89,
+    "defined_npm_aliases": 6,
+    "nested_first_level_source_references": 24,
+    "unique_combined_script_paths": 111,
+    "missing_direct_files": 0,
+    "missing_nested_files": 0,
+    "root_complete_execution": false,
+    "root_emulator_test_execution": false,
+    "includes_original_longform_idempotency": true
+  },
+  "ci": {
+    "exact_head": "fd05a376f876f9b835929a2074c09f47638659e2",
+    "workflow_runs_inspected": 9,
+    "failed_workflows": 9,
+    "sample_runtime_run_id": 42579668481,
+    "sample_failed_job_id": 129035175046,
+    "sampled_recorded_steps": 0,
+    "logs": "404 BlobNotFound",
+    "callable_emulator_e2e": "skipped",
+    "code_regression_attribution": "UNPROVEN",
+    "protected_ci_green": false
+  },
+  "cloud": {
+    "firebase_project_seed": "urai-jobs",
+    "provider_live_inventory_verified": false,
+    "project_number": null,
+    "deployed_functions_verified": [],
+    "storage_buckets_verified": [],
+    "firestore_ruleset_verified": false,
+    "iam_verified": false,
+    "real_gcs_post_revoke_stale_writer_403": false,
+    "real_private_replay": false,
+    "downstream_purge_ack": false,
+    "note": "null/empty = unknown, NOT confirmed absence"
+  },
+  "blockers": [
+    {
+      "priority": "P0",
+      "issue": 252,
+      "reason": "actual privileged GCS writer revocation, upload drain, generation-pinned purge acknowledgement"
+    },
+    {
+      "priority": "P0",
+      "reason": "signed C6 Privacy to Studio to Jobs to protected Spatial Replay to physical deletion"
+    },
+    {
+      "priority": "P1",
+      "issue": 376,
+      "reason": "post-admission rights continuation authority"
+    },
+    {
+      "priority": "P1",
+      "issue": 380,
+      "reason": "current user binding Rules native Auth/Firestore denial not independently verified or merged"
+    },
+    {
+      "priority": "P1",
+      "reason": "protected CI and independent reviewer plus exact deployment/rollback"
+    },
+    {
+      "priority": "P2",
+      "issue": 345,
+      "reason": "atomic concurrent quota and source nine-index deployment parity"
+    }
+  ],
+  "previous_audits": [
+    "docs/estate/JOBS_R944_START_NEXT_CHALK_20261109.md",
+    "docs/estate/JOBS_R946_LATEST_NEXT_CHALK_AND_EVIDENCE_RECONCILIATION_20261109.md",
+    "docs/estate/JOBS_R947_CURRENT_EVIDENCE_AND_PEER_DEDUP_HANDOFF_20261109.md"
+  ],
+  "next_worker_commands": [
+    "fetch latest #384 immutable head and R948 docs",
+    "original R946 preflight on clean full-source HEAD",
+    "frozen root 77 commands typecheck build",
+    "R879 --run-exact-review-only with disposable credentials-free Firebase emulators only",
+    "read-only cloud and effective IAM/deployed SHA audit if access already approved",
+    "never lift production HOLD without real GCS C6 protected private Replay purge and independent CI signoff"
+  ]
+}

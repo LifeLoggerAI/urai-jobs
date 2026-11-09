@@ -1,0 +1,52 @@
+{
+  "schema": "one-urai-genesis-r979-patch-level-v1",
+  "date": "2026-11-09",
+  "release": "PRODUCTION_HOLD_NO_GO",
+  "report": "docs/estate/JOBS_R979_PATCH_LEVEL_INTEGRATION_AND_NEXT_CHALK_HANDOFF_20261109.md",
+  "report_commit": "99ce3cd04e7294e028dc10ccc3da39df2b5b3876",
+  "observed": {
+    "jobs379": "70689793fecb52cf92944239329880887d46cc88",
+    "jobs383": "1e70418b86ad56c209aa06a5d2d7f6a7bc4e102c",
+    "jobs384": "fd05a376f876f9b835929a2074c09f47638659e2",
+    "jobs391": "9f5759f072370fbd42a82560ff6c5d4f37169c6b",
+    "jobs381": "a295fd834c1cc01710a36b04523b023de2283240",
+    "privacy257": "fbdc590376376b758be968f174d71709f326c61f",
+    "studio201": "a6187abfd12ffc8f534ddf66246da91ed032e1dc",
+    "labs262": "5be84013d406299872610ca423090a16760e62b9"
+  },
+  "patches_inspected": [
+    "Studio #201: embedded dot-dot safeSegment reject plus 35th regression",
+    "Jobs #391: overescaped regex corrected in producer Zod test only",
+    "Jobs #381: dataRightsDeletionRequestId Rules field guard plus static/native test source"
+  ],
+  "evidence": {
+    "studio201_native": "NOT_RUN",
+    "jobs391_candidate_zod": "3/3 previously recorded R945",
+    "jobs381_static": "15/15 previously recorded R943",
+    "jobs381_authenticated_emulator": "NOT_RUN",
+    "jobs252_storage_bypass": true,
+    "real_gcs_403": "NOT_RUN",
+    "positive_consent": false,
+    "private_output": false
+  },
+  "execution": {
+    "github_metadata_read": true,
+    "github_patch_read": true,
+    "github_docs_write": true,
+    "source_changes": false,
+    "native_tests": false,
+    "merge": false,
+    "deploy": false,
+    "provider_access": false
+  },
+  "next": [
+    "exact-head Studio 35-case native",
+    "Jobs #391 producer/parser same-head contract",
+    "Jobs #381 authenticated emulator",
+    "Jobs #383 full 77 segment",
+    "Jobs #252 broker and real IAM negative proof",
+    "Privacy R27 callable identity",
+    "full Replay revoke purge",
+    "protected CI independent GO"
+  ]
+}

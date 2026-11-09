@@ -1,0 +1,127 @@
+{
+  "schema_version": "one_urai_genesis_jobs_r952_v1",
+  "checkpoint_utc": "2026-11-09",
+  "decision": "NO_GO_PRODUCTION_HOLD",
+  "incremental_spend_usd": 0,
+  "master_registry": {
+    "repo": "LifeLoggerAI/urai-labs-llc",
+    "pr": 262,
+    "cross_chat_pr": 304
+  },
+  "jobs": {
+    "repo": "LifeLoggerAI/urai-jobs",
+    "main_sha": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+    "forensic_pr": 379,
+    "preferred_engineering_pr": 389,
+    "preferred_branch": "review/chalk-r952-auth-regression-release-gate-20261109",
+    "verified_source_patch_sha": "1ee17f10e300e81833ef12226b12466a64257b1e",
+    "initial_pr_head": "b865209cc352241602d8b9714672f3401aed7669",
+    "parent_pr": 388,
+    "parent_sha": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
+    "tree_entry_count": 1463,
+    "tree_truncated": false,
+    "pins_count": 58,
+    "pins_matching": 58,
+    "pins_mismatched": 0,
+    "root_commands_enrolled": 78,
+    "root_commands_unique": 78,
+    "full_root_executed": false,
+    "original_r951_full_source_test_executed": false,
+    "actual_native_firebase_emulators_executed": false
+  },
+  "source_blobs": {
+    "package.json": "bd50af6bead1c62f36ada6c012123fe0c5d94da7",
+    "scripts/run-r879-unified-native-acceptance.sh": "8a42dcad4416d5896b4886d6c5bad079463d5324",
+    "scripts/r951-worker-emulator-auth-precedence.test.mjs": "d27cc3880aa2ae0387f81bb660ca340d830e22dc",
+    "firestore.rules": "d30c3e8fbbfcbf25767501e351edcb18d6080c6d",
+    "storage.rules": "eedbbe45545ecd09d8867c9d702cd00bb3b7d7be"
+  },
+  "local_evidence": {
+    "kind": "repeated source-excerpt expression matrix",
+    "worker_variants": 4,
+    "environment_cases": 6,
+    "emulator_settings": 2,
+    "assertions_total": 48,
+    "assertions_pass": 48,
+    "node_version": "22.16.0",
+    "exit_code": 0,
+    "stdout_sha256": "065252d57407c696a545961d59df7bd7bc09bb04815d1759e656884289e6b963",
+    "not_http_or_firebase": true
+  },
+  "live_cloud": {
+    "project_seed": "urai-jobs",
+    "project_number": null,
+    "actual_functions": [],
+    "actual_apps": [],
+    "actual_gcs_buckets": [],
+    "deployed_source_sha": null,
+    "actual_iam_readback": false,
+    "actual_rules_release": false,
+    "actual_index_states": false,
+    "cloud_run_revisions": [],
+    "billing_status": "UNKNOWN",
+    "note": "all empty/null values mean uninspected, not confirmed absence"
+  },
+  "ci": {
+    "parent_388_workflow_failures": 9,
+    "current_389_protected_ci_pass": false,
+    "current_389_original_test_receipt": false,
+    "reason_for_runner_failures": "UNKNOWN",
+    "current_389_exact_sha": "b865209cc352241602d8b9714672f3401aed7669",
+    "current_389_workflow_runs": 10,
+    "current_389_workflow_failures": 10,
+    "current_389_workflow_successes": 0,
+    "current_389_root_cause": "UNKNOWN_NOT_DIAGNOSED"
+  },
+  "open_critical_gates": [
+    {
+      "priority": "P0",
+      "issue": 252,
+      "gate": "actual post-revocation privileged GCS stale writer 403, inflight drain, generation-pinned purge ACK"
+    },
+    {
+      "priority": "P0",
+      "gate": "authenticated signed C6 Privacy Studio Jobs private MP4/SRT Spatial Replay revocation/deletion"
+    },
+    {
+      "priority": "P1",
+      "issue": 376,
+      "gate": "post-admission data rights operator authority"
+    },
+    {
+      "priority": "P1",
+      "issue": 380,
+      "gate": "native Auth Firestore owner field 403/200 acceptance"
+    },
+    {
+      "priority": "P1",
+      "gate": "full 78-command suite 4 emulators protected CI independent reviewer real rollback"
+    },
+    {
+      "priority": "P2",
+      "issue": 345,
+      "gate": "14-concurrent createJob quota and effective index parity"
+    },
+    {
+      "priority": "P3",
+      "gate": "live provider GCP inventory without paid tools"
+    }
+  ],
+  "permanent_handoffs": [
+    "docs/estate/JOBS_R952_MASTER_NEXT_CHALK_HOLD_20261109.md",
+    "docs/estate/JOBS_R951_WORKER_AUTH_REVIEW_NEXT_CHALK_HOLD_20261109.md",
+    "docs/estate/JOBS_R944_START_NEXT_CHALK_20261109.md"
+  ],
+  "prohibitions": [
+    "NO_TINYFISH_CREDITS",
+    "NO_PAID_COMPUTE",
+    "NO_PRODUCTION_DEPLOY",
+    "NO_IAM_WRITE",
+    "NO_RULES_WRITE",
+    "NO_PRIVATE_MEDIA",
+    "NO_REAL_USER_JOB",
+    "NO_CI_BYPASS",
+    "NO_AUTO_MERGE",
+    "NO_RELEASE_GO"
+  ]
+}

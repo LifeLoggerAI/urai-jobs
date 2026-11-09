@@ -1,0 +1,158 @@
+{
+  "schema": "one-urai-genesis-r971-full-estate-machine-v1",
+  "checkpoint": "R971",
+  "observed": "2026-11-09",
+  "timezone": "America/Chicago",
+  "disposition": "PRODUCTION_HOLD_NO_GO",
+  "master": {
+    "repository": "LifeLoggerAI/urai-labs-llc",
+    "pr": 262,
+    "head": "0dcc6e5ddfad8662f8111f1ffe10bc8e9e9d16db",
+    "status": "open_draft_unmerged",
+    "coverage": "R958-R960 plus R961 addendum",
+    "role": "engineering knowledge registry, not production authority",
+    "dated_r929_open_pr_census": 934
+  },
+  "jobs_forensic": {
+    "repository": "LifeLoggerAI/urai-jobs",
+    "pr": 379,
+    "branch": "docs/genesis-jobs-firebase-forensics-20261109",
+    "report": "docs/estate/JOBS_R971_FULL_ESTATE_MASTER_CROSSWALK_AND_RELEASE_HOLD_20261109.md",
+    "latest_report_commit": "682251c4e709e2f11ab858f26fcc22ebd9893f74"
+  },
+  "main_refs": {
+    "count": 19,
+    "match_round24_r958": true,
+    "jobs": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
+    "privacy": "1163d6f32a123ef9a6638e092a3eee5ec4a3b317",
+    "spatial": "da94837c2457b0a7590e26a7a644cd728de8afb8",
+    "studio": "854477d80b1a7aa718edb60d1ed4c1cf22dbed9d",
+    "admin": "1cde00e69238f6a32237af2d1914a1b77339d5bc",
+    "b2bportal": "4aea8574970d28a293f921a34156c4cc5a971213",
+    "labs": "2359d7e33df837dd4c4279ce444cfc8750c05c8b",
+    "caveat": "ref metadata only, not complete source/provider certification"
+  },
+  "privacy_r27": {
+    "pr": 257,
+    "head": "e2193434e22983cd52ae835e6e128748dfde1dc7",
+    "base": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6",
+    "commits_ahead": 12,
+    "changed_files": 10,
+    "forced_deny": true,
+    "purpose_registered": false,
+    "grant_written": false,
+    "runs": 6,
+    "run_conclusions": "all completed/failure",
+    "selected_steps": null,
+    "raw_log": "BlobNotFound 404",
+    "tests_typecheck_build_emulator": "NOT_ESTABLISHED",
+    "receipt": "SHA-256 integrity binding, not signature, rights proof or permission"
+  },
+  "studio_jobs": {
+    "candidate_chain": {
+      "198": "3ba9f4eda3d81c3813bcaa8f68cf892e204e02f2",
+      "199": "17859bf26915f99ee08eb8673953b0057740279c",
+      "200": "e74a20746f9ca109cd166f06521e47a3d615f89e",
+      "201": "a6187abfd12ffc8f534ddf66246da91ed032e1dc"
+    },
+    "reported_scoped_results": {
+      "R926": "15/15",
+      "R927": "33/33",
+      "R930": "34/34",
+      "R931": "35/35",
+      "R936": "56/56 plus frozen install/typecheck/build"
+    },
+    "jobs390": "reported 15/15 candidate Zod producer-consumer tests; missing consent correctly rejected",
+    "jobs_main_missing": [
+      "source.generation",
+      "timeline.sourceStartMs",
+      "top-level consent",
+      "producer contract test",
+      "candidate consent gate"
+    ],
+    "jobs391_compare": {
+      "status": "diverged",
+      "ahead": 1,
+      "behind": 2,
+      "merge_base": "a7a1ef61ac1f219567131abec0b7f5b3c2f81ad9"
+    }
+  },
+  "firebase": {
+    "shared_source_target": "urai-4dc1d/(default)",
+    "source_publishers": [
+      "urai-spatial",
+      "B2Bportal",
+      "urai-admin"
+    ],
+    "provider_effective_rules_iam": "UNKNOWN",
+    "privacy_root_firebaserc": "absent at inspected root",
+    "privacy_guarded_deploy": "functions:privacy only; excludes Firestore/Storage Rules",
+    "privacy_spatial_c1_gap": "Spatial first-time owner-only missing-consent get differs from Privacy main generic read",
+    "spatial1964_ahead_main": 1489,
+    "spatial1964_ahead_parent1962": 13
+  },
+  "jobs380": {
+    "issue": "OPEN P1",
+    "main_rules_blob": "7dc63626c6e1a2e7b20ded280ea2dd070f16abc9",
+    "r940_rules_blob": "cfa77a8fa5e69327ab352b31450c59a036d21e38",
+    "unprotected_field": "dataRightsDeletionRequestId",
+    "jobs378_changed_rules": false,
+    "classification": "source self-update Rules gap, not deployed exploit; may stall legitimate deletion through fail-closed mismatch",
+    "next": "separate Rules candidate; protect field with affectedKeys; authenticated emulator set/change/remove and valid owner/server flow tests"
+  },
+  "jobs252": {
+    "issue": "OPEN P0",
+    "required": [
+      "durable write epoch/reservation",
+      "exclusive least-privilege writer",
+      "alternate/retired writer 403",
+      "active upload drain",
+      "generation delete",
+      "final absence",
+      "durable ACK"
+    ]
+  },
+  "revocation_paths": {
+    "A": "R647 prepared, not deployed dispatcher",
+    "B": "Jobs #371 expects consent-jobs-* modules; exact provenance unrecovered",
+    "C": "R818/R836 Jobs-to-Privacy callable denial-only runner",
+    "D": "R27 scoped Life Movie verifier, hard-deny",
+    "separate": true
+  },
+  "cross_model": {
+    "communications": "five-provider sequential failover source, not parallel debate, not live-certified",
+    "orb": "separate bounded OpenAI conversation",
+    "route_context": "internal context propagation, not durable general memory",
+    "public_comment_network": "designed requirement; platform adapter not verified",
+    "labs_registry": "engineering continuity, not autobiographical memory"
+  },
+  "execution": {
+    "refs_read": 19,
+    "source_metadata": true,
+    "tests": false,
+    "installs": false,
+    "typecheck": false,
+    "builds": false,
+    "emulators": false,
+    "ci_rerun": false,
+    "provider_inventory": false,
+    "effective_rules_iam": false,
+    "merge": false,
+    "deploy": false,
+    "dispatch": false,
+    "private_media": false,
+    "billing_mutation": false,
+    "paid_compute": false
+  },
+  "hard_boundaries": [
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO DISPATCH",
+    "NO C1/C6 ENABLEMENT",
+    "NO PRIVATE MEDIA",
+    "NO IAM OR RULES MUTATION",
+    "NO BILLING ACTION",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ]
+}
