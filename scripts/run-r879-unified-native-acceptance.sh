@@ -30,6 +30,16 @@ git merge-base --is-ancestor "$PARENT" HEAD 2>/dev/null || hold 'R879 two-parent
 # expensive native test stages. Never auto-rewrite a pin from the current tree.
 node scripts/r946-r879-source-pin-preflight.mjs scripts/run-r879-unified-native-acceptance.sh || hold 'R946 source closure refused this HEAD'
 
+# R951: pin exact Studio #202 producer + Jobs consumer sources; do not use mutable branch refs.
+check_blob 'scripts/studio-life-movie-actual-producer-zod-contract.test.mjs' '14e58cf74458c013f03add1fdc72669c3b5f9cc4'
+check_blob 'scripts/fixtures/studio-20261109-scene-truth-producer.ts' '9427263442d93c916516a76ae7b953585792be1a'
+check_blob 'scripts/fixtures/studio-20261109-scene-truth-source-pins.json' '0296dd7155347fbbbb1e39a9f85c57d2b8f3fe92'
+check_blob 'scripts/fixtures/studio-r931-producer.ts' '701be51e861e0a5ff47d88ceaba1e3812433d659'
+check_blob 'scripts/fixtures/studio-r931-builder-input.json' '535486ddc13d9419afdd72f155a33018b6562c4d'
+check_blob 'scripts/fixtures/studio-r931-dispatch-route.source.txt' 'ef8e2bd124f7ea2da213d07fca3c5e82d80a056a'
+check_blob 'functions/src/jobs/studioLifeMovieContract.ts' '5f944e906de7243d7415ac479cf92356b09c84c9'
+check_blob 'functions/src/privacy/lifeMovieConsentGate.ts' '53761ac0f5c0340563b13fdd9a12a90e75409d42'
+
 # Every critical file must match the same original, independently reviewed Git blob.
 # This script belongs on a child branch: do not hardcode a future self-referential HEAD.
 check_blob() {
@@ -107,6 +117,11 @@ stage() {
 # native stages; this is not cloud or Firebase authorization evidence.
 stage r946_source_pin_preflight_5 120s node --test scripts/r946-preflight.test.mjs
 grep -q '# pass 5' "$OUT/r946_source_pin_preflight_5.log" || hold 'R946 original five-case checker suite missing'
+
+# R951: the exact Studio #202 producer -> Jobs Zod regression must run on the
+# enrolled root path and the unified source-pinned R879 path. Ten producer tests.
+stage studio202_jobs_zod_10_source 120s node --experimental-strip-types --test scripts/studio-life-movie-actual-producer-zod-contract.test.mjs
+grep -q '# pass 10' "$OUT/studio202_jobs_zod_10_source.log" || hold 'Studio #202 current producer/Jobs Zod acceptance missing'
 
 # R952: original R951 four-worker 48-scenario production/emulator precedence tests.
 # Keep this a mandatory executable stage, not only a source marker.
