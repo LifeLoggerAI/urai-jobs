@@ -49,6 +49,10 @@ for (const [path, text, description] of [
   ['workers/narrator-worker/Dockerfile', 'COPY src ./src', 'narrator container must build canonical authenticated TypeScript source'],
   ['workers/narrator-worker/Dockerfile', 'RUN npm run build', 'narrator container must compile canonical TypeScript source'],
   ['workers/narrator-worker/Dockerfile', 'CMD ["node", "dist/index.js"]', 'narrator container must execute compiled canonical source'],
+  ['workers/asset-worker/index.js', "const localBypass = !productionRuntime && (runtimeEnv === 'local' || runtimeEnv === 'test' || process.env.FUNCTIONS_EMULATOR === 'true');", 'asset bearer emulator bypass cannot override production/staging'],
+  ['workers/studio-worker/index.js', "const localBypass = !productionRuntime && (env === 'local' || env === 'test' || process.env.FUNCTIONS_EMULATOR === 'true');", 'Studio bearer emulator bypass cannot override production/staging'],
+  ['workers/private-source-worker/src/index.ts', "const local = !productionRuntime() && (['local', 'test'].includes(runtimeEnv()) || process.env.FUNCTIONS_EMULATOR === 'true');", 'private source emulator bypass cannot override production/staging'],
+  ['workers/spatial-worker/index.js', "const localBypass = !productionRuntime && (env === 'local' || env === 'test' || process.env.FUNCTIONS_EMULATOR === 'true');", 'legacy spatial emulator bypass cannot override production/staging'],
   ['functions/src/jobs/executeJob.ts', "defineSecret('URAI_JOBS_WORKER_TOKEN')", 'Firebase worker token must use Secret Manager'],
 ]) requireText(path, text, description);
 
