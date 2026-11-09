@@ -217,8 +217,20 @@ for (const action of ['status', 'cancel', 'delete-output']) {
 assert.equal(writes.length, 0, 'denied bridge requests must not write jobs');
 console.log('[PASS] Short and long-form admission and output access reject unverified consent; status, cancel, and deletion remain reachable.');
 
+// The original dispatcher requires current Firestore owner/operator identity.
+// Supply synthetic *valid* accounts rather than disabling the production veto.
+documents.set(`users/${owner}`, {
+  uid: owner, role: 'user', tenantId: tenant, accountStatus: 'active',
+  disabled: false, deleted: false, markedForDeletion: false,
+  dataRightsDeletionPendingCentralPrivacy: false,
+});
+documents.set('users/synthetic-operator', {
+  uid: 'synthetic-operator', role: 'operator', accountStatus: 'active',
+  disabled: false, deleted: false, markedForDeletion: false,
+  dataRightsDeletionPendingCentralPrivacy: false,
+});
 function queue(jobId, jobType) {
-  documents.set(`jobs/${jobId}`, { jobId, status: 'PENDING', type: jobType, ownerUid: owner });
+  documents.set(`jobs/${jobId}`, { jobId, status: 'PENDING', type: jobType, ownerUid: owner, tenantId: tenant });
   documents.set(`jobQueue/${jobId}`, { jobId, status: 'PENDING', availableAt: new Date(Date.now() - 1000) });
 }
 queue('life-job', 'studio.render.video');
@@ -229,7 +241,7 @@ assert.ok(documents.get('jobQueue/life-job').availableAt.getTime() > Date.now())
 assert.equal(documents.get('jobs/other-job').status, 'LEASED');
 assert.equal(published, 1, 'an unrelated job must still be published');
 queue('life-manual', 'studio.assemble.video');
-const manualResult = await manual({ auth: { token: { role: 'operator' } }, data: { limit: 10 } });
+const manualResult = await manual({ auth: { uid: 'synthetic-operator', token: { role: 'operator' } }, data: { limit: 10 } });
 assert.ok(manualResult.skipped.includes('life-manual'));
 assert.equal(documents.get('jobs/life-manual').status, 'PENDING');
 assert.ok(documents.get('jobQueue/life-manual').availableAt.getTime() > Date.now());
