@@ -61,7 +61,7 @@ check_blob 'scripts/r888-quota-ledger-deletion-contract.test.mjs' '54ec923386f97
 check_blob 'scripts/r881-admin-callable-parser.test.mjs' 'ba8aa35132c701a50ef47cef142d12c120ebd8bd'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 # R973: preserve exact Studio producer -> real Jobs Zod denial contract sources.
-check_blob 'scripts/studio-life-movie-actual-producer-zod-contract.test.mjs' '74e94da0a118a043ab76af611474f3f73d329cea'
+check_blob 'scripts/studio-life-movie-actual-producer-zod-contract.test.mjs' '14e58cf74458c013f03add1fdc72669c3b5f9cc4'
 check_blob 'scripts/fixtures/studio-r931-producer.ts' '701be51e861e0a5ff47d88ceaba1e3812433d659'
 check_blob 'scripts/fixtures/studio-r931-builder-input.json' '535486ddc13d9419afdd72f155a33018b6562c4d'
 check_blob 'scripts/fixtures/studio-r931-dispatch-route.source.txt' 'ef8e2bd124f7ea2da213d07fca3c5e82d80a056a'
@@ -116,8 +116,8 @@ stage r946_source_pin_preflight_5 120s node --test scripts/r946-preflight.test.m
 grep -q '# pass 5' "$OUT/r946_source_pin_preflight_5.log" || hold 'R946 original five-case checker suite missing'
 
 # R973: required actual Studio producer -> Jobs strict Zod hard-off acceptance.
-stage studio_producer_jobs_zod_3_source 120s node --experimental-strip-types --test scripts/studio-life-movie-actual-producer-zod-contract.test.mjs
-grep -q '# pass 3' "$OUT/studio_producer_jobs_zod_3_source.log" || hold 'Studio producer Jobs Zod three-case acceptance missing'
+stage studio_producer_jobs_zod_10_source 120s node --experimental-strip-types --test scripts/studio-life-movie-actual-producer-zod-contract.test.mjs
+grep -q '# pass 10' "$OUT/studio_producer_jobs_zod_10_source.log" || hold 'Studio producer Jobs Zod three-case acceptance missing'
 
 # R952: original R951 four-worker 48-scenario production/emulator precedence tests.
 # Keep this a mandatory executable stage, not only a source marker.
