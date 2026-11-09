@@ -1,0 +1,74 @@
+{
+  "schema": "one-urai-genesis-next-chalk-checkpoint-v1",
+  "checkpoint": "R961",
+  "date_utc": "2026-11-09",
+  "project": "ONE URAI GENESIS",
+  "release": {
+    "status": "PRODUCTION_HOLD",
+    "go": false
+  },
+  "repository": "LifeLoggerAI/urai-jobs",
+  "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
+  "forensic_pr": 379,
+  "forensic_pr_head": "f702db321e65d8b787bb32c0ded60d80485be22b",
+  "master_handoff": {
+    "path": "docs/estate/JOBS_R961_DEFINITIVE_NEXT_CHALK_MASTER_HANDOFF_20261109.md",
+    "blob": "00babcd475f75f1099b141cf9c944d42b107a145"
+  },
+  "source_authority": {
+    "jobs_main": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+    "jobs_r923_pr371": "df19633466eaebdda844569ed0d562245bd31dc6",
+    "jobs_r900_pr377": "f8578ea281e818b01811aecc2fe4dfb8c3dc8203",
+    "jobs_r951_pr388": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
+    "jobs_r952_pr389": "b865209cc352241602d8b9714672f3401aed7669",
+    "jobs_r932_pr390": "a7a1ef61ac1f219567131abec0b7f5b3c2f81ad9",
+    "privacy_r17_pr253": "90a4e581e8494f52d85eab3c576d02b926e7d0d9",
+    "privacy_r18_pr254": "dbc193763dc112210c20b5b680e8eb08fdf8396c",
+    "privacy_r19_pr255": "a4d7e4ffb76fa2dbbf7348e2b66faa991761509a",
+    "privacy_r20_pr256": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6",
+    "privacy_r647_pr214": "cc0692053db3b1b8df8267d43856b1a3357de8a0"
+  },
+  "key_findings": [
+    "R647 contains a substantial prepared Privacy-to-Jobs dispatcher library, explicitly NOT DEPLOYED and not exported/activated.",
+    "R647 dispatcher cannot be cherry-picked unchanged into R20: queue metadata absent, integrity hash input changed, prior-grant evidence dropped, and source revocation timestamp conflated with outbox createdAt.",
+    "Jobs R923 receiver has v1 and v2 schemas but v2 does not accept/persist priorGrantReceiptHash or priorGrantEvidenceState.",
+    "Jobs receiver explicitly refuses to certify physical private output deletion and Storage write fence.",
+    "Privacy producer, Jobs receiver, Privacy ACK callable and R647 root outbox ACK are not yet reconciled into one accepted protocol.",
+    "Jobs R900 reproduces post-admission operator-withdrawal continuation; governing Privacy/legal policy remains open.",
+    "Worker auth, rollback, protected CI, deployed source/IAM and full cross-service acceptance remain separate release gates."
+  ],
+  "donor_pins": {
+    "dispatcher": "4126167b4350ba8afe6b19d7b60dec1ca891189f",
+    "contract": "6cca2b9456319927cf22511c7d51c1f16ddf051c",
+    "dispatcher_test": "def1048aa4838f7ff990d792a27d1fb94e7f6441",
+    "jobs_contract_test": "fd60261f1518a31a476e2e5fdfbe62f9d8acf2aa",
+    "donor_publisher": "5b069b79d657b5c2006dd0ab45c8e60709ff0a89"
+  },
+  "tests_and_evidence": {
+    "r961_application_tests_run": false,
+    "r961_native_emulators_run": false,
+    "r961_cloud_inventory_run": false,
+    "r961_dispatcher_invoked": false,
+    "historical_receipts_reused_as_current": false,
+    "note": "R961 was documentation and source/PR metadata reconciliation only. Refer to master handoff for evidence grades and exact scopes."
+  },
+  "next_steps": [
+    "Retrieve and verify exact R647 donor/test blobs and run donor contract tests in an isolated full checkout; otherwise record NOT RUN.",
+    "Design a new versioned canonical event envelope binding current receipt, prior grant evidence, source transition timestamp provenance, immutable identity and contract version.",
+    "Define strict legacy/missing-lineage disposition and one canonical ACK authority.",
+    "Prepare separate review-only Privacy and Jobs changes preserving donor ancestry; do not activate a dispatcher.",
+    "Run same-SHA native producer -> outbox -> dispatcher -> Jobs receiver -> ACK Firebase emulator tests, including retries, conflicts, leases and in-flight changes.",
+    "Perform authorized read-only provider inventory and separately approved nonproduction GCS stale/alternate writer 403, upload drain, exact-generation purge and durable ACK.",
+    "Close protected CI, independent review, device/accessibility/visual gates and obtain explicit founder GO."
+  ],
+  "prohibitions": [
+    "NO CHERRY-PICK unchanged",
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO DISPATCH",
+    "NO PRIVATE MEDIA",
+    "NO IAM CHANGE",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ]
+}
