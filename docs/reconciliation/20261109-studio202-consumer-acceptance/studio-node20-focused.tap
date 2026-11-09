@@ -1,0 +1,35 @@
+TAP version 13
+# Subtest: sceneTruthReceiptRef rejects JSON array coercion
+ok 1 - sceneTruthReceiptRef rejects JSON array coercion
+  ---
+  duration_ms: 8.549462
+  ...
+# Subtest: sceneTruthReceiptRef rejects object coercion without invoking toString
+ok 2 - sceneTruthReceiptRef rejects object coercion without invoking toString
+  ---
+  duration_ms: 0.846126
+  ...
+# Subtest: sceneTruthDigest rejects JSON array coercion
+ok 3 - sceneTruthDigest rejects JSON array coercion
+  ---
+  duration_ms: 0.305326
+  ...
+# Subtest: sceneTruthDigest rejects object coercion without invoking toString
+ok 4 - sceneTruthDigest rejects object coercion without invoking toString
+  ---
+  duration_ms: 1.033534
+  ...
+# Subtest: valid scene truth strings remain exact and non-authorizing
+ok 5 - valid scene truth strings remain exact and non-authorizing
+  ---
+  duration_ms: 3.622254
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 758.310902

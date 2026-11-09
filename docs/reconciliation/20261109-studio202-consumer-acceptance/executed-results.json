@@ -1,0 +1,59 @@
+[
+  {
+    "name": "regression-before.tap",
+    "command": [
+      "/workspace/scratch/2c46eb72c844/runtime22/node_modules/node-linux-x64/bin/node",
+      "--experimental-strip-types",
+      "--test",
+      "--test-reporter=tap",
+      "--test-name-pattern=current Studio sceneTruth",
+      "scripts/studio-life-movie-actual-producer-zod-contract.test.mjs"
+    ],
+    "exit_code": 1,
+    "sha256": "1f240771b7861a012313b857661f6ce237c99c593d077649625ecac304ef5eea"
+  },
+  {
+    "name": "jobs-current-contracts.tap",
+    "command": [
+      "/workspace/scratch/2c46eb72c844/runtime22/node_modules/node-linux-x64/bin/node",
+      "--experimental-strip-types",
+      "--test",
+      "--test-reporter=tap",
+      "scripts/studio-life-movie-create-zod-contract.test.mjs",
+      "scripts/studio-life-movie-actual-producer-zod-contract.test.mjs"
+    ],
+    "exit_code": 0,
+    "sha256": "9b5ff3e1b73554396160b674426c3420b7c901829e84298753d5b59fc0bd253b"
+  },
+  {
+    "name": "studio-node20-focused.tap",
+    "command": [
+      "/workspace/scratch/2c46eb72c844/runtime20/node_modules/node-linux-x64/bin/node",
+      "--test",
+      "--test-reporter=tap",
+      "apps/studio/tests/life-movie-scene-truth-types.test.mjs"
+    ],
+    "exit_code": 0,
+    "sha256": "fe414914639965d6de5586bc4f9ee29ef67861c665cfe67e43178c2517b25f38"
+  },
+  {
+    "name": "studio-node20-typecheck.log",
+    "command": [
+      "/workspace/scratch/2c46eb72c844/runtime20/node_modules/node-linux-x64/bin/node",
+      "/workspace/scratch/2c46eb72c844/verification-deps/node_modules/typescript/bin/tsc",
+      "--noEmit",
+      "--strict",
+      "--target",
+      "es2022",
+      "--module",
+      "commonjs",
+      "--types",
+      "node",
+      "--typeRoots",
+      "/workspace/scratch/2c46eb72c844/verification-deps/node_modules/@types",
+      "apps/studio/lib/studio-life-movie-jobs-bridge.ts"
+    ],
+    "exit_code": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+]

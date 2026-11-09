@@ -1,0 +1,151 @@
+(node:21) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:28) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:28) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///workspace/scratch/2c46eb72c844/contract-candidate/scripts/fixtures/studio-r931-producer.ts is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to /workspace/scratch/2c46eb72c844/contract-candidate/package.json.
+# Subtest: pinned Studio producer fixture provenance is exact and consent remains absent
+ok 1 - pinned Studio producer fixture provenance is exact and consent remains absent
+  ---
+  duration_ms: 1.340522
+  type: 'test'
+  ...
+# Subtest: actual Studio builder output and actual dispatch mapping are missing required canonical consent
+ok 2 - actual Studio builder output and actual dispatch mapping are missing required canonical consent
+  ---
+  duration_ms: 7.575403
+  type: 'test'
+  ...
+# Subtest: missing consent must not be filled by a dummy client receipt or a purpose substitution
+ok 3 - missing consent must not be filled by a dummy client receipt or a purpose substitution
+  ---
+  duration_ms: 1.359528
+  type: 'test'
+  ...
+# Subtest: current Studio fixture and Jobs boundary match immutable source pins
+ok 4 - current Studio fixture and Jobs boundary match immutable source pins
+  ---
+  duration_ms: 1.086624
+  type: 'test'
+  ...
+# Subtest: current Studio sceneTruthReceiptRef rejects JSON array coercion before Jobs admission
+ok 5 - current Studio sceneTruthReceiptRef rejects JSON array coercion before Jobs admission
+  ---
+  duration_ms: 1.068575
+  type: 'test'
+  ...
+# Subtest: current Studio sceneTruthReceiptRef rejects objects without invoking toString
+ok 6 - current Studio sceneTruthReceiptRef rejects objects without invoking toString
+  ---
+  duration_ms: 0.468072
+  type: 'test'
+  ...
+# Subtest: current Studio sceneTruthDigest rejects JSON array coercion before Jobs admission
+ok 7 - current Studio sceneTruthDigest rejects JSON array coercion before Jobs admission
+  ---
+  duration_ms: 0.243877
+  type: 'test'
+  ...
+# Subtest: current Studio sceneTruthDigest rejects objects without invoking toString
+ok 8 - current Studio sceneTruthDigest rejects objects without invoking toString
+  ---
+  duration_ms: 0.164758
+  type: 'test'
+  ...
+# Subtest: current Studio preserves the valid historical payload and still lacks canonical consent
+ok 9 - current Studio preserves the valid historical payload and still lacks canonical consent
+  ---
+  duration_ms: 2.359351
+  type: 'test'
+  ...
+# Subtest: current Studio with a shape-only dummy receipt cannot open consent authority
+ok 10 - current Studio with a shape-only dummy receipt cannot open consent authority
+  ---
+  duration_ms: 1.214902
+  type: 'test'
+  ...
+# (node:29) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: fixture is pinned to Studio \#201 and contains no execution authority
+ok 11 - fixture is pinned to Studio \#201 and contains no execution authority
+  ---
+  duration_ms: 1.261202
+  type: 'test'
+  ...
+# Subtest: actual Jobs Zod create schema accepts the serialized Studio \#201 fixture
+ok 12 - actual Jobs Zod create schema accepts the serialized Studio \#201 fixture
+  ---
+  duration_ms: 6.305932
+  type: 'test'
+  ...
+# Subtest: Jobs recomputes the exact Studio render-plan digest and tenant scope
+ok 13 - Jobs recomputes the exact Studio render-plan digest and tenant scope
+  ---
+  duration_ms: 1.802745
+  type: 'test'
+  ...
+# Subtest: synthetic schema-valid receipt does not open Jobs consent or worker execution
+ok 14 - synthetic schema-valid receipt does not open Jobs consent or worker execution
+  ---
+  duration_ms: 0.303558
+  type: 'test'
+  ...
+# Subtest: missing consent is rejected by actual Jobs Zod schema
+ok 15 - missing consent is rejected by actual Jobs Zod schema
+  ---
+  duration_ms: 2.632837
+  type: 'test'
+  ...
+# Subtest: malformed receipt id is rejected by actual Jobs Zod schema
+ok 16 - malformed receipt id is rejected by actual Jobs Zod schema
+  ---
+  duration_ms: 0.752973
+  type: 'test'
+  ...
+# Subtest: wrong consent purpose and policy are rejected
+ok 17 - wrong consent purpose and policy are rejected
+  ---
+  duration_ms: 0.707398
+  type: 'test'
+  ...
+# Subtest: strict Jobs schema rejects surplus source keys and positive execution flags
+ok 18 - strict Jobs schema rejects surplus source keys and positive execution flags
+  ---
+  duration_ms: 0.55845
+  type: 'test'
+  ...
+# Subtest: generation changes invalidate the existing render digest
+ok 19 - generation changes invalidate the existing render digest
+  ---
+  duration_ms: 1.365456
+  type: 'test'
+  ...
+# Subtest: cross-tenant source and output paths are rejected by Jobs tenant assertion
+ok 20 - cross-tenant source and output paths are rejected by Jobs tenant assertion
+  ---
+  duration_ms: 1.543445
+  type: 'test'
+  ...
+# Subtest: Jobs rejects excessive video offset and nonzero still-image offset
+ok 21 - Jobs rejects excessive video offset and nonzero still-image offset
+  ---
+  duration_ms: 0.770349
+  type: 'test'
+  ...
+# Subtest: Jobs rejects overlapping clips and media beyond render budget
+ok 22 - Jobs rejects overlapping clips and media beyond render budget
+  ---
+  duration_ms: 0.674121
+  type: 'test'
+  ...
+1..22
+# tests 22
+# suites 0
+# pass 22
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 417.456398
