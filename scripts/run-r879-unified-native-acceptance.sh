@@ -51,7 +51,7 @@ check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d53
 check_blob 'functions/src/jobs/createJob.ts' 'c52f09900bb76a1fa71445a7fceb39c177c2c568'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' 'a278725d47f44eaabc9a068be178708a0bf24ced'
+check_blob 'package.json' '4804276332491e1e57a95a2a0cec7050df3a595c'
 check_blob 'functions/src/privacy/dataRightsExecution.ts' '756547684397788d8051acace70ac0e5c03e2e17'
 check_blob 'scripts/r888-quota-ledger-deletion-contract.test.mjs' '54ec923386f973ecae75554accf802b4c280d656'
 check_blob 'scripts/r881-admin-callable-parser.test.mjs' 'ba8aa35132c701a50ef47cef142d12c120ebd8bd'
@@ -174,6 +174,12 @@ grep -q '# pass 12' "$OUT/studio_longform_org_12_source.log" || hold 'R888 organ
 stage longform_resume_source 180s node --test \
   scripts/r417-original-donor-longform-resume-transaction-contract.mjs \
   scripts/life-movies-longform-resume-transaction-contract.mjs
+
+# R945: independently reconciled #382 original source-bound longform replay fixture.
+# This test is a required executable gate, not a doc-only or source-only marker.
+check_blob 'scripts/life-movies-idempotency-revocation-race-contract.mjs' '9af97cd9b2bd7e2a8e5e66d805c90791da60a52c'
+stage longform_idempotency_17_source 180s node --test scripts/life-movies-idempotency-revocation-race-contract.mjs
+grep -q '# pass 17' "$OUT/longform_idempotency_17_source.log" || hold 'R945 original 17-case longform idempotency source tests not passed'
 
 # R890 current server-owner cancellation boundary; source-only before native Firebase.
 check_blob 'scripts/r890-cancel-authority-regression.test.mjs' '8ef3f1e799016eafd3f254f5fa2805f0e6ba2c18'
