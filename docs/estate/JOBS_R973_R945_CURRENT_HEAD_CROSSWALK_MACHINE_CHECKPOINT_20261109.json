@@ -1,0 +1,73 @@
+{
+  "schema": "one-urai-genesis-r973-r945-current-head-crosswalk-v1",
+  "date": "2026-11-09",
+  "status": "PRODUCTION_HOLD_NO_GO",
+  "report": "docs/estate/JOBS_R973_LIVE_HEAD_R945_NATIVE_ACCEPTANCE_AND_CROSS_SERVICE_RELEASE_HOLD_20261109.md",
+  "report_commit": "55e5e06da103805deeb2d7b153e3516b2c8d3cf5",
+  "labs262": "b0e746eca820cc57a630cf3a595833049af245a6",
+  "privacy257": "fbdc590376376b758be968f174d71709f326c61f",
+  "privacy_tree": "1212945dbebfadc85e4e43e66f8c7fb4c2f519e7",
+  "r945_privacy": {
+    "unit": "200/200",
+    "r27": "10/10",
+    "emulator_rules": "13/13",
+    "emulator_smoke": "3/3",
+    "install_lint_typecheck_build_preflight": "PASS",
+    "previous_trigger_noise_seen_in_current_stream": false,
+    "direct_authenticated_callable": "NOT_PROVEN",
+    "forced_deny": true
+  },
+  "jobs391": "9f5759f072370fbd42a82560ff6c5d4f37169c6b",
+  "jobs391_tree": "4bd3d28a81d28f7507db98ce2f7359bb477e432a",
+  "jobs391_results": {
+    "frozen_install": "PASS",
+    "functions_typecheck": "PASS",
+    "functions_build": "PASS",
+    "actual_producer_zod": "3/3",
+    "full_suite": "NOT_RUN",
+    "current_main_schema": "REJECTS_GENERATION_AND_SOURCE_START_MS",
+    "git_compare_from390": "DIVERGED_1_AHEAD_2_BEHIND"
+  },
+  "studio201": {
+    "head": "a6187abfd12ffc8f534ddf66246da91ed032e1dc",
+    "exact_head_native": "NOT_RUN",
+    "hosted": "FAILURE"
+  },
+  "labs_drafts": {
+    "331": "0b4871d6b77b8dcc73a9d7bb448bbc02e34589d8",
+    "332": "3a6376999f0c015f39cdab8555aa688f9a3de56b",
+    "same_changed_paths": 16,
+    "identical_sampled_files": 4,
+    "different_entrypoints": true,
+    "merge": "NO"
+  },
+  "hosted_ci": {
+    "privacy_r27_job": 129149557711,
+    "privacy_steps": null,
+    "privacy_logs": null,
+    "jobs391_job": 129095052353,
+    "jobs_steps": null,
+    "jobs_logs": null
+  },
+  "blockers": {
+    "jobs252": "OPEN_P0",
+    "jobs380": "OPEN_P1",
+    "jobs376": "OPEN_P1",
+    "jobs372": "OPEN_P1",
+    "jobs337": "OPEN_P1",
+    "jobs345": "OPEN_P2",
+    "firebase_live_rules_iam": "UNKNOWN",
+    "revocation_v3_ack": "DESIGN_ONLY",
+    "private_replay": "NOT_CERTIFIED"
+  },
+  "r973_execution": {
+    "github_read": true,
+    "github_docs_write": true,
+    "new_tests": false,
+    "deploy": false,
+    "merge": false,
+    "provider_mutation": false,
+    "paid_compute": false
+  },
+  "next": "R974: direct R27 callable identity denial, hosted CI, exact Studio native, Jobs schema convergence, Rules #380, Storage #252, provider read-only audit, v3 ACK, independent device/visual/legal release."
+}
