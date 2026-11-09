@@ -51,7 +51,10 @@ check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d53
 check_blob 'functions/src/jobs/createJob.ts' 'c52f09900bb76a1fa71445a7fceb39c177c2c568'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' '0e6dcac476c8e54b3b49e0d9e3e517b49d0ae058'
+check_blob 'package.json' 'a278725d47f44eaabc9a068be178708a0bf24ced'
+check_blob 'functions/src/privacy/dataRightsExecution.ts' '756547684397788d8051acace70ac0e5c03e2e17'
+check_blob 'scripts/r888-quota-ledger-deletion-contract.test.mjs' '54ec923386f973ecae75554accf802b4c280d656'
+check_blob 'scripts/r881-admin-callable-parser.test.mjs' 'ba8aa35132c701a50ef47cef142d12c120ebd8bd'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
@@ -198,6 +201,14 @@ stage emulator_env_10_source 120s node --test scripts/r884-emulator-env-isolatio
 grep -q '# pass 10' "$OUT/emulator_env_10_source.log" || hold 'R884 nested emulator env isolation tests missing'
 stage project_handoff_4_source 120s node --test scripts/r887-disposable-project-handoff.test.mjs
 grep -q '# pass 4' "$OUT/project_handoff_4_source.log" || hold 'R887 nested project handoff tests missing'
+
+# R923: preserve original R881 admin TypeScript parser checks from Jobs #369.
+stage admin_parser_2_source 120s node --test scripts/r881-admin-callable-parser.test.mjs
+grep -q '# pass 2' "$OUT/admin_parser_2_source.log" || hold 'R881 original admin parser tests missing'
+
+# R923: preserve original R888 quota-ledger deletion checks from Jobs #369.
+stage quota_deletion_6_source 120s node --test scripts/r888-quota-ledger-deletion-contract.test.mjs
+grep -q '# pass 6' "$OUT/quota_deletion_6_source.log" || hold 'R888 privacy quota-deletion tests missing'
 
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \

@@ -202,9 +202,13 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
     queueDeletes += deleted.queueDeletes;
   }
 
-  // Jobs does not own Firebase Auth deletion, provider derivatives or the
-  // rest of the ecosystem. Never claim global privacy completion.
+  // Jobs owns its admission activity metadata. Remove the server-managed
+  // sliding-window timestamps after all owned Jobs have been safely
+  // anonymized, but RETAIN the central deletion fence and request binding.
+  // FieldValue.delete is permitted here because the set explicitly merges.
+  // This does not erase Auth, provider derivatives or other service data.
   await db.collection('users').doc(ownerUid).set({
+    jobsCreateRateLimit: FieldValue.delete(),
     dataRightsDeletionPendingCentralPrivacy: true,
     dataRightsDeletionRequestId: requestId,
     updatedAt: FieldValue.serverTimestamp(),
