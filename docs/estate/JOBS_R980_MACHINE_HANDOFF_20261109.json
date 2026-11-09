@@ -1,0 +1,53 @@
+{
+  "schema": "one-urai-genesis-r980-convergence-v1",
+  "date": "2026-11-09",
+  "status": "PRODUCTION_HOLD_NO_GO",
+  "report": "docs/estate/JOBS_R980_STUDIO202_JOBS392_PRIVACY258_CONVERGENCE_AND_NEXT_CHALK_HANDOFF_20261109.md",
+  "report_commit": "357031440c994ab8dd322905623c520095b54b16",
+  "heads": {
+    "labs262": "f753af79a7e3a60d919fe8a9258338759137b1a1",
+    "jobs392": "23dbbe6bf802ac3350776c476699f6e33540c689",
+    "jobs393": "5fc1def0be77c75f7d9073efbeb41599d4dcd717",
+    "studio202": "501ac5c325f906cdeb32b0638dd15f5622ea1304",
+    "privacy258": "cec2e685c1154395590bc6c20520d15daffc3550",
+    "jobs391": "9f5759f072370fbd42a82560ff6c5d4f37169c6b"
+  },
+  "native_recorded": {
+    "jobs392_isolated": "22/22 Node22 Zod 3.25.76",
+    "studio202_focused": "5/5 Node20",
+    "jobs392_frozen_workspace": "reported PASS root and Functions build/typecheck/test exact head",
+    "privacy258_native": "NOT_RUN",
+    "jobs393_native": "NOT_RUN",
+    "jobs381_native_emulator": "NOT_RUN",
+    "storage252_real_gcs": "NOT_RUN"
+  },
+  "corrected_ancestry": {
+    "jobs390_jobs391_endpoint_trees_identical": true,
+    "tree": "4bd3d28a81d28f7507db98ce2f7359bb477e432a",
+    "histories_diverge": true
+  },
+  "security": {
+    "positive_consent": false,
+    "private_output": false,
+    "storage_privileged_bypass_observed": true,
+    "storage_fence_verified": false
+  },
+  "execution": {
+    "github_read": true,
+    "documentation_write": true,
+    "new_tests": false,
+    "code_changes": false,
+    "merge": false,
+    "deploy": false,
+    "provider_access": false
+  },
+  "next": [
+    "converge Jobs392+393 exact patches",
+    "full frozen R879 acceptance",
+    "Privacy258 authenticated denial",
+    "Jobs381 authenticated Rules",
+    "Jobs252 sole broker real GCS negative",
+    "approved scoped consent and Replay",
+    "protected CI device visual independent GO"
+  ]
+}
