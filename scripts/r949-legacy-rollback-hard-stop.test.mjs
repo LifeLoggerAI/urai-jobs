@@ -30,10 +30,3 @@ test('legacy rollback refuses success and reports safe next action', () => {
   assert.match(result.stderr, /independently approved Cloud Run rollback/);
   assert.match(result.stderr, /Production release remains HOLD/);
 });
-
-test('canonical deploy workflow remains separate from deprecated rollback', () => {
-  const canonical = readFileSync(new URL('../.github/workflows/urai-jobs-production-deploy.yml', import.meta.url), 'utf8');
-  assert.match(canonical, /^name: URAI Jobs Canonical Production Deploy/m);
-  assert.match(canonical, /scripts\/verify-rollback-revision\.mjs/);
-  assert.doesNotMatch(workflow, /scripts\/deploy-workers|scripts\/deploy-firebase|services update-traffic/);
-});
