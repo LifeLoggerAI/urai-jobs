@@ -53,3 +53,7 @@ Source controls: Studio consent and private MP4/SRT output authority intentional
 9. Separately obtain approved read-only GCP provider metadata and later real data-plane GCS IAM/consent/private Replay/deletion evidence under distinct authorization.
 
 **No merge, production deploy, credits, IAM/Rules edits, media enablement or release GO. ONE URAI GENESIS PRODUCTION HOLD.**
+
+## R952 fresh exact-head Actions result (read-only GitHub API)
+
+At the immutable #389 HEAD b865209cc352241602d8b9714672f3401aed7669, GitHub Actions returned **10 completed workflow runs, all conclusion FAILURE** (System Audit, Production Verify, Typecheck Diagnostics, Runtime CI, Career Surfaces CI, CI, Final CI, Defined Gitlink Guard, Firebase CLI Pin Guard and Visual Proof). This is **not a passing protected CI gate**; no assertion about common failure cause or source regression is supported without original job-step and log evidence. Do not interpret GitHub workflow failure counts as 10 native tests executed. **Production HOLD.**
