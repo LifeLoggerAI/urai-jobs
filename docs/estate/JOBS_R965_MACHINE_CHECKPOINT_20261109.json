@@ -1,0 +1,75 @@
+{
+  "schema": "one-urai-genesis-next-chalk-checkpoint-v1",
+  "checkpoint": "R965",
+  "date_utc": "2026-11-09",
+  "release": {
+    "status": "PRODUCTION_HOLD",
+    "go": false
+  },
+  "repository": "LifeLoggerAI/urai-jobs",
+  "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
+  "forensic_pr": 379,
+  "refreshed_prs": {
+    "jobs_379": "1094f7ac22c8d17ec9f92bdf250fc32241d1d1e1",
+    "jobs_371": "df19633466eaebdda844569ed0d562245bd31dc6",
+    "jobs_377": "f8578ea281e818b01811aecc2fe4dfb8c3dc8203",
+    "jobs_388": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
+    "jobs_389": "b865209cc352241602d8b9714672f3401aed7669",
+    "jobs_390": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+    "jobs_386": "fd1c8d85acd5cc96ef9fcb300173e362b004eb54",
+    "jobs_387": "04592f8573c708954f95f87ddca1e168efde51f4",
+    "jobs_384": "fd05a376f876f9b835929a2074c09f47638659e2",
+    "privacy_214": "cc0692053db3b1b8df8267d43856b1a3357de8a0",
+    "privacy_253": "90a4e581e8494f52d85eab3c576d02b926e7d0d9",
+    "privacy_254": "dbc193763dc112210c20b5b680e8eb08fdf8396c",
+    "privacy_255": "a4d7e4ffb76fa2dbbf7348e2b66faa991761509a",
+    "privacy_256": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6"
+  },
+  "blobs": {
+    "jobs_r923_receiver": "bf28abe6dec01330909f6e6f8bdea909d5a3b920",
+    "privacy_r20_ack_publisher": "84f1e77d5c1cf55f80aaa0a559b6a3eac781386e",
+    "privacy_r20_transition": "0ddee615f1284a58459aae48b915a574da7c9c9e",
+    "privacy_r20_entry": "59a6dcda725a322081f0609f5f01e81de801ee81",
+    "r647_dispatcher": "4126167b4350ba8afe6b19d7b60dec1ca891189f",
+    "r647_contract": "6cca2b9456319927cf22511c7d51c1f16ddf051c",
+    "r647_dispatcher_test": "def1048aa4838f7ff990d792a27d1fb94e7f6441",
+    "r647_jobs_contract_test": "fd60261f1518a31a476e2e5fdfbe62f9d8acf2aa"
+  },
+  "r965_findings": [
+    "Jobs R923 stores a durable consent block/event receipt with integrity hash and checks matching active block on replay.",
+    "Jobs reruns derivative invalidation on authenticated replay; if invalidation fails it returns HTTP 500, while successful cleanup attempt returns HTTP 200.",
+    "Jobs response and persisted receipt explicitly keep privateOutputDeletionAcknowledged=false and storageWriteFenceVerified=false; physical purge remains unverified.",
+    "Privacy R20 per-consumer ACK is separate and binds trusted token consumerId; validates detailHash format but does not recompute it against a Jobs receipt/action or full outbox digest.",
+    "Privacy ACK idempotency includes actorUid; service identity stability across retries/deploy rollovers requires definition.",
+    "R20 eventId excludes prior grant pair but integrityHash/replay classifier include it; v3 identity rule needs explicit decision.",
+    "Three separate claims must stay distinct: Jobs block receipt, Privacy canonical consumer ACK, provider-level physical purge evidence."
+  ],
+  "donor_execution": {
+    "dispatcher_test_declarations": 10,
+    "contract_test_declarations": 16,
+    "executed": false,
+    "typecheck": false,
+    "emulator": false,
+    "checkout": false,
+    "blocker": "git ls-remote exit 128; DNS could not resolve github.com. Local workspace had no complete Privacy checkout or node_modules."
+  },
+  "next_steps": [
+    "On connected host, clean checkout exact Privacy R647 head; verify commit/tree/blobs; run original dispatcher and contract Node tests separately; run Functions typecheck.",
+    "Review v3 contract with Privacy/legal/security: exact event ID/integrity inputs, source-time provenance, prior grant lineage, legacy handling and stable service identity.",
+    "Define Jobs receipt semantics separating consent-block commit from derivative-invalidation attempt/result.",
+    "Upgrade Privacy ACK receiver to bind full event digest, Jobs receipt hash/ID and exact action, or get explicit approval for an attestation trust model.",
+    "Specify crash-safe retry after Jobs commit and after Privacy ACK commit; identical ACK readback is idempotent, conflict goes needs-review.",
+    "Prepare separate review-only Privacy/Jobs changes preserving R647 mechanics and R20 replay protections.",
+    "Run same-SHA native Firebase emulator producer/outbox/dispatcher/Jobs/Privacy ACK flow.",
+    "Separately prove real nonproduction GCS late-writer denial, upload drain, exact generation deletion and final ACK."
+  ],
+  "prohibitions": [
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO DISPATCH",
+    "NO PRIVATE MEDIA",
+    "NO IAM CHANGE",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ]
+}
