@@ -159,6 +159,8 @@ function make(phase){
   assertLifeMovieOwnerTenantAuthorityClear:verifiedOwnerTenantFence,
   assertPlanOwner:shape.assertPlanOwner,
   assertLifeMoviePlanCurrentOrg:originalOrg.assertLifeMoviePlanCurrentOrg,
+  // R938: execute the original child/assembly organization binding guard.
+  assertLifeMovieJobPlanOrg:originalOrg.assertLifeMovieJobPlanOrg,
   assertPlanStructure:shape.assertPlanStructure,
   boundPlanJob:shape.boundPlanJob,validateOwnedMovieJob:owners.exports,buildRequestFingerprint:fingerprint,
   isDeepStrictEqual,consentBlockRef:()=>ref('jobConsentBlocks/'+owner),
