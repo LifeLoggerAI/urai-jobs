@@ -36,6 +36,17 @@ const existing={exists:true,data:()=>({jobId:'prior-accepted-job'})};
 const hash='a'.repeat(64);
 const request={userId:'owner-1',tenantId:'tenant-1',idempotencyKey:'replayed-key',consent:{purpose:'life-movie.render',policyVersion:'1.1.0',decisionReceiptId:hash},payload:{projectId:'p1',renderPlanDigest:hash,sceneTruthDigest:hash,sceneTruthReceiptRef:'receipt-1'}};
 function harness(mode,phase){
+  // R942: a replayed long-form idempotency binding is only valid when the
+  // original persisted plan can be loaded and re-authorized. Never mock the
+  // plan lookup to succeed without checking the actual owner and org.
+  const priorPlan={planId:'prior-accepted-job',schemaVersion:'urai-life-movie-longform-plan-v1',
+    status:'PENDING',ownerUid:phase==='plan-wrong-owner'?'another-owner':'owner-1',
+    tenantId:'tenant-1',...(phase==='plan-wrong-org'?{orgId:'other-org'}:{}),
+    projectId:'p1',renderPlanDigest:hash,sceneTruthDigest:hash,
+    sceneTruthReceiptRef:'receipt-1',consent:request.consent,width:1920,height:1080,fps:30,
+    childJobIds:['prior-accepted-job-0'],segments:[{index:0,startMs:0,endMs:1,
+      childDigest:hash,childPayloadFingerprint:hash,jobId:'prior-accepted-job-0'}]};
+  const storedPlan={exists:true,data:()=>priorPlan};
   const src=read(mode==='short'?'jobs/studioLifeMovieBridge.ts':'jobs/studioLifeMovieLongformBridge.ts');
   const fn=mode==='short'?'createLifeMovieJob':'createPlan';
   const start=src.indexOf('async function '+fn+'(');
@@ -53,6 +64,8 @@ function harness(mode,phase){
         if(phase==='error')throw Error('synthetic_firestore_unavailable');
         return phase==='revoked'?stored(true):phase==='malformed'?stored('false'):absent;
       }
+      if(r.path==='plans/prior-accepted-job'&&mode==='longform')
+        return phase==='plan-missing'?absent:storedPlan;
       return r.path.startsWith('bindings/')?existing:absent;
     },
     create(r,body){writes.push({path:r.path,body})}
@@ -70,26 +83,40 @@ function harness(mode,phase){
     makeChildId:(id,i)=>id+'-'+i,buildRequestFingerprint:()=>hash,buildIdempotencyBindingId:()=> 'binding',bindingMatches:()=>true,
     FieldValue:{serverTimestamp:()=>0},ulid:()=> '01AAAAAAAAAAAAAAAAAAAAAAAA',jobDoc:id=>ref('jobs/'+id),jobQueueEntryDoc:id=>ref('queue/'+id),planRef:id=>ref('plans/'+id),
     IDEMPOTENCY_COLLECTION:'bindings',BINDING_COLLECTION:'bindings',SCENE_TRUTH_RECEIPT_BINDING_COLLECTION:'receipts'};
-  vm.runInNewContext(compile(src.slice(start,end)+'\nmodule.exports='+fn+';'),env);
+  // Use the exact original bridge owner check, not a permissive fixture.
+  const ownerStart=src.indexOf('function assertPlanOwner(');
+  const ownerEnd=src.indexOf('\nfunction assertPlanStructure(',ownerStart);
+  if(mode==='longform')assert.ok(ownerStart>=0&&ownerEnd>ownerStart);
+  const ownerSource=mode==='longform'?src.slice(ownerStart,ownerEnd)+'\n':'';
+  vm.runInNewContext(compile(ownerSource+src.slice(start,end)+'\nmodule.exports='+fn+';'),env);
   return {invoke:()=>env.module.exports(request),reads,writes,preflight};
 }
-for(const mode of ['short','longform'])for(const phase of ['revoked','malformed','error','clear','owner-pending','owner-malformed','owner-missing']){
+for(const mode of ['short','longform'])for(const phase of [
+  'revoked','malformed','error','clear','owner-pending','owner-malformed','owner-missing',
+  ...(mode==='longform'?['plan-missing','plan-wrong-owner','plan-wrong-org']:[])
+]){
   test(mode+' existing idempotency binding '+phase+' must use transactional revocation',async()=>{
     const h=harness(mode,phase);
     if(phase==='clear'){
       const result=await h.invoke();
       assert.equal(result.deduplicated,true);
       assert.equal(mode==='short'?result.jobId:result.planId,'prior-accepted-job');
+      if(mode==='longform')assert.equal(h.writes.length,0,'idempotent long-form replay must be read-only');
     }else{
       const error=phase==='revoked'?(mode==='short'?'life_movie_consent_revoked':'life_movie_longform_consent_revoked'):
         phase==='malformed'?'life_movie_consent_block_unverified':
         phase==='owner-pending'?'owner_data_rights_deletion_pending':
-        phase==='owner-malformed'||phase==='owner-missing'?'owner_data_rights_authority_unavailable':'synthetic_firestore_unavailable';
+        phase==='owner-malformed'||phase==='owner-missing'?'owner_data_rights_authority_unavailable':
+        phase==='plan-missing'?'longform_plan_not_found':
+        phase==='plan-wrong-owner'?'longform_plan_boundary_mismatch':
+        phase==='plan-wrong-org'?'life_movie_owner_org_authority_unavailable':'synthetic_firestore_unavailable';
       await assert.rejects(h.invoke(),new RegExp(error));
       assert.equal(h.writes.length,0,'revoked or unverified consent must not write');
     }
     assert.ok(h.preflight.some(x=>x.startsWith('jobConsentBlocks/')),'initial consent preflight required');
     assert.ok(h.reads.some(x=>x.startsWith('jobConsentBlocks/')),'existing idempotency replay must check consent within transaction');
     assert.ok(h.reads.includes('users/owner-1'),'existing replay must check original owner-deletion fence inside transaction');
+    if(mode==='longform'&&['clear','plan-missing','plan-wrong-owner','plan-wrong-org'].includes(phase))
+      assert.ok(h.reads.includes('plans/prior-accepted-job'),'long-form replay must read the bound persisted plan');
   });
 }
