@@ -26,6 +26,10 @@ cd "$ROOT"
 git merge-base --is-ancestor "$PARENT" HEAD 2>/dev/null || hold 'R879 two-parent merge is not an ancestor (full history required)'
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || hold 'Source working tree is not clean'
 
+# R946: validate every frozen check_blob against this immutable Git HEAD before
+# expensive native test stages. Never auto-rewrite a pin from the current tree.
+node scripts/r946-r879-source-pin-preflight.mjs scripts/run-r879-unified-native-acceptance.sh || hold 'R946 source closure refused this HEAD'
+
 # Every critical file must match the same original, independently reviewed Git blob.
 # This script belongs on a child branch: do not hardcode a future self-referential HEAD.
 check_blob() {
@@ -56,6 +60,9 @@ check_blob 'functions/src/privacy/dataRightsExecution.ts' '756547684397788d8051a
 check_blob 'scripts/r888-quota-ledger-deletion-contract.test.mjs' '54ec923386f973ecae75554accf802b4c280d656'
 check_blob 'scripts/r881-admin-callable-parser.test.mjs' 'ba8aa35132c701a50ef47cef142d12c120ebd8bd'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
+# R946 original offline source-preflight implementation and native fixture suite.
+check_blob 'scripts/r946-r879-source-pin-preflight.mjs' '73b69cb02c5708a2fa581dea965b5c3c55a449e2'
+check_blob 'scripts/r946-preflight.test.mjs' '918260ac8ab90aecb5170673f14aeda094a767cc'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
   FIREBASE_TOKEN FIREBASE_CLI_TOKEN GOOGLE_OAUTH_ACCESS_TOKEN \
@@ -94,6 +101,11 @@ stage() {
   printf '%s\tPASS\t0\t%s\n' "$id" "$digest" >> "$OUT/stages.tsv"
   printf 'URAI_R879_STAGE_PASS stage=%s sha256=%s\n' "$id" "$digest"
 }
+
+# R946 run five actual offline Git-fixture cases before the expensive inherited
+# native stages; this is not cloud or Firebase authorization evidence.
+stage r946_source_pin_preflight_5 120s node --test scripts/r946-preflight.test.mjs
+grep -q '# pass 5' "$OUT/r946_source_pin_preflight_5.log" || hold 'R946 original five-case checker suite missing'
 
 # Original R854 complete frozen install, workspace verify/typecheck/build,
 # hard-off checks, race model, and four disposable native negative suites.
@@ -163,8 +175,8 @@ grep -q '# pass 19' "$OUT/legacy_writer_refusal_19_source.log" || hold 'R887 leg
 check_blob 'functions/src/jobs/lifeMovieLongformOwnerOrg.ts' '36b809a8e599b288480800f4fc3248eb828b5911'
 check_blob 'functions/src/jobs/studioLifeMovieLongformBridge.ts' '888e9645e78d1bd723df883e0a73f042143f1e03'
 check_blob 'scripts/r888-longform-owner-org.test.mjs' '5d33a2cf702fef990201bd6f519ae370d130c074'
-check_blob 'scripts/life-movies-longform-resume-transaction-contract.mjs' 'ef439bbe7a6a697ab04f2ebfc53b7e98d5466dd1'
-check_blob 'scripts/r417-original-donor-longform-resume-transaction-contract.mjs' '19969a9aa34fc19c0ebc520d39f4a368a8402a24'
+check_blob 'scripts/life-movies-longform-resume-transaction-contract.mjs' '75d5e73151a3dd7b4726fe10251ebd63332bd165'
+check_blob 'scripts/r417-original-donor-longform-resume-transaction-contract.mjs' '800834dcfb3db0ff5fdda54ecc83203d7a1a71a3'
 stage studio_longform_org_12_source 120s node --experimental-strip-types --test scripts/r888-longform-owner-org.test.mjs
 grep -q '# pass 12' "$OUT/studio_longform_org_12_source.log" || hold 'R888 organization binding source tests missing'
 
