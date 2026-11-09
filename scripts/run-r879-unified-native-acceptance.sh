@@ -49,17 +49,9 @@ check_blob 'scripts/r875-current-job-caller-authority.test.mjs' '747de36ed331827
 check_blob 'scripts/r876-current-getJobStatus-lifecycle.test.mjs' '6e36a31f9ba17dbf10ba90c79ecd4571b163319f'
 check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d533'
 check_blob 'functions/src/jobs/createJob.ts' 'c52f09900bb76a1fa71445a7fceb39c177c2c568'
-check_blob 'functions/src/jobs/jobCreateRateLimit.ts' '9b7a53c41c56681dfdf4cebbc00de9a962adf5d2'
-check_blob 'firestore.rules' 'cfa77a8fa5e69327ab352b31450c59a036d21e38'
-check_blob 'firestore.indexes.json' '7690ab3a4db2d7e83de5d6d13ebd7100cecde5bd'
-check_blob 'scripts/r879-jobs-current-authority.firebase-emulator.test.mjs' '89f9a65d3276d606975b7f5f5d285f6cb4906c18'
-check_blob 'scripts/run-r879-jobs-native-auth-acceptance.sh' '67ae8515bd206456c8d181ff52ef173e67f65cc2'
-check_blob 'scripts/r884-emulator-env-isolation.test.mjs' 'edbb4fc44f026d1d972021020ca4198d0561c79b'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' '2f87ff80619fca9b8cf7e0a09d7f9c6bb3c04a1b'
-check_blob 'functions/src/privacy/dataRightsExecution.ts' '756547684397788d8051acace70ac0e5c03e2e17'
-check_blob 'scripts/r888-quota-ledger-deletion-contract.test.mjs' '54ec923386f973ecae75554accf802b4c280d656'
+check_blob 'package.json' '37fe4b7de45547709eda9b26bfba02b8dbbd2443'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
@@ -160,22 +152,63 @@ check_blob 'scripts/requeue-dead.mjs' 'fa56f43e016a1eb6a426e199d72ae47ff690bd2e'
 check_blob 'scripts/reclaim-stale-leases.mjs' 'b6e5b640c9bb3a85afa24682ed5ebe3ae318499c'
 check_blob 'scripts/admin-process-queue-now.mjs' '0a2c843726952b6ca62fe745c3b296e95e928b0d'
 check_blob 'scripts/run-worker.mjs' '5d05c0bc16ece743390042b6b492de9dec8abd50'
-stage create_quota_ledger_source 120s node --experimental-strip-types --test scripts/r883-create-job-quota-ledger.test.mjs
-stage firestore_quota_index_source 120s node --test scripts/r885-firestore-quota-index-contract.test.mjs
-stage admin_parser_source 120s node --test scripts/r881-admin-callable-parser.test.mjs
-stage emulator_env_preflight_source 120s node --test scripts/r884-emulator-env-isolation.test.mjs
-stage quota_delete_6_source 120s node --test scripts/r888-quota-ledger-deletion-contract.test.mjs
-check_blob 'functions/src/jobs/lifeMovieLongformOwnerOrg.ts' '36b809a8e599b288480800f4fc3248eb828b5911'
-check_blob 'functions/src/jobs/studioLifeMovieLongformBridge.ts' '86d540ed110f1400470b5cbb7d432df0f38d10cf'
-check_blob 'scripts/life-movies-longform-resume-transaction-contract.mjs' 'ef439bbe7a6a697ab04f2ebfc53b7e98d5466dd1'
-check_blob 'scripts/r417-original-donor-longform-resume-transaction-contract.mjs' '19969a9aa34fc19c0ebc520d39f4a368a8402a24'
-check_blob 'scripts/r888-longform-owner-org.test.mjs' '5d33a2cf702fef990201bd6f519ae370d130c074'
-stage longform_org_12_source 120s node --experimental-strip-types --test scripts/r888-longform-owner-org.test.mjs
-grep -q '# pass 12' "$OUT/longform_org_12_source.log" || hold '12 long-form organization source tests not recorded'
-
 stage legacy_writer_refusal_19_source 120s node --test scripts/r887-legacy-admin-writer-gate.test.mjs
 grep -q '# pass 19' "$OUT/legacy_writer_refusal_19_source.log" || hold 'R887 legacy writer refusal regressions not recorded'
 
+# R888 Studio long-form owner organization is server-owned and never inherited
+# from user-supplied tenant; actual private GCS writer remains hard-off.
+check_blob 'functions/src/jobs/lifeMovieLongformOwnerOrg.ts' '36b809a8e599b288480800f4fc3248eb828b5911'
+check_blob 'functions/src/jobs/studioLifeMovieLongformBridge.ts' '888e9645e78d1bd723df883e0a73f042143f1e03'
+check_blob 'scripts/r888-longform-owner-org.test.mjs' '5d33a2cf702fef990201bd6f519ae370d130c074'
+check_blob 'scripts/life-movies-longform-resume-transaction-contract.mjs' 'ef439bbe7a6a697ab04f2ebfc53b7e98d5466dd1'
+check_blob 'scripts/r417-original-donor-longform-resume-transaction-contract.mjs' '19969a9aa34fc19c0ebc520d39f4a368a8402a24'
+stage studio_longform_org_12_source 120s node --experimental-strip-types --test scripts/r888-longform-owner-org.test.mjs
+grep -q '# pass 12' "$OUT/studio_longform_org_12_source.log" || hold 'R888 organization binding source tests missing'
+
+# R889 retain both source-derived longform transactional resume fixtures:
+# the original R417 donor and modern R888 bridge fixture must execute together
+# against the actual owner/org helper rather than permissive test stubs.
+stage longform_resume_source 180s node --test \
+  scripts/r417-original-donor-longform-resume-transaction-contract.mjs \
+  scripts/life-movies-longform-resume-transaction-contract.mjs
+
+# R890 current server-owner cancellation boundary; source-only before native Firebase.
+check_blob 'scripts/r890-cancel-authority-regression.test.mjs' '8ef3f1e799016eafd3f254f5fa2805f0e6ba2c18'
+stage private_movie_cancel_14_source 120s node --experimental-strip-types --test scripts/r890-cancel-authority-regression.test.mjs
+grep -q '# pass 14' "$OUT/private_movie_cancel_14_source.log" || hold 'R890 private cancellation authority regressions missing'
+
+# R891: independently preserve the peer's atomic owner quota, composite
+# migration index, and nested four-emulator identity isolation. All checks
+# refer to unchanged original Git blobs from the R887 peer parent.
+check_blob 'functions/src/jobs/jobCreateRateLimit.ts' '9b7a53c41c56681dfdf4cebbc00de9a962adf5d2'
+check_blob 'firestore.indexes.json' '7690ab3a4db2d7e83de5d6d13ebd7100cecde5bd'
+check_blob 'firestore.rules' 'cfa77a8fa5e69327ab352b31450c59a036d21e38'
+check_blob 'scripts/owner_authority_rules.static.test.mjs' '3c1dcedbdb5d988da32e85a8e06241bc0bda8bb2'
+check_blob 'scripts/r883-create-job-quota-ledger.test.mjs' '52598f8ab1e84e40e6f3246ca65a8dca8df776c0'
+check_blob 'scripts/r885-firestore-quota-index-contract.test.mjs' '9df8b168f6636ba141f17a15b4e5659361910369'
+check_blob 'scripts/r884-emulator-env-isolation.test.mjs' 'edbb4fc44f026d1d972021020ca4198d0561c79b'
+check_blob 'scripts/r887-disposable-project-handoff.test.mjs' '5d6aa48ab8111280f983f05821209c60b9a92299'
+check_blob 'functions/src/privacy/dataRightsExecution.ts' '756547684397788d8051acace70ac0e5c03e2e17'
+check_blob 'scripts/r888-quota-ledger-deletion-contract.test.mjs' '54ec923386f973ecae75554accf802b4c280d656'
+check_blob 'scripts/r881-admin-callable-parser.test.mjs' 'ba8aa35132c701a50ef47cef142d12c120ebd8bd'
+check_blob 'scripts/r879-jobs-current-authority.firebase-emulator.test.mjs' '89f9a65d3276d606975b7f5f5d285f6cb4906c18'
+check_blob 'scripts/run-r879-jobs-native-auth-acceptance.sh' '67ae8515bd206456c8d181ff52ef173e67f65cc2'
+stage create_quota_12_source 120s node --experimental-strip-types --test scripts/r883-create-job-quota-ledger.test.mjs
+grep -q '# pass 12' "$OUT/create_quota_12_source.log" || hold 'R883 exact-source quota tests missing'
+stage quota_index_5_source 120s node --test scripts/r885-firestore-quota-index-contract.test.mjs
+grep -q '# pass 5' "$OUT/quota_index_5_source.log" || hold 'R885 composite index source tests missing'
+stage emulator_env_10_source 120s node --test scripts/r884-emulator-env-isolation.test.mjs
+grep -q '# pass 10' "$OUT/emulator_env_10_source.log" || hold 'R884 nested emulator env isolation tests missing'
+stage project_handoff_4_source 120s node --test scripts/r887-disposable-project-handoff.test.mjs
+grep -q '# pass 4' "$OUT/project_handoff_4_source.log" || hold 'R887 nested project handoff tests missing'
+
+# R893 — Preserve the independent R888 deletion-retention correction and R881
+# original admin parser checks while retaining the R890 cancellation veto and
+# all R891 four-emulator native stages. Source-only tests are not runtime proof.
+stage quota_delete_6_source 120s node --test scripts/r888-quota-ledger-deletion-contract.test.mjs
+grep -q '# pass 6' "$OUT/quota_delete_6_source.log" || hold 'R888 deletion ledger source acceptance missing'
+stage admin_parser_2_source 120s node --test scripts/r881-admin-callable-parser.test.mjs
+grep -q '# pass 2' "$OUT/admin_parser_2_source.log" || hold 'R881 exported admin parser test missing'
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \
   --only auth,firestore,storage \
@@ -184,15 +217,18 @@ grep -q 'R857_REVIEW_ONLY_PHYSICAL_GENERATION_LEDGER_PASS checks=9' "$OUT/physic
 grep -q 'actualFirestoreEmulator=true actualStorageEmulator=true' "$OUT/physical_generation_9_native.log" || hold 'Actual emulator assertion missing'
 grep -q 'privilegedBypassObserved=true exclusiveIAMVerified=false' "$OUT/physical_generation_9_native.log" || hold 'Storage-level bypass/unknown IAM not established'
 grep -q 'privateDeletionAcknowledged=false productionAuthorized=false' "$OUT/physical_generation_9_native.log" || hold 'Incorrect native production scope'
-# Execute the separate original real Auth/Firestore/Functions/Storage Jobs
-# callable and 14-way admission suite. Use the nested runner's own demo-only
-# project and exact-head checks; no production credentials or providers.
-stage current_jobs_authority_quota_native 7200s env \
-  GCLOUD_PROJECT=demo-urai-jobs GOOGLE_CLOUD_PROJECT=demo-urai-jobs \
-  URAI_EMULATOR_PROJECT=demo-urai-jobs URAI_ACCEPTANCE_SHA="$EXPECTED" \
+# R891: the original four-emulator signed-in Auth/Firestore/Functions/Storage
+# suite must execute, including current-operator role downgrade and the
+# 14-concurrent-request createJob quota race. A source test is not acceptance.
+# Outer negative Storage project is intentionally NOT the inner demo project.
+# Clear both inherited project selectors before setting the inner identity.
+stage jobs_authority_quota_native 7200s env \
+  -u FIREBASE_PROJECT_ID -u CLOUDSDK_CORE_PROJECT \
+  URAI_EMULATOR_PROJECT=demo-urai-jobs GCLOUD_PROJECT=demo-urai-jobs GOOGLE_CLOUD_PROJECT=demo-urai-jobs \
+  URAI_ACCEPTANCE_SHA="$EXPECTED" \
   bash scripts/run-r879-jobs-native-auth-acceptance.sh
 grep -q "R879_JOBS_NATIVE_AUTH_ACCEPTANCE_PASS source=$EXPECTED project=demo-urai-jobs" \
-  "$OUT/current_jobs_authority_quota_native.log" || hold 'Missing real Jobs native caller/quota acceptance marker'
+  "$OUT/jobs_authority_quota_native.log" || hold 'Authenticated Jobs owner/quota native evidence missing'
 
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || hold 'Acceptance changed the pinned working tree'
 
