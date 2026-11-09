@@ -155,3 +155,27 @@ Every finding must be labelled as source config, branch/commit, source blob, sta
 **NO MERGE / NO DEPLOY / NO DISPATCH / NO C1 OR C6 ENABLEMENT / NO PRIVATE MEDIA / NO IAM OR RULES MUTATION / NO BILLING ACTION / NO PAID COMPUTE / NO PRODUCTION GO.**
 
 Preserve all original LifeLogger → LifeOS → UrAi → RuAi implementations, histories and review stacks. Integrate only after proof. **ONE URAI GENESIS — PRODUCTION HOLD / NO-GO.**
+
+
+---
+
+## R972 additive reconciliation — read this before acting
+
+Master cross-lineage report:
+JOBS_R972_FULL_SYSTEM_RECONCILIATION_RULES_CONSENT_JOBS_PRIVACY_HOLD_20261109.md
+
+Updated machine checkpoint:
+JOBS_R972_MACHINE_CHECKPOINT_20261109.json (includes supplemental_cross_lineage_reconciliation).
+
+New R972 findings to preserve:
+
+1. Jobs #381/#383 contain the review-only dataRightsDeletionRequestId Rules repair. Exact Rules blob d30c3e8fbbfcbf25767501e351edcb18d6080c6d; static suite passed 15/15 on exact blobs (R943 TAP SHA256 a68a5b4e7709387bcaa8aa1d856824817efa4b53104bea91d29525664e13da9e). This is NOT native Firebase Rules emulator acceptance. Issue #380 remains open.
+2. Jobs #391 corrects overescaped regexes in the Studio producer Zod test. Test blob 74e94da0a118a043ab76af611474f3f73d329cea. It is one commit ahead and two behind its declared #390 base (merge base a7a1ef61ac1f219567131abec0b9d4f2); test not executed and not enrolled in root urai-jobs:verify or R879. Reconcile onto exact current #390 head and enroll exact blob before claiming release acceptance.
+3. Privacy #257 R27 adds a Jobs-only Life Movie verifier on R20. It requires dedicated own-claims Jobs identity and revoked-token recheck, reads consent/tombstone, writes audit denial only, hard-forces allowed=false, returns no receipt, writes no grant, and leaves life-movie.render unregistered. It is NOT C6 enablement. Focused workflow run ID 42613095876, job 129146191449; steps empty and no test/build pass certified.
+4. Admin main workflow and deploy script source contain: firebase deploy --only hosting,functions,firestore,storage -P urai-4dc1d. This corroborates a source-level ability to publish Admin Rules into the source-configured shared project, not proof it ran or changed deployed rules. Existing Admin #100–#113 repair chain is unmerged; #113 intentionally fails closed because its codebase guard requires urai-admin-functions while its firebase.json still says default.
+5. Current Jobs #381/#383 and Privacy #257 workflow conclusions fail, but sample job steps are empty. No application assertion cause may be claimed.
+6. The original R647, Jobs #371 revocation harness and Privacy R818/R836 callable runner remain separate tests/architectures. Do not combine receipts.
+
+R972 full report classifies source-vs-provider evidence, test-vs-enrollment and all independent release gates. R973 must begin with owner-authorized read-only provider inventory of urai-4dc1d/(default), one Rules publishing authority decision, native Rules acceptance for #381/#383, #391 test reconciliation/enrollment/execution, Privacy #257 diagnostic artifacts/denial tests, and P0 GCS post-revocation 403/upload drain/generation-purge ACK. No Rules/IAM mutation in discovery.
+
+All unchanged safety boundaries remain: no merge, deploy, dispatch, C1/C6 enablement, private media, Rules/IAM mutation, billing action, paid compute or Production GO.
