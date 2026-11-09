@@ -55,11 +55,18 @@ check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d53
 check_blob 'functions/src/jobs/createJob.ts' 'c52f09900bb76a1fa71445a7fceb39c177c2c568'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' 'bd50af6bead1c62f36ada6c012123fe0c5d94da7'
+check_blob 'package.json' '38c9bb6af14f2807656e19e333a7be5a0a992eff'
 check_blob 'functions/src/privacy/dataRightsExecution.ts' '756547684397788d8051acace70ac0e5c03e2e17'
 check_blob 'scripts/r888-quota-ledger-deletion-contract.test.mjs' '54ec923386f973ecae75554accf802b4c280d656'
 check_blob 'scripts/r881-admin-callable-parser.test.mjs' 'ba8aa35132c701a50ef47cef142d12c120ebd8bd'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
+# R973: preserve exact Studio producer -> real Jobs Zod denial contract sources.
+check_blob 'scripts/studio-life-movie-actual-producer-zod-contract.test.mjs' '74e94da0a118a043ab76af611474f3f73d329cea'
+check_blob 'scripts/fixtures/studio-r931-producer.ts' '701be51e861e0a5ff47d88ceaba1e3812433d659'
+check_blob 'scripts/fixtures/studio-r931-builder-input.json' '535486ddc13d9419afdd72f155a33018b6562c4d'
+check_blob 'scripts/fixtures/studio-r931-dispatch-route.source.txt' 'ef8e2bd124f7ea2da213d07fca3c5e82d80a056a'
+check_blob 'functions/src/jobs/studioLifeMovieContract.ts' '5f944e906de7243d7415ac479cf92356b09c84c9'
+check_blob 'functions/src/privacy/lifeMovieConsentGate.ts' '53761ac0f5c0340563b13fdd9a12a90e75409d42'
 # R946 original offline source-preflight implementation and native fixture suite.
 check_blob 'scripts/r946-r879-source-pin-preflight.mjs' '73b69cb02c5708a2fa581dea965b5c3c55a449e2'
 check_blob 'scripts/r946-preflight.test.mjs' '918260ac8ab90aecb5170673f14aeda094a767cc'
@@ -107,6 +114,10 @@ stage() {
 # native stages; this is not cloud or Firebase authorization evidence.
 stage r946_source_pin_preflight_5 120s node --test scripts/r946-preflight.test.mjs
 grep -q '# pass 5' "$OUT/r946_source_pin_preflight_5.log" || hold 'R946 original five-case checker suite missing'
+
+# R973: required actual Studio producer -> Jobs strict Zod hard-off acceptance.
+stage studio_producer_jobs_zod_3_source 120s node --experimental-strip-types --test scripts/studio-life-movie-actual-producer-zod-contract.test.mjs
+grep -q '# pass 3' "$OUT/studio_producer_jobs_zod_3_source.log" || hold 'Studio producer Jobs Zod three-case acceptance missing'
 
 # R952: original R951 four-worker 48-scenario production/emulator precedence tests.
 # Keep this a mandatory executable stage, not only a source marker.
