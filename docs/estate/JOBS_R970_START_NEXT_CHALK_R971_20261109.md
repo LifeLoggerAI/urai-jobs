@@ -1,3 +1,38 @@
+# NEXT CHALK — ONE URAI GENESIS R972 CONTINUATION
+
+**R971 is now the latest supplemental audit. Read these first:**
+1. [R971 Firebase Rules authority and Jobs owner-field reconciliation](JOBS_R971_FIREBASE_RULES_AUTHORITY_AND_OWNER_FIELD_RECONCILIATION_HOLD_20261109.md)
+2. [R971 machine checkpoint](JOBS_R971_MACHINE_CHECKPOINT_20261109.json)
+3. [R970 19-repository Firebase Rules and CI audit](JOBS_R970_19_REPO_FIREBASE_RULES_AND_CI_RECONCILIATION_HOLD_20261109.md)
+4. [R970 machine checkpoint](JOBS_R970_MACHINE_CHECKPOINT_20261109.json)
+5. The R969 full-stack branch/CI governance audit, current-lineage/Life Movie/C1 Rules audit, and full reconciliation.
+6. The R968 consolidated lineage ledger and R967 provenance handoff.
+
+## R971 critical correction and new facts
+
+- Spatial, Admin and B2Bportal source configs all target `urai-4dc1d/(default)` with different Firestore Rules files. This is a **potential source-level publisher collision**, not proof of live overwrite or breach. Labs #261 is a source-only detector; its eight tests were not executed in this pass.
+- Privacy root `.firebaserc` was not found at checked main; Privacy #186 guarded deploy wrapper is explicitly `functions:privacy` only. It does not publish the changed Privacy Rules. Project mapping and live deployed Rules remain unknown.
+- Jobs #380 remains open. Main Rules and the exact R940 inherited Rules file both omit protection of `dataRightsDeletionRequestId`.
+- Critical distinction: Jobs #378's seven-file PR diff contains test scripts and documentation, **not** `firestore.rules`. The Rules file at #378 head is identical to its base blob and inherited from its base; #378 itself is not a Rules repair.
+- Jobs #252/#376/#380/#345 and Privacy #83 remain open.
+- Sampled Privacy #186, Spatial #1964 and Jobs #390/#391 workflow runs conclude failure, but steps/logs are null or BlobNotFound; do not call the app tests failed or passed.
+- Main Jobs remains `2bcdbcf34da4a3fe58619286d6917e2d4fa624e1`, branch protection disabled per branch metadata. Provider/effective Rules/IAM remain unknown.
+
+## R972 execution priorities
+
+1. Obtain owner-authorized read-only provider inventory for `urai-4dc1d`, database identities, deployed Rules release, deployment principals and project ownership.
+2. Decide one accountable Rules publisher for the shared default DB or establish approved separate database/project boundaries.
+3. Confirm Privacy project/region and preserve #186's Functions-only deployment boundary until a separate Rules process is approved.
+4. Create a distinct review-only Jobs #380 Rules fix including `dataRightsDeletionRequestId`; test every protected field's add/change/remove through authenticated Firebase Rules emulators.
+5. Run Labs #261 source detector/tests on its exact head; retain source-only evidence classification.
+6. Obtain executable protected-CI logs or controlled runner evidence; no blind reruns.
+7. Preserve R647, Jobs #371 and R818/R836 as separate acceptance tracks.
+8. Complete P0 GCS post-revocation 403, upload drain, exact-generation delete and downstream purge ACK; then private Replay and full release gates.
+
+**No merge, deploy, Rules/IAM mutation, CI bypass, C6 enablement, private media, paid compute or production GO.**
+
+---
+
 # NEXT CHALK — ONE URAI GENESIS R971 CONTINUATION
 
 **Checkpoint:** R970 · November 9, 2026 · **Release: PRODUCTION HOLD / NO-GO**  
