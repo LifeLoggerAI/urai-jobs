@@ -58,7 +58,7 @@ function timingSafeBearer(actualHeader: string, expectedToken: string): boolean 
 
 function requireWorkerAuth(req: Request, res: Response, next: NextFunction) {
   const token = String(process.env.URAI_JOBS_WORKER_TOKEN || '');
-  const local = ['local', 'test'].includes(runtimeEnv()) || process.env.FUNCTIONS_EMULATOR === 'true';
+  const local = !productionRuntime() && (['local', 'test'].includes(runtimeEnv()) || process.env.FUNCTIONS_EMULATOR === 'true');
   if (!token && local) return next();
   if (!token) return res.status(503).send({ ok: false, error: 'worker auth is not configured' });
   if (!timingSafeBearer(req.get('Authorization') || '', token)) {
