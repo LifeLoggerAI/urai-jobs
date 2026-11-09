@@ -70,6 +70,7 @@ check_blob 'functions/src/privacy/lifeMovieConsentGate.ts' '53761ac0f5c0340563b1
 # R946 original offline source-preflight implementation and native fixture suite.
 check_blob 'scripts/r946-r879-source-pin-preflight.mjs' '73b69cb02c5708a2fa581dea965b5c3c55a449e2'
 check_blob 'scripts/r946-preflight.test.mjs' '918260ac8ab90aecb5170673f14aeda094a767cc'
+check_blob 'scripts/r879-stage-order.test.mjs' 'd87fb92fedf883fe4d1e9cf50bb6fdfb4d869beb'
 check_blob 'scripts/r951-worker-emulator-auth-precedence.test.mjs' 'd27cc3880aa2ae0387f81bb660ca340d830e22dc'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
@@ -110,14 +111,14 @@ stage() {
   printf 'URAI_R879_STAGE_PASS stage=%s sha256=%s\n' "$id" "$digest"
 }
 
+# Offline orchestration regression; no dependency or cloud access.
+stage r879_stage_order_3 120s node --test scripts/r879-stage-order.test.mjs
+grep -q '^# pass 3$' "$OUT/r879_stage_order_3.log" || hold 'Runner stage-order regression missing'
+
 # R946 run five actual offline Git-fixture cases before the expensive inherited
 # native stages; this is not cloud or Firebase authorization evidence.
 stage r946_source_pin_preflight_5 120s node --test scripts/r946-preflight.test.mjs
 grep -q '# pass 5' "$OUT/r946_source_pin_preflight_5.log" || hold 'R946 original five-case checker suite missing'
-
-# R973: required actual Studio producer -> Jobs strict Zod hard-off acceptance.
-stage studio_producer_jobs_zod_10_source 120s node --experimental-strip-types --test scripts/studio-life-movie-actual-producer-zod-contract.test.mjs
-grep -q '# pass 10' "$OUT/studio_producer_jobs_zod_10_source.log" || hold 'Studio producer Jobs Zod three-case acceptance missing'
 
 # R952: original R951 four-worker 48-scenario production/emulator precedence tests.
 # Keep this a mandatory executable stage, not only a source marker.
@@ -129,6 +130,11 @@ grep -q '# pass 4' "$OUT/r951_worker_auth_emulator_precedence_4.log" || hold 'R9
 stage r854_original 5400s bash scripts/run-r854-private-storage-p0-negative-native.sh
 grep -q 'URAI_R854_PRIVATE_STORAGE_P0_NEGATIVE_REPRODUCED' "$OUT/r854_original.log" || hold 'Missing R854 native marker'
 grep -q 'privilegedBypassObserved=true storageLevelFenceVerified=false' "$OUT/r854_original.log" || hold 'Original negative Storage bypass evidence missing'
+
+# The real-Zod stage needs dependencies installed by r854_original above.
+# R973: required actual Studio producer -> Jobs strict Zod hard-off acceptance.
+stage studio_producer_jobs_zod_10_source 120s node --experimental-strip-types --test scripts/studio-life-movie-actual-producer-zod-contract.test.mjs
+grep -q '# pass 10' "$OUT/studio_producer_jobs_zod_10_source.log" || hold 'Studio producer Jobs Zod ten-case acceptance missing'
 
 # Separately rerun exact new source-level suite and real Firebase Storage/Firestore
 # emulator generation readback. Neither is an actual GCS IAM/owner-signature test.

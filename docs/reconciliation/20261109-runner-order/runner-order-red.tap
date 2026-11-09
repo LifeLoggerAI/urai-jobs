@@ -1,0 +1,75 @@
+✖ clean acceptance installs dependencies before real-Zod producer stage (10.722337ms)
+✖ failed prerequisite never runs producer acceptance (5.000948ms)
+✖ failed producer acceptance remains fatal after successful install (6.612256ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 0
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 123.91986
+
+✖ failing tests:
+
+test at jobs/scripts/r879-stage-order.test.mjs:36:1
+✖ clean acceptance installs dependencies before real-Zod producer stage (10.722337ms)
+  AssertionError [ERR_ASSERTION]: HOLD:dependency unavailable before frozen install
+  
+  
+  2 !== 0
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/b5781a95d0b5/jobs/scripts/r879-stage-order.test.mjs:38:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at jobs/scripts/r879-stage-order.test.mjs:41:1
+✖ failed prerequisite never runs producer acceptance (5.000948ms)
+  AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /studio_producer_jobs_zod_10_source/. Input:
+  
+  'r946_source_pin_preflight_5\nstudio_producer_jobs_zod_10_source\n'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/b5781a95d0b5/jobs/scripts/r879-stage-order.test.mjs:44:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'r946_source_pin_preflight_5\nstudio_producer_jobs_zod_10_source\n',
+    expected: /studio_producer_jobs_zod_10_source/,
+    operator: 'doesNotMatch',
+    diff: 'simple'
+  }
+
+test at jobs/scripts/r879-stage-order.test.mjs:46:1
+✖ failed producer acceptance remains fatal after successful install (6.612256ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /r854_original/. Input:
+  
+  'r946_source_pin_preflight_5\nstudio_producer_jobs_zod_10_source\n'
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/b5781a95d0b5/jobs/scripts/r879-stage-order.test.mjs:49:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'r946_source_pin_preflight_5\nstudio_producer_jobs_zod_10_source\n',
+    expected: /r854_original/,
+    operator: 'match',
+    diff: 'simple'
+  }
