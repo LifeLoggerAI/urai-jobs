@@ -1,0 +1,168 @@
+{
+  "schema": "one-urai-genesis-r975-acceptance-evidence-v1",
+  "checkpoint": "R975",
+  "observed": "2026-11-09",
+  "status": "PRODUCTION_HOLD_NO_GO",
+  "report": "docs/estate/JOBS_R975_ACCEPTANCE_EVIDENCE_PRIVACY_R27_AND_FIREBASE_AUTHORITY_RECONCILIATION_20261109.md",
+  "report_commit": "de1ee2539021dbba75722b0a31ed99556c24bb0d",
+  "jobs_main": {
+    "sha": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
+    "tree": "282bd75464cc23d9a6add6a1340c6ae7d3adfc9a",
+    "protected": false,
+    "required_checks": "off"
+  },
+  "jobs_prs": {
+    "381": {
+      "head": "a295fd834c1cc01710a36b04523b023de2283240",
+      "state": "open_draft",
+      "rules_blob": "d30c3e8fbbfcbf25767501e351edcb18d6080c6d",
+      "static_test_blob": "45c9e80c0aca2b8288d2e6ddf0650873dc4bdb75",
+      "native_test_blob": "95f4b72b1d7260a191b0cdc77c5cf008b57011e0",
+      "static_tests": "15/15 PASS at R943",
+      "native_rules_emulator": "NOT RUN"
+    },
+    "382": {
+      "head": "abdc13016fd83fbb4a3d7589645c1310d2344be0",
+      "state": "open_draft",
+      "longform_test_blob": "9af97cd9b2bd7e2a8e5e66d805c90791da60a52c"
+    },
+    "383": {
+      "head": "1e70418b86ad56c209aa06a5d2d7f6a7bc4e102c",
+      "base": "a295fd834c1cc01710a36b04523b023de2283240",
+      "state": "open_draft",
+      "package_blob": "4804276332491e1e57a95a2a0cec7050df3a595c",
+      "root_verify_segments": 77,
+      "longform_17_enrolled": true,
+      "root_suite_executed": false,
+      "longform_17_executed": false,
+      "typecheck": false,
+      "build": false,
+      "r879_emulators": false,
+      "workflow_run": 42577924383,
+      "job_id": 129029735536,
+      "runner_id": 0,
+      "steps": null,
+      "artifacts": []
+    },
+    "389": {
+      "head": "b865209cc352241602d8b9714672f3401aed7669",
+      "state": "open_draft"
+    },
+    "390": {
+      "head": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+      "state": "open_draft"
+    },
+    "391": {
+      "head": "9f5759f072370fbd42a82560ff6c5d4f37169c6b",
+      "state": "open_draft"
+    }
+  },
+  "r943_static_receipt": {
+    "source_commit": "a295fd834c1cc01710a36b04523b023de2283240",
+    "rules_blob": "d30c3e8fbbfcbf25767501e351edcb18d6080c6d",
+    "test_blob": "45c9e80c0aca2b8288d2e6ddf0650873dc4bdb75",
+    "result": "15/15 PASS",
+    "node": "v22.16.0",
+    "npm": "10.9.2",
+    "java": "21.0.12.1",
+    "git": "2.47.3",
+    "tap_sha256": "a68a5b4e7709387bcaa8aa1d856824817efa4b53104bea91d29525664e13da9e",
+    "native_test_syntax_pass": true,
+    "native_test_body_run": false
+  },
+  "privacy257": {
+    "head": "fbdc590376376b758be968f174d71709f326c61f",
+    "state": "open_draft",
+    "consent_api_blob": "db8619c6d7fdf1309d5d89d7cfc8e77e346dbbf1",
+    "own_claims_helper_blob": "443097baa409c289b4189f98e4c56c7ab70aaa31",
+    "r27_test_blob": "4ff5e6ca30a0152d22a05347f405b8c20ad2c8ed",
+    "workflow_blob": "10b45cbdc75356adba76afdd6fd14f562c4e358a",
+    "own_claims_hardened": true,
+    "life_movie_purpose_registered": false,
+    "verifier_allowed": false,
+    "six_runs_failed": [
+      42613806005,
+      42613806033,
+      42613806157,
+      42613805990,
+      42613806255,
+      42613805941
+    ],
+    "dedicated_job_id": 129149557711,
+    "runner_id": 0,
+    "steps": null,
+    "artifacts": [],
+    "exact_head_tests_typecheck_build": "NOT ESTABLISHED"
+  },
+  "privacy_r939_historical": {
+    "source": "6fecb46e380a6400f2ec095ef615d9ef73319032",
+    "tree": "c6bd5d94f2e71e7d267bdd2c6a49e4c98ccdccff",
+    "environment": "Ubuntu 24.04; Node 22.23.0; npm 10.9.8; Java 21.0.12.1",
+    "unit_tests": "199/199 PASS; R27 9/9 included",
+    "install_lint_typecheck_functions_build_static_rules_root_preflight": "PASS",
+    "emulator_command_exit": 0,
+    "rules_assertions": 13,
+    "integration_assertions": 3,
+    "caveats": [
+      "Functions publishConsentRevocation exceptions for intentionally invalid canonical records",
+      "unhandled trigger termination",
+      "ECONNRESET/socket hang-up noise",
+      "raw logs not archived",
+      "one final worktree entry uncaptured",
+      "not current fbdc590 own-claims delta",
+      "not provider/deployment acceptance"
+    ]
+  },
+  "firebase_rules": {
+    "shared_source_target": "urai-4dc1d/(default)",
+    "candidate_sources": [
+      "urai-spatial",
+      "urai-admin",
+      "B2Bportal"
+    ],
+    "admin_reviewed_path_rules_capable": true,
+    "reviewed_spatial_wif_rules_deploy": false,
+    "reviewed_b2b_workflow_rules_deploy": false,
+    "other_publishers": "UNKNOWN",
+    "actual_deployed_rules": "UNKNOWN",
+    "privacy_main_firebaserc": "not found at inspected root",
+    "privacy186_guarded_deploy_scope": "functions:privacy"
+  },
+  "open": {
+    "jobs252": "OPEN P0 GCS future-write denial/upload drain/physical purge ACK",
+    "jobs345": "OPEN P2 concurrent admission/index parity",
+    "jobs376": "OPEN P1 post-admission continuation authority",
+    "jobs380": "OPEN P1 fix in #381/#383 review; native/deployed proof pending",
+    "privacy83": "OPEN protected consent/revocation runtime, downstream ACK and provider suppression"
+  },
+  "performed": {
+    "source_reads": true,
+    "PR_metadata": true,
+    "workflow_metadata": true,
+    "artifact_queries": true,
+    "tests_run": false,
+    "builds": false,
+    "typecheck": false,
+    "emulators": false,
+    "provider_reads": false,
+    "CI_reruns": false,
+    "deployment": false,
+    "merge": false,
+    "dispatch": false,
+    "private_media": false,
+    "paid_compute": false
+  },
+  "next": "Execute exact #383 source on approved clean credential-free runner: static 15, original longform 17, 77 root commands, build/typecheck, guarded R879 emulators and authenticated native Rules test. Execute exact Privacy fbdc590 install/unit/typecheck/build and separate demo denial emulators. Investigate historical R939 trigger/socket noise. Obtain read-only provider Rules/IAM inventory and prove GCS revoke/late-writer 403, upload drain, exact purge and ACK.",
+  "prohibitions": [
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO RULES/IAM MUTATION",
+    "NO CI BYPASS",
+    "NO POSITIVE LIFE-MOVIE GRANT",
+    "NO PRIVATE RENDER",
+    "NO DISPATCH",
+    "NO PRIVATE MEDIA",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ]
+}
