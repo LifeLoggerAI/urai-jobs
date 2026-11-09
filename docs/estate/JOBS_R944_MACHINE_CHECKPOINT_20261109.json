@@ -1,0 +1,213 @@
+{
+  "schema_version": "one_urai_genesis_jobs_handoff_v2",
+  "audit_date_utc": "2026-11-09",
+  "release_status": "NO_GO_PRODUCTION_HOLD",
+  "spend_usd": 0,
+  "prohibited": [
+    "paid_compute",
+    "tinyfish_credits",
+    "real_user_jobs",
+    "customer_media",
+    "production_deploy",
+    "firebase_rules_write",
+    "gcp_iam_mutation",
+    "unreviewed_merge",
+    "ci_bypass"
+  ],
+  "registry": {
+    "repository": "LifeLoggerAI/urai-labs-llc",
+    "pr": 262,
+    "head_sha": "d8167bae7fa1487a62115d704165853587a277ae",
+    "founder_supplied_firebase_ids": 23,
+    "independently_live_audited_in_original_registry": 0
+  },
+  "jobs_repo": {
+    "name": "LifeLoggerAI/urai-jobs",
+    "main_sha": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+    "branch_protected_api_field": false,
+    "documentation_pr": 379,
+    "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
+    "cloud_project_seed": "urai-jobs",
+    "configured_hosting_site": "urai-jobs-563121397472",
+    "node_runtime": "nodejs22",
+    "main_function_exports": 27,
+    "active_runtime_job_types": 12,
+    "main_firestore_composite_indexes": 8,
+    "review_firestore_composite_indexes": 9
+  },
+  "engineering_prs": [
+    {
+      "pr": 320,
+      "sha": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+      "evidence": "historical 695-case full source verify PASS; no current source certificate"
+    },
+    {
+      "pr": 331,
+      "sha": "ff23ab3fe1f9f5179ecc2c7f1f3df3e0a81ff96a",
+      "evidence": "19 offline Storage negative cases PASS; real IAM UNKNOWN"
+    },
+    {
+      "pr": 371,
+      "sha": "df19633466eaebdda844569ed0d562245bd31dc6",
+      "evidence": "two-parent owner/quota code; 76 unique commands enrolled, not a 76-command PASS"
+    },
+    {
+      "pr": 373,
+      "sha": "da0f242ccf35e5e718a3a6c36d5a3009651ecdd6",
+      "evidence": "current operator admission/transaction review"
+    },
+    {
+      "pr": 375,
+      "sha": "3791617efc8fc9b974210ae09c18764e57670b3e",
+      "evidence": "23 synthetic listing cases PASS"
+    },
+    {
+      "pr": 377,
+      "sha": "f8578ea281e818b01811aecc2fe4dfb8c3dc8203",
+      "evidence": "12 diagnostic cases PASS, 4 strict expected-red safety cases FAIL"
+    },
+    {
+      "pr": 378,
+      "sha": "5881a650230c55245c87a001c58f3ebc6835196b",
+      "evidence": "original R940 idempotency 13/14, one missing stored plan fixture"
+    },
+    {
+      "pr": 381,
+      "sha": "a295fd834c1cc01710a36b04523b023de2283240",
+      "parent_sha": "5881a650230c55245c87a001c58f3ebc6835196b",
+      "evidence": "Rules deletion request ID fix; original static 15/15 PASS; native NOT_RUN"
+    },
+    {
+      "pr": 382,
+      "sha": "d87cc22b798b6894861a344125f57747e016c1ba",
+      "parent_sha": "5881a650230c55245c87a001c58f3ebc6835196b",
+      "evidence": "sibling longform 17-case synthetic fixture correction, focused helper 7 PASS reported; original 17 NOT_RUN"
+    }
+  ],
+  "source_blobs": {
+    "firestore.rules@main": "7dc63626c6e1a2e7b20ded280ea2dd070f16abc9",
+    "firestore.rules@R943": "d30c3e8fbbfcbf25767501e351edcb18d6080c6d",
+    "storage.rules@main": "eedbbe45545ecd09d8867c9d702cd00bb3b7d7be",
+    "firestore.indexes.json@main": "61c1bcb10a7ab570cb219d772daae27017ad8f4c",
+    "firestore.indexes.json@review": "7690ab3a4db2d7e83de5d6d13ebd7100cecde5bd",
+    "functions/src/index.ts@main": "8ab440758ad10ccdc40a5f2cbfaa1cc412fe3a86",
+    "functions/src/core/runtimeJobTypes.ts@main": "849fd1ee6c875a4caeae258d9f82ae156ab71057",
+    "functions/src/core/jobRegistry.ts@main": "22bced73969ff06515aa16af1d3b966be2a1ac60",
+    "workers/studio-worker/index.js@main": "ae09a89d80a024301ba9df41db4265216bd6eb6b",
+    "scripts/owner_authority_rules.static.test.mjs@R943": "45c9e80c0aca2b8288d2e6ddf0650873dc4bdb75",
+    "scripts/user_authority_rules.firebase-emulator.test.mjs@R943": "95f4b72b1d7260a191b0cdc77c5cf008b57011e0",
+    "scripts/run-r879-unified-native-acceptance.sh@R943": "0f93e70eb601057a082cf4a7a5dade26807a5868"
+  },
+  "local_reverification": {
+    "original_test": "node --test scripts/owner_authority_rules.static.test.mjs",
+    "environment": "Node22.16.0",
+    "cases_passed": 15,
+    "cases_total": 15,
+    "failed": 0,
+    "skipped": 0,
+    "tap_sha256": "3e5f5f247d7449fd805022972fde18f74367593385b2773a484cee8f3a733dcb",
+    "git_blob_matches": 3,
+    "native_test_source_syntax_pass": true,
+    "native_emulator_executed": false,
+    "full_checkout_failed": "github.com DNS resolution exit 128",
+    "full_workspace_verified": false
+  },
+  "cloud_verified": {
+    "actual_project_number": null,
+    "apps": [],
+    "databases": [],
+    "buckets": [],
+    "deployed_functions": [],
+    "cloud_run_services": [],
+    "service_accounts": [],
+    "rules_releases": [],
+    "deployment_revisions": [],
+    "topics": [],
+    "scheduler_jobs": [],
+    "task_queues": [],
+    "eventarc_triggers": [],
+    "real_gcs_403": false,
+    "live_access": false,
+    "note": "Empty arrays mean UNKNOWN, not verified absence."
+  },
+  "issue_priorities": [
+    {
+      "p": "P0",
+      "issue": 252
+    },
+    {
+      "p": "P0",
+      "issue": 129
+    },
+    {
+      "p": "P1",
+      "issue": 337
+    },
+    {
+      "p": "P1",
+      "issue": 376
+    },
+    {
+      "p": "P1",
+      "issue": 380
+    },
+    {
+      "p": "P2",
+      "issue": 345
+    }
+  ],
+  "cross_service": [
+    {
+      "repo": "urai-privacy",
+      "prs": [
+        236,
+        239
+      ]
+    },
+    {
+      "repo": "urai-studio",
+      "prs": [
+        179,
+        182
+      ]
+    },
+    {
+      "repo": "urai-staging",
+      "prs": [
+        176
+      ]
+    },
+    {
+      "repo": "urai-spatial",
+      "prs": [
+        2069,
+        2072
+      ]
+    },
+    {
+      "repo": "urai-labs-llc",
+      "prs": [
+        262,
+        297
+      ]
+    }
+  ],
+  "docs": [
+    "docs/estate/GENESIS_JOBS_FIREBASE_RECONCILIATION_20261109.md",
+    "docs/estate/GENESIS_JOBS_FIREBASE_CHECKPOINT_20261109.json",
+    "docs/estate/GENESIS_JOBS_R941_FIRESTORE_OWNER_FIELDS_CONTINUATION_20261109.md",
+    "docs/estate/JOBS_R944_SOURCE_RUNTIME_CLOUD_RESOURCE_MATRIX_20261109.md",
+    "docs/estate/JOBS_R944_TEST_HISTORY_CROSS_SERVICE_EVIDENCE_LEDGER_20261109.md",
+    "docs/estate/JOBS_R944_P0_P3_TASKBOOK_AND_EXACT_VERIFICATION_20261109.md",
+    "docs/estate/JOBS_R944_MACHINE_CHECKPOINT_20261109.json",
+    "docs/estate/JOBS_R944_START_NEXT_CHALK_20261109.md"
+  ],
+  "next_worker": [
+    "Read R944 START NEXT CHALK and other handoff files; refresh moving PR heads",
+    "Converge sibling #381 and #382 without overwriting parent/peers",
+    "Run full original 17-case idempotency plus 15 static + disposable native Firebase Rules 403/200, full 76-command workspace suite at one SHA",
+    "Obtain read-only live project resource and deployed SHA/Rules/IAM inventory using already authorized access, no fees",
+    "Close #252 real privileged GCS 403/late writer/drain, positive owner C6 -> Studio -> Jobs -> protected Replay -> purge ACK",
+    "Recover protected CI, independent review, founder release approval; do not claim GO now"
+  ]
+}
