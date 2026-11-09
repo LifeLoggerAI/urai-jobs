@@ -66,7 +66,12 @@
     "parent_388_workflow_failures": 9,
     "current_389_protected_ci_pass": false,
     "current_389_original_test_receipt": false,
-    "reason_for_runner_failures": "UNKNOWN"
+    "reason_for_runner_failures": "UNKNOWN",
+    "current_389_exact_sha": "b865209cc352241602d8b9714672f3401aed7669",
+    "current_389_workflow_runs": 10,
+    "current_389_workflow_failures": 10,
+    "current_389_workflow_successes": 0,
+    "current_389_root_cause": "UNKNOWN_NOT_DIAGNOSED"
   },
   "open_critical_gates": [
     {
