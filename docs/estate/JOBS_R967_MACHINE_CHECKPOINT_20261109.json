@@ -10,7 +10,7 @@
   "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
   "forensic_pr": 379,
   "source_refs": {
-    "jobs_main": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+    "jobs_main": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
     "jobs_r923_pr371": "df19633466eaebdda844569ed0d562245bd31dc6",
     "jobs_r900_pr377": "f8578ea281e818b01811aecc2fe4dfb8c3dc8203",
     "jobs_r951_pr388": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
@@ -30,7 +30,9 @@
     "privacy_r17": "90a4e581e8494f52d85eab3c576d02b926e7d0d9",
     "privacy_r18": "dbc193763dc112210c20b5b680e8eb08fdf8396c",
     "privacy_r19": "a4d7e4ffb76fa2dbbf7348e2b66faa991761509a",
-    "privacy_r20": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6"
+    "privacy_r20": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6",
+    "jobs_main_tree": "282bd75464cc23d9a6add6a1340c6ae7d3adfc9a",
+    "jobs_main_revert_parent": "792d063b9d894bb9cb872e2c3c6dd71e37804f6a"
   },
   "source_blobs": {
     "jobs_three_case_harness": "e9662a979a72a0e39a61fe896a79f8379658d963",
@@ -60,7 +62,27 @@
       "R20/#256"
     ],
     "github_path_history_empty": true,
-    "status": "exact source provenance not recovered; absence only scoped to inspected trees/history"
+    "status": "exact source provenance not recovered; absence only scoped to inspected trees/history",
+    "github_code_search_zero_results": [
+      "consent-jobs-delivery.ts",
+      "consent-jobs-http.ts",
+      "consent-jobs-dispatch.ts"
+    ],
+    "additional_direct_branch_checks": [
+      "review/chalk-converged-jobs-native-source-20261106",
+      "review/chalk-r818-native-jobs-privacy-callable-20261106",
+      "review/chalk-r823-demo-project-r822-jobs-privacy-20261106",
+      "review/chalk-r824-scoped-grant-lifecycle-profile-fences-20261106",
+      "review/chalk-r825-privacy-issuer-transport-demo-convergence-20261106",
+      "review/chalk-r826-privacy-jobs-r823-immutable-pin-20261106",
+      "review/r495-jobs-rights-to-privacy-review-bridge",
+      "review/r506-privacy-revoke-to-jobs-storage-derivative",
+      "review/r548-current-jobs-private-derivative-four-emulators-20261104",
+      "review/r575-jobs264-privacy-native-bridge-20261104",
+      "review/r579-jobs264-privacy208-crossrepo-bridge-20261104",
+      "review/r583-jobs264-dual-artifact-attestation-convergence-20261104"
+    ],
+    "additional_direct_branch_result": "All three expected paths returned not found in each listed branch; not exhaustive of all historical Git objects."
   },
   "r967_execution": {
     "pr_metadata_and_trees_read": true,
@@ -75,7 +97,13 @@
     "install_build_typecheck": false,
     "cloud_inventory": false,
     "gcs_iam_test": false,
-    "app_source_changed": false
+    "app_source_changed": false,
+    "github_read_only_search_only": true,
+    "github_code_search_zero_hits": 3,
+    "additional_branch_path_checks": 12,
+    "current_main_ref_corrected": true,
+    "tests_run": false,
+    "cloud_mutations": false
   },
   "critical_distinctions": [
     "Jobs three-case harness expects consent-jobs-* API and is distinct from R647 consent-revocation-jobs-dispatcher API.",
@@ -102,5 +130,13 @@
     "NO IAM CHANGE",
     "NO PAID COMPUTE",
     "NO PRODUCTION GO"
-  ]
+  ],
+  "main_governance": {
+    "protected": false,
+    "protection_enabled": false,
+    "required_status_checks_enforcement": "off",
+    "required_contexts": [],
+    "required_checks": [],
+    "rulesets_including_parents": []
+  }
 }
