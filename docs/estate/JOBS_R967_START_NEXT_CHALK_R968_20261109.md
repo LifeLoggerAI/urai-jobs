@@ -1,5 +1,13 @@
 # NEXT CHALK — ONE URAI GENESIS R968 CONTINUATION COMMAND
 
+**R967 final reconciliation addendum:** Use the canonical R967 audit [JOBS_R967_HISTORICAL_PRIVACY_HARNESS_PROVENANCE_AND_RUNTIME_GATE_HOLD_20261109.md](JOBS_R967_HISTORICAL_PRIVACY_HARNESS_PROVENANCE_AND_RUNTIME_GATE_HOLD_20261109.md) first. The additional R967 read-only source-path review is [JOBS_R967_PRIVACY_DISPATCHER_HARNESS_RECOVERY_AND_NEXT_CHALK_HOLD_20261109.md](JOBS_R967_PRIVACY_DISPATCHER_HARNESS_RECOVERY_AND_NEXT_CHALK_HOLD_20261109.md). The machine checkpoint has been corrected with live source and branch-search results: [JOBS_R967_MACHINE_CHECKPOINT_20261109.json](JOBS_R967_MACHINE_CHECKPOINT_20261109.json).
+
+**Main SHA correction:** live Jobs main is `2bcdbcf34da4a3fe58619286d6917e2d4fa624e1`, tree `282bd75464cc23d9a6add6a1340c6ae7d3adfc9a`, not stale `9d29be1...` references in older notes. The revert removes one 90-line R933 test file; resulting tree matches prior main. Commit unsigned. Branch protection remains disabled and required checks off.
+
+R967's search found zero indexed results for the three expected `consent-jobs-*` modules and 12 additional historical branch-path checks without a match. The canonical R967 report additionally checked R818/R836, R506/R583/R647/R20 trees and exact-path GitHub history queries. It explicitly distinguishes the Jobs #371 harness, R647 donor and R818/R836 maintained acceptance runner. Do not collapse these architectures.
+
+---
+
 **R967 addendum / correction:** Live Jobs `main` is `2bcdbcf34da4a3fe58619286d6917e2d4fa624e1`, tree `282bd75464cc23d9a6add6a1340c6ae7d3adfc9a`, not the stale `9d29be1...` repeated in some earlier R967 source tables. Commit #2bcdbcf reverts the single accidental 90-line R933 test file; resulting tree matches the earlier main tree. The revert is unsigned. Branch protection remains disabled and required checks off.
 
 The R967 machine checkpoint was corrected with this live main SHA/tree, governance readback, zero GitHub code-search results for the three missing module names, and 12 extra branch-path checks. Those branch checks found no matching files; absence is scoped to inspected refs, not every possible Git object.
