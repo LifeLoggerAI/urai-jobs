@@ -27,7 +27,8 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'role', 'orgId', 'permissions', 'disabled', 'uid',
           'tenantId', 'accountStatus', 'deleted', 'markedForDeletion',
-          'dataRightsDeletionPendingCentralPrivacy', 'jobsCreateRateLimit'
+          'dataRightsDeletionPendingCentralPrivacy', 'dataRightsDeletionRequestId',
+          'jobsCreateRateLimit'
         ])
         && request.resource.data.role == resource.data.role
         && request.resource.data.orgId == resource.data.orgId
