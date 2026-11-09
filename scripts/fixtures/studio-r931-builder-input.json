@@ -1,0 +1,23 @@
+{
+  "tenantId":"tenant1",
+  "projectId":"project1",
+  "sceneTruthReceiptRef":"str_abcdefghijklmnop_abcdefgh_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn",
+  "sceneTruthDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "sources":[{
+    "id":"source01",
+    "bucket":"urai-media-prod",
+    "objectPath":"tenants/tenant1/raw/source01.mp4",
+    "generation":"17",
+    "mimeType":"video/mp4",
+    "provenance":"original-source",
+    "sourceRefs":["source-proof-001"],
+    "consentRef":"consent-001",
+    "ownerOrRightsRef":"rights-001"
+  }],
+  "timeline":[{"sourceId":"source01","startMs":0,"endMs":1000,"sourceStartMs":100}],
+  "audioCues":[{"sourceId":"source01","role":"narration","startMs":0,"endMs":1000,"sourceStartMs":0,"gainDb":0}],
+  "subtitleText":"Synthetic producer-consumer fixture only.",
+  "width":1280,
+  "height":720,
+  "fps":30
+}

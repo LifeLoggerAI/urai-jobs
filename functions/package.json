@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node ../scripts/execution-guards-smoke.mjs",
+    "test": "npm run build && node ../scripts/execution-guards-smoke.mjs && node --experimental-strip-types --test ../scripts/studio-life-movie-create-zod-contract.test.mjs && node --experimental-strip-types --test ../scripts/studio-life-movie-actual-producer-zod-contract.test.mjs",
     "seed": "npm run build && npm run seed:compiled",
     "seed:compiled": "node lib/functions/src/seed.js"
   },

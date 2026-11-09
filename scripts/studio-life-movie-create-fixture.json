@@ -1,0 +1,56 @@
+{
+  "fixture_kind": "non_authorizing_synthetic_parser_fixture",
+  "producer_repo": "LifeLoggerAI/urai-studio",
+  "producer_pr": 201,
+  "producer_head": "a6187abfd12ffc8f534ddf66246da91ed032e1dc",
+  "producer_source_blob": "701be51e861e0a5ff47d88ceaba1e3812433d659",
+  "producer_source_sha256": "d2c2bb641e2b4a65e0940c9af169e06a7b258890184f4e34fd7681b9c0a1429e",
+  "builder_dispatchAuthorized": false,
+  "builder_providerGenerationAuthorized": false,
+  "builder_publicReleaseAuthorized": false,
+  "request": {
+    "tenantId": "tenant1",
+    "userId": "synthetic-owner",
+    "action": "create",
+    "idempotencyKey": "life-movie:project1:743f81388d898a25dbb424261f045d47",
+    "consent": {
+      "purpose": "life-movie.render",
+      "policyVersion": "1.1.0",
+      "decisionReceiptId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "payload": {
+      "schemaVersion": "urai-life-movie-render-v1",
+      "projectId": "project1",
+      "renderPlanDigest": "743f81388d898a25dbb424261f045d479cf6dca95dbf18ba2645346c855145bb",
+      "sceneTruthReceiptRef": "str_abcdefghijklmnop_abcdefgh_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn",
+      "sceneTruthDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "outputPrefix": "tenants/tenant1/life-movies/project1/",
+      "width": 1280,
+      "height": 720,
+      "fps": 30,
+      "sources": [
+        {
+          "id": "source01",
+          "bucket": "urai-media-prod",
+          "objectPath": "tenants/tenant1/raw/source01.mp4",
+          "generation": "17",
+          "mimeType": "video/mp4",
+          "provenance": "original-source",
+          "sourceRefs": ["source-proof-001"],
+          "consentRef": "consent-001",
+          "ownerOrRightsRef": "rights-001"
+        }
+      ],
+      "timeline": [
+        {"sourceId": "source01", "startMs": 0, "endMs": 1000, "sourceStartMs": 100}
+      ],
+      "audioCues": [
+        {"sourceId": "source01", "role": "narration", "startMs": 0, "endMs": 1000, "sourceStartMs": 0, "gainDb": 0}
+      ],
+      "subtitleText": "Synthetic fixture only; not user memory.",
+      "spatialRequired": false,
+      "publicReleaseAuthorized": false,
+      "providerGenerationAuthorized": false
+    }
+  }
+}
