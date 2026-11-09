@@ -185,8 +185,9 @@ grep -q '# pass 14' "$OUT/private_movie_cancel_14_source.log" || hold 'R890 priv
 # refer to unchanged original Git blobs from the R887 peer parent.
 check_blob 'functions/src/jobs/jobCreateRateLimit.ts' '9b7a53c41c56681dfdf4cebbc00de9a962adf5d2'
 check_blob 'firestore.indexes.json' '7690ab3a4db2d7e83de5d6d13ebd7100cecde5bd'
-check_blob 'firestore.rules' 'cfa77a8fa5e69327ab352b31450c59a036d21e38'
-check_blob 'scripts/owner_authority_rules.static.test.mjs' '3c1dcedbdb5d988da32e85a8e06241bc0bda8bb2'
+check_blob 'firestore.rules' 'd30c3e8fbbfcbf25767501e351edcb18d6080c6d'
+check_blob 'scripts/owner_authority_rules.static.test.mjs' '45c9e80c0aca2b8288d2e6ddf0650873dc4bdb75'
+check_blob 'scripts/user_authority_rules.firebase-emulator.test.mjs' '95f4b72b1d7260a191b0cdc77c5cf008b57011e0'
 check_blob 'scripts/r883-create-job-quota-ledger.test.mjs' '52598f8ab1e84e40e6f3246ca65a8dca8df776c0'
 check_blob 'scripts/r885-firestore-quota-index-contract.test.mjs' '9df8b168f6636ba141f17a15b4e5659361910369'
 check_blob 'scripts/r884-emulator-env-isolation.test.mjs' 'edbb4fc44f026d1d972021020ca4198d0561c79b'
