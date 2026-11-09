@@ -43,8 +43,16 @@ for (const [path, text, description] of [
   ['workers/asset-worker/index.js', 'validateProductionConfiguration();', 'asset worker must fail closed at startup'],
   ['workers/narrator-worker/src/index.ts', "validateRequiredEnv(productionRuntime ? ['URAI_JOBS_WORKER_TOKEN', 'GCS_BUCKET_NAME'] : []);", 'narrator production secrets must be mandatory'],
   ['workers/narrator-worker/src/index.ts', "app.get('/authz', requireWorkerAuth", 'narrator auth probe must be protected'],
+  ['workers/narrator-worker/src/index.ts', "app.post('/execute-job', requireWorkerAuth", 'narrator job execution must require bearer auth'],
+  ['workers/narrator-worker/src/runtime.ts', 'if (!expectedToken || !expectedToken.trim())', 'narrator must reject missing worker token even in local/test'],
+  ['workers/narrator-worker/src/runtime.ts', 'timingSafeEqual(actualHash, expectedHash)', 'narrator must compare bearer token hashes using timing-safe comparison'],
+  ['workers/narrator-worker/Dockerfile', 'COPY src ./src', 'narrator container must build canonical authenticated TypeScript source'],
+  ['workers/narrator-worker/Dockerfile', 'RUN npm run build', 'narrator container must compile canonical TypeScript source'],
+  ['workers/narrator-worker/Dockerfile', 'CMD ["node", "dist/index.js"]', 'narrator container must execute compiled canonical source'],
   ['functions/src/jobs/executeJob.ts', "defineSecret('URAI_JOBS_WORKER_TOKEN')", 'Firebase worker token must use Secret Manager'],
 ]) requireText(path, text, description);
+
+rejectText('workers/narrator-worker/Dockerfile', 'COPY index.js', 'narrator container must not copy unsecured legacy root entrypoint');
 
 requireRegex(
   'functions/src/jobs/executeJob.ts',
