@@ -330,3 +330,56 @@ A selected audit PR is not necessarily newest engineering source. Continue all w
 Preserve all worker branches, original LifeLogger/LifeOS/UrAi/RuAi history, candidate donors, test receipts and contradictions. No silent supersession. Keep security gates closed until exact source and provider evidence supports independent release certification.
 
 **ONE URAI GENESIS — R971 RECONCILED. PRODUCTION HOLD / NO-GO.**
+
+
+---
+
+## R971 ADDENDUM — Jobs #380 server-owned data-rights request binding
+
+A separate R971 Jobs Rules audit adds a concrete source-level P1 finding that must be folded into the R972 work queue. This addendum is based on a fresh read of Jobs issue #380, current #378 metadata and exact-source pins recorded in that issue.
+
+### Exact source and state
+
+- Jobs issue #380: OPEN, title “P1 HOLD: user self-update Rules leave server-owned data-rights request binding mutable”.
+- Current Jobs main remains `2bcdbcf34da4a3fe58619286d6917e2d4fa624e1`, tree `282bd75464cc23d9a6add6a1340c6ae7d3adfc9a`.
+- Current main `firestore.rules` blob: `7dc63626c6e1a2e7b20ded280ea2dd070f16abc9`.
+- Jobs #378 R940 head: `5881a650230c55245c87a001c58f3ebc6835196b`, open/draft/unmerged.
+- R940 candidate `firestore.rules` blob: `cfa77a8fa5e69327ab352b31450c59a036d21e38`.
+- R940 `functions/src/privacy/dataRightsExecution.ts` blob: `756547684397788d8051acace70ac0e5c03e2e17`.
+
+The issue body references an older main commit identifier `9d29be1...`; that identifier is stale after the explicit add/revert sequence. The current main commit `2bcdbcf...` has the same baseline tree and the same Rules blob pin above. Use the current main ref, not the old issue-text SHA, as present source authority.
+
+### Exact gap and careful risk classification
+
+Current main's `users/{uid}` self-update predicate protects only a smaller set of fields including role/orgId/permissions/disabled/uid. The issue reports that these fields are not protected by the current main predicate: tenantId, accountStatus, deleted, markedForDeletion, dataRightsDeletionPendingCentralPrivacy, dataRightsDeletionRequestId and jobsCreateRateLimit.
+
+R940 #378 adds an `affectedKeys()` predicate protecting tenantId, account/deletion lifecycle, dataRightsDeletionPendingCentralPrivacy and jobsCreateRateLimit, but its list still omits **dataRightsDeletionRequestId**.
+
+R940 data-rights execution source records `dataRightsDeletionRequestId` when Jobs establishes/retains the central deletion fence and compares it to the requested ID at authorized execution admission. If an owner can tamper with this binding, the consequence may be a fail-closed mismatch and interference with a legitimate deletion request. This source finding is **not** proof of a deployed exploit, not proof a malicious mutation would succeed under the complete Rules engine and not proof unauthorized work ran.
+
+The issue's source-only field-guard evaluation says main permits several fields and R940 blocks most of them; dataRightsDeletionRequestId remains unprotected in both; role is blocked in both. That is static source logic evaluation, not native Firebase Rules emulator or live provider reproduction.
+
+### Required repair, kept separate from #378's existing review scope
+
+Do not claim Jobs #378 is a Rules fix. Its exact changed-file list contains seven documentation/test/runner paths and does not include firestore.rules. The R940 Rules blob is inherited from its base, not introduced by #378's diff.
+
+Create a new isolated, review-only Rules candidate only after exact current tree and all related worker heads are refreshed. At minimum:
+- add dataRightsDeletionRequestId to the server-owned `affectedKeys()` guard;
+- consider a positive allowlist of truly client-editable profile fields to avoid silently exposing future authority fields;
+- add genuine Authenticated Firestore Rules emulator cases for owner attempts to set/change/remove dataRightsDeletionRequestId, tenantId, accountStatus, deleted, markedForDeletion, central deletion-pending flag and quota fields;
+- include cross-owner/anonymous/client-admin denial, legacy documents with missing optional fields, valid harmless profile updates and authorized trusted server/admin changes;
+- prove the Jobs/Privacy transaction can still establish/update the deletion request and that a legitimate owner deletion remains functional.
+
+No Rules or IAM mutation is authorized. Obtain effective deployed Rules SHA/release and exact intended Firebase project from owner-authorized read-only provider access before any deployment discussion.
+
+### R971 consolidated priority update
+
+- P0 Jobs #252: storage-level future-write fence, stale/alternate writer 403, active-upload drain, generation delete, physical absence and durable downstream ACK.
+- P1 Jobs #380: missing dataRightsDeletionRequestId in profile self-update protected fields; isolated Rules repair plus native emulator.
+- P1 Jobs #376: operator withdrawal/continuation authority policy; reported 12/12 synthetic diagnostic cases are not provider proof.
+- P2 Jobs #345: potential pre-transaction quota race; native concurrent acceptance outstanding.
+- Shared urai-4dc1d/(default) Rules publisher collision remains a separate governance/ownership problem.
+- Privacy #186 / Spatial #1964 C1/profile Rules candidates remain separate branches with different ancestry/semantics.
+- Protected CI, actual deployed Rules/IAM, independent review and Founder GO remain outstanding.
+
+This addendum is source/documentation only. It does not prove a live policy mutation, a production exploit, test execution, deployed Rules state or release readiness.
