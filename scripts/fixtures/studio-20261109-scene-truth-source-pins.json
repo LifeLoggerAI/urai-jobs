@@ -1,0 +1,61 @@
+{
+  "jobs_base": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+  "studio_commit": "501ac5c325f906cdeb32b0638dd15f5622ea1304",
+  "files": [
+    {
+      "local": "scripts/fixtures/studio-20261109-scene-truth-producer.ts",
+      "repo": "LifeLoggerAI/urai-studio",
+      "path": "apps/studio/lib/studio-life-movie-jobs-bridge.ts",
+      "commit": "501ac5c325f906cdeb32b0638dd15f5622ea1304",
+      "git_blob": "9427263442d93c916516a76ae7b953585792be1a",
+      "sha256": "f78a2aaa0298d5cb00fb1571e81cf133dfd6c2a5f4a9e54734e25f44f51db4be",
+      "bytes": 12464
+    },
+    {
+      "local": "scripts/fixtures/studio-r931-producer.ts",
+      "repo": "LifeLoggerAI/urai-studio",
+      "path": "apps/studio/lib/studio-life-movie-jobs-bridge.ts",
+      "commit": "a6187abfd12ffc8f534ddf66246da91ed032e1dc",
+      "git_blob": "701be51e861e0a5ff47d88ceaba1e3812433d659",
+      "sha256": "d2c2bb641e2b4a65e0940c9af169e06a7b258890184f4e34fd7681b9c0a1429e",
+      "bytes": 12380
+    },
+    {
+      "local": "scripts/fixtures/studio-r931-dispatch-route.source.txt",
+      "repo": "LifeLoggerAI/urai-studio",
+      "path": "apps/studio/app/api/studio/video-factory/jobs-dispatch/route.ts",
+      "commit": "501ac5c325f906cdeb32b0638dd15f5622ea1304",
+      "git_blob": "ef8e2bd124f7ea2da213d07fca3c5e82d80a056a",
+      "sha256": "8c750033c7eb447ae837f5d15e0d221a16e2df37c647bfc396b594ea7d29f828",
+      "bytes": 4174
+    },
+    {
+      "local": "scripts/fixtures/studio-r931-builder-input.json",
+      "repo": "LifeLoggerAI/urai-jobs",
+      "path": "scripts/fixtures/studio-r931-builder-input.json",
+      "commit": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+      "git_blob": "535486ddc13d9419afdd72f155a33018b6562c4d",
+      "sha256": "a8c2a85eee6a7c8d595d2825769446643261cde9eaecadead48982d4a02fd720",
+      "bytes": 867
+    },
+    {
+      "local": "functions/src/jobs/studioLifeMovieContract.ts",
+      "repo": "LifeLoggerAI/urai-jobs",
+      "path": "functions/src/jobs/studioLifeMovieContract.ts",
+      "commit": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+      "git_blob": "5f944e906de7243d7415ac479cf92356b09c84c9",
+      "sha256": "335d0aaf56d6070bf4035f6474831432289ebfd54c5bf0aecceae76c948ea771",
+      "bytes": 11446
+    },
+    {
+      "local": "functions/src/privacy/lifeMovieConsentGate.ts",
+      "repo": "LifeLoggerAI/urai-jobs",
+      "path": "functions/src/privacy/lifeMovieConsentGate.ts",
+      "commit": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+      "git_blob": "53761ac0f5c0340563b13fdd9a12a90e75409d42",
+      "sha256": "cc7b677f35e38583bb851f6396cea76afa928b3449d23ef15900599472c76072",
+      "bytes": 932
+    }
+  ],
+  "scope": "Synthetic producer-consumer acceptance only; no consent issuance, runtime credentials, rendering or release authorization."
+}

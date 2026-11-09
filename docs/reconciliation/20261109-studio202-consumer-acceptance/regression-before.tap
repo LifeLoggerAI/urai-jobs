@@ -1,0 +1,103 @@
+(node:6) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:13) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:13) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///workspace/scratch/2c46eb72c844/contract-candidate/scripts/fixtures/studio-r931-producer.ts is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to /workspace/scratch/2c46eb72c844/contract-candidate/package.json.
+# Subtest: current Studio sceneTruthReceiptRef rejects JSON array coercion before Jobs admission
+not ok 1 - current Studio sceneTruthReceiptRef rejects JSON array coercion before Jobs admission
+  ---
+  duration_ms: 4.702443
+  type: 'test'
+  location: '/workspace/scratch/2c46eb72c844/contract-candidate/scripts/studio-life-movie-actual-producer-zod-contract.test.mjs:117:3'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/2c46eb72c844/contract-candidate/scripts/studio-life-movie-actual-producer-zod-contract.test.mjs:120:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+  ...
+# Subtest: current Studio sceneTruthReceiptRef rejects objects without invoking toString
+not ok 2 - current Studio sceneTruthReceiptRef rejects objects without invoking toString
+  ---
+  duration_ms: 0.919672
+  type: 'test'
+  location: '/workspace/scratch/2c46eb72c844/contract-candidate/scripts/studio-life-movie-actual-producer-zod-contract.test.mjs:123:3'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/2c46eb72c844/contract-candidate/scripts/studio-life-movie-actual-producer-zod-contract.test.mjs:128:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: current Studio sceneTruthDigest rejects JSON array coercion before Jobs admission
+not ok 3 - current Studio sceneTruthDigest rejects JSON array coercion before Jobs admission
+  ---
+  duration_ms: 0.265811
+  type: 'test'
+  location: '/workspace/scratch/2c46eb72c844/contract-candidate/scripts/studio-life-movie-actual-producer-zod-contract.test.mjs:117:3'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/2c46eb72c844/contract-candidate/scripts/studio-life-movie-actual-producer-zod-contract.test.mjs:120:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: current Studio sceneTruthDigest rejects objects without invoking toString
+not ok 4 - current Studio sceneTruthDigest rejects objects without invoking toString
+  ---
+  duration_ms: 0.682918
+  type: 'test'
+  location: '/workspace/scratch/2c46eb72c844/contract-candidate/scripts/studio-life-movie-actual-producer-zod-contract.test.mjs:123:3'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/2c46eb72c844/contract-candidate/scripts/studio-life-movie-actual-producer-zod-contract.test.mjs:128:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 0
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 257.584439
