@@ -55,7 +55,7 @@ check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d53
 check_blob 'functions/src/jobs/createJob.ts' 'c52f09900bb76a1fa71445a7fceb39c177c2c568'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' '4804276332491e1e57a95a2a0cec7050df3a595c'
+check_blob 'package.json' 'bd50af6bead1c62f36ada6c012123fe0c5d94da7'
 check_blob 'functions/src/privacy/dataRightsExecution.ts' '756547684397788d8051acace70ac0e5c03e2e17'
 check_blob 'scripts/r888-quota-ledger-deletion-contract.test.mjs' '54ec923386f973ecae75554accf802b4c280d656'
 check_blob 'scripts/r881-admin-callable-parser.test.mjs' 'ba8aa35132c701a50ef47cef142d12c120ebd8bd'
@@ -63,6 +63,7 @@ check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf
 # R946 original offline source-preflight implementation and native fixture suite.
 check_blob 'scripts/r946-r879-source-pin-preflight.mjs' '73b69cb02c5708a2fa581dea965b5c3c55a449e2'
 check_blob 'scripts/r946-preflight.test.mjs' '918260ac8ab90aecb5170673f14aeda094a767cc'
+check_blob 'scripts/r951-worker-emulator-auth-precedence.test.mjs' 'd27cc3880aa2ae0387f81bb660ca340d830e22dc'
 
 for name in GOOGLE_APPLICATION_CREDENTIALS GOOGLE_APPLICATION_CREDENTIALS_JSON \
   FIREBASE_TOKEN FIREBASE_CLI_TOKEN GOOGLE_OAUTH_ACCESS_TOKEN \
@@ -106,6 +107,11 @@ stage() {
 # native stages; this is not cloud or Firebase authorization evidence.
 stage r946_source_pin_preflight_5 120s node --test scripts/r946-preflight.test.mjs
 grep -q '# pass 5' "$OUT/r946_source_pin_preflight_5.log" || hold 'R946 original five-case checker suite missing'
+
+# R952: original R951 four-worker 48-scenario production/emulator precedence tests.
+# Keep this a mandatory executable stage, not only a source marker.
+stage r951_worker_auth_emulator_precedence_4 120s node --test scripts/r951-worker-emulator-auth-precedence.test.mjs
+grep -q '# pass 4' "$OUT/r951_worker_auth_emulator_precedence_4.log" || hold 'R951 four original worker-source tests missing'
 
 # Original R854 complete frozen install, workspace verify/typecheck/build,
 # hard-off checks, race model, and four disposable native negative suites.
