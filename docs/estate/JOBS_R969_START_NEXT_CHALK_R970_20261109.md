@@ -150,3 +150,53 @@ No clone, dependency install, donor tests, emulator harness, R836 runner, build,
 - latest PR #379 head.
 
 No merge, deployment, dispatch, private-media processing, IAM mutation, paid compute or production GO.
+
+
+---
+
+# R969 ADDENDUM — LIFE MOVIE SCOPED CONSENT AND C1 RULES RECONCILIATION
+
+Read these R969 artifacts before continuing:
+1. `docs/estate/JOBS_R969_CURRENT_LINEAGE_SECURITY_AND_C1_RULES_RECONCILIATION_HOLD_20261109.md`
+2. `docs/estate/JOBS_R969_MACHINE_CHECKPOINT_20261109.json`
+
+This addendum supersedes older generic R970 phrasing where it conflicts with the fresher R969 source readback above. Refresh PR heads before action.
+
+## Current exact source pointers
+
+### Privacy #183 — scoped Life Movie verifier
+Current observed head: `389aa638f99a6394b46be335ee0465168a7a1a4c`.
+- `functions/src/life-movie-render-authorization.ts` blob `a75e4f2297c331baa52b044f2842820adbdc7fc8`
+- `functions/src/life-movie-scoped-receipt.ts` blob `a41f4cf9c2efb525115ec31359d936c8b2f66f6e`
+- `functions/src/consent-api.ts` blob `43da4d49ccbee7cbe145d0729d921e10d859ba63`
+
+The current source requires exact subject UID, purpose/tier/policy, tenant, render project/plan/source-set digests, receipt hash and explicitly inactive deletion-fence evidence. The receipt digest is SHA-256 integrity binding, not a signature or authorization. Generic purpose-wide Life Movie grant/evaluation remains fail-closed. A trusted positive scoped issuer and protected deployed runtime are not certified.
+
+### Privacy #224 — R818 denial-only transport test
+Current observed head: `f9e7786854f7ec70cab9a6e22d2c90ad95b834ed`; test blob `51c5279295f07fde06c7f89b1472c5f147fdf8f0`.
+It uses real local Firebase emulators and original compiled Jobs identity/transport to exercise denial/no-grant/no-render behavior. Stage two's ephemeral signer only re-signs local emulator claims for a negative test. This is not production service identity, not positive C6, and not successful render acceptance.
+
+### Privacy/Spatial Rules heads
+- Privacy main Rules blob `7c0051eb6d148791198127e625c99973abdc49c1` at main `1163d6f32a123ef9a6638e092a3eee5ec4a3b317`.
+- Privacy #186 Rules blob `295e5d27623cceddec8245759ff28128b17be28c` at `2d0c7b621b63ac63ae83e44f5c40ac2ca5344cdc`.
+- Spatial main Rules blob `26330636a18a3675da049aa4bdadb34c82293882` at `da94837c2457b0a7590e26a7a644cd728de8afb8`.
+- Spatial #1964 Rules blob `8b015a8bbe123bb7857bff5d98ba5a153067c41c` at `e3347d0e1ee57eaabafcfd50e2b033f7476aecf8`; its parent C1 bridge #1962 is `da2ee1ff6eed5b5cf0c8f3b762214fdb57c07c11`.
+
+Privacy #186 adds strict tombstone/lease and ten-field profile authority rules. Spatial #1964 adds corresponding profile/deletion protections plus a first-time owner-only C1 `memory.storage` receipt read; missing may be observed as missing, existing record must match uid/purpose/C1/policy 1.0.0. Privacy main's generic consent record read does not implement the same missing-document path. Reconcile Rules fragments only after proving project/database topology and deployment ownership. Do not deploy either complete source Ruleset over the other.
+
+Privacy issue #83 remains open.
+
+## R970 mandatory execution order
+1. Refresh Jobs #379/current main, Privacy main/#183/#186/#224/#214/#253-#256, Spatial main/#1962/#1964, Studio #198-#201, plus Jobs #371/#377/#384/#386-#391.
+2. Inspect actual current diffs/ancestry and establish Firebase project/database topology and Rules deployment owners.
+3. Produce collection/action/field matrix covering first-time C1 get, uid/userId/ownerId, ten protected fields, tombstone active/lease states, admin/founder authority and service-specific private data.
+4. Keep R647 dispatcher, Jobs #371 harness, and R818/R836 callable runner as separate acceptance paths. Do not count results between them.
+5. Recover exact original #371 `consent-jobs-*` module provenance only from a named archive/workspace/repository. If unrecoverable, create a new, differently named review-only harness rewrite.
+6. Obtain a Git-connected clean host; verify exact refs/trees/blobs/lockfiles. Run R647 10/16 suites, #371 three-case harness (only with compatible source), and #224/#232 native denial paths independently.
+7. Run Jobs #390/#391 real producer envelope against actual installed Jobs Zod dependency.
+8. Resolve R20/v3 event, prior-grant digest, revocation timestamp provenance, receiver/action binding, workload identity, ACK authenticity and crash-safe idempotency with Privacy/legal/security owners.
+9. Restore protected CI and independent non-author review; preserve raw logs and tool versions. A workflow failure with empty steps/404 logs is inconclusive.
+10. Obtain authorized read-only Firebase/GCP runtime inventory; then controlled disposable staging GCS stale-writer 403, upload drain, generation delete, final absence and durable purge ACK.
+11. Complete same-SHA authenticated owner C6 grant → private render → protected Replay → revoke → provider-call suppression → physical purge → downstream ACK; then device/accessibility/visual/legal/operations approvals and Founder GO.
+
+**No merge, deploy, dispatch, C6 enablement, private media, IAM/Rules mutation, billing action, paid compute, or production GO.**
