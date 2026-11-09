@@ -1,5 +1,13 @@
 # NEXT CHALK — ONE URAI GENESIS R969 FULL RECONCILIATION CONTINUATION
 
+**R968 supplemental report:** [JOBS_R968_PRIVACY_JOBS_THREE_LINEAGES_AND_RELEASE_GATES_HOLD_20261109.md](JOBS_R968_PRIVACY_JOBS_THREE_LINEAGES_AND_RELEASE_GATES_HOLD_20261109.md). The primary consolidated ledger remains [JOBS_R968_CONSOLIDATED_CROSS_LINEAGE_RECONCILIATION_AND_RELEASE_LEDGER_20261109.md](JOBS_R968_CONSOLIDATED_CROSS_LINEAGE_RECONCILIATION_AND_RELEASE_LEDGER_20261109.md), with machine checkpoint [JOBS_R968_MACHINE_CHECKPOINT_20261109.json](JOBS_R968_MACHINE_CHECKPOINT_20261109.json).
+
+**Main SHA correction before action:** older R968 consolidated tables record Jobs main as `9d29be1...`; live readback in the R967 continuation confirms current main is `2bcdbcf34da4a3fe58619286d6917e2d4fa624e1`, tree `282bd75464cc23d9a6add6a1340c6ae7d3adfc9a`. This revert removes one 90-line R933 file and restores the prior tree. It is unsigned. Branch protection is still disabled and required checks are off. Re-fetch this state before any action.
+
+R968 tracks remain three distinct systems: R647 donor; Jobs #371 harness with missing Privacy modules; R818/R836 native Jobs→Privacy callable path. Do not transfer test results between them.
+
+---
+
 Continue the existing LifeLogger → LifeOS → UrAi Genesis. Do not rebuild or restart surviving implementations. Preserve all branches, source histories and evidence. Production remains HOLD / NO-GO.
 
 ## Read first
