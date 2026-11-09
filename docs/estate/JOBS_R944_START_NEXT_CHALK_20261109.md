@@ -1,3 +1,33 @@
+# START HERE — ONE URAI GENESIS JOBS NEXT CHALK, R959
+
+**Current checkpoint:** R959 · November 9, 2026  
+**Release:** **PRODUCTION HOLD / NO-GO**  
+**Canonical R959 report:** [JOBS_R959_FULL_NEXT_CHALK_MAIN_AND_ISSUE_RECONCILIATION_20261109.md](JOBS_R959_FULL_NEXT_CHALK_MAIN_AND_ISSUE_RECONCILIATION_20261109.md)  
+**Machine checkpoint:** [JOBS_R959_MACHINE_CHECKPOINT_20261109.json](JOBS_R959_MACHINE_CHECKPOINT_20261109.json)
+
+## R959 new facts — read before doing anything
+- Jobs main is now `2bcdbcf34da4a3fe58619286d6917e2d4fa624e1`; commit reverts one accidentally added 90-line R933 test file. Its tree `282bd75464cc23d9a6add6a1340c6ae7d3adfc9a` matches the earlier main tree. The revert commit is unsigned. Preserve history; do not rewrite.
+- Main remains unprotected: `protected=false`, required checks enforcement off, no required contexts; Rulesets including parents returned an empty list.
+- Jobs PR #389 remains open/draft/unmerged at `b865209cc352241602d8b9714672f3401aed7669`. Its 78 root commands are enrolled, not executed.
+- Ten prior Actions failures still show pre-runner allocation (runner ID 0, no recorded steps). Exact GitHub cause remains UNKNOWN. No blind retries.
+- Issues #252 (P0 GCS revocation), #376 (post-admission data rights), #380 (server-owned deletion binding Rules), and #345 (quota concurrency) remain open.
+- Four worker implementation files are covered by the original R951 source-expression test. This is not HTTP middleware or deployed-route testing.
+- Studio Life Movie consent authority and private GCS output writes remain hard-off. Live GCS 403, upload drain, exact-generation deletion/ACK and owner Replay remain uncertified.
+
+## R959 required sequence
+1. Read the R959 report and JSON checkpoint.
+2. Refresh PRs #387–#389, #379, #304, main branch, Rulesets, issues #252/#376/#380/#345, and Actions.
+3. Have an authorized admin establish and verify main protection; do not change settings from an unprivileged forensic pass.
+4. Diagnose Actions runner allocation from complete GitHub-side evidence. Do not rerun blindly.
+5. Run original auth test, 78 root commands, typecheck/build and guarded four-emulator R879 on one immutable SHA in an approved free, credential-free full checkout.
+6. Add real HTTP auth tests; independently prove P0 GCS revocation, drain, generation deletion, purge ACK and owner-only Replay.
+7. Verify deployed resource/IAM/revision parity and operational rollback.
+8. Update Jobs #379 and Genesis #304 with receipts and exact heads.
+
+**No merge, deployment, CI bypass, production IAM/Rules mutation, paid compute, real jobs or private media. Production HOLD.**
+
+---
+
 # START HERE — ONE URAI GENESIS JOBS NEXT CHALK, R958
 
 **Current checkpoint:** R958 · November 9, 2026  
