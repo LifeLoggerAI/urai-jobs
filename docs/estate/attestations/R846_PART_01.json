@@ -1,0 +1,162 @@
+{
+  "schema_version": "1.0",
+  "audit": "R846 byte batch 01",
+  "repo": "LifeLoggerAI/urai-jobs",
+  "source_commit": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+  "source_tree": "3e74b4b0d6e10df15f9ccd747e9e936218b7fc25",
+  "selection": "Security/release high-risk paths, first 18 in R845 manifest order",
+  "method": "Exact-commit GitHub contents base64; independently decoded bytes; byte length; Git blob SHA1 recomputed over header+bytes; SHA256 recomputed over bytes; SHA256 abc test passed",
+  "counts": {
+    "attempted": 18,
+    "verified": 18,
+    "errors": 0,
+    "unique_verified": 18,
+    "verified_bytes": 90177
+  },
+  "records": [
+    {
+      "path": ".github/workflows/career-production-release.yml",
+      "expected_git_blob_sha": "8addd141769edfecb578f44131abcdab9ff75616",
+      "actual_git_blob_sha": "8addd141769edfecb578f44131abcdab9ff75616",
+      "byte_length": 552,
+      "sha256": "98b403beb85b78a3626459c92f2430a6a8d14c04038ba6189a4d4ae40274f1cd",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/career-surfaces-ci.yml",
+      "expected_git_blob_sha": "206b90d0b9a8928fafd343b34face418eecb1e56",
+      "actual_git_blob_sha": "206b90d0b9a8928fafd343b34face418eecb1e56",
+      "byte_length": 3542,
+      "sha256": "e47b9b46c32e5c5d6076c33cded316cef4c85215ebc8dff31f63324dfeaefc12",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "expected_git_blob_sha": "93d21e147170dc1923ecb2ebb843d02c8962bc28",
+      "actual_git_blob_sha": "93d21e147170dc1923ecb2ebb843d02c8962bc28",
+      "byte_length": 2453,
+      "sha256": "c058c1d3234dcfef4017429e48c31c2e5e084704cf3dc242b76d4c2ca597c09f",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/defined-gitlink-guard.yml",
+      "expected_git_blob_sha": "57673f0128ac83fe3b896e1e773ccbe18df9d3ad",
+      "actual_git_blob_sha": "57673f0128ac83fe3b896e1e773ccbe18df9d3ad",
+      "byte_length": 813,
+      "sha256": "827e1008bf0f2b7e3c7cd56928b10ad0bab6928133d78aa80aa9ee92af310eae",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/deploy-asset-worker.yml",
+      "expected_git_blob_sha": "6e326b53851a4bfff4b3da90af1782a8ac3f0ffe",
+      "actual_git_blob_sha": "6e326b53851a4bfff4b3da90af1782a8ac3f0ffe",
+      "byte_length": 485,
+      "sha256": "2ca76fd252afba457514bdf8c1a07e6babb7acbb97938bd9849093673807800f",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/firebase-cli-pin-guard.yml",
+      "expected_git_blob_sha": "12f23217b0b929c9376cb92f9454c39e24bf417b",
+      "actual_git_blob_sha": "12f23217b0b929c9376cb92f9454c39e24bf417b",
+      "byte_length": 3004,
+      "sha256": "7afa101c2245baf18e1e91aae5903cdcc57d30960f4bd1f47fd1dede5c171b8a",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/firebase-deploy.yml",
+      "expected_git_blob_sha": "88aa04786aa3544648250a6b45808d3386fa6f2e",
+      "actual_git_blob_sha": "88aa04786aa3544648250a6b45808d3386fa6f2e",
+      "byte_length": 518,
+      "sha256": "b7ba0bccb0aa62ee71f47538aa77828f500d74c7237b785b8f71b13d2523b14f",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/marketplace-verification.yml",
+      "expected_git_blob_sha": "f9080e212c366a2e2c7bf6ffa59b06e6a4f5bc4b",
+      "actual_git_blob_sha": "f9080e212c366a2e2c7bf6ffa59b06e6a4f5bc4b",
+      "byte_length": 1554,
+      "sha256": "1015fc1b94fb9d558b9b8ff188c55706849079a3e61c541102cc5a653fed567f",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/post-deploy-verify.yml",
+      "expected_git_blob_sha": "5ef02991479f7f14b8bc7498440af2800b0b04f1",
+      "actual_git_blob_sha": "5ef02991479f7f14b8bc7498440af2800b0b04f1",
+      "byte_length": 6234,
+      "sha256": "1f094e211b6bb67f6fb5afae65f7a8ecb29bcb78cf8e3f77c1f35103137e3003",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/production-deploy-publish.yml",
+      "expected_git_blob_sha": "7c4ff6aa6cb0a1819dffeb2163991c5e8a6cace9",
+      "actual_git_blob_sha": "7c4ff6aa6cb0a1819dffeb2163991c5e8a6cace9",
+      "byte_length": 530,
+      "sha256": "825ee6b69663711fee8e0c964dc48184f98956bfe8710bda1d2c599d5e17f466",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/production-verification.yml",
+      "expected_git_blob_sha": "e4cb542b8a1d9abcacdebaa60612b04ca8043e94",
+      "actual_git_blob_sha": "e4cb542b8a1d9abcacdebaa60612b04ca8043e94",
+      "byte_length": 3976,
+      "sha256": "b07671e9d8d29fd435511db9b21077a9d8c9d30a71cd3d61a15e1daca56badeb",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/rollback-on-smoke-failure.yml",
+      "expected_git_blob_sha": "2cc2c0959d0537a94ffd84e7173d185322331d2c",
+      "actual_git_blob_sha": "2cc2c0959d0537a94ffd84e7173d185322331d2c",
+      "byte_length": 393,
+      "sha256": "436229ad6c817a6bd58e0db70c9263a74c991b428e8cb697fea5203417bbb081",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/system-audit.yml",
+      "expected_git_blob_sha": "987320c6bb4f18d7461b30dfa19c83a8928e7dcc",
+      "actual_git_blob_sha": "987320c6bb4f18d7461b30dfa19c83a8928e7dcc",
+      "byte_length": 3482,
+      "sha256": "2747302a22c6af40ab46c241210f818e7e66657b697ac8e26ce8e99889a867a1",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/urai-jobs-ci.yml",
+      "expected_git_blob_sha": "fd2a03fcc0221a89c4f307dfbd1b76e0010e1ee9",
+      "actual_git_blob_sha": "fd2a03fcc0221a89c4f307dfbd1b76e0010e1ee9",
+      "byte_length": 4811,
+      "sha256": "432403b1a9d62737bd3fcfd9239b0d015944ce6e63d40c4d8f20854332b26c62",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/urai-jobs-final-ci.yml",
+      "expected_git_blob_sha": "ad6e4d882c18d6a6032c666cbddbfd1e69262bc4",
+      "actual_git_blob_sha": "ad6e4d882c18d6a6032c666cbddbfd1e69262bc4",
+      "byte_length": 8527,
+      "sha256": "d82cb73026a22ea41122dc2f07234e5c2632df739b9637239839e4e5f18877fb",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/urai-jobs-live-verification.yml",
+      "expected_git_blob_sha": "ae9f4924c989ba6738fe8180f3b5614bdecf1cd9",
+      "actual_git_blob_sha": "ae9f4924c989ba6738fe8180f3b5614bdecf1cd9",
+      "byte_length": 1562,
+      "sha256": "827e4c485041b4947c8297145d6ef4f3f9c2145ed1c7a9306e87d551ebad8636",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/urai-jobs-production-deploy.yml",
+      "expected_git_blob_sha": "0bc4d67765ce128df2861b2cb8e4469c51d63f87",
+      "actual_git_blob_sha": "0bc4d67765ce128df2861b2cb8e4469c51d63f87",
+      "byte_length": 39878,
+      "sha256": "a2d801fbb0126ecd9604dd264182edf3ddeeb92b98b05213cef994b2023f4a9b",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/urai-jobs-runtime-ci.yml",
+      "expected_git_blob_sha": "296bbf93a543724d6b834e5efdf6c6e34cc579e5",
+      "actual_git_blob_sha": "296bbf93a543724d6b834e5efdf6c6e34cc579e5",
+      "byte_length": 7863,
+      "sha256": "c8712097df6186b213f66581157ae1bffc98666eef728621b41ab554df2fcc19",
+      "status": "VERIFIED"
+    }
+  ]
+}

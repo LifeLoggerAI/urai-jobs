@@ -1,0 +1,148 @@
+{
+  "schema_version": "1.0",
+  "audit": "R861_SINGLETON_BATCH_19",
+  "repository": "LifeLoggerAI/urai-jobs",
+  "source_commit": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+  "source_tree": "3e74b4b0d6e10df15f9ccd747e9e936218b7fc25",
+  "manifest_blob_sha": "6b68e15bdca24c278eaa9c71d794f8eb374f8671",
+  "original_singleton_index_start": 112,
+  "original_singleton_index_end": 127,
+  "method": "Original R845 deterministic 685 unique singleton cohort; GitHub exact-source base64 raw bytes; independent Git-object SHA-1 and raw-content SHA-256 with known vectors; checks against original path/blob/size and returned SHA.",
+  "counts": {
+    "attempted": 16,
+    "verified": 16,
+    "failed": 0,
+    "unique_bytes_verified": 108397
+  },
+  "records": [
+    {
+      "path": "scripts/consent-revocation-contract.mjs",
+      "git_blob_sha": "c6276720f841f5a45c1935b49e64a869b6c22f11",
+      "actual_git_blob_sha1": "c6276720f841f5a45c1935b49e64a869b6c22f11",
+      "sha256": "363b581f0bf9e0ecaff0e40bdcb859cb43b8e36f033a03c2a3bf2389928dd0b4",
+      "byte_length": 8959,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/deploy-career-worker.sh",
+      "git_blob_sha": "60d4e7c7501fe47e465dfd3f758104531c3aebb4",
+      "actual_git_blob_sha1": "60d4e7c7501fe47e465dfd3f758104531c3aebb4",
+      "sha256": "2f803afc8a005a5b8101234191cc6954feeccaa0d625d925fb023ad05db1aedc",
+      "byte_length": 269,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/deploy-firebase.sh",
+      "git_blob_sha": "90607b4bc19d706972fa401f9ae245a9fe73fa63",
+      "actual_git_blob_sha1": "90607b4bc19d706972fa401f9ae245a9fe73fa63",
+      "sha256": "ebf6b93b945b2dff89b23c8b97864bf98c1993b1251e11b4bf54565096a42763",
+      "byte_length": 13318,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/deploy-managed-worker.sh",
+      "git_blob_sha": "374ce0d8264f9764202cf6c22877265efc72f769",
+      "actual_git_blob_sha1": "374ce0d8264f9764202cf6c22877265efc72f769",
+      "sha256": "59c9c04e95cbc97f5d63b81e511bce75b375e3aea7eae18c3343d36df81e1acd",
+      "byte_length": 364,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/deploy-workers-approved.sh",
+      "git_blob_sha": "877d6bf71152dee291a1644802a78fe7fc64f698",
+      "actual_git_blob_sha1": "877d6bf71152dee291a1644802a78fe7fc64f698",
+      "sha256": "746cffc857334311d244ff4868fdeaecc05172192e07eb2555c163adc8197ab3",
+      "byte_length": 17001,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/deploy-workers.sh",
+      "git_blob_sha": "b42fdcb1748bcfd0d541c3fffa334401fdf9e3b3",
+      "actual_git_blob_sha1": "b42fdcb1748bcfd0d541c3fffa334401fdf9e3b3",
+      "sha256": "b172c2f1f8ba8c35334db02ac373e0839f4c07fb27d2f18706ec1a7da8ec310a",
+      "byte_length": 31878,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/dlq-retention-cleanup.mjs",
+      "git_blob_sha": "09a6d5fc93a1669ce3b82810bfc16944129abf8f",
+      "actual_git_blob_sha1": "09a6d5fc93a1669ce3b82810bfc16944129abf8f",
+      "sha256": "20318fb3906abec7da4c5d70ff83c698a116435f5830b0a78b84f955b01d5488",
+      "byte_length": 1980,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/ensure-gcs-bucket.sh",
+      "git_blob_sha": "7a0675e303dc1b84cdc628ba114e1c71ea683008",
+      "actual_git_blob_sha1": "7a0675e303dc1b84cdc628ba114e1c71ea683008",
+      "sha256": "6cfd67ca701601e0e41abe0b15b0fe944be86758d3b5e337a146b5ee241190ca",
+      "byte_length": 2842,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/execution-guards-smoke.mjs",
+      "git_blob_sha": "c0f07847d8ff36b3af2f784d557777f81e0ccb9d",
+      "actual_git_blob_sha1": "c0f07847d8ff36b3af2f784d557777f81e0ccb9d",
+      "sha256": "f0fe3e47df405c7a15386c7d0b5466fe0f51d2fbb94717659db8378cc96f6d63",
+      "byte_length": 2162,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/export-worker-urls-from-receipt.mjs",
+      "git_blob_sha": "1e92d938aea9dd40208c2b19a961e3a43b944c93",
+      "actual_git_blob_sha1": "1e92d938aea9dd40208c2b19a961e3a43b944c93",
+      "sha256": "9e54c25e4199a6f961d7e1b7abaa6c1d6b84782f132e07c19cc8a69c32618c7e",
+      "byte_length": 2528,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/export-worker-urls.mjs",
+      "git_blob_sha": "452be328763dd8f408aed30682bb70989e9e9fb9",
+      "actual_git_blob_sha1": "452be328763dd8f408aed30682bb70989e9e9fb9",
+      "sha256": "15aa53c90e9061d3f2bd11b67cdc2c737113ff0f65bc6dc2a655a3683b6b25fa",
+      "byte_length": 1679,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/firebase-prebuilt-manifest.mjs",
+      "git_blob_sha": "b55c7d57d51dcbea6b407d4f34f90768442eb264",
+      "actual_git_blob_sha1": "b55c7d57d51dcbea6b407d4f34f90768442eb264",
+      "sha256": "bdc4a3292e8d2e79674dfabad115d2ff5d97f60fbd6e3514708769b8db296d86",
+      "byte_length": 6798,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/fixtures/privacy-revocation-contract-65e7d7ec.ts",
+      "git_blob_sha": "6cca2b9456319927cf22511c7d51c1f16ddf051c",
+      "actual_git_blob_sha1": "6cca2b9456319927cf22511c7d51c1f16ddf051c",
+      "sha256": "3fc73414dbc84be84894585a13fcfd79cb7391861a1380f3161e0d44f6bcee79",
+      "byte_length": 10586,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/functions-runtime-firestore-iam-contract.mjs",
+      "git_blob_sha": "6d416e3f8ffaf03cc0a3252bf34cb44cbabdbe7e",
+      "actual_git_blob_sha1": "6d416e3f8ffaf03cc0a3252bf34cb44cbabdbe7e",
+      "sha256": "14baccffed680df2f79001407c3f5994681406bde7b49a3b961fec3abfa885b2",
+      "byte_length": 1891,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/generate-slo-dashboard.mjs",
+      "git_blob_sha": "05a9bb6bd0ad74855b4243d2f8c999cf47f9255d",
+      "actual_git_blob_sha1": "05a9bb6bd0ad74855b4243d2f8c999cf47f9255d",
+      "sha256": "dd54271f98ae28bd5bea79dba5fc2bc247a6fb0d4a49da4d26a812d3e2aa2726",
+      "byte_length": 530,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/integration/r421-run-synthetic-cross-service.mjs",
+      "git_blob_sha": "a0a32e1d2be5dbb4905b41c31172a6e28a7085f2",
+      "actual_git_blob_sha1": "a0a32e1d2be5dbb4905b41c31172a6e28a7085f2",
+      "sha256": "417b770ed3354e8f3cef70bc20e05c69a5c10fde5d6589bdc506d5639773f1f3",
+      "byte_length": 5612,
+      "status": "VERIFIED"
+    }
+  ],
+  "limitation": "Source-tree-only byte certificate; no runtime, history, external assets or authorization claimed."
+}

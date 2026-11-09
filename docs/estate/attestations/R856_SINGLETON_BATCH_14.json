@@ -1,0 +1,147 @@
+{
+  "schema_version": "1.0",
+  "audit": "R856 singleton byte batch 14",
+  "repository": "LifeLoggerAI/urai-jobs",
+  "source_commit": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+  "source_tree": "3e74b4b0d6e10df15f9ccd747e9e936218b7fc25",
+  "source_manifest_sha": "6b68e15bdca24c278eaa9c71d794f8eb374f8671",
+  "selection": "Immutable R845 manifest: unique singleton blobs excluding 65 original high-risk blobs; prefix precedence functions/, workers/, scripts/, web/, docs/, launch-proof/, marketplace/, _audit/, other then lexical path; indices 48..63 inclusive.",
+  "method": "Exact-commit base64 contents from GitHub; raw byte decoding, SHA-1 Git object hash recomputed, SHA-256 raw content digest calculated, byte count and source/API SHA checked, abc SHA-256 and empty Git blob control vectors passed.",
+  "counts": {
+    "attempted": 16,
+    "verified": 16,
+    "failed": 0,
+    "unique_bytes_verified": 19449
+  },
+  "records": [
+    {
+      "path": "workers/captured-reality-worker/package.json",
+      "git_blob_sha": "7131341d94a586222e1a71f801ecfd263a0298dc",
+      "actual_git_blob_sha1": "7131341d94a586222e1a71f801ecfd263a0298dc",
+      "sha256": "6ddc455a0afe7f24dd1c46bb05eecd61882f978f3a9471063a5eeb55a6e9e7a1",
+      "byte_length": 390,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/career-worker/Dockerfile",
+      "git_blob_sha": "5e8b44af16c18d7be7012e5986dd72b7e29847e0",
+      "actual_git_blob_sha1": "5e8b44af16c18d7be7012e5986dd72b7e29847e0",
+      "sha256": "a5d54eec757c44c3a49aa9ddf2f7faaa37960daa6529767678ff53341dbf84d7",
+      "byte_length": 223,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/career-worker/package.json",
+      "git_blob_sha": "905c486a707d44426bf7fd6d0cc4f33ba46865b5",
+      "actual_git_blob_sha1": "905c486a707d44426bf7fd6d0cc4f33ba46865b5",
+      "sha256": "307ddaa4eeef590079494559520afa6ffc7668fa7f5612567523342991e7c0ab",
+      "byte_length": 429,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/career-worker/src/handlers/index.js",
+      "git_blob_sha": "a0437d6ec27ae09eb6aae2ad06659b43f368f5d5",
+      "actual_git_blob_sha1": "a0437d6ec27ae09eb6aae2ad06659b43f368f5d5",
+      "sha256": "b9759a8105f2b62969734c161cd845aea0d2c9a2307ff8a0b1424f14329348b1",
+      "byte_length": 2635,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/career-worker/src/handlers/index.ts",
+      "git_blob_sha": "601b285fc624d1629134bd9a52ec250c6c13fc35",
+      "actual_git_blob_sha1": "601b285fc624d1629134bd9a52ec250c6c13fc35",
+      "sha256": "c5f396c06559e93d828aa06260d87afa404d1a33c0e5b6205c388ccb2e7a99be",
+      "byte_length": 2894,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/career-worker/src/index.js",
+      "git_blob_sha": "6a6deac40d3fb8da091df9f2a75aeeebcfb1c323",
+      "actual_git_blob_sha1": "6a6deac40d3fb8da091df9f2a75aeeebcfb1c323",
+      "sha256": "84cd37020be645e315140701a42b3b54ef45c31de66f5388688556accb6f3b12",
+      "byte_length": 988,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/career-worker/src/index.ts",
+      "git_blob_sha": "023ad1519f78a18146594e1138360a289d294bf4",
+      "actual_git_blob_sha1": "023ad1519f78a18146594e1138360a289d294bf4",
+      "sha256": "271de1ff8a50ffb374fcb2564393b8d50baeba615f18ff8688f35d73733b3ae2",
+      "byte_length": 3043,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/narrator-worker/Dockerfile",
+      "git_blob_sha": "2f9be4ed4fd6c1eafbea87cc9ca51e6b8c2bf9aa",
+      "actual_git_blob_sha1": "2f9be4ed4fd6c1eafbea87cc9ca51e6b8c2bf9aa",
+      "sha256": "62575a50d16227c29fd3bf85b7539124ccd2cfaf9a1b1bf6c5134a8fd229b1f7",
+      "byte_length": 436,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/narrator-worker/package.json",
+      "git_blob_sha": "3f438bd981d2aba3b3ff8091dcd21a6b19be9b1a",
+      "actual_git_blob_sha1": "3f438bd981d2aba3b3ff8091dcd21a6b19be9b1a",
+      "sha256": "86f8da93f19c6b9567ddce4e1aa703ced6253f0e500125eb7821a4642920b749",
+      "byte_length": 607,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/narrator-worker/src/circuit-breaker.js",
+      "git_blob_sha": "fa0c8ffd1d01d8b31aa27f1424c3bac9f24452a2",
+      "actual_git_blob_sha1": "fa0c8ffd1d01d8b31aa27f1424c3bac9f24452a2",
+      "sha256": "86c7bd748ef6b317e18e55d1950d09882a6248fe2864191807f5caf7454b3bb5",
+      "byte_length": 1058,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/narrator-worker/src/circuit-breaker.ts",
+      "git_blob_sha": "c615454b6b8a6389ac5143b9456bff81594d2825",
+      "actual_git_blob_sha1": "c615454b6b8a6389ac5143b9456bff81594d2825",
+      "sha256": "d2e04ee0a05bb960cb1ce2abf56762dd5321f13702299f2f39d543a170811f2e",
+      "byte_length": 964,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/narrator-worker/src/concurrency-governor.js",
+      "git_blob_sha": "5a28b5cfb24e636a4235bd51f0fc906aa4a32343",
+      "actual_git_blob_sha1": "5a28b5cfb24e636a4235bd51f0fc906aa4a32343",
+      "sha256": "17751a4931781d53db3fc9e8c56347fd730c38189ef02fa3b73f975db0afa797",
+      "byte_length": 1099,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/narrator-worker/src/concurrency-governor.ts",
+      "git_blob_sha": "59529be80db0c4bedda4e0d101d8934fe0548bd0",
+      "actual_git_blob_sha1": "59529be80db0c4bedda4e0d101d8934fe0548bd0",
+      "sha256": "95ea181844e9ddb95fd2f5faed7e1035abef545c6c88e228db63f25b3fd0f1fd",
+      "byte_length": 1100,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/narrator-worker/src/handlers/index.js",
+      "git_blob_sha": "035eadcd958cf979fe8408d6121d7b9d15762cd8",
+      "actual_git_blob_sha1": "035eadcd958cf979fe8408d6121d7b9d15762cd8",
+      "sha256": "36ead2cada53cf49cc5a5c8d00405b751b508d7eed975fc6534aa73783675e5f",
+      "byte_length": 458,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/narrator-worker/src/handlers/index.ts",
+      "git_blob_sha": "1eb7ca4331a68a2aa290b723f5bc6ba6dee9085b",
+      "actual_git_blob_sha1": "1eb7ca4331a68a2aa290b723f5bc6ba6dee9085b",
+      "sha256": "11b70a6e6fb4d27986db9bc32544f195c8f54d72eefc56c06988229462b68bdc",
+      "byte_length": 474,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/narrator-worker/src/handlers/narrator-tts.js",
+      "git_blob_sha": "8b168c5facafd9a4c52ee8309d976d9349dc72bc",
+      "actual_git_blob_sha1": "8b168c5facafd9a4c52ee8309d976d9349dc72bc",
+      "sha256": "727526ccd60ce80208cffa0980c7f7557d79be41229132bf8d9a7c4baa067421",
+      "byte_length": 2651,
+      "status": "VERIFIED"
+    }
+  ],
+  "qualification": "Current-tree exact-content attestation only, not runtime or all-history verification."
+}

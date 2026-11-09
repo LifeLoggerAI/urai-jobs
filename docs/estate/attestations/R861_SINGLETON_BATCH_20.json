@@ -1,0 +1,148 @@
+{
+  "schema_version": "1.0",
+  "audit": "R861_SINGLETON_BATCH_20",
+  "repository": "LifeLoggerAI/urai-jobs",
+  "source_commit": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+  "source_tree": "3e74b4b0d6e10df15f9ccd747e9e936218b7fc25",
+  "manifest_blob_sha": "6b68e15bdca24c278eaa9c71d794f8eb374f8671",
+  "original_singleton_index_start": 128,
+  "original_singleton_index_end": 143,
+  "method": "Original R845 685 singleton cohort; GitHub exact source base64 raw bytes; independently computed Git blob SHA-1 and raw SHA-256; source path, manifest byte length and returned blob SHA checked. Standard hash known vectors passed.",
+  "counts": {
+    "attempted": 16,
+    "verified": 16,
+    "failed": 0,
+    "unique_bytes_verified": 126943
+  },
+  "records": [
+    {
+      "path": "scripts/integration/r421-synthetic-cross-service.test.mjs",
+      "git_blob_sha": "00a99f38f5d537b576dd0cfb05c6874104b7f562",
+      "actual_git_blob_sha1": "00a99f38f5d537b576dd0cfb05c6874104b7f562",
+      "sha256": "9fc5622217faa36e0853b4697feda82dc5d050b1007581f28402464632fc96e6",
+      "byte_length": 17182,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/jobs-reliability-verify.mjs",
+      "git_blob_sha": "9542e19c87a0b4195394b7ee9386d2152f3d8c72",
+      "actual_git_blob_sha1": "9542e19c87a0b4195394b7ee9386d2152f3d8c72",
+      "sha256": "4f8d583cceffd2d1e14c1ce04e193cf14c2d2b02ec040b8885b37e44ed50aefb",
+      "byte_length": 2710,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-model-index-contract.mjs",
+      "git_blob_sha": "f87ab5385660dde8169fd77233122f66048949a2",
+      "actual_git_blob_sha1": "f87ab5385660dde8169fd77233122f66048949a2",
+      "sha256": "fc6f9d488a2b9afae3b69adca91fe9512c22ba0fd8aeac15cb335cfeaf08d970",
+      "byte_length": 1811,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-movie-writer-fence-race-model.test.mjs",
+      "git_blob_sha": "bb2ae16bf81eb44d08fbd38134e9a20d27c61c8c",
+      "actual_git_blob_sha1": "bb2ae16bf81eb44d08fbd38134e9a20d27c61c8c",
+      "sha256": "863b025db896544d2ca168f7a06262d261c2ce8c0dce9bc2afa3576be4b02c22",
+      "byte_length": 9512,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-movies-admission-clock-race-contract.mjs",
+      "git_blob_sha": "2a6a854552bb6f1bce429a81604aa323e6cf09e9",
+      "actual_git_blob_sha1": "2a6a854552bb6f1bce429a81604aa323e6cf09e9",
+      "sha256": "b7de65b471863f7bbd34d80c2c026a01875951f4788c301e08f2078b7000490c",
+      "byte_length": 3759,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-movies-admission-preflight-contract.mjs",
+      "git_blob_sha": "93b4bce38a7ac4b67090454a30206a62c30678f6",
+      "actual_git_blob_sha1": "93b4bce38a7ac4b67090454a30206a62c30678f6",
+      "sha256": "1b50bb3f05f75150517d60fd9222972bf4beec526b1470eadaf7e586d4e823c1",
+      "byte_length": 13079,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-movies-cancellation-smoke.mjs",
+      "git_blob_sha": "99f3c9900be44fcb9e2b417a77cde34e1852723c",
+      "actual_git_blob_sha1": "99f3c9900be44fcb9e2b417a77cde34e1852723c",
+      "sha256": "d8006a697064428f9645865070d5fd74a0614cde675c63de396a58ffbdfd1b71",
+      "byte_length": 11549,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-movies-consent-block-state-contract.mjs",
+      "git_blob_sha": "ce172780967d4d82721290a9ff03a73870b8420e",
+      "actual_git_blob_sha1": "ce172780967d4d82721290a9ff03a73870b8420e",
+      "sha256": "e07ac7ca340fe03ca1ab155506af8c4a8a67b8616566511f4afc1625131bca24",
+      "byte_length": 6091,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-movies-consent-decision-contract.mjs",
+      "git_blob_sha": "0a78d0b90dd985c7b773890cb31bca8c9038aad9",
+      "actual_git_blob_sha1": "0a78d0b90dd985c7b773890cb31bca8c9038aad9",
+      "sha256": "7f8d377718bb4e51efb3131363e1048e72c7ce8a4ee63b35c9d2ce54bc7dfd84",
+      "byte_length": 5896,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-movies-consent-gate-smoke.mjs",
+      "git_blob_sha": "f895751e8d48177fe0bdc14b9bba60f8568f3141",
+      "actual_git_blob_sha1": "f895751e8d48177fe0bdc14b9bba60f8568f3141",
+      "sha256": "0170c0d316ee19912faf214d2c40083f213bd7c933a3b738415b2421cee0fa2f",
+      "byte_length": 14264,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-movies-consent-response-bounds.test.mjs",
+      "git_blob_sha": "ab19183b6983a3d9520e263649f34b4f8b8f5c92",
+      "actual_git_blob_sha1": "ab19183b6983a3d9520e263649f34b4f8b8f5c92",
+      "sha256": "d0be5b636aa782575cd838abd48a5ebe410f260e7484cd4a632df06da8d24196",
+      "byte_length": 5836,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-movies-consent-transport-contract.mjs",
+      "git_blob_sha": "fdaaf228c41269700b95d920cb02ecb39da296e0",
+      "actual_git_blob_sha1": "fdaaf228c41269700b95d920cb02ecb39da296e0",
+      "sha256": "0815802ffce406aa43bb1efd0421ba4d847f13d388ed97d0fc9109fc0273b37f",
+      "byte_length": 15541,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-movies-creation-admission-contract.mjs",
+      "git_blob_sha": "bcc7c26fdcd0fc7894bb763e9a098df3e121e819",
+      "actual_git_blob_sha1": "bcc7c26fdcd0fc7894bb763e9a098df3e121e819",
+      "sha256": "433e636df46c3fd41e60599e96fa857ff6ebabdce5419cc16814b2037ee7d10f",
+      "byte_length": 4575,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-movies-creation-revocation-race-contract.mjs",
+      "git_blob_sha": "5eae68c7a46c62dad61352fbff8cc950d5b71d7a",
+      "actual_git_blob_sha1": "5eae68c7a46c62dad61352fbff8cc950d5b71d7a",
+      "sha256": "eaa9622e13772b8afc492dfbf14bac5156539fb3c8cfc2c3844f71959c18491b",
+      "byte_length": 5170,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-movies-cross-repo-envelope-smoke.mjs",
+      "git_blob_sha": "9765af06ca181b16780311ea02686b687df6db43",
+      "actual_git_blob_sha1": "9765af06ca181b16780311ea02686b687df6db43",
+      "sha256": "3489f7d5ea17b0b67d6b30b63f23707c2295e705157c84935b860e4035318a1d",
+      "byte_length": 7268,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/life-movies-derivative-revocation-alias.test.mjs",
+      "git_blob_sha": "a01eae6f654d70d5f44af96f20b7f4338f1f038c",
+      "actual_git_blob_sha1": "a01eae6f654d70d5f44af96f20b7f4338f1f038c",
+      "sha256": "0e273e3dd7c6ea7a11c4005affe6281dbf8ceda1fd1e021e8c227d79a5461b62",
+      "byte_length": 2700,
+      "status": "VERIFIED"
+    }
+  ],
+  "limitation": "Source-tree-only byte certificate; no runtime, history, external assets or authorization claimed."
+}

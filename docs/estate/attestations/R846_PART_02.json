@@ -1,0 +1,148 @@
+{
+  "schema_version": "1.0",
+  "audit": "R846 byte batch 02",
+  "repository": "LifeLoggerAI/urai-jobs",
+  "source_commit": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+  "source_tree": "3e74b4b0d6e10df15f9ccd747e9e936218b7fc25",
+  "base_manifest_commit": "f51c39b6c348326b76d35b43c66f23a948df9b44",
+  "scope": "high-risk list indices 18-33; ordered by R845 manifest; workflows, security modules, acceptance runners",
+  "method": "Retrieved exact-commit GitHub file as base64, decoded actual bytes, independently calculated Git blob SHA-1 with prefix, SHA-256 content digest, checked file size and manifest SHA; empty Git blob and abc SHA-256 vectors passed",
+  "counts": {
+    "attempted": 16,
+    "verified": 16,
+    "failed": 0,
+    "verified_bytes": 160944,
+    "unique_verified_blob_ids": 16
+  },
+  "records": [
+    {
+      "path": ".github/workflows/urai-jobs-typecheck-diagnostics.yml",
+      "expected_git_blob_sha": "96a0c48584884941d764fd1bf925fdffa1a54010",
+      "actual_git_blob_sha": "96a0c48584884941d764fd1bf925fdffa1a54010",
+      "byte_length": 5188,
+      "sha256": "4a45ca927d9ff62996bcc8cc024e46e163b9d78685c5275b7bec6cd3d8feba0a",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/urai-jobs-visual-proof.yml",
+      "expected_git_blob_sha": "ad3ac5c5d8686825c8b399e97fa53d5297491870",
+      "actual_git_blob_sha": "ad3ac5c5d8686825c8b399e97fa53d5297491870",
+      "byte_length": 2951,
+      "sha256": "9f518b109a11d8dcde3e0216438817d9c739b58e9ac820c7acbeea4a40d91993",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/urai-production-verify.yml",
+      "expected_git_blob_sha": "e7b50462126fa0db072addec183a9005cfe36973",
+      "actual_git_blob_sha": "e7b50462126fa0db072addec183a9005cfe36973",
+      "byte_length": 3337,
+      "sha256": "0a072566050bae8ad9034285dff81eff9644e1cdcb750a0fe2f232120c64fa7f",
+      "status": "VERIFIED"
+    },
+    {
+      "path": ".github/workflows/uraiprod-gitlink-removal-guard.yml",
+      "expected_git_blob_sha": "380487fd09c0072e55bf60321c135d7861fb56fe",
+      "actual_git_blob_sha": "380487fd09c0072e55bf60321c135d7861fb56fe",
+      "byte_length": 1898,
+      "sha256": "6bd39c7be494ffb14b947a16c2945c8c73770282cb165b0c4ee11df39f97de22",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "firebase.json",
+      "expected_git_blob_sha": "f001d5130f4b2583c0d5030c393586180e38172e",
+      "actual_git_blob_sha": "f001d5130f4b2583c0d5030c393586180e38172e",
+      "byte_length": 1837,
+      "sha256": "ed06bb2fc3269634de661b5ef54d4a916e9aeae08e6dd13c6d9924bd2f8e9c3f",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "firestore.rules",
+      "expected_git_blob_sha": "988b1278a04227c4c543c0cd032b4642ac542ecd",
+      "actual_git_blob_sha": "988b1278a04227c4c543c0cd032b4642ac542ecd",
+      "byte_length": 2996,
+      "sha256": "6536270a1a93ff7304f4d3c062f183995be9da97aafa4c3edbc21632d3ecc3a2",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/jobs/lifeMovieOwnerDeletion.ts",
+      "expected_git_blob_sha": "afdd8e83ac656e7d126e2e141fb063067ec73b42",
+      "actual_git_blob_sha": "afdd8e83ac656e7d126e2e141fb063067ec73b42",
+      "byte_length": 10539,
+      "sha256": "fb5ffe150d725c181db4e327048a5880ed38fd85f3c19c4f5210b4de3d69aed2",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/jobs/lifeMoviePrivateDeliveryContract.ts",
+      "expected_git_blob_sha": "bfe1e7600715bb8e0f2dd696876dd86d3d0a4ce4",
+      "actual_git_blob_sha": "bfe1e7600715bb8e0f2dd696876dd86d3d0a4ce4",
+      "byte_length": 4200,
+      "sha256": "c942721d8a961548bc03d92cab0c92c62d96a594f05e5c7ae40cab58e0190d1f",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/jobs/studioLifeMovieBridge.ts",
+      "expected_git_blob_sha": "a8c1ba71472312895cb4464282d5d2ba12e190c8",
+      "actual_git_blob_sha": "a8c1ba71472312895cb4464282d5d2ba12e190c8",
+      "byte_length": 24799,
+      "sha256": "46896ac59fd6cc809b6e6af1d73493fd0c9b3c31f60476555ea14cdca59e646b",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/jobs/studioLifeMovieContract.ts",
+      "expected_git_blob_sha": "5f944e906de7243d7415ac479cf92356b09c84c9",
+      "actual_git_blob_sha": "5f944e906de7243d7415ac479cf92356b09c84c9",
+      "byte_length": 11446,
+      "sha256": "335d0aaf56d6070bf4035f6474831432289ebfd54c5bf0aecceae76c948ea771",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/jobs/studioLifeMovieLongformBridge.ts",
+      "expected_git_blob_sha": "1655b817fcbc8de93cc3d1d31371193f9cc0f505",
+      "actual_git_blob_sha": "1655b817fcbc8de93cc3d1d31371193f9cc0f505",
+      "byte_length": 57163,
+      "sha256": "d72909fae3f430a24d08a6e604d4cd4beeb6b281c368ea7c011e8a775839773c",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/jobs/studioLifeMovieLongformContract.ts",
+      "expected_git_blob_sha": "eb09e66fb4f620a307241e24559523d9ad242ce6",
+      "actual_git_blob_sha": "eb09e66fb4f620a307241e24559523d9ad242ce6",
+      "byte_length": 12679,
+      "sha256": "60251824ba59053bbe9baa7b29c20a019de82f4ad35a7cfbad8cffffdfd683fd",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/consentBlocks.ts",
+      "expected_git_blob_sha": "8bd86161687402ebb610cc30f6677f88521c2c1c",
+      "actual_git_blob_sha": "8bd86161687402ebb610cc30f6677f88521c2c1c",
+      "byte_length": 3946,
+      "sha256": "a2b84c8b91d1d7782fe857109171843ccf7aef7f59cd9b1d0c793c160cfc83ae",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/consentRevocation.ts",
+      "expected_git_blob_sha": "bf8598710668e6ed0c533c58be9ce67bfaa3e289",
+      "actual_git_blob_sha": "bf8598710668e6ed0c533c58be9ce67bfaa3e289",
+      "byte_length": 10287,
+      "sha256": "8aa97fc4be3e0c7e41eb737e987e8228227564d39902a2a5d8f8257a0cd5dfbc",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/consentRevocationOrder.ts",
+      "expected_git_blob_sha": "33c71b71a7a505d17f8b5b51189573a954873593",
+      "actual_git_blob_sha": "33c71b71a7a505d17f8b5b51189573a954873593",
+      "byte_length": 1996,
+      "sha256": "a3f9dfb011025e9b58ddf1277656d9da696edab605ccc947dcbdd67c01106452",
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/privacy/dataRights.ts",
+      "expected_git_blob_sha": "0666810686497f304db4e97f6c40c65811fb1de8",
+      "actual_git_blob_sha": "0666810686497f304db4e97f6c40c65811fb1de8",
+      "byte_length": 5682,
+      "sha256": "282ce0d0f03097385befc9d2e7ff4deab1be4f1f717a9fa4c7f9428173969013",
+      "status": "VERIFIED"
+    }
+  ],
+  "conclusion": "File-byte attestation only; no runtime, release, or private-media certification"
+}

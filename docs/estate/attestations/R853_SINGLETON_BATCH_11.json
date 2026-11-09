@@ -1,0 +1,147 @@
+{
+  "schema_version": "1.0",
+  "audit": "R853 singleton source-byte batch 11",
+  "repository": "LifeLoggerAI/urai-jobs",
+  "source_commit": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+  "source_tree": "3e74b4b0d6e10df15f9ccd747e9e936218b7fc25",
+  "source_manifest_sha": "6b68e15bdca24c278eaa9c71d794f8eb374f8671",
+  "selection": "Original R845 manifest unique-blob singletons excluding 65 high risk blobs: order functions/, workers/, scripts/, web/, docs/, launch-proof/, marketplace/, _audit/, other; within group path ascending. Indices 0 through 15.",
+  "method": "Exact pinned commit per-path GitHub contents base64 -> raw bytes, independently SHA-1 Git blob hash and raw SHA-256; matched manifest SHA, API blob SHA, and manifest byte length. SHA-256 abc and empty Git blob control vectors PASS.",
+  "counts": {
+    "attempted": 16,
+    "verified": 16,
+    "errors": 0,
+    "unique_bytes_verified": 166342
+  },
+  "records": [
+    {
+      "path": "functions/package-lock.json",
+      "git_blob_sha": "d6d43ed4e2b48916d5c64ad27f53d62139107ec4",
+      "actual_git_blob_sha1": "d6d43ed4e2b48916d5c64ad27f53d62139107ec4",
+      "sha256": "d0c0bf09e47d3fac56f24c41eb780d2bb535bf7f8b156634bb2e24f047435eec",
+      "byte_length": 128040,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/package.json",
+      "git_blob_sha": "3a1fbbe23bf1098701f2c6aea4db2e4a844faaea",
+      "actual_git_blob_sha1": "3a1fbbe23bf1098701f2c6aea4db2e4a844faaea",
+      "sha256": "e3d53e8de315626c893d841328e3cd02b7730fdf132a00fb22dea610dc41820a",
+      "byte_length": 836,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/core/auth.ts",
+      "git_blob_sha": "434ffe34830d9e4db745ac51c18ff1615cf9d533",
+      "actual_git_blob_sha1": "434ffe34830d9e4db745ac51c18ff1615cf9d533",
+      "sha256": "73ce0f95f864e8778d596a393432982f868f4d063945fe36749eafe48b98d1b3",
+      "byte_length": 1648,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/core/dispatchRecovery.ts",
+      "git_blob_sha": "c1fc3bb3641dea29f057be73f9e52344ccc82a53",
+      "actual_git_blob_sha1": "c1fc3bb3641dea29f057be73f9e52344ccc82a53",
+      "sha256": "84a9ec88de8448bfdcac0a91f01a44fa26270f6630dab44fb6bcd26bd7b97b89",
+      "byte_length": 2429,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/core/errors.ts",
+      "git_blob_sha": "535a3671a0de5cf5fb8c49e6fa0f3d04fdea2836",
+      "actual_git_blob_sha1": "535a3671a0de5cf5fb8c49e6fa0f3d04fdea2836",
+      "sha256": "36365d51508cd5e84dd0022525e40f4401af3312f4b2b87f1f5a415f68c00b67",
+      "byte_length": 1769,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/core/firestore-paths.ts",
+      "git_blob_sha": "2eca9891420aa8b7007e63159c6737b381b83f61",
+      "actual_git_blob_sha1": "2eca9891420aa8b7007e63159c6737b381b83f61",
+      "sha256": "901aeb57a61400fc60b53c67f52bf9e93bf7a37abf1a44020aa4c20cd0e5fa60",
+      "byte_length": 1676,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/core/idempotency.ts",
+      "git_blob_sha": "794511d7cb242dd5d0d1fa92c4608cc80912b3b1",
+      "actual_git_blob_sha1": "794511d7cb242dd5d0d1fa92c4608cc80912b3b1",
+      "sha256": "ee0276735c09820e40b706db0d9253c1762ea0786808bb37636d3197d9eae091",
+      "byte_length": 627,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/core/jobRegistry.ts",
+      "git_blob_sha": "22bced73969ff06515aa16af1d3b966be2a1ac60",
+      "actual_git_blob_sha1": "22bced73969ff06515aa16af1d3b966be2a1ac60",
+      "sha256": "276dbcbfb5d6398bd2f9485716b0943f9181319d849594459d90f7e046e7dc54",
+      "byte_length": 6352,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/core/jobs.ts",
+      "git_blob_sha": "ea846b6c8a36757039b9041221c6fd7587e7743b",
+      "actual_git_blob_sha1": "ea846b6c8a36757039b9041221c6fd7587e7743b",
+      "sha256": "afeb0beb87edf974d63d8aec642aa178d9067f87dd8b8cf4229cd10711014dbc",
+      "byte_length": 729,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/core/jobsReliability.test.ts",
+      "git_blob_sha": "94a07385a2db84be9b6c943765350d898a6a28c4",
+      "actual_git_blob_sha1": "94a07385a2db84be9b6c943765350d898a6a28c4",
+      "sha256": "656fb26ac7565819442580a942abb7ca9370886ad576e1b830590f38bd453b68",
+      "byte_length": 2585,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/core/jobsReliability.ts",
+      "git_blob_sha": "e646dbccffbb704234d9c670eb8151088e1b843b",
+      "actual_git_blob_sha1": "e646dbccffbb704234d9c670eb8151088e1b843b",
+      "sha256": "dc845eee21796474b3cd5bf4902be8fc071775cb20ada098b1447bf3ccdbe5ab",
+      "byte_length": 1980,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/core/logging.ts",
+      "git_blob_sha": "151adecfe48add26f2395b8a70bbe2a8a98b2eae",
+      "actual_git_blob_sha1": "151adecfe48add26f2395b8a70bbe2a8a98b2eae",
+      "sha256": "39f1169330992adae815d60cf8fad0463af43e581d095328411ead20f8ae32ea",
+      "byte_length": 1547,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/core/results.ts",
+      "git_blob_sha": "12d9795fb68d99766fdb3cdcca1be048feb9b811",
+      "actual_git_blob_sha1": "12d9795fb68d99766fdb3cdcca1be048feb9b811",
+      "sha256": "e934bce539cd4b459ccfeaa61e0347f93e26fd003a28631ad9e38e03abb9ddc4",
+      "byte_length": 700,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/core/runtimeJobTypes.ts",
+      "git_blob_sha": "849fd1ee6c875a4caeae258d9f82ae156ab71057",
+      "actual_git_blob_sha1": "849fd1ee6c875a4caeae258d9f82ae156ab71057",
+      "sha256": "209873a27cf559849ab75e29a006b22f100ec2ab7714f7abf7775152b8192cc1",
+      "byte_length": 7001,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/core/types.ts",
+      "git_blob_sha": "1faebc35e97ecd6f23c93077d2e79450edb63cbe",
+      "actual_git_blob_sha1": "1faebc35e97ecd6f23c93077d2e79450edb63cbe",
+      "sha256": "d296c4dc88b4cd39ace33d77ea538409d47612f98526eec86faeb0a706c403a5",
+      "byte_length": 5138,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "functions/src/events/onJobTerminalEvent.ts",
+      "git_blob_sha": "3718f49d260c516b9c72f4882b8d901c4b7b22ff",
+      "actual_git_blob_sha1": "3718f49d260c516b9c72f4882b8d901c4b7b22ff",
+      "sha256": "b9afc20d1c61b5deaf2469562f7a2ee5b0beb3e8bace80b91a6f913d83b4b5f9",
+      "byte_length": 3285,
+      "status": "VERIFIED"
+    }
+  ],
+  "qualification": "Content-integrity only; no full historical object graph or production runtime certification."
+}

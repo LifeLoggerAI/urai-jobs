@@ -1,0 +1,147 @@
+{
+  "schema_version": "1.0",
+  "audit": "R860_SINGLETON_BATCH_17",
+  "repository": "LifeLoggerAI/urai-jobs",
+  "source_commit": "ea8f0165ac74511a4e4196919ddd3109d0c1ff2e",
+  "source_tree": "3e74b4b0d6e10df15f9ccd747e9e936218b7fc25",
+  "source_manifest_sha": "6b68e15bdca24c278eaa9c71d794f8eb374f8671",
+  "selection": "Fixed R845 685-singleton cohort positions 80..95; functions, workers, scripts, web, docs, launch-proof, marketplace, _audit, other then lexical path",
+  "method": "GitHub exact-source base64 raw content decoded; independently computed Git SHA-1 object ID and content SHA-256; compared original manifest SHA/byte length and returned blob SHA; SHA known vectors pass.",
+  "counts": {
+    "attempted": 16,
+    "verified": 16,
+    "failed": 0,
+    "unique_bytes_verified": 63609
+  },
+  "records": [
+    {
+      "path": "workers/private-life-model-index-provider/src/index.ts",
+      "git_blob_sha": "8b13ee9c18028bcefd85369d5c6597d04a15901d",
+      "actual_git_blob_sha1": "8b13ee9c18028bcefd85369d5c6597d04a15901d",
+      "sha256": "c36138f6541f2c0650bbca1d1b94201dbad1f77fb4c49311206c5f1d52824330",
+      "byte_length": 19404,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/private-life-model-index-provider/tsconfig.json",
+      "git_blob_sha": "3686686cdff1ecde6b96fa95d1f7a5b77ed8b22e",
+      "actual_git_blob_sha1": "3686686cdff1ecde6b96fa95d1f7a5b77ed8b22e",
+      "sha256": "fb95bbb5569c5f997f5049ca215183c6eda07b08203cf02428da1179364722a7",
+      "byte_length": 315,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/private-source-worker/Dockerfile",
+      "git_blob_sha": "a222aa9f46a13d5bb9f899dfcc04844e603e4840",
+      "actual_git_blob_sha1": "a222aa9f46a13d5bb9f899dfcc04844e603e4840",
+      "sha256": "80f1c270d800240b8d0e9ffeb68ec782a1ae3b1d1771471f30f5041db2cb1843",
+      "byte_length": 263,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/private-source-worker/package.json",
+      "git_blob_sha": "7deacfec66d6c61657825d387fe1596a9883cc7d",
+      "actual_git_blob_sha1": "7deacfec66d6c61657825d387fe1596a9883cc7d",
+      "sha256": "f9c2c5db5da562001e042698baad2760a3b39e4e8ba681d60e802286a6ce38fc",
+      "byte_length": 463,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/private-source-worker/src/index.ts",
+      "git_blob_sha": "ec3f28af4bc0c42c46bc2da3350ecc999ec449ef",
+      "actual_git_blob_sha1": "ec3f28af4bc0c42c46bc2da3350ecc999ec449ef",
+      "sha256": "a36f2b56127b978149ff9a201b7e6632aaf36882b019b7c13d698f705819503e",
+      "byte_length": 17071,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/spatial-worker/Dockerfile",
+      "git_blob_sha": "8e093a6cdad8b0aa2c109b7778e13b440ad699fd",
+      "actual_git_blob_sha1": "8e093a6cdad8b0aa2c109b7778e13b440ad699fd",
+      "sha256": "8aa32556606e61b4ceaaa05f4546d619cef7270507afdb7d962ffbfa1788c5ac",
+      "byte_length": 185,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/spatial-worker/index.js",
+      "git_blob_sha": "1265e08e45be23d24986e90dc367888ff40346ae",
+      "actual_git_blob_sha1": "1265e08e45be23d24986e90dc367888ff40346ae",
+      "sha256": "18766f1307607d0ad981dfbb85bcc2866bfc7310214eed9f43facc43e3ef989e",
+      "byte_length": 2042,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/spatial-worker/package.json",
+      "git_blob_sha": "fa9e1a7cce68d41f9a010210fded56775a5b94f7",
+      "actual_git_blob_sha1": "fa9e1a7cce68d41f9a010210fded56775a5b94f7",
+      "sha256": "474c58adbbca9c13bd9b0c1337f70745190e84513509ea304023767790331c41",
+      "byte_length": 456,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "workers/tsconfig.json",
+      "git_blob_sha": "2d7ae8e847e153387b6a90e36e4610f17b1a2ad1",
+      "actual_git_blob_sha1": "2d7ae8e847e153387b6a90e36e4610f17b1a2ad1",
+      "sha256": "07f29cb48aa87557e5fb184a020d2d8d4b3410a4d8f9aa60de45b1d840080d7a",
+      "byte_length": 387,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/activation-readiness-verify.mjs",
+      "git_blob_sha": "f0d63109161e8704ebc0f1fd1de14a72e8263f82",
+      "actual_git_blob_sha1": "f0d63109161e8704ebc0f1fd1de14a72e8263f82",
+      "sha256": "17bd4b8aedf72dc6d3f8b2f6b93e6415919ae261b5e93a0a07410a5be824c76c",
+      "byte_length": 11383,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/admin-process-queue-now.mjs",
+      "git_blob_sha": "5d5b8b8bacea27057ebb3528a157eb84ce5e3f63",
+      "actual_git_blob_sha1": "5d5b8b8bacea27057ebb3528a157eb84ce5e3f63",
+      "sha256": "e44a6e189f76b7a56ed959af3aa26eaae51d38282d1824503ef508901412a1a2",
+      "byte_length": 3454,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/apply-monitoring-alerts.sh",
+      "git_blob_sha": "c9a8bb71b806cebb69a221a8db1bfd51baa60bac",
+      "actual_git_blob_sha1": "c9a8bb71b806cebb69a221a8db1bfd51baa60bac",
+      "sha256": "1243e11ca99f7000089df506bf70316b51e75fdaf29defb51fa85bcb1f4a360a",
+      "byte_length": 593,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/bootstrap-gcp-deploy-iam.sh",
+      "git_blob_sha": "abc96c1915f42036bdf96cfd35fc51a6cd18a3dc",
+      "actual_git_blob_sha1": "abc96c1915f42036bdf96cfd35fc51a6cd18a3dc",
+      "sha256": "baabce9b3d0f82691b249a1933cfaa21886242656621a6f29145463bf5fefb4a",
+      "byte_length": 3681,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/bootstrap-github-actions-deploy-secret.sh",
+      "git_blob_sha": "bcd40dd2f75448d7302f0afb90b92f55f40b5562",
+      "actual_git_blob_sha1": "bcd40dd2f75448d7302f0afb90b92f55f40b5562",
+      "sha256": "9e05249bd5becc6ed4cc36fd230ffcffb963e6a60c3e6eba360770fac3401f16",
+      "byte_length": 1977,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/bootstrap-managed-worker-iam.sh",
+      "git_blob_sha": "da5c4e5511c587d83a16cbd82a96ffbb65e6f1c3",
+      "actual_git_blob_sha1": "da5c4e5511c587d83a16cbd82a96ffbb65e6f1c3",
+      "sha256": "e511889309e236471fb60242ae48adc327b69714549dbe4660a176cead83fd34",
+      "byte_length": 484,
+      "status": "VERIFIED"
+    },
+    {
+      "path": "scripts/canary-rollout.sh",
+      "git_blob_sha": "8839d2f2a9fa5fdb45e399411896256548e6a567",
+      "actual_git_blob_sha1": "8839d2f2a9fa5fdb45e399411896256548e6a567",
+      "sha256": "115309ddfdf8b604a1cb41391561678256a48c2f202462dd947c89aa0d737829",
+      "byte_length": 1451,
+      "status": "VERIFIED"
+    }
+  ],
+  "qualification": "Current tracked source byte verification only; full history/other assets/runtime acceptance separate"
+}
