@@ -1,0 +1,120 @@
+{
+  "schema": "one-urai-genesis-r971-rules-authority-owner-field-v1",
+  "checkpoint": "R971",
+  "observed_date": "2026-11-09",
+  "disposition": "PRODUCTION_HOLD_NO_GO",
+  "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
+  "report": "docs/estate/JOBS_R971_FIREBASE_RULES_AUTHORITY_AND_OWNER_FIELD_RECONCILIATION_HOLD_20261109.md",
+  "report_blob": "b6aa47a847d4e8dcc33dbc335b03f267fcd41fa6",
+  "report_commit": "62cf2be4cb59e0efd11b2e70b65c2be279dff036",
+  "refs": {
+    "jobs_main": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
+    "jobs_main_tree": "282bd75464cc23d9a6add6a1340c6ae7d3adfc9a",
+    "privacy_main": "1163d6f32a123ef9a6638e092a3eee5ec4a3b317",
+    "spatial_main": "da94837c2457b0a7590e26a7a644cd728de8afb8",
+    "jobs378": "5881a650230c55245c87a001c58f3ebc6835196b",
+    "jobs379_pre_r971": "e3a16bfcbb281cbcfed32cf121a23a0ac579a928",
+    "jobs389": "b865209cc352241602d8b9714672f3401aed7669",
+    "jobs390": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+    "jobs391": "9f5759f072370fbd42a82560ff6c5d4f37169c6b",
+    "labs261": "2980ca804fe04c37256a00af6e291a79a05004e4",
+    "labs284": "6e1f9c8ae8ac2d80835da008d46cf1d6d089ef23",
+    "privacy186": "2d0c7b621b63ac63ae83e44f5c40ac2ca5344cdc",
+    "spatial1964": "e3347d0e1ee57eaabafcfd50e2b033f7476aecf8"
+  },
+  "source_rules": {
+    "shared_firestore_target": "urai-4dc1d/(default)",
+    "candidate_publishers": [
+      "urai-spatial",
+      "urai-admin",
+      "B2Bportal"
+    ],
+    "rules_files": [
+      "firebase/firestore.rules",
+      "firestore.rules",
+      "firestore.rules"
+    ],
+    "classification": "Potential source-level competing Rules publishers; provider effective state unknown",
+    "labs261_source_detector_tests": 8,
+    "tests_executed_r971": false
+  },
+  "privacy_deploy": {
+    "main_root_firebaserc": "not found at inspected root ref",
+    "firebase_json_blob": "04a0a54c96abde147a61ab800d924a8c56130109",
+    "functions_codebase": "privacy",
+    "guarded_scope": "functions:privacy only",
+    "firestore_rules_deployed_by_wrapper": false,
+    "actual_project_mapping": "UNKNOWN"
+  },
+  "jobs380": {
+    "status": "OPEN",
+    "main_rules_blob": "7dc63626c6e1a2e7b20ded280ea2dd070f16abc9",
+    "r940_rules_blob": "cfa77a8fa5e69327ab352b31450c59a036d21e38",
+    "r940_rules_path_in_changed_files": false,
+    "jobs378_changed_files": [
+      "docs/security/R940_NEXT_CHALK_ORIGINAL_SOURCE_TEST_RECONCILIATION_HOLD.md",
+      "scripts/life-movies-consent-gate-smoke.mjs",
+      "scripts/life-movies-idempotency-revocation-race-contract.mjs",
+      "scripts/life-movies-longform-resume-transaction-contract.mjs",
+      "scripts/queue-recovery-contract.mjs",
+      "scripts/r417-original-donor-longform-resume-transaction-contract.mjs",
+      "scripts/urai-jobs-verify.mjs"
+    ],
+    "dataRightsDeletionRequestId_protected": false,
+    "current_deployed_rules": "UNKNOWN",
+    "native_rules_emulator_test": false
+  },
+  "issues": {
+    "252": "OPEN P0; no real GCS future-write fence/403, upload drain or physical purge ACK",
+    "345": "OPEN P2; potential pre-transaction quota race, native concurrent acceptance outstanding",
+    "376": "OPEN P1; 12/12 in-memory diagnostic tests in issue body do not prove deployed authority",
+    "380": "OPEN P1; missing protected dataRightsDeletionRequestId source field, deployed Rules unknown",
+    "privacy83": "OPEN; source implementation present, protected deployed runtime/downstream ACK/provider suppression unproven"
+  },
+  "ci": {
+    "privacy186_runs": 8,
+    "spatial1964_runs": 12,
+    "jobs390_runs": 9,
+    "jobs391_runs": 9,
+    "sampled_conclusions": "completed/failure",
+    "sampled_step_logs": "null/empty",
+    "blob_not_found_404": true,
+    "jobs391_callable_e2e": "skipped",
+    "application_test_verdict": "UNKNOWN",
+    "protected_ci_certificate": false
+  },
+  "earlier_r970": {
+    "repo_main_refs_read": 19,
+    "all_match_round24": true,
+    "shared_target_source_config_risk": true,
+    "actual_provider_effective_rules_verified": false,
+    "privacy_rules_deploy_wrapper_functions_only": true,
+    "spatial1964_ahead_main": 1489,
+    "spatial1964_ahead_parent_1962": 13
+  },
+  "execution": {
+    "github_source_metadata_read": true,
+    "tests": false,
+    "builds": false,
+    "typecheck": false,
+    "firebase_emulators": false,
+    "ci_reruns": false,
+    "provider_inventory": false,
+    "effective_iam_rules": false,
+    "deployment": false,
+    "merge": false,
+    "customer_media_access": false,
+    "paid_compute": false
+  },
+  "next": "Obtain authorized read-only provider inventory for urai-4dc1d/(default); establish one accountable Firestore Rules publisher or approved database separation; create separate reviewed Jobs #380 Rules repair including dataRightsDeletionRequestId and authenticated native Rules tests; keep Privacy #186 Functions-only deploy scope; recover executable CI evidence; continue P0 GCS revocation/purge and other release gates.",
+  "prohibitions": [
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO RULES OR IAM MUTATION",
+    "NO CI BYPASS",
+    "NO C6 ENABLEMENT",
+    "NO PRIVATE MEDIA",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ]
+}
