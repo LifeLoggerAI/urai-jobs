@@ -89,7 +89,15 @@ check("backend cancelJob exists", cancelFn.includes("cancelJob") || adminFns.inc
 check("createJob writes canonical type", createJob.includes("type: jobType"));
 check("createJob writes compatibility jobType", createJob.includes("jobType: jobType") || createJob.includes("jobType,"));
 check("getJobStatus binds owner reads to Firebase Auth UID", getJobStatus.includes("const authenticatedUid = context.auth?.uid"));
-check("getJobStatus compares owner to authenticated UID", getJobStatus.includes("job.ownerUid !== authenticatedUid"));
+// R936: source now enforces owner+tenant+org against the transaction's CURRENT
+// Firestore owner, using caller.uid derived from context.auth rather than a
+// mutable profile uid. The legacy string comparison alone was incomplete.
+check("getJobStatus compares owner scope to current authenticated caller", 
+  getJobStatus.includes("const authenticatedUid = context.auth?.uid") &&
+  getJobStatus.includes("checkedCurrentJobCaller(context.auth, userSnapshot.exists ? userSnapshot.data() : null)") &&
+  getJobStatus.includes("!caller.operator && !boundJobMatchesCurrentOwnerScope(job, userSnapshot.data(), caller.uid)") &&
+  getJobStatus.includes("transaction.get(userRef)") && getJobStatus.includes("transaction.get(jobRef)")
+);
 check("getJobStatus does not trust mutable profile UID", !getJobStatus.includes("job.ownerUid !== user.uid"));
 check("Firestore profile updates cannot mutate embedded uid", firestoreRules.includes("request.resource.data.get('uid', null) == resource.data.get('uid', null)"));
 check("executeJob posts to narrator /execute-job", executeJob.includes("/execute-job"));
