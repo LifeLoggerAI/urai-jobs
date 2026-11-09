@@ -14,7 +14,7 @@
    - Jobs forensic #379: `120fe4fd9a3dbaccd03a7585711a706172c1348e` at first refresh, then `fbc853362c4cc453a3a7f1f184f4838c9dcbd592` after parallel docs updates; open/draft, 96 files at latest read.
    - Labs master #262: `738f55bb9cc8d98b903fa65626555ab741f3443d`, 199 files, open/draft.
    - Labs relay #304: `b01c2b4602246b1dc1d0d4d7da45b600a45bf80e`, 24 files, open/draft.
-   - Jobs #383 remains `1e70418b86ad56ad05e5a2`.
+   - Jobs #383 remains `1e70418b86ad56c209aa06a5d2d7f6a7bc4e102c`.
    - Privacy #257 remains `fbdc590376376b758be968f174d71709f326c61f`.
 5. The sampled #383 and #257 workflow failure run lists remain unchanged. Raw selected job records still expose null/empty step arrays, runner allocation absent/ID 0, and no artifacts. No new execution receipt appeared.
 6. All substantive release gates from R975 remain open. Production remains HOLD.
