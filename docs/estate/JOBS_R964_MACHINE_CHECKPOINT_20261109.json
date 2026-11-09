@@ -1,0 +1,72 @@
+{
+  "schema": "one-urai-genesis-next-chalk-checkpoint-v1",
+  "checkpoint": "R964",
+  "date_utc": "2026-11-09",
+  "release": {
+    "status": "PRODUCTION_HOLD",
+    "go": false
+  },
+  "repository": "LifeLoggerAI/urai-jobs",
+  "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
+  "forensic_pr": 379,
+  "source_refs": {
+    "jobs_main": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+    "jobs_r923": "df19633466eaebdda844569ed0d562245bd31dc6",
+    "jobs_r900": "f8578ea281e818b01811aecc2fe4dfb8c3dc8203",
+    "jobs_r951": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
+    "jobs_r952": "b865209cc352241602d8b9714672f3401aed7669",
+    "jobs_r932": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+    "privacy_r647": "cc0692053db3b1b8df8267d43856b1a3357de8a0",
+    "privacy_r17": "90a4e581e8494f52d85eab3c576d02b926e7d0d9",
+    "privacy_r18": "dbc193763dc112210c20b5b680e8eb08fdf8396c",
+    "privacy_r19": "a4d7e4ffb76fa2dbbf7348e2b66faa991761509a",
+    "privacy_r20": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6"
+  },
+  "source_blobs": {
+    "privacy_r20_ack_publisher": "84f1e77d5c1cf55f80aaa0a559b6a3eac781386e",
+    "privacy_r20_transition": "0ddee615f1284a58459aae48b915a574da7c9c9e",
+    "privacy_r20_functions_entry": "59a6dcda725a322081f0609f5f01e81de801ee81",
+    "jobs_r923_receiver": "bf28abe6dec01330909f6e6f8bdea909d5a3b920",
+    "r647_dispatcher": "4126167b4350ba8afe6b19d7b60dec1ca891189f",
+    "r647_contract": "6cca2b9456319927cf22511c7d51c1f16ddf051c",
+    "r647_dispatcher_test": "def1048aa4838f7ff990d792a27d1fb94e7f6441",
+    "r647_jobs_contract_test": "fd60261f1518a31a476e2e5fdfbe62f9d8acf2aa"
+  },
+  "findings": [
+    "Jobs and Privacy relevant PRs refreshed and remain open draft/unmerged.",
+    "R20 ACK callable validates detailHash format and trusted consumerId, but does not recompute detailHash against a canonical Jobs receipt/action or recompute the full outbox immutable digest.",
+    "R20 ACK duplicate idempotency comparison includes actorUid; confirm stable service actor identity across retries/deployments.",
+    "R20 eventId digest excludes prior grant pair while integrityHash and replay classifier include it; v3 design must explicitly choose identity tuple and test vectors.",
+    "Crash-safe ACK recovery must recognize an identical ACK committed before a lost callable response, then allow a new lease owner to finalize delivery projection without creating a second ACK.",
+    "R647 legacy dispatcher remains donor-only and incompatible with R20; never cherry-pick unchanged."
+  ],
+  "donor_execution": {
+    "dispatcher_tests": 10,
+    "contract_transport_tests": 16,
+    "executed": false,
+    "reason": "git ls-remote failed exit 128: Could not resolve host github.com",
+    "checkout": false,
+    "dependencies_installed": false,
+    "typecheck": false,
+    "emulators": false
+  },
+  "next_steps": [
+    "Use network-capable environment for clean detached R647 checkout and blob verification.",
+    "Run both original donor Node tests separately and Functions typecheck, preserving logs, versions, hashes and exits.",
+    "Review R963 v3 proposal and R964 receiver refinement with Privacy/legal/security owners.",
+    "Specify event identity, canonical serialization, source-time provenance, detailHash derivation, service actor stability and legacy event disposition.",
+    "Prepare separate review-only Privacy and Jobs implementation branches after approval.",
+    "Run same-SHA Firebase emulator producer-to-ACK flow with duplicate, timeout-after-commit, stale lease and conflict cases.",
+    "Independently prove nonproduction GCS stale/alternate writer 403, upload drain, exact generation purge and durable final ACK."
+  ],
+  "prohibitions": [
+    "NO CHERRY-PICK UNCHANGED",
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO DISPATCH",
+    "NO PRIVATE MEDIA",
+    "NO IAM CHANGE",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ]
+}
