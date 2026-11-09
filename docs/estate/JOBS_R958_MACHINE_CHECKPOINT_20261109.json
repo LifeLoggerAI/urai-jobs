@@ -1,0 +1,156 @@
+{
+  "schema_version": "one_urai_genesis_jobs_r958_checkpoint_v1",
+  "checkpoint_date": "2026-11-09",
+  "release_decision": "PRODUCTION_HOLD_NO_GO",
+  "cost_usd": 0,
+  "source": {
+    "repository": "LifeLoggerAI/urai-jobs",
+    "main_sha_observed": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+    "main_branch_protected": false,
+    "main_protection_enabled": false,
+    "required_status_checks_enforcement": "off",
+    "required_status_check_contexts": [],
+    "required_status_check_checks": [],
+    "repository_rulesets_including_parents": [],
+    "engineering_pr": 389,
+    "engineering_pr_state": "open",
+    "engineering_pr_draft": true,
+    "engineering_pr_merged": false,
+    "engineering_pr_base": "review/chalk-r951-worker-emulator-auth-boundary-20261109",
+    "engineering_pr_head": "review/chalk-r952-auth-regression-release-gate-20261109",
+    "engineering_head_sha": "b865209cc352241602d8b9714672f3401aed7669",
+    "parent_pr": 388,
+    "parent_sha": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
+    "predecessor_prs": [
+      {
+        "pr": 387,
+        "head_sha": "04592f8573c708954f95f87ddca1e168efde51f4",
+        "state": "open_draft"
+      },
+      {
+        "pr": 388,
+        "head_sha": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
+        "state": "open_draft"
+      },
+      {
+        "pr": 389,
+        "head_sha": "b865209cc352241602d8b9714672f3401aed7669",
+        "state": "open_draft"
+      }
+    ],
+    "package_blob": "bd50af6bead1c62f36ada6c012123fe0c5d94da7",
+    "r879_runner_blob": "8a42dcad4416d5896b4886d6c5bad079463d5324",
+    "original_r951_auth_test_blob": "d27cc3880aa2ae0387f81bb660ca340d830e22dc",
+    "root_command_segments_enrolled": 78,
+    "root_command_segments_executed_as_full_suite": false,
+    "r879_pinned_blobs": 58,
+    "r879_pin_mismatches": 0,
+    "documentation_pr": 379,
+    "genesis_crosschat_pr": 304
+  },
+  "auth_evidence": {
+    "source_test": "scripts/r951-worker-emulator-auth-precedence.test.mjs",
+    "worker_implementation_files": [
+      "workers/asset-worker/index.js",
+      "workers/studio-worker/index.js",
+      "workers/private-source-worker/src/index.ts",
+      "workers/spatial-worker/index.js"
+    ],
+    "source_test_checks_exact_bypass_expressions": true,
+    "source_test_checks_bearer_guard_text": true,
+    "source_test_evaluates_six_environments_two_emulator_states": true,
+    "http_middleware_execution": false,
+    "live_cloud_run_execution": false,
+    "r951_r952_expression_matrix_reported_pass": 48,
+    "r953_excerpt_harness_reported_pass": 4,
+    "r953_mutation_test_detected": true,
+    "r954_complete_source_adapted_harness_reported_pass": 4,
+    "r954_mutation_test_detected": true,
+    "r954_five_git_objects_wording_clarification": "Four worker implementation files are consumed by the original test; the fifth object may be the standalone test itself. Retrieve original R954 receipt before making a stronger five-worker claim.",
+    "full_original_test_on_full_checkout": false
+  },
+  "ci": {
+    "commit_sha": "b865209cc352241602d8b9714672f3401aed7669",
+    "failed_workflow_runs": 10,
+    "run_ids": [
+      42589887660,
+      42589887640,
+      42589887621,
+      42589887656,
+      42589887624,
+      42589887604,
+      42589887690,
+      42589887581,
+      42589887663,
+      42589887599
+    ],
+    "executed_job_records": 12,
+    "executed_jobs_runner_id": 0,
+    "executed_jobs_runner_name": "",
+    "executed_jobs_runner_group_name": "",
+    "executed_jobs_steps_recorded": 0,
+    "approximate_job_lifetime_seconds": [
+      2,
+      4
+    ],
+    "callable_emulator_e2e": "skipped",
+    "combined_commit_statuses": [],
+    "hosted_runner_selector_seen": "ubuntu-latest",
+    "inspected_workflows": {
+      ".github/workflows/urai-jobs-runtime-ci.yml": "296bbf93a543724d6b834e5efdf6c6e34cc579e5",
+      ".github/workflows/urai-jobs-final-ci.yml": "ad6e4d882c18d6a6032c666cbddbfd1e69262bc4",
+      ".github/workflows/urai-production-verify.yml": "e7b50462126fa0db072addec183a9005cfe36973",
+      ".github/workflows/system-audit.yml": "987320c6bb4f18d7461b30dfa19c83a8928e7dcc",
+      ".github/workflows/ci.yml": "93d21e147170dc1923ecb2ebb843d02c8962bc28"
+    },
+    "runner_allocation_failure_signature": true,
+    "exact_github_side_cause": "UNKNOWN",
+    "protected_ci_green": false,
+    "workflows_rerun_in_r956_r957_r958": false
+  },
+  "cloud": {
+    "firebase_gcp_resource_inventory": "UNKNOWN",
+    "deployed_cloud_run_revisions": "UNKNOWN",
+    "deployed_container_digests": "UNKNOWN",
+    "effective_storage_iam": "UNKNOWN",
+    "effective_old_writer_permissions": "UNKNOWN",
+    "post_revocation_gcs_403": false,
+    "inflight_upload_drain": false,
+    "exact_generation_physical_deletion_ack": false,
+    "downstream_purge_ack": false,
+    "signed_owner_consent_to_private_replay_e2e": false,
+    "studio_consent_authority": "hard_off",
+    "studio_private_output_write_authority": "hard_off"
+  },
+  "release_blockers": {
+    "p0": [
+      "Actual stale/alternate privileged GCS writers return 403 after revoke",
+      "In-flight/resumable upload drain/fencing",
+      "Exact-generation deletion and durable downstream acknowledgement",
+      "Positive owner consent -> Privacy -> Studio -> Jobs private output -> Spatial Replay -> revoke/delete/purge ACK"
+    ],
+    "p1": [
+      "Original R951 standalone test on full checkout",
+      "Run full 78 command segments on immutable reviewed SHA",
+      "Typecheck and build",
+      "Four disposable Firebase emulators",
+      "HTTP worker authentication tests",
+      "Protected CI and independent reviewer",
+      "Main branch protection/ruleset and required checks",
+      "Operational rollback rehearsal",
+      "Post-admission data-rights policy issue #376",
+      "Firestore user-binding Rules issue #380"
+    ],
+    "p2": [
+      "Quota concurrency issue #345",
+      "Effective installed Firestore index parity"
+    ],
+    "p3": [
+      "Authenticated read-only Firebase/GCP resource and IAM inventory",
+      "Deployed revisions/image digest/source SHA parity",
+      "Logs, quotas and billing inventory"
+    ]
+  },
+  "no_production_actions": true,
+  "next_required": "Resolve exact GitHub Actions runner-allocation cause and main branch protection with authorized admin; then execute full original Jobs acceptance and separately certify P0 live Storage and private Replay controls."
+}
