@@ -1,5 +1,25 @@
 # NEXT CHALK — ONE URAI GENESIS R970 CONTINUATION COMMAND
 
+**R969 read-order correction — three R969 reports plus one supplemental full-stack audit must be read together:**
+
+1. [R969 full-stack branch/CI/governance reconciliation](JOBS_R969_FULL_STACK_BRANCH_CI_GOVERNANCE_RECONCILIATION_HOLD_20261109.md) — branch ancestry, #371 stack topology, R836 base compare, hosted CI evidence and branch protection limitations.
+2. [R969 current lineage, Life Movie security and C1 Rules reconciliation](JOBS_R969_CURRENT_LINEAGE_SECURITY_AND_C1_RULES_RECONCILIATION_HOLD_20261109.md) — Privacy #183 scoped render verifier, #224 denial-only transport, Privacy #186 and Spatial #1964 exact Rules comparison.
+3. [R969 full next-Chalk reconciliation](JOBS_R969_FULL_RECONCILIATION_NEXT_CHALK_HOLD_20261109.md) — Jobs issue/CI/current source and all three revocation tracks.
+4. [R969 machine checkpoint](JOBS_R969_MACHINE_CHECKPOINT_20261109.json) — latest consolidated pointers and hashes.
+
+## Critical R969 refinements
+
+- Jobs #371 head `df196334...` is 60 commits ahead / 0 behind its intended R891 review base `ebdf5f...`; against main it is 629 ahead / 2 behind, 236 net paths. **Do not retarget or merge #371 directly to main.** Preserve stacked PR ancestry.
+- Privacy R836 #232 has a 1-ahead/1-behind compare against #230, but its only reported file path `next-env.d.ts` has identical blob `ce4e94a6...` on both refs. Preserve two-parent history and exact pins; do not rebase for cosmetic compare status.
+- GitHub branch metadata reports unprotected status for Jobs main, Jobs R891 base, Privacy main and Privacy #230/R836 base. Repo rulesets returned empty; direct protection APIs returned 403 and org rulesets were inaccessible. Effective governance is **NOT CERTIFIED**, not proven absent.
+- Sampled Actions runs concluded failure, but job step lists were empty and a log fetch returned BlobNotFound. This does not prove tests executed or application assertions failed.
+- Privacy #183 has a scoped Life Movie verifier and hash-bound receipt source. The hash is integrity, not signature/authority; generic Life Movie grant/evaluation stays fail-closed. Positive trusted issuer and deployed runtime remain unproven.
+- Privacy #224 is denial-only Jobs transport to the actual Privacy callable with a synthetic local token adapter; not positive C6 or production identity.
+- Privacy #186 and Spatial #1964 Rules candidates differ. Spatial has an owner-only first-time C1 memory-storage receipt read absent from Privacy main generic consent-record rule. Do not deploy either full Ruleset over the other; prove Firebase project/database topology and split Rules authority first.
+- Keep R647, Jobs #371 and R818/R836 acceptance tracks separate.
+
+---
+
 Continue the existing LifeLogger → LifeOS → UrAi Genesis. Preserve source history, review stacks and forensic evidence. Do not restart, flatten, or rebuild surviving implementations.
 
 ## Read first
