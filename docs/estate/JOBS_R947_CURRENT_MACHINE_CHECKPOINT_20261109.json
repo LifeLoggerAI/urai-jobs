@@ -1,0 +1,116 @@
+{
+  "schema_version": "one_urai_jobs_r947_forensic_handoff_v1",
+  "date_utc": "2026-11-09",
+  "status": "PRODUCTION_HOLD_NO_GO",
+  "incremental_spend_usd": 0,
+  "scope": "authenticated GitHub exact-tree source metadata plus PR historical receipts, not native/live production",
+  "source": {
+    "main_sha": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+    "source_converged_parent": {
+      "pr": 383,
+      "sha": "1e70418b86ad56c209aa06a5d2d7f6a7bc4e102c",
+      "root_verification_commands_enrolled": 77,
+      "root_full_verification_executed": false
+    },
+    "preferred_runner_candidate": {
+      "pr": 384,
+      "sha": "fd05a376f876f9b835929a2074c09f47638659e2",
+      "status": "OPEN_DRAFT_NOT_MERGED",
+      "verified_git_tree_entries": 1458,
+      "git_tree_truncated": false,
+      "expected_r879_pins": 57,
+      "matching_pins": 57,
+      "duplicate_paths": 0,
+      "preflight_helper_blob": "73b69cb02c5708a2fa581dea965b5c3c55a449e2",
+      "preflight_tests_blob": "918260ac8ab90aecb5170673f14aeda094a767cc",
+      "runner_blob": "145641d4de868945deadb577540571783bf74eab",
+      "preflight_native_synthetic_tests_reported": "5/5 PASS by separate worker; not rerun in R947 current work",
+      "original_r879_native_executed": false
+    },
+    "superseded_branch": {
+      "pr": 385,
+      "sha": "ba3f699531f7fce6b50776485181a0eb7551c160",
+      "state": "CLOSED_UNMERGED",
+      "reason": "two-line identical repair superseded by #384 with 57 pinned blobs + fail-fast 5-case preflight",
+      "evidence_preserved": true
+    }
+  },
+  "original_failure": {
+    "pr": 383,
+    "sha": "1e70418b86ad56c209aa06a5d2d7f6a7bc4e102c",
+    "tree_entries": 1455,
+    "tree_truncated": false,
+    "original_r879_total_pins": 55,
+    "matched": 53,
+    "mismatched": [
+      {
+        "file": "scripts/life-movies-longform-resume-transaction-contract.mjs",
+        "expected": "ef439bbe7a6a697ab04f2ebfc53b7e98d5466dd1",
+        "actual": "75d5e73151a3dd7b4726fe10251ebd63332bd165"
+      },
+      {
+        "file": "scripts/r417-original-donor-longform-resume-transaction-contract.mjs",
+        "expected": "19969a9aa34fc19c0ebc520d39f4a368a8402a24",
+        "actual": "800834dcfb3db0ff5fdda54ecc83203d7a1a71a3"
+      }
+    ]
+  },
+  "live_cloud": {
+    "project_seed": "urai-jobs",
+    "project_number_verified": null,
+    "deployed_function_revision_verified": false,
+    "firestore_rules_release_verified": false,
+    "storage_bucket_iam_verified": false,
+    "gcs_privileged_stale_writer_403_verified": false,
+    "active_upload_drain_verified": false,
+    "cloud_run_identity_verified": false,
+    "actual_billing_verified": false,
+    "none_observed_does_not_mean_absent": true
+  },
+  "security": {
+    "signed_c6_owner_private_render_replay_deletion_ack_verified": false,
+    "actual_firestore_emulator_guard_verified": false,
+    "source_rule_guard_in_unmerged_pr_381": true,
+    "post_admission_actor_policy_verified": false
+  },
+  "ci": {
+    "reviewed_pr383_10_workflow_failures": true,
+    "reviewed_pr383_13_check_failures_one_skipped": true,
+    "example_job_steps": 0,
+    "logs_available": false,
+    "protected_ci_green": false,
+    "independent_reviewer_approved": false
+  },
+  "p0_open_issues": [
+    252
+  ],
+  "p1_open_issues": [
+    337,
+    376,
+    380
+  ],
+  "p2_open_issues": [
+    345
+  ],
+  "prohibited": [
+    "paid_tool_use",
+    "production_iam_mutation",
+    "production_deploy",
+    "customer_data_access",
+    "real_user_jobs",
+    "unreviewed_merge",
+    "disabling_release_holds"
+  ],
+  "audit_handoffs": {
+    "jobs_pr": 379,
+    "labs_pr": 304,
+    "jobs_doc": "docs/estate/JOBS_R947_CURRENT_EVIDENCE_AND_PEER_DEDUP_HANDOFF_20261109.md",
+    "cross_repo_doc": "docs/estate/JOBS_R947_CROSS_CHAT_HANDOFF_20261109.md"
+  },
+  "next_worker": [
+    "Refresh PR384 current SHA, compare its 57 pin inventory to complete immutable Git tree",
+    "Run the 5-case original source preflight plus full 77 root commands and real four emulator R879 with --run-exact-review-only on clean free CPU host",
+    "Verify actual live GCP IAM/Storage/Functions/Firestore deployed parity only with approved read-only provider credentials, no paid tools",
+    "Preserve hard P0 GCS privileged writer 403 and signed C6 protected replay-deletion acceptance, protected CI and independent founder GO"
+  ]
+}
