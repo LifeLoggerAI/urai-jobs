@@ -33,8 +33,14 @@
     "privacy_256": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6"
   },
   "main_heads_last_read": {
-    "jobs": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
-    "privacy": "1163d6f32a123ef9a6638e092a3eee5ec4a3b317"
+    "jobs": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
+    "privacy": "1163d6f32a123ef9a6638e092a3eee5ec4a3b317",
+    "jobs_tree": "282bd75464cc23d9a6add6a1340c6ae7d3adfc9a",
+    "jobs_parent": "792d063b9d894bb9cb872e2c3c6dd71e37804f6a",
+    "jobs_revert_unsigned": true,
+    "jobs_protected": false,
+    "jobs_required_checks": "off",
+    "jobs_rulesets_including_parents": []
   },
   "source_pins": {
     "r647_dispatcher": "4126167b4350ba8afe6b19d7b60dec1ca891189f",
@@ -89,7 +95,8 @@
   "privacy_issue_83": {
     "state": "OPEN",
     "title": "RUNTIME GATE: deploy and prove consent decision + revocation enforcement",
-    "classification": "Source decision service exists; protected deployed runtime, registered downstream ACKs and provider-call prevention remain open."
+    "classification": "Canonical source implementation exists; protected deployed runtime, downstream consumer acknowledgements, provider-call suppression and exact deployment/rollback evidence remain unproven.",
+    "original_issue_body_stale": true
   },
   "other_release_gates": [
     "Jobs #377 operator post-admission withdrawal requires Privacy/legal/security policy.",
@@ -119,5 +126,17 @@
     "NO IAM CHANGE",
     "NO PAID COMPUTE",
     "NO PRODUCTION GO"
-  ]
+  ],
+  "main_heads_last_read_note": "Corrected via live branch readback in R967 continuation; earlier R968 consolidated report recorded stale 9d29be1 SHA.",
+  "execution_boundary": {
+    "r968_supplemental_audit": "source readback only",
+    "tests_run": false,
+    "emulators_run": false,
+    "build_typecheck_run": false,
+    "cloud_inventory": false,
+    "gcs_provider_test": false,
+    "production_mutations": false
+  },
+  "supplemental_report": "docs/estate/JOBS_R968_PRIVACY_JOBS_THREE_LINEAGES_AND_RELEASE_GATES_HOLD_20261109.md",
+  "next_start_prompt": "docs/estate/JOBS_R968_START_NEXT_CHALK_R969_20261109.md"
 }
