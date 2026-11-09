@@ -11,7 +11,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - name: Rollback placeholder
+      - name: Refuse non-operational rollback placeholder
         run: |
-          echo '[INFO] Rollback orchestration initialized'
-          echo '[INFO] Previous stable revision would be restored here'
+          echo '[BLOCKED] The legacy rollback-on-smoke-failure workflow does not restore a revision.' >&2
+          echo '[BLOCKED] Use independently approved Cloud Run rollback with exact revision, source and IAM evidence.' >&2
+          echo '[BLOCKED] Production release remains HOLD until restore and post-rollback tests are proven.' >&2
+          exit 1
