@@ -1,250 +1,116 @@
 {
-  "schema": "one-urai-genesis-next-chalk-checkpoint-v1",
+  "schema": "one-urai-genesis-r969-security-reconciliation-v1",
   "checkpoint": "R969",
-  "date_utc": "2026-11-09",
-  "project": "ONE URAI GENESIS",
+  "observed_date": "2026-11-09",
+  "timezone": "America/Chicago",
   "release": {
-    "status": "PRODUCTION_HOLD",
+    "status": "PRODUCTION_HOLD_NO_GO",
     "go": false
   },
   "repository": "LifeLoggerAI/urai-jobs",
   "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
   "forensic_pr": 379,
-  "current_heads": {
+  "r969_report": {
+    "path": "docs/estate/JOBS_R969_CURRENT_LINEAGE_SECURITY_AND_C1_RULES_RECONCILIATION_HOLD_20261109.md",
+    "commit": "050753515d522f457974069918ed2fe0faf0c797"
+  },
+  "observed_heads": {
     "jobs_main": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
-    "jobs_379_before_r969": "bcb7c187a8c5f5d228721779d5479d6cebb224c6",
-    "jobs_371_r923": "df19633466eaebdda844569ed0d562245bd31dc6",
-    "jobs_r891_base": "ebdf5f62338822f99b7293bdd5b9a0cda4917dd9",
+    "jobs_main_tree": "282bd75464cc23d9a6add6a1340c6ae7d3adfc9a",
+    "jobs_371": "df19633466eaebdda844569ed0d562245bd31dc6",
     "jobs_377": "f8578ea281e818b01811aecc2fe4dfb8c3dc8203",
-    "jobs_388": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
-    "jobs_389": "b865209cc352241602d8b9714672f3401aed7669",
-    "jobs_390": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
     "jobs_384": "fd05a376f876f9b835929a2074c09f47638659e2",
     "jobs_386": "fd1c8d85acd5cc96ef9fcb300173e362b004eb54",
     "jobs_387": "04592f8573c708954f95f87ddca1e168efde51f4",
+    "jobs_388": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
+    "jobs_389": "b865209cc352241602d8b9714672f3401aed7669",
+    "jobs_390": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+    "jobs_391": "9f5759f072370fbd42a82560ff6c5d4f37169c6b",
     "privacy_main": "1163d6f32a123ef9a6638e092a3eee5ec4a3b317",
+    "privacy_183": "389aa638f99a6394b46be335ee0465168a7a1a4c",
     "privacy_192": "7f5f4ad2f157a9d3eb4ed12b679d499fe5888bdc",
     "privacy_213": "4a4656d6283aa7e627bf220b447436df82865f99",
-    "privacy_214": "cc0692053db3b1b8df8267d43856b1a3357de8a0",
+    "privacy_214_r647": "cc0692053db3b1b8df8267d43856b1a3357de8a0",
+    "privacy_224_r818": "f9e7786854f7ec70cab9a6e22d2c90ad95b834ed",
     "privacy_229": "79e71fd6137947d2ed7c416a2596090572fef978",
-    "privacy_230_and_r836_base": "846d2ffa469af5634374bd77fbdc2d41bca8e964",
+    "privacy_230": "846d2ffa469af5634374bd77fbdc2d41bca8e964",
     "privacy_231": "42aad96404c4f0de01a448031df80f7b5c06f7c0",
     "privacy_232_r836": "e1e2dee63c39590d343d727aa53618ac97a52691",
-    "privacy_253": "90a4e581e8494f52d85eab3c576d02b926e7d0d9",
-    "privacy_254": "dbc193763dc112210c20b5b51189573a954873593",
-    "privacy_255": "a4d7e4ffb76fa2dbbf7348e2b66faa991761509a",
-    "privacy_256": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6"
+    "privacy_253_r17": "90a4e581e8494f52d85eab3c576d02b926e7d0d9",
+    "privacy_254_r18": "dbc193763dc112210c20b5b680e8eb08fdf8396c",
+    "privacy_255_r19": "a4d7e4ffb76fa2dbbf7348e2b66faa991761509a",
+    "privacy_256_r20": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6",
+    "privacy_186": "2d0c7b621b63ac63ae83e44f5c40ac2ca5344cdc",
+    "spatial_main": "da94837c2457b0a7590e26a7a644cd728de8afb8",
+    "spatial_1962": "da2ee1ff6eed5b5cf0c8f3b762214fdb57c07c11",
+    "spatial_1964": "e3347d0e1ee57eaabafcfd50e2b033f7476aecf8",
+    "studio_201": "a6187abfd12ffc8f534ddf66246da91ed032e1dc",
+    "labs_262": "29797f56fe507c2bed2c66cc10acd8b6e5be280b",
+    "labs_321": "6f48f00d7d0187d0586f2c00f784888f4894590c",
+    "labs_323": "fe3f0dba370ab221d6eb36d4283fb8ff825586d5"
   },
-  "branch_topology": {
-    "jobs_371_declared_base": "review/chalk-r891-jobs-quota-owner-runtime-convergence-20261107",
-    "jobs_371_declared_base_sha": "ebdf5f62338822f99b7293bdd5b9a0cda4917dd9",
-    "jobs_371_vs_declared_base": {
-      "status": "ahead",
-      "ahead": 60,
-      "behind": 0,
-      "changed_files": 13
-    },
-    "jobs_371_vs_main": {
-      "status": "diverged",
-      "ahead": 629,
-      "behind": 2,
-      "changed_files": 236,
-      "modified": 52,
-      "added": 184,
-      "additions": 12742,
-      "deletions": 1182
-    },
-    "jobs_main_only_commits": [
-      {
-        "sha": "792d063b9d894bb9cb872e2c3c6dd71e37804f6a",
-        "message": "R933 repair regexes in producer-consumer regression",
-        "effect": "temporarily adds scripts/studio-life-movie-actual-producer-zod-contract.test.mjs"
-      },
-      {
-        "sha": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
-        "message": "revert accidental default branch R933 test-file update",
-        "effect": "removes same test file"
-      }
-    ],
-    "privacy_836_declared_base": "846d2ffa469af5634374bd77fbdc2d41bca8e964",
-    "privacy_836_vs_base": {
-      "status": "diverged",
-      "ahead": 1,
-      "behind": 1,
-      "reported_file": "next-env.d.ts"
-    },
-    "privacy_836_next_env": {
-      "base_blob": "ce4e94a6b10f160ee021fe18939af160d2927dcf",
-      "head_blob": "ce4e94a6b10f160ee021fe18939af160d2927dcf",
-      "content_same": true
-    }
+  "exact_rule_blobs": {
+    "privacy_main": "7c0051eb6d148791198127e625c99973abdc49c1",
+    "privacy_186": "295e5d27623cceddec8245759ff28128b17be28c",
+    "spatial_main": "26330636a18a3675da049aa4bdadb34c82293882",
+    "spatial_1964": "8b015a8bbe123bb7857bff5d98ba5a153067c41c"
   },
-  "governance": {
-    "branch_api_protected_false": [
-      "LifeLoggerAI/urai-jobs main",
-      "LifeLoggerAI/urai-jobs review/chalk-r891-jobs-quota-owner-runtime-convergence-20261107",
-      "LifeLoggerAI/urai-privacy main",
-      "LifeLoggerAI/urai-privacy review/chalk-converged-jobs-native-source-20261106"
-    ],
-    "jobs_repo_rulesets": [],
-    "privacy_repo_rulesets": [],
-    "branch_protection_detail_api": "403 Resource not accessible by integration",
-    "org_rulesets_api": "not accessible via allowed API fetch path",
-    "status": "effective policy not certified; authorized admin verification required"
+  "exact_life_movie_blobs": {
+    "privacy_183_authorization": "a75e4f2297c331baa52b044f2842820adbdc7fc8",
+    "privacy_183_receipt": "a41f4cf9c2efb525115ec31359d936c8b2f66f6e",
+    "privacy_183_consent_api": "43da4d49ccbee7c7be145d0729d921e10d859ba63",
+    "privacy_224_r818_test": "51c5279295f07fde06c7f89b1472c5f147fdf8f0"
   },
-  "actions_evidence": {
-    "jobs_runs": [
-      {
-        "id": 42562565924,
-        "name": "URAI Jobs Runtime CI",
-        "run_number": 1992,
-        "conclusion": "failure",
-        "job_id": 128981975229,
-        "job": "Validate runtime",
-        "steps": []
-      },
-      {
-        "id": 42562565556,
-        "name": "URAI Jobs System Audit",
-        "run_number": 1732,
-        "conclusion": "failure",
-        "job_id": 128981974507,
-        "job": "System audit",
-        "steps": []
-      },
-      {
-        "id": 42562565589,
-        "name": "Firebase CLI Pin Guard",
-        "run_number": 1277,
-        "conclusion": "failure"
-      },
-      {
-        "id": 42562565770,
-        "name": "URAI Jobs Visual Proof",
-        "run_number": 1158,
-        "conclusion": "failure"
-      },
-      {
-        "id": 42562565528,
-        "name": "URAI Jobs Typecheck Diagnostics",
-        "run_number": 1431,
-        "conclusion": "failure"
-      },
-      {
-        "id": 42562565570,
-        "name": "CI",
-        "run_number": 2026,
-        "conclusion": "failure"
-      },
-      {
-        "id": 42562565621,
-        "name": "URAI Production Verify",
-        "run_number": 1529,
-        "conclusion": "failure"
-      },
-      {
-        "id": 42562565683,
-        "name": "Career Surfaces CI",
-        "run_number": 1072,
-        "conclusion": "failure"
-      },
-      {
-        "id": 42562565702,
-        "name": "URAI Jobs Final CI",
-        "run_number": 2006,
-        "conclusion": "failure"
-      },
-      {
-        "id": 42562565590,
-        "name": "Defined Gitlink Guard",
-        "run_number": 1281,
-        "conclusion": "failure"
-      }
-    ],
-    "privacy_runs": [
-      {
-        "id": 42333455401,
-        "name": "URAI Privacy Release Verification",
-        "run_number": 794,
-        "conclusion": "failure",
-        "job_id": 128284947159,
-        "steps": []
-      },
-      {
-        "id": 42333455466,
-        "name": "URAI Production Verify",
-        "run_number": 758,
-        "conclusion": "failure",
-        "job_id": 128284946772,
-        "steps": []
-      },
-      {
-        "id": 42333455418,
-        "name": "Consent Export and Deletion Branch Validation",
-        "run_number": 557,
-        "conclusion": "failure"
-      },
-      {
-        "id": 42333455397,
-        "name": "Privacy package validation",
-        "run_number": 1132,
-        "conclusion": "failure"
-      },
-      {
-        "id": 42333455392,
-        "name": "Release Verification",
-        "run_number": 957,
-        "conclusion": "failure"
-      }
-    ],
-    "log_retrieval": "BlobNotFound during combined job log retrieval; no raw steps retrieved",
-    "interpretation": "Workflow failure metadata exists, but empty step summaries and missing logs do not prove application tests ran or which command failed."
+  "architecture": {
+    "track_A": "Privacy R647 prepared, not-deployed dispatcher; exports dispatchPendingJobsRevocations; incompatible with R20 queue/hash/prior-grant/time semantics without reviewed adaptation",
+    "track_B": "Jobs #371 three-case emulator harness expects three consent-jobs-* modules and deliverJobsConsentRevocation; provenance not found in inspected refs/path-history",
+    "track_C": "Privacy R818/R836 compiled Jobs identity/transport to actual Privacy callable denial/review-only test; no positive C6 or production identity proof",
+    "privacy_183": "Scoped verifier and hash-bound receipt source; hash is integrity binding, not signature/authority; generic Life Movie grant and evaluator fail closed; positive trusted issuer/deployment not certified",
+    "c1_rules": "Privacy #186 and Spatial #1964 are divergent service Rules candidates. Reconcile fragments using actual project/database topology; no whole-ruleset deployment."
   },
-  "technical_baseline": {
-    "tracks": {
-      "A": "R647 prepared, not-deployed outbox dispatcher donor",
-      "B": "Jobs #371 three-case synthetic revocation/Storage emulator harness; compatible Privacy consent-jobs modules not recovered",
-      "C": "Privacy R818/R836 Jobs-to-Privacy callable denial/review-only issuer runner; distinct from revocation"
-    },
-    "r647_vs_r20_defects": [
-      "R20 missing old jobsDelivery queue fields",
-      "R20 integrity hash inputs changed to include prior-grant evidence",
-      "R647 v2 projection drops priorGrantReceiptHash/priorGrantEvidenceState",
-      "R647 derives revokedAt from outbox createdAt"
-    ],
-    "privacy_issue_83": "OPEN; source consent implementation exists, protected deployed runtime, downstream ACK and provider-call prevention remain unverified",
-    "v3_event_ack": "R963-R965 design proposal only; not approved/implemented",
-    "derivative_cleanup": "generation-pinned delete and unresolved in-flight marker; not proof of future write denial or full historical erase"
-  },
+  "issue_83": "OPEN; protected deployed runtime, downstream ACK, provider-call suppression, deployed SHA, rollback and Rules authority remain required",
   "execution": {
-    "git_ls_remote_exit": 128,
-    "git_error": "Could not resolve host: github.com",
-    "donor_tests": false,
-    "jobs_harness": false,
-    "r836_runner": false,
-    "installs_build_typecheck": false,
-    "emulator": false,
-    "cloud_inventory": false,
-    "gcs_iam_test": false,
-    "no_app_source_changed": true
+    "github_metadata_and_source_readback": true,
+    "local_clone_or_checkout": false,
+    "tests_run": false,
+    "typecheck": false,
+    "build": false,
+    "firebase_emulators": false,
+    "actions_current_run": false,
+    "provider_inventory": false,
+    "live_iam_or_rules": false,
+    "gcs_stale_writer_403": false,
+    "upload_drain": false,
+    "physical_purge": false,
+    "positive_c6_or_render": false,
+    "private_media_access": false,
+    "merge": false,
+    "deploy": false,
+    "provider_mutation": false,
+    "paid_compute": false,
+    "access_blocker": "Earlier R967/R968 git ls-remote returned exit 128: Could not resolve host: github.com"
   },
-  "next_actions": [
-    "Preserve Jobs #371 declared R891 review base and its 60-commit stack; do not retarget directly to main.",
-    "Reconcile complete Jobs stack ancestry and verify main R933 add/revert pair via full tree identity.",
-    "Preserve Privacy R836 two-parent ancestry; next-env blob is identical at base/head despite compare ancestry divergence.",
-    "Have authorized admin verify effective branch protection, required checks, independent reviewers, org policies and bypass settings.",
-    "Recover actual Actions job step logs/runner transcripts; determine whether failures occurred before application steps.",
-    "On Git-connected host execute R647 10- and 16-case donor suites separately; run Jobs #371 harness only with compatible original Privacy source; run R836 runner separately.",
-    "Review and approve v3 event/ACK design with Privacy/legal/security.",
-    "Perform same-SHA native cross-service test and separate real nonproduction GCS 403/upload-drain/generation-purge ACK.",
-    "Close operator-withdrawal policy, worker auth, rollback, C6, devices/accessibility/visual and founder GO gates."
+  "next_steps": [
+    "Refresh Jobs #379, Jobs/Privacy/Spatial main and all cited review heads before action.",
+    "Establish actual Firebase project/database topology and owner of each deployed Ruleset.",
+    "Reconcile per-service Rules fragments for C1 first-time receipt read, UID/userId/ownerId, ten protected fields and deletion tombstone/lease semantics.",
+    "Keep R647, Jobs #371 and R818/R836 as separate test/integration tracks.",
+    "Recover original consent-jobs-* provenance from a grounded archive/workspace; otherwise propose a separately named reviewed harness rewrite.",
+    "Run exact-head isolated builds/tests/emulators with raw logs, source SHAs, tree/blob identities, tool versions and exit codes.",
+    "Resolve R20 immutable event digest/prior grant lineage, dispatcher choice, receiver binding, trusted ACK identity, retry and crash-safe idempotency.",
+    "Run actual Jobs #390/#391 Studio producer to Jobs Zod consumer test.",
+    "Restore protected CI and independent review; obtain authorized read-only provider inventory.",
+    "In approved disposable staging, prove alternate/stale GCS writer 403, upload drain, generation deletion, final absence and durable purge ACK.",
+    "Complete same-SHA authenticated C6 grant -> private render -> protected Replay -> revoke -> physical purge -> downstream ACK."
   ],
   "prohibitions": [
     "NO MERGE",
     "NO DEPLOY",
     "NO DISPATCH",
+    "NO C6 ENABLEMENT",
     "NO PRIVATE MEDIA",
-    "NO IAM CHANGE",
+    "NO IAM OR RULES MUTATION",
+    "NO BILLING ACTION",
     "NO PAID COMPUTE",
     "NO PRODUCTION GO"
   ]
