@@ -13,7 +13,8 @@ function timingSafeTokenMatch(actualHeader, expectedToken) {
 function requireWorkerAuth(req, res, next) {
   const expectedToken = process.env.URAI_JOBS_WORKER_TOKEN;
   const env = String(process.env.URAI_ENV || process.env.NODE_ENV || 'local').toLowerCase();
-  const localBypass = env === 'local' || env === 'test' || process.env.FUNCTIONS_EMULATOR === 'true';
+  const productionRuntime = ['prod', 'production', 'staging'].includes(env);
+  const localBypass = !productionRuntime && (env === 'local' || env === 'test' || process.env.FUNCTIONS_EMULATOR === 'true');
 
   if (!expectedToken && localBypass) return next();
   if (!expectedToken) return res.status(503).send({ ok: false, error: 'worker auth is not configured' });
