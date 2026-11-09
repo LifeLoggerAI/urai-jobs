@@ -1,0 +1,92 @@
+{
+  "schema": "one-urai-genesis-next-chalk-checkpoint-v1",
+  "checkpoint": "R966",
+  "date_utc": "2026-11-09",
+  "release": {
+    "status": "PRODUCTION_HOLD",
+    "go": false
+  },
+  "repository": "LifeLoggerAI/urai-jobs",
+  "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
+  "forensic_pr": 379,
+  "refreshed_prs": {
+    "jobs_379": "dc15eb588d1779600583d932d7b81baa8625311b",
+    "jobs_371": "df19633466eaebdda844569ed0d562245bd31dc6",
+    "jobs_377": "f8578ea281e818b01811aecc2fe4dfb8c3dc8203",
+    "jobs_388": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
+    "jobs_389": "b865209cc352241602d8b9714672f3401aed7669",
+    "jobs_390": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+    "jobs_386": "fd1c8d85acd5cc96ef9fcb300173e362b004eb54",
+    "jobs_387": "04592f8573c708954f95f87ddca1e168efde51f4",
+    "jobs_384": "fd05a376f876f9b835929a2074c09f47638659e2",
+    "privacy_214": "cc0692053db3b1b8df8267d43856b1a3357de8a0",
+    "privacy_253": "90a4e581e8494f52d85eab3c576d02b926e7d0d9",
+    "privacy_254": "dbc193763dc112210c20b5b680e8eb08fdf8396c",
+    "privacy_255": "a4d7e4ffb76fa2dbbf7348e2b66faa991761509a",
+    "privacy_256": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6"
+  },
+  "source_blobs": {
+    "jobs_harness": "e9662a979a72a0e39a61fe896a79f8379658d963",
+    "jobs_derivative_cleanup": "d441b4971d456f2e861b2640067cbde6a2dfff32",
+    "jobs_receiver": "bf28abe6dec01330909f6e6f8bdea909d5a3b920",
+    "jobs_replay_doc": "31886c5ce46a39f2a0424aa377c157874a62ac84",
+    "privacy_r647_dispatcher": "4126167b4350ba8afe6b19d7b60dec1ca891189f",
+    "privacy_r647_contract": "6cca2b9456319927cf22511c7d51c1f16ddf051c",
+    "privacy_r20_publisher": "84f1e77d5c1cf55f80aaa0a559b6a3eac781386e",
+    "privacy_r20_transition": "0ddee615f1284a58459aae48b915a574da7c9c9e"
+  },
+  "harness": {
+    "test_declarations": 3,
+    "dependencies": [
+      "consent-revocation-transition.ts",
+      "consent-jobs-delivery.ts",
+      "consent-jobs-http.ts",
+      "consent-revocation.ts",
+      "consent-jobs-dispatch.ts"
+    ],
+    "actual_local_firestore_storage_emulators_required": true,
+    "loopback_http_wrapper": true,
+    "functions_auth_wrappers_mocked": true,
+    "synthetic_fixture_not_authorized_grant": true,
+    "compatible_privacy_checkout_found": false,
+    "note": "R647/R20 trees inspected do not include consent-jobs-delivery.ts, consent-jobs-http.ts, consent-jobs-dispatch.ts. R647 dispatcher filename/API differs. Exact compatible branch remains unknown."
+  },
+  "derivative_cleanup": {
+    "generation_pinned_delete": true,
+    "in_flight_unresolved_marker": true,
+    "unknown_objects_deleted": false,
+    "point_in_time_listing_not_future_write_fence": true,
+    "privateOutputDeletionAcknowledged": false,
+    "storageWriteFenceVerified": false,
+    "full_historical_erasure_certified": false
+  },
+  "r966_execution": {
+    "git_ls_remote_exit": 128,
+    "reason": "Could not resolve host github.com",
+    "donor_node_tests_executed": false,
+    "firebase_emulator_harness_executed": false,
+    "typecheck": false,
+    "build": false,
+    "cloud_inventory": false,
+    "gcs_iam_403": false,
+    "deployment_or_dispatch": false
+  },
+  "next_steps": [
+    "Recover exact compatible Privacy checkout containing the five modules expected by the Jobs harness; verify commit/tree/blob IDs.",
+    "Compare that consent-jobs-* delivery implementation to R647 consent-revocation-jobs-dispatcher and R20 publisher; select one architecture after review.",
+    "On connected host execute R647 contract and dispatcher Node tests separately from a clean locked checkout.",
+    "Run Jobs three-case local Firestore+Storage emulator harness with compatible Privacy source and exact Jobs #371; record all exits/log hashes/tool versions.",
+    "Add crash/timeout ACK recovery tests, conflicting ACK, new lease owner, unresolved in-flight cleanup and legacy event tests.",
+    "Separately verify authorized nonproduction GCS stale/alternate writer 403, upload/stream drain, generation purge and durable absence ACK.",
+    "Keep production HOLD and all other release gates independent."
+  ],
+  "prohibitions": [
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO DISPATCH",
+    "NO PRIVATE MEDIA",
+    "NO IAM CHANGE",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ]
+}
