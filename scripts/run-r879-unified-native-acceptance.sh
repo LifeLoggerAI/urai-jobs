@@ -123,6 +123,11 @@ grep -q '# pass 5' "$OUT/r946_source_pin_preflight_5.log" || hold 'R946 original
 stage studio202_jobs_zod_10_source 120s node --experimental-strip-types --test scripts/studio-life-movie-actual-producer-zod-contract.test.mjs
 grep -q '# pass 10' "$OUT/studio202_jobs_zod_10_source.log" || hold 'Studio #202 current producer/Jobs Zod acceptance missing'
 
+# R954: the original creation/revocation transaction contract must execute
+# with the exact production owner/org resolver loaded in its VM fixture.
+stage creation_revocation_14_source 180s node --test scripts/life-movies-creation-revocation-race-contract.mjs
+grep -q '# pass 14' "$OUT/creation_revocation_14_source.log" || hold 'R954 creation/revocation owner-org source tests missing'
+
 # R952: original R951 four-worker 48-scenario production/emulator precedence tests.
 # Keep this a mandatory executable stage, not only a source marker.
 stage r951_worker_auth_emulator_precedence_4 120s node --test scripts/r951-worker-emulator-auth-precedence.test.mjs
@@ -211,6 +216,7 @@ stage longform_resume_source 180s node --test \
 # R945: independently reconciled #382 original source-bound longform replay fixture.
 # This test is a required executable gate, not a doc-only or source-only marker.
 check_blob 'scripts/life-movies-idempotency-revocation-race-contract.mjs' '9af97cd9b2bd7e2a8e5e66d805c90791da60a52c'
+check_blob 'scripts/life-movies-creation-revocation-race-contract.mjs' '4d34670e5022c4468be383928bf2ba9c45beeaf3'
 stage longform_idempotency_17_source 180s node --test scripts/life-movies-idempotency-revocation-race-contract.mjs
 grep -q '# pass 17' "$OUT/longform_idempotency_17_source.log" || hold 'R945 original 17-case longform idempotency source tests not passed'
 
