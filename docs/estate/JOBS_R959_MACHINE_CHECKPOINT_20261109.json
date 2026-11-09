@@ -1,0 +1,141 @@
+{
+  "schema_version": "one_urai_genesis_jobs_r959_checkpoint_v1",
+  "checkpoint_date": "2026-11-09",
+  "release_decision": "PRODUCTION_HOLD_NO_GO",
+  "cost_usd": 0,
+  "main": {
+    "sha": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
+    "parent_sha": "792d063b9d894bb9cb872e2c3c6dd71e37804f6a",
+    "tree_sha": "282bd75464cc23d9a6add6a1340c6ae7d3adfc9a",
+    "prior_main_sha": "9d29be1bcd3a45a4b9a743df9c9706c00811f38b",
+    "prior_main_tree_sha": "282bd75464cc23d9a6add6a1340c6ae7d3adfc9a",
+    "revert_commit_unsigned": true,
+    "revert_message": "Revert accidental default-branch R933 test-file update; keep review changes isolated",
+    "reverted_path": "scripts/studio-life-movie-actual-producer-zod-contract.test.mjs",
+    "reverted_file_lines": 90,
+    "resulting_tree_matches_prior_main": true,
+    "branch_protected": false,
+    "protection_enabled": false,
+    "required_status_checks_enforcement": "off",
+    "required_status_check_contexts": [],
+    "required_status_check_checks": [],
+    "inherited_rulesets": []
+  },
+  "engineering_prs": [
+    {
+      "number": 387,
+      "head_sha": "04592f8573c708954f95f87ddca1e168efde51f4",
+      "state": "open",
+      "draft": true,
+      "merged": false
+    },
+    {
+      "number": 388,
+      "head_sha": "17b8f53ac1f4c75ac2abdd50a3bd631e61196c38",
+      "state": "open",
+      "draft": true,
+      "merged": false
+    },
+    {
+      "number": 389,
+      "head_sha": "b865209cc352241602d8b9714672f3401aed7669",
+      "state": "open",
+      "draft": true,
+      "merged": false,
+      "base": "review/chalk-r951-worker-emulator-auth-boundary-20261109",
+      "root_command_segments_enrolled": 78,
+      "root_command_segments_executed": false
+    }
+  ],
+  "authentication": {
+    "original_test_blob": "d27cc3880aa2ae0387f81bb660ca340d830e22dc",
+    "implementation_files": [
+      "workers/asset-worker/index.js",
+      "workers/studio-worker/index.js",
+      "workers/private-source-worker/src/index.ts",
+      "workers/spatial-worker/index.js"
+    ],
+    "test_scope": "source expression exactness and text-presence guard checks; six env values x two emulator values",
+    "real_http_middleware_test": false,
+    "full_clean_checkout_test": false,
+    "four_emulator_test": false,
+    "r951_r952_matrix_reported_pass": 48,
+    "r953_excerpt_harness_reported_pass": 4,
+    "r954_complete_source_adapted_harness_reported_pass": 4,
+    "r954_mutation_detected": true
+  },
+  "ci": {
+    "workflow_runs_failed": 10,
+    "run_ids": [
+      42589887660,
+      42589887640,
+      42589887621,
+      42589887656,
+      42589887624,
+      42589887604,
+      42589887690,
+      42589887581,
+      42589887663,
+      42589887599
+    ],
+    "executed_job_records": 12,
+    "runner_id": 0,
+    "runner_name": "",
+    "runner_group_name": "",
+    "recorded_steps": 0,
+    "runtime_callable_emulator_e2e": "skipped",
+    "inspected_workflow_runner_label": "ubuntu-latest",
+    "exact_runner_allocation_cause": "UNKNOWN",
+    "rerun_in_r959": false,
+    "protected_ci_green": false
+  },
+  "open_jobs_issues": [
+    {
+      "number": 252,
+      "priority": "P0",
+      "title": "Storage-enforced post-revocation write fence and active-upload drain",
+      "status": "open"
+    },
+    {
+      "number": 376,
+      "priority": "P1",
+      "title": "Data-rights executor post-admission revocation/continuation policy",
+      "status": "open"
+    },
+    {
+      "number": 380,
+      "priority": "P1",
+      "title": "User self-update Rules leave server-owned data-rights request binding mutable",
+      "status": "open"
+    },
+    {
+      "number": 345,
+      "priority": "P2",
+      "title": "Concurrent createJob rate-limit admission",
+      "status": "open"
+    }
+  ],
+  "cloud": {
+    "live_firebase_gcp_inventory": "UNKNOWN",
+    "deployed_cloud_run_revisions": "UNKNOWN",
+    "deployed_source_sha": "UNKNOWN",
+    "effective_storage_iam": "UNKNOWN",
+    "post_revoke_gcs_403": false,
+    "inflight_upload_drain": false,
+    "exact_generation_deletion_ack": false,
+    "downstream_purge_ack": false,
+    "authenticated_owner_private_replay_e2e": false,
+    "studio_consent_authority": "hard_off",
+    "studio_private_output_write_authority": "hard_off"
+  },
+  "documentation": {
+    "forensic_pr": 379,
+    "genesis_crosschat_pr": 304,
+    "r958_canonical_report": "docs/estate/JOBS_R958_CANONICAL_NEXT_CHALK_RECONCILIATION_20261109.md",
+    "r958_machine_checkpoint": "docs/estate/JOBS_R958_MACHINE_CHECKPOINT_20261109.json",
+    "r958_start_entrypoint": "docs/estate/JOBS_R944_START_NEXT_CHALK_20261109.md",
+    "r959_report": "docs/estate/JOBS_R959_FULL_NEXT_CHALK_MAIN_AND_ISSUE_RECONCILIATION_20261109.md"
+  },
+  "no_production_actions": true,
+  "next_required": "Preserve main revert history; establish main protection through authorized admin; diagnose Actions runner allocation; execute exact full Jobs acceptance in an approved free credential-free complete checkout; prove P0 storage revocation and private Replay/purge."
+}
