@@ -18,15 +18,15 @@ const routeSource = readFileSync(new URL('./fixtures/studio-r931-dispatch-route.
 
 test('pinned Studio producer fixture provenance is exact and consent remains absent', () => {
   assert.equal(buildJobsLifeMovieEnvelope.name, 'buildJobsLifeMovieEnvelope');
-  assert.match(routeSource, /callStudioJobsBridge\\(\\{/);
+  assert.match(routeSource, /callStudioJobsBridge\(\{/);
   assert.match(routeSource, /action:'create'/);
-  assert.match(routeSource, /tenantId:auth\\.tenantId/);
-  assert.match(routeSource, /userId:auth\\.uid/);
-  assert.match(routeSource, /idempotencyKey:envelope\\.idempotencyKey/);
-  assert.match(routeSource, /payload:envelope\\.payload/);
-  const call = routeSource.match(/callStudioJobsBridge\\(\\{([\\s\\S]*?)\\}\\);/);
+  assert.match(routeSource, /tenantId:auth\.tenantId/);
+  assert.match(routeSource, /userId:auth\.uid/);
+  assert.match(routeSource, /idempotencyKey:envelope\.idempotencyKey/);
+  assert.match(routeSource, /payload:envelope\.payload/);
+  const call = routeSource.match(/callStudioJobsBridge\(\{([\s\S]*?)\}\);/);
   assert.ok(call, 'actual pinned dispatch route call must be found');
-  assert.doesNotMatch(call[1], /\\bconsent\\s*:/);
+  assert.doesNotMatch(call[1], /\bconsent\s*:/);
 });
 
 test('actual Studio builder output and actual dispatch mapping are missing required canonical consent', () => {
@@ -34,7 +34,7 @@ test('actual Studio builder output and actual dispatch mapping are missing requi
   assert.equal(envelope.dispatchAuthorized, false);
   assert.equal(envelope.providerGenerationAuthorized, false);
   assert.equal(envelope.publicReleaseAuthorized, false);
-  assert.doesNotMatch(JSON.stringify(envelope), /"consent"\\s*:/);
+  assert.doesNotMatch(JSON.stringify(envelope), /"consent"\s*:/);
   
   const request = {
     action: 'create',
