@@ -70,7 +70,8 @@ test('throwing profile or hostile snapshot fails closed', () => {
 test('both actual Studio bridges enforce the guard inside all enqueue/resume transactions', () => {
   for(const name of ['studioLifeMovieBridge.ts','studioLifeMovieLongformBridge.ts']) {
     const source=fs.readFileSync(path.resolve(`functions/src/jobs/${name}`),'utf8');
-    const expected=name.includes('Longform')?3:1;
+    // R924: long-form includes an additional current-owner cancellation transaction.
+    const expected=name.includes('Longform')?4:1;
     const matches=[...source.matchAll(/assertOwnerDeletionFenceClear\(ownerSnapshot\);\s*assertLifeMovieOwnerTenantAuthorityClear\(ownerSnapshot,\s*(?:input.userId|userId),\s*(?:input.tenantId|tenantId)\);/g)];
     assert.equal(matches.length,expected,name+' must bind every owner-relevant transaction');
   }
@@ -207,6 +208,19 @@ test('long-form status atomically checks owner, consent and original job binding
     // The old nontransactional child-read path must never be reintroduced.
     async getAll() { throw Error('private_child_read_outside_transaction'); },
   };
+  // Use the ORIGINAL security helper source, not a permissive test stub.
+  // The owner-org guard was introduced after the older status fixture.
+  const ownerOrgSource = fs.readFileSync(path.resolve('functions/src/jobs/lifeMovieLongformOwnerOrg.ts'), 'utf8');
+  const ownerOrgOutput = ts.transpileModule(ownerOrgSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const ownerOrgModule = { exports: {} };
+  vm.runInNewContext(ownerOrgOutput, {
+    module: ownerOrgModule, exports: ownerOrgModule.exports, Object, Array, Error,
+  });
+  const { assertLifeMoviePlanCurrentOrg, assertLifeMovieJobPlanOrg } = ownerOrgModule.exports;
+  assert.equal(typeof assertLifeMoviePlanCurrentOrg, 'function');
+  assert.equal(typeof assertLifeMovieJobPlanOrg, 'function');
   const longformModule = { exports: {} };
   vm.runInNewContext(output + '\nmodule.exports.readPlanStatus = readPlanStatus;', {
     module: longformModule, Object, Array, Promise, Error, Set, createHash, isDeepStrictEqual,
@@ -217,6 +231,8 @@ test('long-form status atomically checks owner, consent and original job binding
     checkedJobConsentBlockState: (snapshot) => snapshot.data()?.state ?? 'unverified',
     deriveStatus: () => 'SUCCESS',
     assertLifeMovieOwnerTenantAuthorityClear: check,
+    assertLifeMoviePlanCurrentOrg,
+    assertLifeMovieJobPlanOrg,
   });
   const load = () => longformModule.exports.readPlanStatus(plan.planId, 'tenant-1', 'owner-1');
   const valid = await load();

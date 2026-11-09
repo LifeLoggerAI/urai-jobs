@@ -24,6 +24,10 @@ function setup(snapshotState){
    consent:{purpose:'voice.synthesis',policyVersion:'1',decisionReceiptId:'receipt-one'}},
    queue:{jobId:'synthetic-one',status:'PENDING',availableAt:new Date(Date.now()-1000)},
    consent:snapshotState, consentReads:0, published:0, workerCalls:0, updates:[]};
+ const users={
+   'synthetic-owner':{uid:'synthetic-owner',role:'user',accountStatus:'active',disabled:false,deleted:false,markedForDeletion:false,dataRightsDeletionPendingCentralPrivacy:false},
+   'synthetic-operator':{uid:'synthetic-operator',role:'operator',accountStatus:'active',disabled:false,deleted:false,markedForDeletion:false,dataRightsDeletionPendingCentralPrivacy:false},
+ };
  let seq=0;
  const apply=(ref,props)=>{state.updates.push({kind:ref.kind,props});
   for(const [name,value] of Object.entries(props)){
@@ -38,10 +42,11 @@ function setup(snapshotState){
  refs.consent.get=async()=>snap('consent');
  const db={
    collection:n=>{if(n==='logs')return {add:async()=>({id:'synthetic-log'})};
+   if(n==='users')return {doc:uid=>({kind:'user',uid,get:async()=>({exists:!!users[uid],data:()=>users[uid]})})};
    assert.equal(n,'jobQueue');const chain={where(){return chain},orderBy(){return chain},limit(){return chain},
     async get(){return {empty:false,size:1,docs:[{id:'synthetic-one',data:()=>state.queue}]}}};return chain},
    runTransaction:async cb=>cb({
-    get:async ref=>snap(ref.kind),
+    get:async ref=>ref.kind==='user'?{exists:!!users[ref.uid],data:()=>users[ref.uid]}:snap(ref.kind),
     update:apply,
     set:apply,
     create:()=>{},
@@ -89,6 +94,13 @@ function setup(snapshotState){
    return {getStorage(){throw Error('dispatch fixture must not access Storage');}};
  });
  modules['./rejectedNarratorOutput.js']=rejectedOutputModule.exports;
+ // R925: exercise the ORIGINAL current-owner/tenant/org and operator-role helper.
+ // No always-allow mock is permitted for this authority boundary.
+ const currentOwnerModule={exports:{}};
+ evalSource(compiled('jobs/currentJobCallerAuthority.ts'),currentOwnerModule,k=>{
+   throw Error('Unexpected current owner helper import '+k);
+ });
+ modules['./currentJobCallerAuthority.js']=currentOwnerModule.exports;
  const load=path=>{
    const moduleObj={exports:{}};
    evalSource(compiled('jobs/'+path+'.ts'),moduleObj,k=>{
@@ -113,7 +125,7 @@ for(const [label,block,shouldPublish,shouldCancel] of [
   test(`${mode}: ${label} ${shouldPublish?'publishes':'does not publish'}`,async()=>{
     const f=setup(block);
     const fn=f.load(mode==='manual'?'processQueueNow':'processQueueTick');
-    if(mode==='manual')await fn.processQueueNow({auth:{token:{role:'operator'}},data:{limit:1}});
+    if(mode==='manual')await fn.processQueueNow({auth:{uid:'synthetic-operator',token:{role:'operator'}},data:{limit:1}});
     else await fn.processQueueTick();
     assert.equal(f.state.published,shouldPublish?1:0);
     assert.equal(f.state.job.status,shouldCancel?'CANCELLED':shouldPublish?'LEASED':'PENDING');
@@ -169,12 +181,14 @@ for (const [label, corrupt] of malformedStoredContexts) {
       const f = setup(absent);
       corrupt(f.state.job);
       const fn = f.load(mode === 'manual' ? 'processQueueNow' : 'processQueueTick');
-      if (mode === 'manual') await fn.processQueueNow({auth:{token:{role:'operator'}},data:{limit:1}});
+      if (mode === 'manual') await fn.processQueueNow({auth:{uid:'synthetic-operator',token:{role:'operator'}},data:{limit:1}});
       else await fn.processQueueTick();
       assert.equal(f.state.published, 0);
       assert.equal(f.state.job.status, 'PENDING');
       assert.equal(f.state.queue.status, 'PENDING');
-      assert.equal(f.state.queue.dispatch?.blockedReason, 'job_consent_context_unverified');
+      assert.equal(f.state.queue.dispatch?.blockedReason,
+        label === 'missing owner with populated consent'
+          ? 'job_owner_authority_unavailable' : 'job_consent_context_unverified');
     });
   }
   test('executor: stored job with malformed consent ' + label + ' cannot start', async () => {
@@ -191,7 +205,9 @@ for (const [label, corrupt] of malformedStoredContexts) {
     assert.equal(f.state.workerCalls, 0);
     assert.equal(f.state.job.status, 'PENDING');
     assert.equal(f.state.queue.status, 'PENDING');
-    assert.equal(f.state.queue.dispatch?.blockedReason, 'job_consent_context_unverified');
+    assert.equal(f.state.queue.dispatch?.blockedReason,
+        label === 'missing owner with populated consent'
+          ? 'job_owner_authority_unavailable' : 'job_consent_context_unverified');
   });
 }
 
@@ -209,7 +225,7 @@ for(const [mode,fnName] of [['manual','processQueueNow'],['scheduled','processQu
   test(`${mode}: explicit revocation cancels even with ${order} additional consent`,async()=>{
    const f=withSecondConsent(setup(blocks));
    const fn=f.load(fnName);
-   if(mode==='manual')await fn.processQueueNow({auth:{token:{role:'operator'}},data:{limit:1}});
+   if(mode==='manual')await fn.processQueueNow({auth:{uid:'synthetic-operator',token:{role:'operator'}},data:{limit:1}});
    else await fn.processQueueTick();
    assert.equal(f.state.job.status,'CANCELLED');
    assert.equal(f.state.queue.status,'CANCELLED');
