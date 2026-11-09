@@ -60,7 +60,10 @@ test('legacy owner and explicit false remain admissible',async()=>{
  assert.doesNotThrow(()=>assertOwnerJobsNotDeleting({role:'user'}));
  assert.doesNotThrow(()=>assertOwnerJobsNotDeleting({dataRightsDeletionPendingCentralPrivacy:false}));
  await checkCurrentOwner(getLatest({role:'user'}),ref);
- await checkCurrentOwner(getLatest({dataRightsDeletionPendingCentralPrivacy:false}),ref);
+ await checkCurrentOwner(getLatest({role:'user',dataRightsDeletionPendingCentralPrivacy:false}),ref);
+ // The legacy deletion flag can be absent, but current server-owned role cannot.
+ await assert.rejects(checkCurrentOwner(getLatest({dataRightsDeletionPendingCentralPrivacy:false}),ref),
+  /Current user is not allowed to create runtime jobs/);
 });
 for(const [label,value] of [
  ['active deletion',true],['malformed string','false'],['malformed null',null],['malformed zero',0],['malformed object',{}],
@@ -68,8 +71,9 @@ for(const [label,value] of [
  test('canonical create rejects '+label+' before any writes',async()=>{
   const record={role:'user',dataRightsDeletionPendingCentralPrivacy:value};
   assert.throws(()=>assertOwnerJobsNotDeleting(record),/central Privacy|deletion/i);
-  // Current-role admission may deny before reaching the explicit deletion guard.
-  await assert.rejects(checkCurrentOwner(getLatest(record),ref),/central Privacy|deletion|Current user is not allowed/i);
+  // All these records have valid current server-owned role, so rejection must
+  // occur at the central Privacy deletion fence, never a missing-role shortcut.
+  await assert.rejects(checkCurrentOwner(getLatest(record),ref),/central Privacy|deletion/i);
  });
 }
 test('stale pre-check cannot bypass newly activated transaction fence',async()=>{
@@ -77,7 +81,7 @@ test('stale pre-check cannot bypass newly activated transaction fence',async()=>
  await assert.rejects(checkCurrentOwner(getLatest({
   role:'user',dataRightsDeletionPendingCentralPrivacy:true,
   dataRightsDeletionRequestId:'synthetic-deletion-request'
- }),ref),/reconciliation|Current user is not allowed/i);
+ }),ref),/reconciliation/i);
 });
 test('canonical create rejects vanished owner before creating job or queue',async()=>{
  await assert.rejects(checkCurrentOwner(getLatest(null,false),ref),/Owner record missing/i);
