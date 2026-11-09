@@ -1,5 +1,15 @@
 # NEXT CHALK — ONE URAI GENESIS R968 CONTINUATION COMMAND
 
+**R967 addendum / correction:** Live Jobs `main` is `2bcdbcf34da4a3fe58619286d6917e2d4fa624e1`, tree `282bd75464cc23d9a6add6a1340c6ae7d3adfc9a`, not the stale `9d29be1...` repeated in some earlier R967 source tables. Commit #2bcdbcf reverts the single accidental 90-line R933 test file; resulting tree matches the earlier main tree. The revert is unsigned. Branch protection remains disabled and required checks off.
+
+The R967 machine checkpoint was corrected with this live main SHA/tree, governance readback, zero GitHub code-search results for the three missing module names, and 12 extra branch-path checks. Those branch checks found no matching files; absence is scoped to inspected refs, not every possible Git object.
+
+Canonical Jobs R967 full source report: [JOBS_R967_PRIVACY_DISPATCHER_HARNESS_RECOVERY_AND_NEXT_CHALK_HOLD_20261109.md](JOBS_R967_PRIVACY_DISPATCHER_HARNESS_RECOVERY_AND_NEXT_CHALK_HOLD_20261109.md). Supplemental reconciliation: [JOBS_R967_PRIVACY_DISPATCHER_HARNESS_RECOVERY_AND_NEXT_CHALK_HOLD_20261109.md](JOBS_R967_PRIVACY_DISPATCHER_HARNESS_RECOVERY_AND_NEXT_CHALK_HOLD_20261109.md). Machine record: [JOBS_R967_MACHINE_CHECKPOINT_20261109.json](JOBS_R967_MACHINE_CHECKPOINT_20261109.json).
+
+---
+
+# NEXT CHALK — ONE URAI GENESIS R968 CONTINUATION COMMAND
+
 Continue the existing LifeLogger → LifeOS → UrAi Genesis. Preserve original code, histories, branches and forensic records. Do not restart or rebuild known implementations.
 
 ## Read first
