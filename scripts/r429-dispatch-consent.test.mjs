@@ -186,7 +186,9 @@ for (const [label, corrupt] of malformedStoredContexts) {
       assert.equal(f.state.published, 0);
       assert.equal(f.state.job.status, 'PENDING');
       assert.equal(f.state.queue.status, 'PENDING');
-      assert.equal(f.state.queue.dispatch?.blockedReason, 'job_consent_context_unverified');
+      assert.equal(f.state.queue.dispatch?.blockedReason,
+        label === 'missing owner with populated consent'
+          ? 'job_owner_authority_unavailable' : 'job_consent_context_unverified');
     });
   }
   test('executor: stored job with malformed consent ' + label + ' cannot start', async () => {
@@ -203,7 +205,9 @@ for (const [label, corrupt] of malformedStoredContexts) {
     assert.equal(f.state.workerCalls, 0);
     assert.equal(f.state.job.status, 'PENDING');
     assert.equal(f.state.queue.status, 'PENDING');
-    assert.equal(f.state.queue.dispatch?.blockedReason, 'job_consent_context_unverified');
+    assert.equal(f.state.queue.dispatch?.blockedReason,
+        label === 'missing owner with populated consent'
+          ? 'job_owner_authority_unavailable' : 'job_consent_context_unverified');
   });
 }
 
