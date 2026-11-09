@@ -81,7 +81,7 @@ before(async () => {
   for (const uid of owned) await signIn(uid);
   const regular = { uid: owner, role: 'user', orgId: 'org-one', permissions: ['jobs:create'], disabled: false,
     tenantId: 'tenant-one', accountStatus: 'active', deleted: false, markedForDeletion: false,
-    dataRightsDeletionPendingCentralPrivacy: true, displayName: 'Original' };
+    dataRightsDeletionPendingCentralPrivacy: true, dataRightsDeletionRequestId: 'request-original', displayName: 'Original' };
   await firestore.collection('users').doc(owner).set(regular);
   await firestore.collection('users').doc(foreign).set({ ...regular, uid: foreign, dataRightsDeletionPendingCentralPrivacy: false });
   // Missing legacy authority fields matter: add/remove must both be blocked.
@@ -103,6 +103,7 @@ for (const [key, value] of [
   ['role', 'admin'], ['orgId', 'foreign-org'], ['permissions', ['admin']], ['disabled', true],
   ['uid', 'another'], ['tenantId', 'tenant-two'], ['accountStatus', 'active-but-forged'],
   ['deleted', true], ['markedForDeletion', true], ['dataRightsDeletionPendingCentralPrivacy', false],
+  ['dataRightsDeletionRequestId', 'request-forged'], 
 ]) {
   test(`real owner cannot mutate privileged ${key}`, async () => denyMutation(owner, owner, key, value));
   test(`real owner cannot remove privileged ${key}`, async () => denyMutation(owner, owner, key, value, true));
@@ -110,6 +111,7 @@ for (const [key, value] of [
 for (const [key, value] of [
   ['tenantId', 'tenant-two'], ['accountStatus', 'active'], ['deleted', false],
   ['markedForDeletion', false], ['dataRightsDeletionPendingCentralPrivacy', false],
+  ['dataRightsDeletionRequestId', 'request-forged'], 
 ]) {
   test(`legacy owner cannot add privileged ${key}`, async () => denyMutation(legacy, legacy, key, value));
 }

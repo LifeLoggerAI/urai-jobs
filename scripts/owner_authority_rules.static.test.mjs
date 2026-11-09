@@ -7,7 +7,8 @@ const rulesPath = path.resolve('firestore.rules');
 const trustedFields = [
   'role', 'orgId', 'permissions', 'disabled', 'uid',
   'tenantId', 'accountStatus', 'deleted', 'markedForDeletion',
-  'dataRightsDeletionPendingCentralPrivacy', 'jobsCreateRateLimit',
+  'dataRightsDeletionPendingCentralPrivacy', 'dataRightsDeletionRequestId',
+  'jobsCreateRateLimit',
 ];
 
 function getUserAuthority(source) {
