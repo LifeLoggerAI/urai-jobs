@@ -1,0 +1,191 @@
+{
+  "schema": "one-urai-genesis-r970-firebase-rules-ci-reconciliation-v1",
+  "checkpoint": "R970",
+  "observed_date": "2026-11-09",
+  "timezone": "America/Chicago",
+  "release": {
+    "status": "PRODUCTION_HOLD_NO_GO",
+    "go": false
+  },
+  "repository": "LifeLoggerAI/urai-jobs",
+  "documentation_branch": "docs/genesis-jobs-firebase-forensics-20261109",
+  "forensic_pr": 379,
+  "report": {
+    "path": "docs/estate/JOBS_R970_19_REPO_FIREBASE_RULES_AND_CI_RECONCILIATION_HOLD_20261109.md",
+    "commit": "43df69cc2b5defaa4e1d5fd47c3bd6adc2ebcee2"
+  },
+  "main_refs_19": {
+    "UrAi": "8cac3ba513830c11261d57bc2b5dd7ad8b83e85a",
+    "UrAi-Dev": "08257158e2ffee8bbeb183ae89185f1677bad1da",
+    "UrAiProd": "d3d7ce6e607a5ee1be2c9f9ede6eecf1cfb393b9",
+    "urai-spatial": "da94837c2457b0a7590e26a7a644cd728de8afb8",
+    "urai-privacy": "1163d6f32a123ef9a6638e092a3eee5ec4a3b317",
+    "urai-jobs": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
+    "urai-studio": "854477d80b1a7aa718edb60d1ed4c1cf22dbed9d",
+    "urai-staging": "bda659ad23590b39e7f32de349f8a3723455ce02",
+    "urai-admin": "1cde00e69238f6a32237af2d1914a1b77339d5bc",
+    "urai-analytics": "a6e98090843301ad4f377c1cd8a840edfe517c8c",
+    "urai-marketing": "b421ab5ca2c4a76a1b63e7c8d43996cf7a764354",
+    "urai-investors": "1c248838072a2ada4da52d943b10c933a5016a26",
+    "urai-labs-llc": "2359d7e33df837dd4c4279ce444cfc8750c05c8b",
+    "asset-factory": "a49f611ade29a1754787701ab4bf915c85c0cdc6",
+    "urai-content": "988ca4f7f38b1ce86e4d3f426361b5866fd23e0d",
+    "urai-foundation": "8ee8036b649ae9c9e73ae374a7247f0bb34c4c03",
+    "urai-communications": "40cd2f4b6d422734869486a49cddac9e103a58f1",
+    "B2Bportal": "4aea8574970d28a293f921a34156c4cc5a971213",
+    "urai-storytime": "73f586a0a2931961ae221af7cfc0caf1b6aef39d"
+  },
+  "unchanged_since_round24": true,
+  "firebase_source_topology": {
+    "shared_project": "urai-4dc1d",
+    "likely_shared_database": "(default) per current source config; provider effective mapping not audited",
+    "spatial": {
+      "main": "da94837c2457b0a7590e26a7a644cd728de8afb8",
+      "firebaserc": "0d4fc68d65f23254829cc0502621a6ffe2215788",
+      "firebase_json": "2466dd32ddb52c672f9d6700cf1470c451c55b7c",
+      "rules": "firebase/firestore.rules"
+    },
+    "admin": {
+      "main": "1cde00e69238f6a32237af2d1914a1b77339d5bc",
+      "firebaserc": "48b58a1e42c3554ead35cba801e980f0afdeaf2f",
+      "firebase_json": "9cdb6bfa298c46376fbdd1b1604df5b530ccd39b",
+      "rules": "firestore.rules"
+    },
+    "b2bportal": {
+      "main": "4aea8574970d28a293f921a34156c4cc5a971213",
+      "firebaserc": "ea4ae23452b00fea090b411114cfd164200205fd",
+      "firebase_json": "f93da458dc32acd6b4217a24f0d2db902deb086a",
+      "rules": "firestore.rules"
+    },
+    "privacy": {
+      "main": "1163d6f32a123ef9a6638e092a3eee5ec4a3b317",
+      "root_firebaserc": "ABSENT_AT_REPO_ROOT",
+      "firebase_json": "04a0a54c96abde147a61ab800d924a8c56130109",
+      "rules": "firestore.rules",
+      "functions_codebase": "privacy",
+      "guarded_deploy_scope": "functions:privacy only"
+    },
+    "registry_source_pr284": "6e1f9c8ae8ac2d80835da008d46cf1d6d089ef23"
+  },
+  "labs_federated_rules_audit": {
+    "pr261_head": "2980ca804fe04c37256a00af6e291a79a05004e4",
+    "report_blob": "9ac2a9d99f4c1ef1c09ea93b74ffcad1a1950e59",
+    "source_snapshot_blob": "1853988ffbbe6b0689f36dcb46d55f3bebe84e45",
+    "classification": "potential source-level publisher collision; not provider deployment proof or breach"
+  },
+  "candidate_lineages": {
+    "privacy186": {
+      "head": "2d0c7b621b63ac63ae83e44f5c40ac2ca5344cdc",
+      "compare_to_main": {
+        "status": "ahead",
+        "ahead": 12,
+        "behind": 0
+      },
+      "changed_files": [
+        "firestore.rules",
+        "package.json",
+        "scripts/guarded-firebase-deploy.mjs",
+        "scripts/guarded-firebase-deploy.test.mjs",
+        "scripts/validate-rules.mjs",
+        "tests/rules/firestore.rules.test.ts"
+      ]
+    },
+    "spatial1962": {
+      "head": "da2ee1ff6eed5b5cf0c8f3b762214fdb57c07c11"
+    },
+    "spatial1964": {
+      "head": "e3347d0e1ee57eaabafcfd50e2b033f7476aecf8",
+      "parent": "da2ee1ff6eed5b5cf0c8f3b762214fdb57c07c11",
+      "compare_to_parent": {
+        "ahead": 13,
+        "behind": 0,
+        "changed_files": 6
+      },
+      "compare_to_main": {
+        "ahead": 1489,
+        "behind": 0
+      },
+      "changed_files": [
+        ".github/workflows/first-private-memory-emulator.yml",
+        "firebase/firestore.rules",
+        "tests/firestore.privacyConsent.rules.static.test.mjs",
+        "tests/firestore.userAuthority.rules.test.mjs",
+        "urai-tier1/src/lib/privacy/canonicalMemoryConsentClient.ts",
+        "urai-tier1/tests/canonical-memory-consent-expiry.test.mjs"
+      ]
+    }
+  },
+  "exact_rules_blobs": {
+    "privacy_main": "7c0051eb6d148791198127e625c99973abdc49c1",
+    "privacy186": "295e5d27623cceddec8245759ff28128b17be28c",
+    "spatial_main": "26330636a18a3675da049aa4bdadb34c82293882",
+    "spatial1964": "8b015a8bbe123bb7857bff5d98ba5a153067c41c"
+  },
+  "ci_readback": {
+    "privacy186": {
+      "runs_sampled": 8,
+      "release_verification_job": 125760642477,
+      "steps": null,
+      "log": "BlobNotFound 404"
+    },
+    "spatial1964": {
+      "runs_sampled": 12,
+      "emulator_job": 125757056379,
+      "steps": null,
+      "log": "BlobNotFound 404"
+    },
+    "jobs390": {
+      "runs_sampled": 9,
+      "workflow_status": "completed/failure"
+    },
+    "jobs391": {
+      "runs_sampled": 9,
+      "runtime_job": 129095052403,
+      "steps": null,
+      "callable_e2e_job": 129095074327,
+      "callable_e2e": "skipped",
+      "runtime_log": "BlobNotFound 404"
+    },
+    "interpretation": "workflow failure conclusions observed; sampled step and raw logs unavailable; no application test failure cause established"
+  },
+  "access_and_execution": {
+    "github_metadata_and_source_readback": true,
+    "provider_tools_callable": false,
+    "provider_inventory": false,
+    "effective_iam_or_rules": false,
+    "local_git_clone_checkout": false,
+    "installs_tests_typecheck_build": false,
+    "firebase_emulators": false,
+    "ci_dispatch": false,
+    "raw_logs": false,
+    "deploy": false,
+    "merge": false,
+    "private_media": false,
+    "provider_mutation": false,
+    "paid_compute": false
+  },
+  "release_gates": [
+    "Shared urai-4dc1d default Firestore policy authority, project/database identity and deploy principal resolution",
+    "Privacy project/tenant/runtime mapping and separate reviewed Rules deployment authority",
+    "C1 first-time read + shared profile identity/protected-field/deletion-fence contract",
+    "Jobs #252 privileged GCS future-write fence, 403, upload drain, exact-generation deletion and durable purge ACK",
+    "R647 / Jobs #371 / R818-R836 separate integration acceptance",
+    "Studio #390/#391 actual Jobs Zod parse test",
+    "Privacy R20 event digest, prior grant, timestamp, trusted ACK and crash-safe retries",
+    "Protected CI, effective branch governance, independent reviewer and raw logs",
+    "Deployed source, runtime identities, ingress/secrets and effective IAM",
+    "Same-SHA authenticated C6 -> private render -> Replay -> revoke -> physical purge",
+    "Device/accessibility/AAA visual, legal/store, billing/backups, rollback and founder GO"
+  ],
+  "prohibitions": [
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO DISPATCH",
+    "NO C6 ENABLEMENT",
+    "NO PRIVATE MEDIA",
+    "NO IAM OR RULES MUTATION",
+    "NO BILLING ACTION",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ]
+}
