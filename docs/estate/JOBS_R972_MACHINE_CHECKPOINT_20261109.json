@@ -96,5 +96,100 @@
     "NO PRIVATE MEDIA",
     "NO PAID COMPUTE",
     "NO PRODUCTION GO"
-  ]
+  ],
+  "supplemental_cross_lineage_reconciliation": {
+    "report": "docs/estate/JOBS_R972_FULL_SYSTEM_RECONCILIATION_RULES_CONSENT_JOBS_PRIVACY_HOLD_20261109.md",
+    "report_commit": "bdf4d1975839a6d39c77d651c1f5ac32a9bb557c",
+    "jobs381": {
+      "head": "a295fd834c1cc01710a36b04523b023de2283240",
+      "base": "review/chalk-r934-consent-smoke-original-authority-review-20261109",
+      "fixed_rules_blob": "d30c3e8fbbfcbf25767501e351edcb18d6080c6d",
+      "static_test_blob": "45c9e80c0aca2b8288d2e6ddf0650873dc4bdb75",
+      "native_rules_test_blob": "95f4b72b1d7260a191b0cdc77c5cf008b57011e0",
+      "runner_blob": "67ae8515bd206456c8d181ff52ef173e67f65cc2",
+      "original_static_node_test": {
+        "passed": 15,
+        "failed": 0,
+        "exit": 0,
+        "node": "22.16.0",
+        "tap_sha256": "a68a5b4e7709387bcaa8aa1d856824817efa4b53104bea91d29525664e13da9e"
+      },
+      "native_rules_emulator": "NOT_RUN"
+    },
+    "jobs383": {
+      "head": "1e70418b86ad56c209aa06a5d2d7f6a7bc4e102c",
+      "base": "a295fd834c1cc01710a36b04523b023de2283240",
+      "root_commands_enrolled": 77,
+      "longform_test_blob": "9af97cd9b2bd7e2a8e5e66d805c90791da60a52c",
+      "full_root_and_native_acceptance": "NOT_RUN"
+    },
+    "jobs391": {
+      "head": "9f5759f072370fbd42a82560ff6c5d4f37169c6b",
+      "base": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+      "compare": {
+        "status": "diverged",
+        "ahead": 1,
+        "behind": 2,
+        "merge_base": "a7a1ef61ac1f219567131abec0b9d4f2"
+      },
+      "corrected_test_blob": "74e94da0a118a043ab76af611474f3f73d329cea",
+      "root_package_blob": "bd50af6bead1c62f36ada6c012123fe0c5d94da7",
+      "root_verify_enrolled": false,
+      "r879_runner_blob": "8a42dcad4416d5896b4886d6c5bad079463d5324",
+      "r879_enrolled": false,
+      "test_executed": false
+    },
+    "privacy257": {
+      "head": "a3f7119497fe1d9c6dc61e104a1da0a583d247f8",
+      "base": "cfc9de884dc975ca04fa2b80b7bddcf5b9896ff6",
+      "ahead": 13,
+      "behind": 0,
+      "consent_api_blob": "d54a7636f7e6421577eb17a6316f1a4bc9fde8e7",
+      "decision_blob": "3cb3232d0334691c820575e8626c34e25d0c987e",
+      "functions_entry_blob": "f81171feb058be606be19134928c4baf9830f664",
+      "boundary_test_blob": "5376f6359229645907e4b2668a0e28516785b8f6",
+      "workflow_blob": "10b45cbdc75356adba76afdd6fd14f562c4e358a",
+      "life_movie_purpose_registered": false,
+      "forced_allowed": false,
+      "grant_write": false,
+      "receipt_capability": false,
+      "render_enabled": false,
+      "workflow_run_id": 42613095876,
+      "job_id": 129146191449,
+      "job_steps": [],
+      "tests_typecheck_build": "NOT_CERTIFIED"
+    },
+    "admin_source_deploy_collision": {
+      "workflow_blob": "582d9322353d60b6061ac3ce603630810b41a8bd",
+      "script_blob": "17abe4b59f45ea253660d3b65965d8db5ee4bddc",
+      "command": "firebase deploy --only hosting,functions,firestore,storage -P urai-4dc1d",
+      "source_capability_only": true,
+      "workflow_execution_or_deployed_rules_change": "NOT_ESTABLISHED"
+    },
+    "actions_391": {
+      "run_ids": [
+        42597933940,
+        42597933956,
+        42597933825,
+        42597933788,
+        42597933872,
+        42597933869,
+        42597933827,
+        42597933779,
+        42597933870
+      ],
+      "all_workflow_conclusions_failure": true,
+      "sample_job_id": 129095052789,
+      "job_steps": [],
+      "raw_test_failure_cause": "UNKNOWN"
+    },
+    "hard_distinctions": [
+      "Rules-source correction in #381/#383 is not a deployed Rules fix until effective provider readback and authorized deployment.",
+      "R943 original static Node 15/15 pass is not native Firebase Rules emulator acceptance.",
+      "#391 regex fix is test-only, not yet enrolled or executed.",
+      "Privacy #257 is denial-only and deliberately never issues C6 consent or render authority.",
+      "Admin broad deploy command is a source capability, not evidence that it ran or overwrote deployed Rules.",
+      "Jobs receipt, Privacy ACK and physical Storage purge evidence are separate."
+    ]
+  }
 }
