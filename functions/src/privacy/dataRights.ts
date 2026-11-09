@@ -4,6 +4,7 @@ import type { CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
 import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
+import { checkedCurrentJobCaller } from '../jobs/currentJobCallerAuthority.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
 
@@ -123,31 +124,45 @@ const getHandler = async (data: unknown, context: CallableContext) => {
   };
 };
 
-const listHandler = async (data: unknown) => {
+const listHandler = async (data: unknown, context: CallableContext) => {
   const parsed = ListSchema.safeParse(data ?? {});
   if (!parsed.success) throw httpsError('invalid-argument', 'Invalid data-rights list request.');
 
-  let query: FirebaseFirestore.Query = getFirestore().collection(DATA_RIGHTS_COLLECTION);
-  if (parsed.data.status) query = query.where('status', '==', parsed.data.status);
-  const snap = await query.orderBy('createdAt', 'desc').limit(parsed.data.limit).get();
+  // R898: a role-only read at callable entry is not account-state authority.
+  // Bind the current server-owned operator record and private list query to
+  // the same Firestore transaction; stale claims and revoked users fail closed.
+  const uid = ownerUid(context);
+  const db = getFirestore();
+  return db.runTransaction(async transaction => {
+    const operatorSnapshot = await transaction.get(db.collection('users').doc(uid));
+    const current = checkedCurrentJobCaller(
+      context.auth, operatorSnapshot.exists ? operatorSnapshot.data() : null
+    );
+    if (!current?.operator) {
+      throw httpsError('permission-denied', 'Current data-rights operator authority is unavailable.');
+    }
 
-  return {
-    requests: snap.docs.map((doc) => {
-      const record = doc.data();
-      return {
-        requestId: doc.id,
-        ownerUid: record.ownerUid,
-        requestType: record.requestType,
-        requestedFormat: record.requestedFormat || null,
-        status: record.status,
-        executionState: record.executionState,
-        createdAt: record.createdAt || null,
-        updatedAt: record.updatedAt || null,
-      };
-    }),
-  };
+    let query: FirebaseFirestore.Query = db.collection(DATA_RIGHTS_COLLECTION);
+    if (parsed.data.status) query = query.where('status', '==', parsed.data.status);
+    const snap = await transaction.get(query.orderBy('createdAt', 'desc').limit(parsed.data.limit));
+
+    return {
+      requests: snap.docs.map((doc) => {
+        const record = doc.data();
+        return {
+          requestId: doc.id,
+          ownerUid: record.ownerUid,
+          requestType: record.requestType,
+          requestedFormat: record.requestedFormat || null,
+          status: record.status,
+          executionState: record.executionState,
+          createdAt: record.createdAt || null,
+          updatedAt: record.updatedAt || null,
+        };
+      }),
+    };
+  });
 };
-
 export const submitDataRightsRequest = withAuthenticatedRole(['user', 'admin', 'operator'], submitHandler);
 export const getDataRightsRequest = withAuthenticatedRole(['user', 'admin', 'operator'], getHandler);
 export const listDataRightsRequests = withAuthenticatedRole(['admin', 'operator'], listHandler);

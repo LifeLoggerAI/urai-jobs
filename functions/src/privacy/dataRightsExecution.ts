@@ -4,6 +4,7 @@ import type { CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
 import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
+import { checkedCurrentJobCaller } from '../jobs/currentJobCallerAuthority.js';
 import { uploadToGcs } from '../core/gcs.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
@@ -227,17 +228,30 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
   };
 }
 
-const handler = async (data: unknown, _context: CallableContext) => {
+const handler = async (data: unknown, context: CallableContext) => {
   const parsed = ExecuteSchema.safeParse(data);
   if (!parsed.success) {
     throw httpsError('invalid-argument', 'Invalid governed data-rights execution request.', parsed.error.flatten());
   }
   const admission = executionAdmission();
+  const operatorUid = context.auth?.uid;
+  if (typeof operatorUid !== 'string' || !operatorUid.trim() || operatorUid !== operatorUid.trim()) {
+    throw httpsError('unauthenticated', 'Authenticated data-rights operator is required.');
+  }
   const db = getFirestore();
   const requestRef = db.collection(DATA_RIGHTS_COLLECTION).doc(parsed.data.requestId);
   const executionRef = requestRef.collection('audit').doc(`execution-${canonicalDigest(parsed.data.idempotencyKey).slice(0, 24)}`);
 
   const request = await db.runTransaction(async (transaction) => {
+    // R898: check live operator authority in the SAME transaction as the
+    // approved request and STARTED audit; a revoked role must not enter it.
+    const operatorSnapshot = await transaction.get(db.collection('users').doc(operatorUid));
+    const current = checkedCurrentJobCaller(
+      context.auth, operatorSnapshot.exists ? operatorSnapshot.data() : null
+    );
+    if (!current?.operator) {
+      throw httpsError('permission-denied', 'Current data-rights operator authority is unavailable.');
+    }
     const [requestSnap, priorExecution] = await Promise.all([
       transaction.get(requestRef),
       transaction.get(executionRef),
@@ -374,6 +388,8 @@ const handler = async (data: unknown, _context: CallableContext) => {
   });
 
   if (request.replay) return { replay: true, receipt: request.replay };
+  // R898 residual HOLD: post-admission async GCS/Jobs operations still need a
+  // durable operator revocation/finalization review; this gate alone is not proof.
   const record = request.record;
   const ownerUid = String(record.ownerUid);
   try {

@@ -51,8 +51,10 @@ check_blob 'functions/src/core/auth.ts' '434ffe34830d9e4db745ac51c18ff1615cf9d53
 check_blob 'functions/src/jobs/createJob.ts' 'c52f09900bb76a1fa71445a7fceb39c177c2c568'
 check_blob 'scripts/r877-owner-scope-guard.test.mjs' '4c4b6a4cbdb28d6d488c07aed4e53fceb80602f6'
 check_blob 'scripts/r878-owner-scope-read-cancel.test.mjs' '1533fca349d9eab317b9c37c4f3f389c7ac896c5'
-check_blob 'package.json' 'a278725d47f44eaabc9a068be178708a0bf24ced'
-check_blob 'functions/src/privacy/dataRightsExecution.ts' '756547684397788d8051acace70ac0e5c03e2e17'
+check_blob 'package.json' 'ad82672f84dabc9124afc76f37675c34b47babe3'
+check_blob 'functions/src/privacy/dataRightsExecution.ts' '7109247526da10725aaba8bef1a4e9c3bba1c86e'
+check_blob 'functions/src/privacy/dataRights.ts' '5f3240db49159ba94fd6aeaae205a3f7c243cc58'
+check_blob 'scripts/r898-data-rights-current-operator-contract.test.mjs' '7592dddcc668b88dfb5b7f128b350bd17e726c60'
 check_blob 'scripts/r888-quota-ledger-deletion-contract.test.mjs' '54ec923386f973ecae75554accf802b4c280d656'
 check_blob 'scripts/r881-admin-callable-parser.test.mjs' 'ba8aa35132c701a50ef47cef142d12c120ebd8bd'
 check_blob 'scripts/r881-owner-scope-callable-behavior.test.mjs' 'bae399805bf2bf7dcf2db23d39345312cf3b3571'
@@ -209,6 +211,10 @@ grep -q '# pass 2' "$OUT/admin_parser_2_source.log" || hold 'R881 original admin
 # R923: preserve original R888 quota-ledger deletion checks from Jobs #369.
 stage quota_deletion_6_source 120s node --test scripts/r888-quota-ledger-deletion-contract.test.mjs
 grep -q '# pass 6' "$OUT/quota_deletion_6_source.log" || hold 'R888 privacy quota-deletion tests missing'
+
+# R898: source-level data-rights current operator admission only; no signed Auth or GCS proof.
+stage data_rights_operator_source 120s node --experimental-strip-types --test scripts/r898-data-rights-current-operator-contract.test.mjs
+grep -q '# fail 0' "$OUT/data_rights_operator_source.log" || hold 'R898 current-operator source tests missing'
 
 stage physical_generation_9_native 1200s npx --yes firebase-tools@15.24.0 \
   --config firebase.json --project "$PROJECT" emulators:exec \
