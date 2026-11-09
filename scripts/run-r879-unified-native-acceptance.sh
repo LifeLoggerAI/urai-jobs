@@ -163,8 +163,8 @@ grep -q '# pass 19' "$OUT/legacy_writer_refusal_19_source.log" || hold 'R887 leg
 check_blob 'functions/src/jobs/lifeMovieLongformOwnerOrg.ts' '36b809a8e599b288480800f4fc3248eb828b5911'
 check_blob 'functions/src/jobs/studioLifeMovieLongformBridge.ts' '888e9645e78d1bd723df883e0a73f042143f1e03'
 check_blob 'scripts/r888-longform-owner-org.test.mjs' '5d33a2cf702fef990201bd6f519ae370d130c074'
-check_blob 'scripts/life-movies-longform-resume-transaction-contract.mjs' 'ef439bbe7a6a697ab04f2ebfc53b7e98d5466dd1'
-check_blob 'scripts/r417-original-donor-longform-resume-transaction-contract.mjs' '19969a9aa34fc19c0ebc520d39f4a368a8402a24'
+check_blob 'scripts/life-movies-longform-resume-transaction-contract.mjs' '75d5e73151a3dd7b4726fe10251ebd63332bd165'
+check_blob 'scripts/r417-original-donor-longform-resume-transaction-contract.mjs' '800834dcfb3db0ff5fdda54ecc83203d7a1a71a3'
 stage studio_longform_org_12_source 120s node --experimental-strip-types --test scripts/r888-longform-owner-org.test.mjs
 grep -q '# pass 12' "$OUT/studio_longform_org_12_source.log" || hold 'R888 organization binding source tests missing'
 
