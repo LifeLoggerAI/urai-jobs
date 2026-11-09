@@ -6,6 +6,31 @@ type ExecutionGuardJob = {
   execution?: { leaseToken?: unknown };
 };
 
+type ExecutionAuthorityJob = ExecutionGuardJob & {
+  jobId?: unknown; type?: unknown; jobType?: unknown; tenantId?: unknown;
+  orgId?: unknown; ownerUid?: unknown; payload?: unknown; consent?: unknown;
+  consents?: unknown; ownerSubsystem?: unknown; sourceSystem?: unknown;
+  sourceProject?: unknown; createdBy?: unknown;
+};
+
+// Lifecycle timestamps and lease heartbeats may change while a worker runs.
+// The account, routing, private input and consent that admitted it may not.
+function authorityValue(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value !== 'object') return `${typeof value}:${typeof value === 'number' ? String(value) : JSON.stringify(value)}`;
+  if (value instanceof Date) return `date:${value.toISOString()}`;
+  if (Array.isArray(value)) return `[${value.map(authorityValue).join(',')}]`;
+  return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${authorityValue((value as Record<string, unknown>)[key])}`).join(',')}}`;
+}
+
+export function executionAuthorityUnchanged(current: ExecutionAuthorityJob, admitted: ExecutionAuthorityJob): boolean {
+  const fields = ['jobId', 'type', 'jobType', 'tenantId', 'orgId', 'ownerUid',
+    'payload', 'consent', 'consents', 'ownerSubsystem', 'sourceSystem',
+    'sourceProject', 'createdBy'] as const;
+  try { return fields.every(field => authorityValue(current[field]) === authorityValue(admitted[field])); }
+  catch { return false; }
+}
+
 type QueueRecoveryRecord = {
   status?: unknown;
   lease?: { leaseToken?: unknown };
@@ -38,7 +63,34 @@ export function decideExecutionStart(job: ExecutionGuardJob, leaseToken: string)
 }
 
 export function canFinalizeExecution(job: ExecutionGuardJob, leaseToken: string): boolean {
-  return job.status === 'RUNNING' && job.execution?.leaseToken === leaseToken;
+  return job.status === 'RUNNING'
+    && job.lease?.leaseToken === leaseToken
+    && job.execution?.leaseToken === leaseToken;
+}
+
+export function canFinalizeQueuedExecution(job: ExecutionGuardJob, queue: QueueRecoveryRecord | null, leaseToken: string): boolean {
+  return canFinalizeExecution(job, leaseToken)
+    && queue?.status === 'RUNNING'
+    && queue.lease?.leaseToken === leaseToken;
+}
+
+type ExecutionAttemptJob = {
+  execution?: { attemptCount?: unknown; maxAttempts?: unknown };
+  attempts?: unknown;
+  maxAttempts?: unknown;
+};
+
+/** Started executions consume the admitted budget; lease/publish recovery does not. */
+export function executionAttemptPolicy(job: ExecutionAttemptJob): { attemptCount: number; maxAttempts: number } | null {
+  const attemptCount = job.execution?.attemptCount !== undefined
+    ? job.execution.attemptCount : job.attempts === undefined ? 0 : job.attempts;
+  const maxAttempts = job.execution?.maxAttempts !== undefined
+    ? job.execution.maxAttempts : job.maxAttempts === undefined ? 3 : job.maxAttempts;
+  if (typeof attemptCount !== 'number' || !Number.isSafeInteger(attemptCount) || attemptCount < 0
+    || typeof maxAttempts !== 'number' || !Number.isSafeInteger(maxAttempts) || maxAttempts < 1) {
+    return null;
+  }
+  return { attemptCount, maxAttempts };
 }
 
 export function canRequeueUnstartedLease(
@@ -51,6 +103,29 @@ export function canRequeueUnstartedLease(
     && job.lease?.leaseToken === leaseToken
     && queueEntry.lease?.leaseToken === leaseToken
     && job.execution?.leaseToken !== leaseToken;
+}
+
+
+/** Resolve a due queue row from the current transaction snapshot, never only
+ * from the earlier indexed query. Reject foreign aliases, missing timestamps
+ * and malformed Firestore data before granting a lease or publishing work. */
+export function isCurrentDueQueueEntry(
+  queue: { jobId?: unknown; status?: unknown; availableAt?: unknown } | null | undefined,
+  expectedJobId: string,
+  nowMs = Date.now(),
+): boolean {
+  if (!queue || typeof expectedJobId !== 'string' || !expectedJobId
+    || queue.jobId !== expectedJobId || queue.status !== 'PENDING'
+    || !Number.isSafeInteger(nowMs)) return false;
+  try {
+    const due = queue.availableAt;
+    const dueMs = due instanceof Date ? due.getTime()
+      : due && typeof due === 'object' && 'toMillis' in due
+        && typeof due.toMillis === 'function' ? due.toMillis() : Number.NaN;
+    return Number.isSafeInteger(dueMs) && dueMs <= nowMs;
+  } catch {
+    return false;
+  }
 }
 
 export function isTerminalJobStatus(status: unknown): boolean {

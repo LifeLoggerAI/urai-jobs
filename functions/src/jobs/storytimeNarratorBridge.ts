@@ -8,7 +8,8 @@ import { z } from 'zod';
 import type { Job, JobConsentContext, JobQueueEntry } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { bindingMatches, buildIdempotencyBindingId, buildRequestFingerprint, type IdempotencyBinding } from '../core/jobsReliability.js';
-import { consentBlockRef } from '../privacy/consentBlocks.js';
+import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { assertPrivateMediaOwnerActive, inspectPrivateMedia, privateMediaDescriptor, streamPrivateMedia } from './privateMediaDelivery.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STORYTIME_JOBS_BRIDGE_TOKEN');
 const IDEMPOTENCY_COLLECTION = 'storytimeNarratorBridgeBindings';
@@ -45,7 +46,11 @@ const JobActionSchema = IdentitySchema.extend({
   jobId: z.string().trim().min(10).max(64).regex(/^[A-Za-z0-9_-]+$/),
 }).strict();
 
-const RequestSchema = z.union([CreateSchema, JobActionSchema]);
+const DeliverSchema = IdentitySchema.extend({ action: z.literal('deliver'), kind: z.literal('audio'),
+  jobId: JobActionSchema.shape.jobId, authorityHash: z.string().regex(/^[a-f0-9]{64}$/),
+  expiresAt: z.number().int().positive(), generation: z.string().regex(/^[1-9][0-9]*$/),
+}).strict();
+const RequestSchema = z.union([CreateSchema, JobActionSchema, DeliverSchema]);
 
 function productionRuntime() {
   return new Set(['staging', 'prod', 'production']).has(String(process.env.URAI_ENV || process.env.NODE_ENV || '').toLowerCase());
@@ -158,15 +163,8 @@ async function createNarratorJob(input: z.infer<typeof CreateSchema>) {
   const db = getFirestore();
   const bindingRef = db.collection(IDEMPOTENCY_COLLECTION)
     .doc(buildIdempotencyBindingId(input.userId, jobType, input.idempotencyKey));
-  const existing = await bindingRef.get();
-  if (existing.exists) {
-    const binding = existing.data() as Partial<IdempotencyBinding>;
-    if (!bindingMatches(binding, expectedBinding) || typeof binding.jobId !== 'string' || !binding.jobId) {
-      throw new Error('idempotency_conflict');
-    }
-    return { jobId: binding.jobId, deduplicated: true };
-  }
-
+  // All idempotent replay decisions must participate in the same
+  // canonical revocation transaction as new queue admission.
   const jobId = ulid();
   const now = FieldValue.serverTimestamp();
   const newJob: BoundJob = {
@@ -186,7 +184,13 @@ async function createNarratorJob(input: z.infer<typeof CreateSchema>) {
   const queue: JobQueueEntry = { jobId, jobType, status: 'PENDING', attemptCount: 0 };
 
   return db.runTransaction(async (transaction) => {
-    const inside = await transaction.get(bindingRef);
+    const [inside, currentConsentBlock] = await Promise.all([
+      transaction.get(bindingRef),
+      transaction.get(consentBlockRef(input.userId, consent.purpose)),
+    ]);
+    if (currentConsentBlock.exists && currentConsentBlock.data()?.active === true) {
+      throw new Error('storytime_voiceover_consent_revoked');
+    }
     if (inside.exists) {
       const binding = inside.data() as Partial<IdempotencyBinding>;
       if (!bindingMatches(binding, expectedBinding) || typeof binding.jobId !== 'string' || !binding.jobId) {
@@ -265,17 +269,42 @@ async function artifactLocation(input: z.infer<typeof JobActionSchema>) {
   return { job, output, location };
 }
 
-async function playback(input: z.infer<typeof JobActionSchema>) {
-  const { output, location } = await artifactLocation(input);
-  const expiresAtMs = Date.now() + 5 * 60 * 1000;
-  const [url] = await getStorage().bucket(location.bucket).file(location.objectPath).getSignedUrl({
-    action: 'read',
-    expires: expiresAtMs,
-    responseDisposition: 'inline',
-    responseType: typeof output.mimeType === 'string' ? output.mimeType : 'audio/mpeg',
+async function narratorPlaybackAuthority(input: z.infer<typeof JobActionSchema> | z.infer<typeof DeliverSchema>, expectedFingerprint?: string) {
+  return getFirestore().runTransaction(async transaction => {
+    const snapshot = await transaction.get(jobDoc(input.jobId));
+    if (!snapshot.exists) throw new Error('job_not_found');
+    const job = assertBoundJob(snapshot.data() as BoundJob, input as z.infer<typeof JobActionSchema>);
+    const access = job as BoundJob & { derivativeAccessState?: string; outputDeletionState?: string };
+    if (job.jobId !== input.jobId || job.status !== 'SUCCESS'
+      || ['REVOKED', 'DELETED'].includes(String(access.derivativeAccessState))
+      || ['PENDING', 'COMPLETE'].includes(String(access.outputDeletionState))) throw new Error('job_not_ready_for_playback');
+    if (!isConsentContext(job.consent) || job.consent.purpose !== 'storytime.voiceover') throw new Error('storytime_voiceover_consent_missing');
+    const blocked = await transaction.get(consentBlockRef(input.userId, job.consent.purpose));
+    if (blocked.data()?.active === true) throw new Error('storytime_voiceover_consent_revoked');
+    await assertPrivateMediaOwnerActive(transaction, getFirestore(), input.userId);
+    const output = job.output && typeof job.output === 'object' ? job.output as Record<string, unknown> : {};
+    const location = parseArtifactPath(output.artifactPath);
+    const allowedBucket = String(process.env.GCS_BUCKET_NAME || '').trim();
+    const prefix = `storytime/${input.userId}/${input.sessionId}/${input.narratorScriptId}/`;
+    if (!allowedBucket || location.bucket !== allowedBucket || !location.objectPath.startsWith(prefix)
+      || location.objectPath.includes('\\')) throw new Error('narrator_artifact_boundary_mismatch');
+    const fingerprint = buildRequestFingerprint('narrator.tts', { jobId: job.jobId, ownerUid: job.ownerUid,
+      sourceSystem: job.sourceSystem, sourceSessionId: job.sourceSessionId, sourceNarratorScriptId: job.sourceNarratorScriptId,
+      payload: job.payload, consent: job.consent, output });
+    if (expectedFingerprint && expectedFingerprint !== fingerprint) throw new Error('private_media_delivery_changed');
+    return { job, output, location, fingerprint };
   });
+}
+
+async function playback(input: z.infer<typeof JobActionSchema>) {
+  const authority = await narratorPlaybackAuthority(input);
+  const { output, location } = authority;
+  const expiresAtMs = Date.now() + 5 * 60 * 1000;
+  const metadata = await inspectPrivateMedia(location);
+  await narratorPlaybackAuthority(input, authority.fingerprint);
   return {
-    url,
+    delivery: { ...privateMediaDescriptor('audio', authority.fingerprint, expiresAtMs, metadata.generation),
+      jobId: input.jobId, sessionId: input.sessionId, narratorScriptId: input.narratorScriptId },
     expiresAt: new Date(expiresAtMs).toISOString(),
     mimeType: typeof output.mimeType === 'string' ? output.mimeType : 'audio/mpeg',
     provider: typeof output.provider === 'string' ? output.provider : undefined,
@@ -284,16 +313,78 @@ async function playback(input: z.infer<typeof JobActionSchema>) {
   };
 }
 
+async function deliverNarrator(input: z.infer<typeof DeliverSchema>, request: any, response: any) {
+  const authority = await narratorPlaybackAuthority(input, input.authorityHash);
+  await streamPrivateMedia({ descriptor: { authorityHash: input.authorityHash, expiresAt: input.expiresAt, generation: input.generation }, location: authority.location,
+    mimeType: typeof authority.output.mimeType === 'string' ? authority.output.mimeType : 'audio/mpeg',
+    disposition: 'inline', revalidate: async () => {
+      if (!authorized(request.get('authorization') || '')) throw new Error('unauthorized');
+      const current = await narratorPlaybackAuthority(input, input.authorityHash);
+      if (!authorized(request.get('authorization') || '')) throw new Error('unauthorized');
+      return current;
+    }, request, response });
+}
+
 async function deleteOutput(input: z.infer<typeof JobActionSchema>) {
-  const { location } = await artifactLocation(input);
-  await getStorage().bucket(location.bucket).file(location.objectPath).delete({ ignoreNotFound: true });
-  const now = FieldValue.serverTimestamp();
-  await jobDoc(input.jobId).update({
-    output: FieldValue.delete(),
-    result: FieldValue.delete(),
-    outputDeletedAt: now,
-    outputDeletedBy: input.userId,
-    updatedAt: now,
+  const db = getFirestore();
+  const ref = jobDoc(input.jobId);
+  // Revoke playback before a cross-service Storage deletion. A failed GCS
+  // request leaves a durable PENDING fence that cannot stream private audio.
+  const fenced = await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new Error('job_not_found');
+    const job = assertBoundJob(snapshot.data() as BoundJob, input);
+    if (!['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].includes(String(job.status))) {
+      throw new Error('job_not_ready_for_output_deletion');
+    }
+    const output = job.output && typeof job.output === 'object' && !Array.isArray(job.output)
+      ? job.output as Record<string, unknown> : undefined;
+    const deletedBefore = !!(job as BoundJob & { outputDeletedAt?: unknown }).outputDeletedAt
+      || (job as BoundJob & { outputDeletionState?: string }).outputDeletionState === 'COMPLETE';
+    if (!output && deletedBefore) return { alreadyDeleted: true, artifactPath: null as string | null, location: null };
+    if ((output && !output.artifactPath) || (!output && job.status === 'SUCCESS')) {
+      throw new Error('narrator_artifact_missing');
+    }
+    const location = output ? parseArtifactPath(output.artifactPath) : null;
+    if (location) {
+      const bucket = String(process.env.GCS_BUCKET_NAME || '').trim();
+      const requiredPrefix = `storytime/${input.userId}/${input.sessionId}/${input.narratorScriptId}/`;
+      if (!bucket || location.bucket !== bucket || !location.objectPath.startsWith(requiredPrefix)
+        || location.objectPath.includes('\\')) throw new Error('narrator_artifact_boundary_mismatch');
+    }
+    transaction.update(ref, {
+      derivativeAccessState: 'REVOKED',
+      outputDeletionState: 'PENDING',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { alreadyDeleted: false, artifactPath: output ? String(output.artifactPath) : null, location };
+  });
+  if (fenced.alreadyDeleted) return { deleted: true, alreadyDeleted: true };
+  if (fenced.location) {
+    await getStorage().bucket(fenced.location.bucket).file(fenced.location.objectPath)
+      .delete({ ignoreNotFound: true });
+  }
+  // Job output must still match the exact artifact we removed; otherwise fail
+  // closed and retain PENDING for a retry instead of falsely certifying deletion.
+  await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new Error('job_not_found');
+    const job = assertBoundJob(snapshot.data() as BoundJob, input);
+    const output = job.output && typeof job.output === 'object' && !Array.isArray(job.output)
+      ? job.output as Record<string, unknown> : undefined;
+    if (!['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].includes(String(job.status))
+      || (output ? output.artifactPath : null) !== fenced.artifactPath) {
+      throw new Error('narrator_output_changed_during_deletion');
+    }
+    transaction.update(ref, {
+      output: FieldValue.delete(),
+      result: FieldValue.delete(),
+      outputDeletedAt: FieldValue.serverTimestamp(),
+      outputDeletedBy: input.userId,
+      outputDeletionState: 'COMPLETE',
+      derivativeAccessState: 'REVOKED',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
   });
   return { deleted: true };
 }
@@ -324,6 +415,9 @@ export const storytimeNarratorBridge = onRequest({
   }
 
   try {
+    if (parsed.data.action === 'deliver') {
+      await deliverNarrator(parsed.data, req, res); return;
+    }
     if (parsed.data.action === 'create') {
       const result = await createNarratorJob(parsed.data);
       res.status(result.deduplicated ? 200 : 202).json({ ok: true, status: 'queued', ...result });
@@ -345,7 +439,9 @@ export const storytimeNarratorBridge = onRequest({
     }
     res.status(200).json({ ok: true, deletion: await deleteOutput(parsed.data) });
   } catch (error) {
-    const code = error instanceof Error ? error.message : 'storytime_narrator_bridge_failed';
+    if (res.headersSent || res.destroyed) return;
+    const rawCode = error instanceof Error ? error.message : '';
+    const code = /^[a-z0-9_]{1,120}$/.test(rawCode) ? rawCode : 'private_media_delivery_unavailable';
     const status = code === 'job_not_found' ? 404
       : code === 'storytime_narrator_boundary_mismatch' ? 403
       : code === 'storytime_voiceover_consent_revoked' ? 409
@@ -353,6 +449,8 @@ export const storytimeNarratorBridge = onRequest({
       : code === 'job_not_ready_for_playback' ? 409
       : code === 'narrator_artifact_boundary_mismatch' ? 403
       : code === 'narrator_artifact_missing' ? 409
+      : code === 'job_not_ready_for_output_deletion' ? 409
+      : code === 'narrator_output_changed_during_deletion' ? 409
       : code === 'elevenlabs_voice_id_required' ? 400
       : 400;
     res.status(status).json({ ok: false, error: code });

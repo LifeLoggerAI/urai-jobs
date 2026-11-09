@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const express = require('express');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const admin = require('firebase-admin');
+const { requireDispatchAuthority, requireCallbackLease, requiredConsentPurposes } = require('./lifecycle-authority');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -110,9 +111,9 @@ async function authorizeSources(job) {
   const token=String(process.env.PRIVATE_SOURCE_AUTHORITY_TOKEN||'');
   const handles=[];
   for(const sourceReceiptRef of job.payload.sourceReceiptRefs){
-    const response=await fetch(`${authorityUrl}/authorize`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${token}`},body:JSON.stringify({sourceReceiptRef,ownerUid:job.ownerUid,requestedPurpose:'reconstruct-place',requestReceipt:job.jobId})});
+    const response=await fetch(`${authorityUrl}/authorize`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${token}`},body:JSON.stringify({schemaVersion:'urai-private-source-receipt-v2',sourceReceiptRef,ownerUid:job.ownerUid,jobId:job.jobId,leaseToken:job.leaseToken,requestedPurpose:'reconstruct-place',requestReceipt:job.jobId,idempotencyKey:job.jobId})});
     const data=await response.json().catch(()=>({}));
-    if(response.status!==200||data.authorized!==true||!PRIVATE_HANDLE.test(String(data.sourceHandle||''))) throw new Error('private source authorization denied or invalid');
+    if(response.status!==200||data.authorized!==true||data.schemaVersion!=='urai-private-source-receipt-v2'||data.ownerUid!==job.ownerUid||data.jobId!==job.jobId||data.sourceReceiptRef!==sourceReceiptRef||data.requestedPurpose!=='reconstruct-place'||data.idempotencyKey!==job.jobId||!PRIVATE_HANDLE.test(String(data.sourceHandle||''))) throw new Error('private source authorization denied or invalid');
     handles.push(String(data.sourceHandle));
   }
   return handles;
@@ -133,9 +134,15 @@ function publicBaseUrl(req){
 function consentBlockId(ownerUid,purpose){
   return crypto.createHash('sha256').update(String(ownerUid)+'\n'+String(purpose)).digest('hex');
 }
-function requiredConsentPurposes(job){
-  const values=Array.isArray(job?.consents)?job.consents.map(x=>String(x?.purpose||'')):[];
-  return [...new Set(values.filter(Boolean))];
+async function requireCurrentDispatchAuthority(tx,jobRef,attempt){
+  const snap=await tx.get(jobRef);
+  const current=snap.exists?snap.data():null;
+  const purposes=requireDispatchAuthority(current,attempt);
+  for(const purpose of purposes){
+    const block=await tx.get(db.collection('jobConsentBlocks').doc(consentBlockId(current.ownerUid,purpose)));
+    if(block.exists&&block.data()?.active===true) throw new Error('captured reality consent revoked before dispatch');
+  }
+  return current;
 }
 function validArtifact(x){
   return x && PRIVATE_HANDLE.test(String(x.ref||'')) && SHA256.test(String(x.sha256||'')) && Number.isSafeInteger(x.byteSize) && x.byteSize>0;
@@ -160,9 +167,7 @@ app.post('/execute-job',requireWorkerAuth,executeRateLimit,async(req,res)=>{
   const deadline=admin.firestore.Timestamp.fromMillis(Date.now()+callbackTimeoutMs);
   let callbackAuthorityRegistered=false;
   try{
-    const initial=await jobRef.get();
-    const current=initial.exists?initial.data():null;
-    if(!current||current.status!=='RUNNING'||current.execution?.leaseToken!==job.leaseToken) throw new Error('stale job or lease');
+    await db.runTransaction(tx=>requireCurrentDispatchAuthority(tx,jobRef,job));
 
     // Source authorization happens before callback authority exists. A denial is
     // therefore a definitive dispatch failure and can safely terminalize upstream.
@@ -171,8 +176,7 @@ app.post('/execute-job',requireWorkerAuth,executeRateLimit,async(req,res)=>{
     const callbackUrl=`${publicBaseUrl(req)}/engine-callback?callbackToken=${encodeURIComponent(callbackToken)}`;
 
     await db.runTransaction(async tx=>{
-      const snap=await tx.get(jobRef); const active=snap.exists?snap.data():null;
-      if(!active||active.status!=='RUNNING'||active.execution?.leaseToken!==job.leaseToken) throw new Error('stale job or lease');
+      await requireCurrentDispatchAuthority(tx,jobRef,job);
       tx.update(jobRef,{'progress.percent':15,'progress.stage':'CAPTURED_REALITY_DISPATCH','execution.asyncCallbackPending':true,'execution.callbackTokenHash':callbackTokenHash,'execution.callbackLeaseToken':job.leaseToken,'execution.callbackDeadlineAt':deadline,'lease.heartbeatAt':admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()});
       tx.set(queueRef,{jobId:job.jobId,status:'RUNNING','lease.heartbeatAt':admin.firestore.FieldValue.serverTimestamp(),updatedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
     });
@@ -218,6 +222,7 @@ app.post('/engine-callback',callbackRateLimit,async(req,res)=>{
       const presented=crypto.createHash('sha256').update(token).digest('hex');
       if(!expected||!timingSafeString(presented,expected)) throw new Error('callback token rejected');
       if(job.status!=='RUNNING'||job.execution?.asyncCallbackPending!==true) throw new Error('callback not active');
+      requireCallbackLease(job);
       const deadline=job.execution?.callbackDeadlineAt?.toMillis?.()||0; if(deadline<=Date.now()) throw new Error('callback expired');
 
       const requiredPurposes=requiredConsentPurposes(job);
@@ -244,7 +249,7 @@ app.post('/engine-callback',callbackRateLimit,async(req,res)=>{
           trainingReceiptRef:String(result.trainingReceiptRef),
           sourceVsReconstructionReceiptRef:String(result.sourceVsReconstructionReceiptRef),
         };
-        tx.update(jobRef,{status:'SUCCESS',result:boundedResult,output:boundedResult,error:admin.firestore.FieldValue.delete(),lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
+        tx.update(jobRef,{status:'SUCCESS',result:boundedResult,output:boundedResult,error:admin.firestore.FieldValue.delete(),lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.capturedRealityAcceptedCallbackHash':expected,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
       }else{
         tx.update(jobRef,{status:'FAILED',error:{message:'Captured Reality reconstruction engine reported failure.'},lease:admin.firestore.FieldValue.delete(),updatedAt:now,completedAt:now,'execution.asyncCallbackPending':false,'execution.callbackTokenHash':admin.firestore.FieldValue.delete(),'execution.callbackLeaseToken':admin.firestore.FieldValue.delete(),'execution.callbackDeadlineAt':admin.firestore.FieldValue.delete()});
       }

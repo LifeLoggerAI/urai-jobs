@@ -17,6 +17,7 @@ assert.equal(fixture.status, 0, fixture.stderr);
 const baseJob = {
   jobId: 'job-fixture-1', tenantId: 'tenant-fixture-1', ownerUid: 'owner-fixture-1',
   type: 'studio.render.video', leaseToken: 'fixture-lease',
+  consent: { purpose: 'life-movie.render', policyVersion: 'fixture-v1', decisionReceiptId: 'fixture-receipt' },
   payload: {
     schemaVersion: 'urai-life-movie-render-v1', projectId: 'project-fixture-1', renderPlanDigest: 'a'.repeat(64),
     sceneTruthReceiptRef: `str_fixturefixture1234_zzzzzzzz_${'A'.repeat(40)}`,
@@ -35,18 +36,19 @@ function harness(options = {}) {
   const job = structuredClone(baseJob);
   if (options.longRender) job.payload.timeline[0].endMs = 30000;
   const current = { ...structuredClone(job), status: 'RUNNING', execution: { leaseToken: job.leaseToken } };
-  const state = { current, reads: 0, downloads: 0, uploads: [], deleted: [], objects: new Map(), children: new Set(), consentRevoked: false };
+  const state = { current, reads: 0, downloads: 0, uploads: [], deleted: [], objects: new Map(), metadata: new Map(), children: new Set(), consentRevoked: false };
   const app = { use() {}, get() {}, post() {}, listen() {} };
   const express = Object.assign(() => app, { json: () => () => {} });
   const admin = {
     initializeApp() {},
-    firestore: () => ({ collection: (collection) => ({ doc: () => ({ get: async () => {
+    firestore: () => ({ runTransaction: callback => callback({ get: ref => ref.get() }),
+      collection: (collection) => ({ doc: () => ({ get: async () => {
       state.reads++;
       if (options.authorityError) throw new Error('private backend diagnostic must not escape');
       if (options.hungAuthority) return new Promise(() => {});
       return collection === 'jobs'
         ? { exists: true, data: () => state.current }
-        : { exists: state.consentRevoked, data: () => ({ active: state.consentRevoked }) };
+        : { exists: collection === 'jobConsentBlocks' && state.consentRevoked, data: () => ({ active: state.consentRevoked }) };
     } }) }) }),
     storage: () => ({ bucket: () => ({ file: (name) => ({
       createReadStream() {
@@ -58,6 +60,8 @@ function harness(options = {}) {
         return fs.createReadStream(source);
       },
       createWriteStream(metadata) {
+        const uploadFile = this;
+        assert.equal(metadata.preconditionOpts.ifGenerationMatch, 0);
         state.uploads.push({ name, metadata });
         const chunks = [];
         return new Writable({
@@ -69,13 +73,21 @@ function harness(options = {}) {
           final(callback) {
             if (options.failUpload && state.uploads.length === 2) return callback(new Error('fixture_upload_failed'));
             state.objects.set(name, Buffer.concat(chunks));
+            state.metadata.set(name, { generation: String(state.uploads.length + 100), ...metadata.metadata });
+            uploadFile.metadata = state.metadata.get(name);
+            this.emit('response', { statusCode: 200 });
             if (options.cancelUpload) state.current.status = 'CANCELLED';
             callback();
           },
         });
       },
-      async delete() {
+      async getMetadata() {
+        if (!state.metadata.has(name)) throw Object.assign(new Error('fixture_missing_object'), { code: 404 });
+        return [state.metadata.get(name)];
+      },
+      async delete(deleteConfig) {
         if (options.failCleanup) throw new Error('fixture_delete_failed');
+        assert.equal(deleteConfig.ifGenerationMatch, state.metadata.get(name).generation);
         state.deleted.push(name); state.objects.delete(name);
       },
     }) }) }),
@@ -123,7 +135,7 @@ try {
   await rejected({ authorityError: true }, /render_authority_unavailable/);
   await rejected({ hungAuthority: true, timeout: '75' }, /render_deadline_exceeded/);
   await rejected({}, /render_consent_revoked/, ({ state, job }) => {
-    state.current.consent = { purpose: 'private-media' }; state.consentRevoked = true;
+    state.consentRevoked = true;
   });
   await rejected({ cancelDownload: true }, /render_lease_revoked/);
   await rejected({ longRender: true, cancelRender: true }, /render_lease_revoked/);
@@ -131,7 +143,7 @@ try {
   const cancelled = await rejected({ cancelUpload: true }, /render_lease_revoked/);
   assert.equal(cancelled.state.deleted.length, 1);
   const failed = await rejected({ failUpload: true }, /fixture_upload_failed/);
-  assert.equal(failed.state.deleted.length, 2);
+  assert.equal(failed.state.deleted.length, 1, 'cleanup removes only the successfully created first generation');
   await rejected({ cancelUpload: true, failCleanup: true }, /render_cleanup_incomplete/);
 
   const successes = [];

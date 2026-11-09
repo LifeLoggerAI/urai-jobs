@@ -1,0 +1,12 @@
+{
+  "name": "@urai/generic-world-factory-offline",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check cli.mjs && node --check factory.mjs"
+  },
+  "description": "Offline generic-world job preparation and quarantine. No provider execution or runtime deployment."
+}

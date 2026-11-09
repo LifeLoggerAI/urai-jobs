@@ -1,0 +1,38 @@
+{
+  "changelogUrl": "https://docs.meshy.ai/en/api/changelog",
+  "credentialsAvailable": false,
+  "creditsSpent": 0,
+  "elapsedComputeEstimate": null,
+  "estimateScope": "One text preview and one texture refine per distinct modular kit through existing adapter. Optional extra operations, retries, second-provider bakeoff, post-processing and scene assembly are excluded.",
+  "historyRule": "Separate dated estimate. Immutable packet pricing UNKNOWN remains unchanged. Reconfirm API cost and account balance before submission.",
+  "inputsVerified": {
+    "existingAdapterPreviewGeometryResolution": "4k",
+    "specCount": 136,
+    "targetTextureResolutions": {
+      "4k": 136
+    }
+  },
+  "jobPreparationStatus": "READY_FOR_PROVIDER",
+  "mode": "text-to-3d preview plus refine",
+  "model": "meshy-7.1",
+  "observedAt": "2026-10-07T00:44:30.596855+00:00",
+  "paidExecutionStatus": "BLOCKED",
+  "preparedManifestSha256": "4f7c3c8108d4097df1b7c5520650a6d7de9aa873f1b5af400987764d0242ae68",
+  "preparedPackage": "gwq-07728fb3b8542d2e59f0f321c78c93deaa0ce4e892d62e73c2653c8f2963da88",
+  "providerAdapter": "meshy",
+  "providerBalanceVerified": false,
+  "providerCalls": 0,
+  "reason": "Credential and bounded paid authority required before execution; no purchase/subscription permitted.",
+  "schemaVersion": "urai-offline-provider-estimate-v1",
+  "singleAttemptEstimate": {
+    "basePreviewCredits": 20,
+    "creditsPerModularKit": 35,
+    "geometryResolution4kAdditionalCredits": 5,
+    "refineTexture4kCredits": 10,
+    "totalCredits": 4760,
+    "uniqueModularKits": 136
+  },
+  "sourceUrl": "https://docs.meshy.ai/en/api/pricing",
+  "spendAuthorized": false,
+  "usdEstimate": null
+}

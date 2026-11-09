@@ -1,11 +1,12 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ES2022",
-    "moduleResolution": "Bundler",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "outDir": "lib",
-    "rootDir": ".",
+    "rootDir": "..",
     "strict": true,
+    "noEmitOnError": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -13,7 +14,8 @@
     "declaration": true
   },
   "include": [
-    "./**/*.ts"
+    "./**/*.ts",
+    "../shared/**/*.ts"
   ],
   "exclude": [
     "lib",

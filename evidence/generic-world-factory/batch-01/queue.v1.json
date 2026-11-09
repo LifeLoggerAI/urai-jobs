@@ -1,0 +1,321 @@
+{
+  "schemaVersion": "urai-generic-world-factory-queue-v1",
+  "authority": {
+    "studioIssue": 153,
+    "jobsIssue": 152,
+    "studioSpecCommit": "38a07269009fc5a8b34946ecc0fa2a9566c4727a",
+    "assetFactoryMainObserved": "080a457d1b61250ec163b3eb80c3aaf2e82fdb51",
+    "assetFactoryLock": "IMMUTABLE; no schema/build mutation without governance override",
+    "spatialMutationAllowed": false
+  },
+  "stages": [
+    "SPEC_VALIDATE",
+    "SOURCE_PROVENANCE",
+    "GEOMETRY_BUILD",
+    "MATERIALS_LIGHTING",
+    "OPTIMIZE_LOD",
+    "COLLISION_NAV",
+    "BUDGET_VALIDATE",
+    "VISUAL_QA",
+    "PACKAGE_HASH_RECEIPT"
+  ],
+  "jobs": [
+    {
+      "queueIndex": 1,
+      "sceneId": "gw-etx-living-room-1960s-1970s-v1",
+      "truthClass": "GENERIC",
+      "status": "READY_FOR_PROVIDER",
+      "paidExecutionAuthorized": false,
+      "blockingReason": "No current explicit paid generation authority established for this generic-world batch. Prepare/validate only.",
+      "requiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "promotionAuthority": false
+    },
+    {
+      "queueIndex": 2,
+      "sceneId": "gw-etx-kitchen-dining-1970s-1980s-v1",
+      "truthClass": "GENERIC",
+      "status": "READY_FOR_PROVIDER",
+      "paidExecutionAuthorized": false,
+      "blockingReason": "No current explicit paid generation authority established for this generic-world batch. Prepare/validate only.",
+      "requiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "promotionAuthority": false
+    },
+    {
+      "queueIndex": 3,
+      "sceneId": "gw-etx-small-town-street-v1",
+      "truthClass": "GENERIC",
+      "status": "READY_FOR_PROVIDER",
+      "paidExecutionAuthorized": false,
+      "blockingReason": "No current explicit paid generation authority established for this generic-world batch. Prepare/validate only.",
+      "requiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "promotionAuthority": false
+    },
+    {
+      "queueIndex": 4,
+      "sceneId": "gw-school-classroom-hall-v1",
+      "truthClass": "GENERIC",
+      "status": "READY_FOR_PROVIDER",
+      "paidExecutionAuthorized": false,
+      "blockingReason": "No current explicit paid generation authority established for this generic-world batch. Prepare/validate only.",
+      "requiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "promotionAuthority": false
+    },
+    {
+      "queueIndex": 5,
+      "sceneId": "gw-church-sanctuary-fellowship-v1",
+      "truthClass": "GENERIC",
+      "status": "READY_FOR_PROVIDER",
+      "paidExecutionAuthorized": false,
+      "blockingReason": "No current explicit paid generation authority established for this generic-world batch. Prepare/validate only.",
+      "requiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "promotionAuthority": false
+    },
+    {
+      "queueIndex": 6,
+      "sceneId": "gw-hospital-room-corridor-v1",
+      "truthClass": "GENERIC",
+      "status": "READY_FOR_PROVIDER",
+      "paidExecutionAuthorized": false,
+      "blockingReason": "No current explicit paid generation authority established for this generic-world batch. Prepare/validate only.",
+      "requiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "promotionAuthority": false
+    },
+    {
+      "queueIndex": 7,
+      "sceneId": "gw-college-dorm-campus-v1",
+      "truthClass": "GENERIC",
+      "status": "READY_FOR_PROVIDER",
+      "paidExecutionAuthorized": false,
+      "blockingReason": "No current explicit paid generation authority established for this generic-world batch. Prepare/validate only.",
+      "requiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "promotionAuthority": false
+    },
+    {
+      "queueIndex": 8,
+      "sceneId": "gw-military-admin-ops-v1",
+      "truthClass": "GENERIC",
+      "status": "READY_FOR_PROVIDER",
+      "paidExecutionAuthorized": false,
+      "blockingReason": "No current explicit paid generation authority established for this generic-world batch. Prepare/validate only.",
+      "requiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "promotionAuthority": false
+    },
+    {
+      "queueIndex": 9,
+      "sceneId": "gw-lake-dock-shoreline-v1",
+      "truthClass": "GENERIC",
+      "status": "READY_FOR_PROVIDER",
+      "paidExecutionAuthorized": false,
+      "blockingReason": "No current explicit paid generation authority established for this generic-world batch. Prepare/validate only.",
+      "requiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "promotionAuthority": false
+    },
+    {
+      "queueIndex": 10,
+      "sceneId": "gw-backyard-workshop-v1",
+      "truthClass": "GENERIC",
+      "status": "READY_FOR_PROVIDER",
+      "paidExecutionAuthorized": false,
+      "blockingReason": "No current explicit paid generation authority established for this generic-world batch. Prepare/validate only.",
+      "requiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "promotionAuthority": false
+    },
+    {
+      "queueIndex": 11,
+      "sceneId": "gw-diner-cafe-v1",
+      "truthClass": "GENERIC",
+      "status": "READY_FOR_PROVIDER",
+      "paidExecutionAuthorized": false,
+      "blockingReason": "No current explicit paid generation authority established for this generic-world batch. Prepare/validate only.",
+      "requiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "promotionAuthority": false
+    },
+    {
+      "queueIndex": 12,
+      "sceneId": "gw-motel-walkway-v1",
+      "truthClass": "GENERIC",
+      "status": "READY_FOR_PROVIDER",
+      "paidExecutionAuthorized": false,
+      "blockingReason": "No current explicit paid generation authority established for this generic-world batch. Prepare/validate only.",
+      "requiredOutputs": [
+        "scene.glb",
+        "lod0.glb",
+        "lod1.glb",
+        "lod2.glb",
+        "collision.glb",
+        "nav.json",
+        "materials-manifest.json",
+        "provenance.json",
+        "qa.json",
+        "receipt.json",
+        "previews"
+      ],
+      "promotionAuthority": false
+    }
+  ],
+  "qa": {
+    "machineChecks": [
+      "glb-structural-valid",
+      "mesh-present",
+      "required-extensions-supported",
+      "scale-metric",
+      "origin-grounded",
+      "bounds-finite",
+      "materials-bound",
+      "textures-present",
+      "triangle-budget",
+      "texture-memory-budget",
+      "lod-order",
+      "collision-present",
+      "nav-present",
+      "duplicate-hash-check",
+      "dependency-resolution"
+    ],
+    "visualChecks": [
+      "wide",
+      "eye-height",
+      "doorway-navigation",
+      "material-detail",
+      "mobile-budget",
+      "xr-relevant"
+    ],
+    "machinePassDoesNotEqualVisualAcceptance": true
+  },
+  "receipt": {
+    "hashAlgorithm": "SHA-256",
+    "versionedSuccessorsOnly": true,
+    "overwriteHistory": false
+  }
+}

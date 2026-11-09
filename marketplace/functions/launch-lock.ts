@@ -1,4 +1,4 @@
-import type { MarketplaceEnv } from './env';
+import type { MarketplaceEnv } from './env.js';
 
 export const assertMarketplaceLaunchState = (
   env: MarketplaceEnv,

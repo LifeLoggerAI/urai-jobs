@@ -1,0 +1,88 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:sidewalk-concrete-one-meter:v1",
+    "sourceKitSha256": "1205b1c38e22389ed6c9a0f926abede7919175130ce119c13d8921edf2964964",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 1,
+        "id": "gw-backyard-garage-workshop",
+        "specSha256": "e1447787a6305e9f5351fd893026a7fb6954dedefcc59742e7d23b619fdae34d",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-beach-boardwalk",
+        "specSha256": "c427c724409d1346c7bd521cb6a26e260824e2ab2ae8de152a0f843475a77e48",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-cemetery",
+        "specSha256": "411ac6db194fce1f7476d53ef9bfa27ffe33e1d057b82c1394988e320912705c",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 1,
+        "id": "gw-east-texas-residential-street",
+        "specSha256": "19b70ac77b1c62b6bc5efbcf0f775a465796174e6e9856f08d7576ba23591815",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-forest-trail",
+        "specSha256": "631cf458f8e06f074f29d46e1fd19a0144f2ac9c1b0bbe9ae7edc1d6c46ec4b0",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-gas-station",
+        "specSha256": "fdac334d879acdf17fd7c541ac77e1c14dbe9a3e24e9debfd978b4a3e31e3a16",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 1,
+        "id": "gw-lake-dock-shoreline",
+        "specSha256": "436f75fa4b110036b0e82708d8a6e79bf019c0c3de6280b5f8e50fedebd481ce",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-park-playground",
+        "specSha256": "e3708cd946acc6f4cdbfd14f9435d49f679c19224265d79f8ef7fb97b3843a40",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-rural-road",
+        "specSha256": "23c7e89379a543794b73a82faca52756b9380b3da5088d56b6ce45b6a4849297",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 302363075
+  },
+  "id": "kit-sidewalk-concrete-one-meter-v1-1205b1c38e22389e",
+  "prompt": "Original generic modular walkway; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. One-meter modular level sidewalk segment with expansion joint; configurable restrained wear Target bounding dimensions 1.8m wide x 0.08m high x 1m deep. Materials: concrete-weathered. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 1.8,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

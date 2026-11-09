@@ -8,11 +8,13 @@ on:
       - "web/src/App.tsx"
       - "web/src/pages/LandingPage.tsx"
       - "workers/career-worker/**"
+      - "marketplace/**"
       - "scripts/career-surfaces-verify.mjs"
       - "scripts/career-runtime-smoke.mjs"
       - "scripts/activation-readiness-verify.mjs"
       - "package.json"
       - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/career-surfaces-ci.yml"
   push:
     branches:
@@ -23,11 +25,13 @@ on:
       - "web/src/App.tsx"
       - "web/src/pages/LandingPage.tsx"
       - "workers/career-worker/**"
+      - "marketplace/**"
       - "scripts/career-surfaces-verify.mjs"
       - "scripts/career-runtime-smoke.mjs"
       - "scripts/activation-readiness-verify.mjs"
       - "package.json"
       - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/career-surfaces-ci.yml"
 
 permissions:
@@ -112,3 +116,12 @@ jobs:
 
       - name: Build career worker
         run: pnpm career-worker:build
+
+      - name: Typecheck marketplace functions
+        run: pnpm marketplace:typecheck
+
+      - name: Build marketplace functions
+        run: pnpm marketplace:build
+
+      - name: Verify persisted marketplace lifecycle
+        run: pnpm marketplace:test

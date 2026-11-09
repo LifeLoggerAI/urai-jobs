@@ -1,0 +1,4367 @@
+{
+  "independentlyApproved": false,
+  "inputSetSha256": "07728fb3b8542d2e59f0f321c78c93deaa0ce4e892d62e73c2653c8f2963da88",
+  "jobs": [
+    {
+      "id": "gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33",
+      "kitId": "kit:baseboard-painted-neutral:v1",
+      "path": "jobs/gwjob-667cdf10480307e666b4034cc3a1fee16464cbf7b093ecadce8e2cff17868c33.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30",
+      "kitId": "kit:door-interior-accessible-neutral:v1",
+      "path": "jobs/gwjob-7387ec07d6fe31e58254be025f5fe401d14b68c474e747da2e313414a71bbb30.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-583b9a5d141af85c3ba845457d31ad5002b5e7dafed4019d93b15c8e963532b0",
+      "kitId": "kit:gw-airport-concourse-counter:v1",
+      "path": "jobs/gwjob-583b9a5d141af85c3ba845457d31ad5002b5e7dafed4019d93b15c8e963532b0.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-3fb72e3368d9f2e63502e60e8a72de7f017ebd7c249fe37c47625b5aee114a3d",
+      "kitId": "kit:gw-airport-concourse-seats-left:v1",
+      "path": "jobs/gwjob-3fb72e3368d9f2e63502e60e8a72de7f017ebd7c249fe37c47625b5aee114a3d.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-01e3d5b03406cb5d6535391b20af6767a8938cab0c120ba9f00a9f409d6bb659",
+      "kitId": "kit:gw-airport-concourse-seats-right:v1",
+      "path": "jobs/gwjob-01e3d5b03406cb5d6535391b20af6767a8938cab0c120ba9f00a9f409d6bb659.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-a20deb8f4128f4df74c82ba19f9e140a1fc24665ccb42b8d6d1aa9b4f008aebb",
+      "kitId": "kit:gw-airport-concourse-shell:v1",
+      "path": "jobs/gwjob-a20deb8f4128f4df74c82ba19f9e140a1fc24665ccb42b8d6d1aa9b4f008aebb.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-e976ef1e5b4b83b93859143e51e51b129e869f9493cc0817cf14c2a922050f75",
+      "kitId": "kit:gw-apartment-living-shell:v1",
+      "path": "jobs/gwjob-e976ef1e5b4b83b93859143e51e51b129e869f9493cc0817cf14c2a922050f75.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-d2d3cfc09dfa7546e07a40a3c11203e3340700ddf8f7a2b4cf03292afd998d51",
+      "kitId": "kit:gw-apartment-living-sofa:v1",
+      "path": "jobs/gwjob-d2d3cfc09dfa7546e07a40a3c11203e3340700ddf8f7a2b4cf03292afd998d51.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-4c3bec9cca8da43df0afd9c12c4a0a2d7bd62207be64f58bb2d641c209b81583",
+      "kitId": "kit:gw-apartment-living-storage:v1",
+      "path": "jobs/gwjob-4c3bec9cca8da43df0afd9c12c4a0a2d7bd62207be64f58bb2d641c209b81583.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-c28771fc4175f72491b63aeb8920039c89718e3abe98fb052a21dfb6079e9be4",
+      "kitId": "kit:gw-apartment-living-table:v1",
+      "path": "jobs/gwjob-c28771fc4175f72491b63aeb8920039c89718e3abe98fb052a21dfb6079e9be4.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-e3d815ae00f9c4fdb4c95e9ed8dd276db1609a0063dc582dea5964e28ffb1c66",
+      "kitId": "kit:gw-backyard-garage-workshop-bench:v1",
+      "path": "jobs/gwjob-e3d815ae00f9c4fdb4c95e9ed8dd276db1609a0063dc582dea5964e28ffb1c66.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-e4e2288a590cc0260066bb99b72cd3582e8572e3a319e9cd07ef52d3739f6531",
+      "kitId": "kit:gw-backyard-garage-workshop-ground-shell:v1",
+      "path": "jobs/gwjob-e4e2288a590cc0260066bb99b72cd3582e8572e3a319e9cd07ef52d3739f6531.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-830e1267631440ed1fa659015fc85a37b0f44fb005c292ca5d97baf0bced01ed",
+      "kitId": "kit:gw-backyard-garage-workshop-patio-table:v1",
+      "path": "jobs/gwjob-830e1267631440ed1fa659015fc85a37b0f44fb005c292ca5d97baf0bced01ed.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-7f7d54d23241962e09d9758f3cc0e4cc86edbe0bcdeb8b3914ebf20ca619b4a9",
+      "kitId": "kit:gw-backyard-garage-workshop-shelf:v1",
+      "path": "jobs/gwjob-7f7d54d23241962e09d9758f3cc0e4cc86edbe0bcdeb8b3914ebf20ca619b4a9.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-2ec9e9f4cc7e9e0730ec935eba95d5ca45cb7035ecd96580d5f38369955ce8ef",
+      "kitId": "kit:gw-backyard-garage-workshop-vegetation-1:v1",
+      "path": "jobs/gwjob-2ec9e9f4cc7e9e0730ec935eba95d5ca45cb7035ecd96580d5f38369955ce8ef.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-3c10fec75dac3137d1c0313447012fd98482d9a5d0c8cf77ea0511faf1343a58",
+      "kitId": "kit:gw-backyard-garage-workshop-vegetation-2:v1",
+      "path": "jobs/gwjob-3c10fec75dac3137d1c0313447012fd98482d9a5d0c8cf77ea0511faf1343a58.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-aae2af189963c828d6692d58ac4205992323ad1d9be136e5d1e26a88b6b54948",
+      "kitId": "kit:gw-backyard-garage-workshop-vegetation-3:v1",
+      "path": "jobs/gwjob-aae2af189963c828d6692d58ac4205992323ad1d9be136e5d1e26a88b6b54948.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-79ac39c1d4b81a461e3f1848db811e09410ff580d15ae42b2f4437b54c305bbd",
+      "kitId": "kit:gw-beach-boardwalk-bench:v1",
+      "path": "jobs/gwjob-79ac39c1d4b81a461e3f1848db811e09410ff580d15ae42b2f4437b54c305bbd.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-32fbcd6301d3c91b5306c4470e2314bc006a95440bcc21b3c6167839b8371832",
+      "kitId": "kit:gw-beach-boardwalk-ground-shell:v1",
+      "path": "jobs/gwjob-32fbcd6301d3c91b5306c4470e2314bc006a95440bcc21b3c6167839b8371832.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-d9d9816ad3e3ac86a7ccf36d8e8f8a58bd8bcb99cd20e86995555e2e0b44f65e",
+      "kitId": "kit:gw-beach-boardwalk-vegetation-1:v1",
+      "path": "jobs/gwjob-d9d9816ad3e3ac86a7ccf36d8e8f8a58bd8bcb99cd20e86995555e2e0b44f65e.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-a8cf590b9fad6ce1d71e96b2bd7b7185bb9a3a39362b044cef40ce0e8024568d",
+      "kitId": "kit:gw-bedroom-era-bed:v1",
+      "path": "jobs/gwjob-a8cf590b9fad6ce1d71e96b2bd7b7185bb9a3a39362b044cef40ce0e8024568d.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-0268c1b676a7670227cc83c12223f1a77dec809948cccd134070293bfaf77b4e",
+      "kitId": "kit:gw-bedroom-era-chair:v1",
+      "path": "jobs/gwjob-0268c1b676a7670227cc83c12223f1a77dec809948cccd134070293bfaf77b4e.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-5df636da5ec5779475f26e55b398a05fe3aeb275491df5230d4265c7a3642ea0",
+      "kitId": "kit:gw-bedroom-era-dresser:v1",
+      "path": "jobs/gwjob-5df636da5ec5779475f26e55b398a05fe3aeb275491df5230d4265c7a3642ea0.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-d40d168abec0bccbf5397c258f477149870df295f4b93064292b34e95c20fb2d",
+      "kitId": "kit:gw-bedroom-era-shell:v1",
+      "path": "jobs/gwjob-d40d168abec0bccbf5397c258f477149870df295f4b93064292b34e95c20fb2d.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-989b63e79c4fd454af65957e7e2ea2039773694283f44bded4aee6be6b6fe99b",
+      "kitId": "kit:gw-cemetery-bench:v1",
+      "path": "jobs/gwjob-989b63e79c4fd454af65957e7e2ea2039773694283f44bded4aee6be6b6fe99b.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-dcef97129d5a786dad646bc94767197cf8a3c1eb50885d80f24e46c4d0dee8ad",
+      "kitId": "kit:gw-cemetery-ground-shell:v1",
+      "path": "jobs/gwjob-dcef97129d5a786dad646bc94767197cf8a3c1eb50885d80f24e46c4d0dee8ad.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-7329a1c4a136d79b073da666e6b006c477f1c445b2a7266d9fa54367ffb664d0",
+      "kitId": "kit:gw-cemetery-vegetation-1:v1",
+      "path": "jobs/gwjob-7329a1c4a136d79b073da666e6b006c477f1c445b2a7266d9fa54367ffb664d0.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-b3809102d1f5e3716e19921cfd1456dfb022912c74d8736833573bfc8c6a2116",
+      "kitId": "kit:gw-cemetery-vegetation-2:v1",
+      "path": "jobs/gwjob-b3809102d1f5e3716e19921cfd1456dfb022912c74d8736833573bfc8c6a2116.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-c0e4cf2fd5393d6d0ca31e2cddd870bcb7810681df89922321c3f015acd19a4f",
+      "kitId": "kit:gw-church-sanctuary-fellowship-fellowship-tables:v1",
+      "path": "jobs/gwjob-c0e4cf2fd5393d6d0ca31e2cddd870bcb7810681df89922321c3f015acd19a4f.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-19ceea34eaf8d6a434a05b93bb9082df7bf8acfadee29676b66c77e01e168de4",
+      "kitId": "kit:gw-church-sanctuary-fellowship-lectern:v1",
+      "path": "jobs/gwjob-19ceea34eaf8d6a434a05b93bb9082df7bf8acfadee29676b66c77e01e168de4.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-ca0d8281ff4616b4d155aa5fadc84babfb5376ba611c8867e672e0537315927a",
+      "kitId": "kit:gw-church-sanctuary-fellowship-pews-left:v1",
+      "path": "jobs/gwjob-ca0d8281ff4616b4d155aa5fadc84babfb5376ba611c8867e672e0537315927a.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-9df7c5c7769c0332b1474fe2a50ebdc125b0804071d19714f7d8b5817063569c",
+      "kitId": "kit:gw-church-sanctuary-fellowship-pews-right:v1",
+      "path": "jobs/gwjob-9df7c5c7769c0332b1474fe2a50ebdc125b0804071d19714f7d8b5817063569c.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-d5f31c6fee2be5d0f635981be3832a890a07eb87271f7118b623bb44d2ca0574",
+      "kitId": "kit:gw-church-sanctuary-fellowship-shell:v1",
+      "path": "jobs/gwjob-d5f31c6fee2be5d0f635981be3832a890a07eb87271f7118b623bb44d2ca0574.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-85c73cee7d043073804494570b4b9cc0d73a253541e642c62a86a8db482c6920",
+      "kitId": "kit:gw-clinic-waiting-room-exam-bench:v1",
+      "path": "jobs/gwjob-85c73cee7d043073804494570b4b9cc0d73a253541e642c62a86a8db482c6920.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-44456e50ce8a1d220cda804d3e4ccec0187b4a1a136ae41fd0ce136cbbfb7573",
+      "kitId": "kit:gw-clinic-waiting-room-reception:v1",
+      "path": "jobs/gwjob-44456e50ce8a1d220cda804d3e4ccec0187b4a1a136ae41fd0ce136cbbfb7573.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-66729ef0c3cc4416ff75772805e5f85bd264826b8bdc5808df5aecccd428c182",
+      "kitId": "kit:gw-clinic-waiting-room-seats-left:v1",
+      "path": "jobs/gwjob-66729ef0c3cc4416ff75772805e5f85bd264826b8bdc5808df5aecccd428c182.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-a84f0b4cd62d55927cf31e49deab9e39c29b6b6cf1e91e384c2eae46bb302299",
+      "kitId": "kit:gw-clinic-waiting-room-shell:v1",
+      "path": "jobs/gwjob-a84f0b4cd62d55927cf31e49deab9e39c29b6b6cf1e91e384c2eae46bb302299.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-e428141a86d47e3ca48d197137ccf098322f01d89a103f05eceb39cbcab130f8",
+      "kitId": "kit:gw-college-dorm-campus-bed-left:v1",
+      "path": "jobs/gwjob-e428141a86d47e3ca48d197137ccf098322f01d89a103f05eceb39cbcab130f8.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-f8c9a63d2375abda5910477f61e6e2d7ddf389c46265f49bef27ec4c9fbecdba",
+      "kitId": "kit:gw-college-dorm-campus-bed-right:v1",
+      "path": "jobs/gwjob-f8c9a63d2375abda5910477f61e6e2d7ddf389c46265f49bef27ec4c9fbecdba.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-df2e8ed015374e8dcaf48119398c4ce96cbb945714bef51f53faaeb2f00903a5",
+      "kitId": "kit:gw-college-dorm-campus-desk-left:v1",
+      "path": "jobs/gwjob-df2e8ed015374e8dcaf48119398c4ce96cbb945714bef51f53faaeb2f00903a5.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-45322c3b8d376dbd190fd7154ef3bcd3b8f562e988413914908fad313e66013e",
+      "kitId": "kit:gw-college-dorm-campus-shell:v1",
+      "path": "jobs/gwjob-45322c3b8d376dbd190fd7154ef3bcd3b8f562e988413914908fad313e66013e.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-a7af4d83d6849bfc729cf83f44d8ec482170b7203e277bed65a0a461f116e680",
+      "kitId": "kit:gw-college-dorm-campus-wardrobe:v1",
+      "path": "jobs/gwjob-a7af4d83d6849bfc729cf83f44d8ec482170b7203e277bed65a0a461f116e680.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-9d5d0368ac3b3d630e81c306cdc0f9042f6ac2d9054684760af06dcb2fb08e2d",
+      "kitId": "kit:gw-courthouse-public-hall-bench-left:v1",
+      "path": "jobs/gwjob-9d5d0368ac3b3d630e81c306cdc0f9042f6ac2d9054684760af06dcb2fb08e2d.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-2370db7f808a53448006375886d62b8b999f6f6d64282a1b7b6aa02d44802282",
+      "kitId": "kit:gw-courthouse-public-hall-bench-right:v1",
+      "path": "jobs/gwjob-2370db7f808a53448006375886d62b8b999f6f6d64282a1b7b6aa02d44802282.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-5ffd896935cb27100df7373cd41cc6b7c5b3b6ba54bc7e1f05592d8b52d4ad21",
+      "kitId": "kit:gw-courthouse-public-hall-service-desk:v1",
+      "path": "jobs/gwjob-5ffd896935cb27100df7373cd41cc6b7c5b3b6ba54bc7e1f05592d8b52d4ad21.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-729d066704430fa7fb7bbd2907088cda82996242aa5916e277f0bdd16915300e",
+      "kitId": "kit:gw-courthouse-public-hall-shell:v1",
+      "path": "jobs/gwjob-729d066704430fa7fb7bbd2907088cda82996242aa5916e277f0bdd16915300e.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-ce4cdd43cc9cc71e4958f35f26b6aeb87014efd41c74e5d6af674d17760561fc",
+      "kitId": "kit:gw-diner-cafe-booths-left:v1",
+      "path": "jobs/gwjob-ce4cdd43cc9cc71e4958f35f26b6aeb87014efd41c74e5d6af674d17760561fc.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-283cd6e06ece1cbc2a3a18fde24905e16ed745482f7749ced9058b92466cb764",
+      "kitId": "kit:gw-diner-cafe-counter:v1",
+      "path": "jobs/gwjob-283cd6e06ece1cbc2a3a18fde24905e16ed745482f7749ced9058b92466cb764.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-3e9ca601cce7121dad7984c1927277826310d83878d9b40ce233286fc9a0906a",
+      "kitId": "kit:gw-diner-cafe-shell:v1",
+      "path": "jobs/gwjob-3e9ca601cce7121dad7984c1927277826310d83878d9b40ce233286fc9a0906a.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-d4b1baadc9ccdf359368d3857aa25f6acdf1f9fa7ea64c1970c98e9b44c6a88e",
+      "kitId": "kit:gw-diner-cafe-table:v1",
+      "path": "jobs/gwjob-d4b1baadc9ccdf359368d3857aa25f6acdf1f9fa7ea64c1970c98e9b44c6a88e.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-db47bf3d8d07bdff177aaa6ccd8e4f6cf35c4b52cfd7c72f75e55a75b7c9b09b",
+      "kitId": "kit:gw-east-texas-living-room-armchair:v1",
+      "path": "jobs/gwjob-db47bf3d8d07bdff177aaa6ccd8e4f6cf35c4b52cfd7c72f75e55a75b7c9b09b.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-a43fcb74fde742e98d36d481b97472991e8f507cf277055be85c323ae1fbf004",
+      "kitId": "kit:gw-east-texas-living-room-shell:v1",
+      "path": "jobs/gwjob-a43fcb74fde742e98d36d481b97472991e8f507cf277055be85c323ae1fbf004.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-ee33e46d3b4889817e05a8f9e0f793fece2581768748d4627c14ca4b08710565",
+      "kitId": "kit:gw-east-texas-living-room-side-table:v1",
+      "path": "jobs/gwjob-ee33e46d3b4889817e05a8f9e0f793fece2581768748d4627c14ca4b08710565.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-a304b02dd4b169e8ca7ceac919e6fe0933eb9534ef70743bf32d10c4ccc1b6b1",
+      "kitId": "kit:gw-east-texas-living-room-sideboard:v1",
+      "path": "jobs/gwjob-a304b02dd4b169e8ca7ceac919e6fe0933eb9534ef70743bf32d10c4ccc1b6b1.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-8cf4116508387d860e8b90ad63eaa05164298fe1d4f0760f099b59305feaa6dc",
+      "kitId": "kit:gw-east-texas-living-room-sofa:v1",
+      "path": "jobs/gwjob-8cf4116508387d860e8b90ad63eaa05164298fe1d4f0760f099b59305feaa6dc.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-c545b1af20389bb4fb339942e8225fab31d22a0ff5f807b75d434d8a5cddb5d2",
+      "kitId": "kit:gw-east-texas-residential-street-ground-shell:v1",
+      "path": "jobs/gwjob-c545b1af20389bb4fb339942e8225fab31d22a0ff5f807b75d434d8a5cddb5d2.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-8fe7d7b1e671bd4bdbda6db24f7ef41cdf27e659a002d3687e670b3d0e2fde34",
+      "kitId": "kit:gw-east-texas-residential-street-house-shell:v1",
+      "path": "jobs/gwjob-8fe7d7b1e671bd4bdbda6db24f7ef41cdf27e659a002d3687e670b3d0e2fde34.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-20181c0fe8d8300b7c477710b932d7132ef2397e2f8241ce073c2ea6c8f1567c",
+      "kitId": "kit:gw-east-texas-residential-street-mailbox:v1",
+      "path": "jobs/gwjob-20181c0fe8d8300b7c477710b932d7132ef2397e2f8241ce073c2ea6c8f1567c.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-73a70f1d88b3abc4f63ffa8d67c1b501fc5a83da3084a23e5a9d9740838de2ca",
+      "kitId": "kit:gw-east-texas-residential-street-vegetation-1:v1",
+      "path": "jobs/gwjob-73a70f1d88b3abc4f63ffa8d67c1b501fc5a83da3084a23e5a9d9740838de2ca.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-fce03879e3645aee609dfddf80a0bd6e98b0da88a39cdd79db1d2490f6466761",
+      "kitId": "kit:gw-east-texas-residential-street-vegetation-2:v1",
+      "path": "jobs/gwjob-fce03879e3645aee609dfddf80a0bd6e98b0da88a39cdd79db1d2490f6466761.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-26d80dc18bcd08e1aeebbba91a82669884fe72d7f3a85c80b8ac662313aa33f7",
+      "kitId": "kit:gw-east-texas-residential-street-vegetation-3:v1",
+      "path": "jobs/gwjob-26d80dc18bcd08e1aeebbba91a82669884fe72d7f3a85c80b8ac662313aa33f7.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-faf769c2de8c989a9ce2764e555bf5c935fd0faf68484b698dda170ad829124a",
+      "kitId": "kit:gw-factory-floor-machine-left:v1",
+      "path": "jobs/gwjob-faf769c2de8c989a9ce2764e555bf5c935fd0faf68484b698dda170ad829124a.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-7233faa9f6dac9f205fed4b39b818db07e9af95a26aed052176ce24a8a108507",
+      "kitId": "kit:gw-factory-floor-machine-right:v1",
+      "path": "jobs/gwjob-7233faa9f6dac9f205fed4b39b818db07e9af95a26aed052176ce24a8a108507.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-f9693ad20c2373121a2bf37430d80e674e484786599665e9a2a06b52a88c35de",
+      "kitId": "kit:gw-factory-floor-shell:v1",
+      "path": "jobs/gwjob-f9693ad20c2373121a2bf37430d80e674e484786599665e9a2a06b52a88c35de.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-c5f3d95a1edd8c05066ad015abd221facf418e72bdb4aae63dab4bcbb90fe266",
+      "kitId": "kit:gw-family-kitchen-dining-cabinet-run:v1",
+      "path": "jobs/gwjob-c5f3d95a1edd8c05066ad015abd221facf418e72bdb4aae63dab4bcbb90fe266.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-80091b311cfa581de3f0cf0379a20c311f9fda9cf89b4219a0d0de151ebd6218",
+      "kitId": "kit:gw-family-kitchen-dining-china-cabinet:v1",
+      "path": "jobs/gwjob-80091b311cfa581de3f0cf0379a20c311f9fda9cf89b4219a0d0de151ebd6218.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-8d5d2b8977053cf7fd5568fea22531836b06a9c80028ad822528260030aec2ff",
+      "kitId": "kit:gw-family-kitchen-dining-dining-table:v1",
+      "path": "jobs/gwjob-8d5d2b8977053cf7fd5568fea22531836b06a9c80028ad822528260030aec2ff.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-4e4d4e07a4da55313666154a8d639198722f69ca4f72ccbb930b4e69c2cd4e51",
+      "kitId": "kit:gw-family-kitchen-dining-range:v1",
+      "path": "jobs/gwjob-4e4d4e07a4da55313666154a8d639198722f69ca4f72ccbb930b4e69c2cd4e51.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-796be5b3fe3f320eec4d60b15c168be8181e603e08cd4c3d90ba6e331127bff8",
+      "kitId": "kit:gw-family-kitchen-dining-refrigerator:v1",
+      "path": "jobs/gwjob-796be5b3fe3f320eec4d60b15c168be8181e603e08cd4c3d90ba6e331127bff8.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-438451245102c0618ad6ba2a7dd5f449eaff50bc2ecb9c618b678559fab0eb44",
+      "kitId": "kit:gw-family-kitchen-dining-shell:v1",
+      "path": "jobs/gwjob-438451245102c0618ad6ba2a7dd5f449eaff50bc2ecb9c618b678559fab0eb44.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-ebbd95311a6187b518206e0369420d3fc63fe82faae4fa77a1157659c62cd3d7",
+      "kitId": "kit:gw-forest-trail-bench:v1",
+      "path": "jobs/gwjob-ebbd95311a6187b518206e0369420d3fc63fe82faae4fa77a1157659c62cd3d7.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-984a9ac4446ad51ec3162ad16c0c6957ada89fd2721d19e6b824ee85e1d12ee5",
+      "kitId": "kit:gw-forest-trail-ground-shell:v1",
+      "path": "jobs/gwjob-984a9ac4446ad51ec3162ad16c0c6957ada89fd2721d19e6b824ee85e1d12ee5.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-58574bf80de0ea002c00062561c942500d033fe8b28f838010ac418bd2779eee",
+      "kitId": "kit:gw-forest-trail-vegetation-1:v1",
+      "path": "jobs/gwjob-58574bf80de0ea002c00062561c942500d033fe8b28f838010ac418bd2779eee.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-b2b431f86ce3863b0c87971d51f41256d43011e92f5e7aec9decfb3c09b39b12",
+      "kitId": "kit:gw-forest-trail-vegetation-2:v1",
+      "path": "jobs/gwjob-b2b431f86ce3863b0c87971d51f41256d43011e92f5e7aec9decfb3c09b39b12.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-a5568627292ba8f81e5f49cb67cabe0cd9d78843c6eedf3bff0e4c72fee5a377",
+      "kitId": "kit:gw-forest-trail-vegetation-3:v1",
+      "path": "jobs/gwjob-a5568627292ba8f81e5f49cb67cabe0cd9d78843c6eedf3bff0e4c72fee5a377.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-48b813b90658bb2c5679615e6e6ca5e8971818f0236fac7e80864484e10de47d",
+      "kitId": "kit:gw-gas-station-counter:v1",
+      "path": "jobs/gwjob-48b813b90658bb2c5679615e6e6ca5e8971818f0236fac7e80864484e10de47d.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-476bb12da12c53cb907b80cb16ce9ee46b263e92f544f6020deb41ae4a5bcd93",
+      "kitId": "kit:gw-gas-station-ground-shell:v1",
+      "path": "jobs/gwjob-476bb12da12c53cb907b80cb16ce9ee46b263e92f544f6020deb41ae4a5bcd93.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-884bb7cbe075b3d02aaa3fd83930e3c23e4c9902562baf37b7bda305075a0d61",
+      "kitId": "kit:gw-gas-station-pump-left:v1",
+      "path": "jobs/gwjob-884bb7cbe075b3d02aaa3fd83930e3c23e4c9902562baf37b7bda305075a0d61.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-8e416cf7cdf80ad06ce6004258f1a2edb365062bf265fc35b079a1e762c9c30e",
+      "kitId": "kit:gw-gas-station-pump-right:v1",
+      "path": "jobs/gwjob-8e416cf7cdf80ad06ce6004258f1a2edb365062bf265fc35b079a1e762c9c30e.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-62b75998c78a1c9bd16f6ce83e737435355224780be7f29b4d79ee5a547e689c",
+      "kitId": "kit:gw-grocery-store-checkout:v1",
+      "path": "jobs/gwjob-62b75998c78a1c9bd16f6ce83e737435355224780be7f29b4d79ee5a547e689c.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-28b3d0be183c53cdd877c9332f1e804b3ea9758aed73a4748a96c01b07f2d755",
+      "kitId": "kit:gw-grocery-store-shell:v1",
+      "path": "jobs/gwjob-28b3d0be183c53cdd877c9332f1e804b3ea9758aed73a4748a96c01b07f2d755.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-2c573d334eeda160c37c13df17db5a81b06d489ae246e1fbd531b8533dd3d6ef",
+      "kitId": "kit:gw-grocery-store-shelves-left:v1",
+      "path": "jobs/gwjob-2c573d334eeda160c37c13df17db5a81b06d489ae246e1fbd531b8533dd3d6ef.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-10c5f7a76bf90c002f114519882b80e9a4b9ce0d1a5af79b34c4a17befbc38bb",
+      "kitId": "kit:gw-grocery-store-shelves-right:v1",
+      "path": "jobs/gwjob-10c5f7a76bf90c002f114519882b80e9a4b9ce0d1a5af79b34c4a17befbc38bb.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-8e0cace67a707a087bbad196ed03a5510b28a786aeb0d7bf57b1548bff22c2a1",
+      "kitId": "kit:gw-hospital-room-corridor-bed:v1",
+      "path": "jobs/gwjob-8e0cace67a707a087bbad196ed03a5510b28a786aeb0d7bf57b1548bff22c2a1.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-514dbb9ca328585e68f5478ae569e1c01fafdeec0c73bcf974cd57f52b8bb86c",
+      "kitId": "kit:gw-hospital-room-corridor-cabinet:v1",
+      "path": "jobs/gwjob-514dbb9ca328585e68f5478ae569e1c01fafdeec0c73bcf974cd57f52b8bb86c.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-7c18686f3a7fbc1cca5aaf2c8872454a8fced8ad5b104e869bbe1e0ad5939bd6",
+      "kitId": "kit:gw-hospital-room-corridor-shell:v1",
+      "path": "jobs/gwjob-7c18686f3a7fbc1cca5aaf2c8872454a8fced8ad5b104e869bbe1e0ad5939bd6.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-1a4c70cf509ac5d4cadfc9c578677296622c4bad16448663ba79c7a23099fafb",
+      "kitId": "kit:gw-hospital-room-corridor-visitor-chair:v1",
+      "path": "jobs/gwjob-1a4c70cf509ac5d4cadfc9c578677296622c4bad16448663ba79c7a23099fafb.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-aac97dbaa8702e27ba4a8b72ee04273f3fe3eef6601a2dd14f841cb5f314ae30",
+      "kitId": "kit:gw-lake-dock-shoreline-bench:v1",
+      "path": "jobs/gwjob-aac97dbaa8702e27ba4a8b72ee04273f3fe3eef6601a2dd14f841cb5f314ae30.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-ea9a5f72cc7a9900f195519089370e4b19e222254a9c4867221950d9f552ad5a",
+      "kitId": "kit:gw-lake-dock-shoreline-ground-shell:v1",
+      "path": "jobs/gwjob-ea9a5f72cc7a9900f195519089370e4b19e222254a9c4867221950d9f552ad5a.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-7f969162d685de6ed811e5bb818139cba031f180c82db0747c04535ebf14055f",
+      "kitId": "kit:gw-lake-dock-shoreline-storage:v1",
+      "path": "jobs/gwjob-7f969162d685de6ed811e5bb818139cba031f180c82db0747c04535ebf14055f.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-af86298c578ea85d473e7df5d139cfb0f11e2da0041306a181e81faada13e448",
+      "kitId": "kit:gw-lake-dock-shoreline-vegetation-1:v1",
+      "path": "jobs/gwjob-af86298c578ea85d473e7df5d139cfb0f11e2da0041306a181e81faada13e448.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-7f40d80b757b101c561dfcfd559ea448b8d5dbd8cc9414d5fee1e3bc361d8a2e",
+      "kitId": "kit:gw-lake-dock-shoreline-vegetation-2:v1",
+      "path": "jobs/gwjob-7f40d80b757b101c561dfcfd559ea448b8d5dbd8cc9414d5fee1e3bc361d8a2e.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-c26690cb6d24984f6f82836f210e459f99d4f2f3339ebd589a92f2a35a138225",
+      "kitId": "kit:gw-lake-dock-shoreline-vegetation-3:v1",
+      "path": "jobs/gwjob-c26690cb6d24984f6f82836f210e459f99d4f2f3339ebd589a92f2a35a138225.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-53dbfc37a4c3cd117147c531383adc4a1892275fc377eefb4dc7c565d4b1723d",
+      "kitId": "kit:gw-military-admin-operations-cabinets:v1",
+      "path": "jobs/gwjob-53dbfc37a4c3cd117147c531383adc4a1892275fc377eefb4dc7c565d4b1723d.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-b989bf2b8619ff29975730d0904763980d5b3ef8f2d348ce86a9ad10fb95198d",
+      "kitId": "kit:gw-military-admin-operations-console-bank:v1",
+      "path": "jobs/gwjob-b989bf2b8619ff29975730d0904763980d5b3ef8f2d348ce86a9ad10fb95198d.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-561fa6b4ff96e87512df784f0578bab328bf9e8f29ee95d6b1973467e26ab8b4",
+      "kitId": "kit:gw-military-admin-operations-desks-left:v1",
+      "path": "jobs/gwjob-561fa6b4ff96e87512df784f0578bab328bf9e8f29ee95d6b1973467e26ab8b4.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-9c93e0de155fce3fc753f775c968a933af661319fea4d91a24fc0a08df384a85",
+      "kitId": "kit:gw-military-admin-operations-operations-table:v1",
+      "path": "jobs/gwjob-9c93e0de155fce3fc753f775c968a933af661319fea4d91a24fc0a08df384a85.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-95178c066c7a6219325a0d18b8c6595dc96442406c54fc9e06f537155107c698",
+      "kitId": "kit:gw-military-admin-operations-shell:v1",
+      "path": "jobs/gwjob-95178c066c7a6219325a0d18b8c6595dc96442406c54fc9e06f537155107c698.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-8488981fb707013bc13d986fcd0bcdfda5fe99b759fcb60a22b0b32bc3377470",
+      "kitId": "kit:gw-military-barracks-beds-left:v1",
+      "path": "jobs/gwjob-8488981fb707013bc13d986fcd0bcdfda5fe99b759fcb60a22b0b32bc3377470.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-6921d3807b4742ef5b074bf5c6a5a270506549f6f00ff86d0f8ce17b725fcd8d",
+      "kitId": "kit:gw-military-barracks-beds-right:v1",
+      "path": "jobs/gwjob-6921d3807b4742ef5b074bf5c6a5a270506549f6f00ff86d0f8ce17b725fcd8d.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-e7e345ac15f149ab64399aa1b91d3a2ef201dc9c696af40bd203c6504f65297e",
+      "kitId": "kit:gw-military-barracks-lockers:v1",
+      "path": "jobs/gwjob-e7e345ac15f149ab64399aa1b91d3a2ef201dc9c696af40bd203c6504f65297e.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-a860d0207f7fe0cdf4eff31453aa3e3e9181a9eaab912b2ca600e1ff231d5901",
+      "kitId": "kit:gw-military-barracks-shell:v1",
+      "path": "jobs/gwjob-a860d0207f7fe0cdf4eff31453aa3e3e9181a9eaab912b2ca600e1ff231d5901.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-722989097b5b4f125a081c22b5d62247c3732f496de910044bc25cf92514a283",
+      "kitId": "kit:gw-motel-room-walkway-bed:v1",
+      "path": "jobs/gwjob-722989097b5b4f125a081c22b5d62247c3732f496de910044bc25cf92514a283.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-86b19e5115840411788af103f91d13696b2cc04b1e25930d779d1784d92abbb4",
+      "kitId": "kit:gw-motel-room-walkway-desk:v1",
+      "path": "jobs/gwjob-86b19e5115840411788af103f91d13696b2cc04b1e25930d779d1784d92abbb4.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-8b9cfebec82d1a9ac6d6c0320f8a6b928ed5a22f45961f49d433972f49f4c47a",
+      "kitId": "kit:gw-motel-room-walkway-shell:v1",
+      "path": "jobs/gwjob-8b9cfebec82d1a9ac6d6c0320f8a6b928ed5a22f45961f49d433972f49f4c47a.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-ab33a852297488176a5028cb14a19c9c2db5b3aef6bd266c3b8efa59ece97d85",
+      "kitId": "kit:gw-motel-room-walkway-wardrobe:v1",
+      "path": "jobs/gwjob-ab33a852297488176a5028cb14a19c9c2db5b3aef6bd266c3b8efa59ece97d85.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-b4f4f5d0a161ed2f2a1de0776560878aa3381e74d03457ad3d682ed0d3df04a9",
+      "kitId": "kit:gw-office-workplace-desks-left:v1",
+      "path": "jobs/gwjob-b4f4f5d0a161ed2f2a1de0776560878aa3381e74d03457ad3d682ed0d3df04a9.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-b5f72f363a214af1e2ac97f9433b9e0d4b74255bbb081bdd9364f449c37a58e0",
+      "kitId": "kit:gw-office-workplace-desks-right:v1",
+      "path": "jobs/gwjob-b5f72f363a214af1e2ac97f9433b9e0d4b74255bbb081bdd9364f449c37a58e0.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-3585694922c4a0200f48b631f976b1763d40fca0d566594da1036ee0cbe8b7a1",
+      "kitId": "kit:gw-office-workplace-shell:v1",
+      "path": "jobs/gwjob-3585694922c4a0200f48b631f976b1763d40fca0d566594da1036ee0cbe8b7a1.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-b1c6a0f6c6ae4f17e689bca19f9ccd1c354e615298e4812f1e94567e97b81804",
+      "kitId": "kit:gw-office-workplace-storage:v1",
+      "path": "jobs/gwjob-b1c6a0f6c6ae4f17e689bca19f9ccd1c354e615298e4812f1e94567e97b81804.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-4ba3c8c32fe81e19ec8da0f04f24d67780372f5c34524b0dadd4fbe271d0585b",
+      "kitId": "kit:gw-park-playground-bench:v1",
+      "path": "jobs/gwjob-4ba3c8c32fe81e19ec8da0f04f24d67780372f5c34524b0dadd4fbe271d0585b.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-1060d301732c41eb743b6a67d05f4fa21779085f2bf21b63458a423c1fea5252",
+      "kitId": "kit:gw-park-playground-ground-shell:v1",
+      "path": "jobs/gwjob-1060d301732c41eb743b6a67d05f4fa21779085f2bf21b63458a423c1fea5252.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-7135227328974450820f21f9f102dc2761ef9a1d0e5cbe0f06dcacef4d09572d",
+      "kitId": "kit:gw-park-playground-vegetation-1:v1",
+      "path": "jobs/gwjob-7135227328974450820f21f9f102dc2761ef9a1d0e5cbe0f06dcacef4d09572d.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-88bb5b683540aa270c5a757b248a71d839c4eb7c9a2456179675c9bb815ae80a",
+      "kitId": "kit:gw-park-playground-vegetation-2:v1",
+      "path": "jobs/gwjob-88bb5b683540aa270c5a757b248a71d839c4eb7c9a2456179675c9bb815ae80a.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-9ae4a36f23de51824540994704e1a44d6cd3dd0b8163f1b11e58a8bfc251d9ca",
+      "kitId": "kit:gw-park-playground-vegetation-3:v1",
+      "path": "jobs/gwjob-9ae4a36f23de51824540994704e1a44d6cd3dd0b8163f1b11e58a8bfc251d9ca.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-a914a75f798f2b412ebd64f565212e9996c4575872927bf4e0bad931b723ad3a",
+      "kitId": "kit:gw-rural-house-porch-cabinet:v1",
+      "path": "jobs/gwjob-a914a75f798f2b412ebd64f565212e9996c4575872927bf4e0bad931b723ad3a.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-7de0e5646880defb493c871f67fd1d39a59e5697f3b2f34b48200610806967d4",
+      "kitId": "kit:gw-rural-house-porch-porch-bench:v1",
+      "path": "jobs/gwjob-7de0e5646880defb493c871f67fd1d39a59e5697f3b2f34b48200610806967d4.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-5990bcbaa1f66161921cc066a617703074c6233ae3c7e3336504ad1ba16770d2",
+      "kitId": "kit:gw-rural-house-porch-shell:v1",
+      "path": "jobs/gwjob-5990bcbaa1f66161921cc066a617703074c6233ae3c7e3336504ad1ba16770d2.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-e3eb945af0a2c30349d4b3c12be4a6e54bde7e44fdfe6e7e523cd4e01fa67719",
+      "kitId": "kit:gw-rural-house-porch-sofa:v1",
+      "path": "jobs/gwjob-e3eb945af0a2c30349d4b3c12be4a6e54bde7e44fdfe6e7e523cd4e01fa67719.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-f61171dcbee3d6117d8cbbdcab1bb17bf00796fee5cd865b0f2f6330f25eb748",
+      "kitId": "kit:gw-rural-house-porch-vegetation-1:v1",
+      "path": "jobs/gwjob-f61171dcbee3d6117d8cbbdcab1bb17bf00796fee5cd865b0f2f6330f25eb748.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-a4db85b51923bbe3e6655a52e86328aad60213ce976725b91bf3fb07ca674c51",
+      "kitId": "kit:gw-rural-house-porch-vegetation-2:v1",
+      "path": "jobs/gwjob-a4db85b51923bbe3e6655a52e86328aad60213ce976725b91bf3fb07ca674c51.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-167da513777125f9f5b6205dfa344916df375e1116d71ecf3de2aaa80ae2144a",
+      "kitId": "kit:gw-rural-road-bench:v1",
+      "path": "jobs/gwjob-167da513777125f9f5b6205dfa344916df375e1116d71ecf3de2aaa80ae2144a.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-886f1d747f14999c944ac4b0c84fd86b09d6eb7cc2aac9e8050647ce96033106",
+      "kitId": "kit:gw-rural-road-fence-left:v1",
+      "path": "jobs/gwjob-886f1d747f14999c944ac4b0c84fd86b09d6eb7cc2aac9e8050647ce96033106.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-4276ae19b457ab35aa6af4ac7fcb4b8a3a68906b7b81c1b4d7e9758f9d419f8a",
+      "kitId": "kit:gw-rural-road-ground-shell:v1",
+      "path": "jobs/gwjob-4276ae19b457ab35aa6af4ac7fcb4b8a3a68906b7b81c1b4d7e9758f9d419f8a.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-4d98b9e31d106328c3f635d74907788cba980371837f494a1e8f2598a4870ad5",
+      "kitId": "kit:gw-rural-road-vegetation-1:v1",
+      "path": "jobs/gwjob-4d98b9e31d106328c3f635d74907788cba980371837f494a1e8f2598a4870ad5.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-3e3e90e67b92e9c0ab43c16fdd7a7ae0cce2aca0d5242193bba97c5c8e3e5f36",
+      "kitId": "kit:gw-rural-road-vegetation-2:v1",
+      "path": "jobs/gwjob-3e3e90e67b92e9c0ab43c16fdd7a7ae0cce2aca0d5242193bba97c5c8e3e5f36.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-96b5e331bb58ce4ba27cdc625fd3b5a1b3bd1554062bf74677954881181977ee",
+      "kitId": "kit:gw-school-classroom-hallway-desk-left:v1",
+      "path": "jobs/gwjob-96b5e331bb58ce4ba27cdc625fd3b5a1b3bd1554062bf74677954881181977ee.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-042d85b22b7cd78acc4b9896f61e6f12fc98073b2a46611f3a73580e08fba70b",
+      "kitId": "kit:gw-school-classroom-hallway-desk-right:v1",
+      "path": "jobs/gwjob-042d85b22b7cd78acc4b9896f61e6f12fc98073b2a46611f3a73580e08fba70b.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-605169c401785f6af09d2085701f3af2235d491bb3e4706228d13ef9081d6da9",
+      "kitId": "kit:gw-school-classroom-hallway-shell:v1",
+      "path": "jobs/gwjob-605169c401785f6af09d2085701f3af2235d491bb3e4706228d13ef9081d6da9.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-920ae01dce4f8339ddde6e48edfe61e4d2ada2c26fd1c523324fa7c7b6eeae37",
+      "kitId": "kit:gw-school-classroom-hallway-storage:v1",
+      "path": "jobs/gwjob-920ae01dce4f8339ddde6e48edfe61e4d2ada2c26fd1c523324fa7c7b6eeae37.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-da5c0abb59c24229791e93b23aca7c0a31cf016ec831a054dded0a3674a19276",
+      "kitId": "kit:gw-school-classroom-hallway-teacher-desk:v1",
+      "path": "jobs/gwjob-da5c0abb59c24229791e93b23aca7c0a31cf016ec831a054dded0a3674a19276.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-51aa8a726c99e7d6c9d56fc7d8198acf46b648d8abe35519bb2a8cca9cdef5ca",
+      "kitId": "kit:gw-warehouse-rack-left:v1",
+      "path": "jobs/gwjob-51aa8a726c99e7d6c9d56fc7d8198acf46b648d8abe35519bb2a8cca9cdef5ca.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-ea592c0e385a55a6e0a84f680a822f15be8382ddaa26f20f35bda28342a2154e",
+      "kitId": "kit:gw-warehouse-rack-right:v1",
+      "path": "jobs/gwjob-ea592c0e385a55a6e0a84f680a822f15be8382ddaa26f20f35bda28342a2154e.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-be7a4d529c16767f98d4225019119d059fcae45aaee98c0bc93a1ffb92d10748",
+      "kitId": "kit:gw-warehouse-shell:v1",
+      "path": "jobs/gwjob-be7a4d529c16767f98d4225019119d059fcae45aaee98c0bc93a1ffb92d10748.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-204f563b79f875ec60277045e53fcf09670c5c0b5a8e19b31919b7ea4a32d8fc",
+      "kitId": "kit:sidewalk-concrete-one-meter:v1",
+      "path": "jobs/gwjob-204f563b79f875ec60277045e53fcf09670c5c0b5a8e19b31919b7ea4a32d8fc.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b",
+      "kitId": "kit:window-residential-neutral:v1",
+      "path": "jobs/gwjob-5d5c44dbaa8e525bebc2aab0a0e1c304d769c73e4ae5bec0cc54624b5e04559b.json",
+      "provider": "meshy",
+      "status": "READY_FOR_PROVIDER"
+    }
+  ],
+  "kits": [
+    {
+      "id": "kit:baseboard-painted-neutral:v1",
+      "providerSpecSha256": "a1101ca47975803f465d02a931a2b000a1c4427d08f2c4d68da73ada6fa0287e",
+      "reusableByWorlds": [
+        "gw-airport-concourse",
+        "gw-apartment-living",
+        "gw-bedroom-era",
+        "gw-church-sanctuary-fellowship",
+        "gw-clinic-waiting-room",
+        "gw-college-dorm-campus",
+        "gw-courthouse-public-hall",
+        "gw-diner-cafe",
+        "gw-east-texas-living-room",
+        "gw-factory-floor",
+        "gw-family-kitchen-dining",
+        "gw-grocery-store",
+        "gw-hospital-room-corridor",
+        "gw-military-admin-operations",
+        "gw-military-barracks",
+        "gw-motel-room-walkway",
+        "gw-office-workplace",
+        "gw-rural-house-porch",
+        "gw-school-classroom-hallway",
+        "gw-warehouse"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "3eaafb1471294a034c63dec332440a8a0135be50b8c583f0ba5a673556c89085",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:door-interior-accessible-neutral:v1",
+      "providerSpecSha256": "949866d6bba398f0e49caac5f4ce549c061b54fb04ea2b92b401d813ac60329c",
+      "reusableByWorlds": [
+        "gw-airport-concourse",
+        "gw-apartment-living",
+        "gw-bedroom-era",
+        "gw-church-sanctuary-fellowship",
+        "gw-clinic-waiting-room",
+        "gw-college-dorm-campus",
+        "gw-courthouse-public-hall",
+        "gw-diner-cafe",
+        "gw-east-texas-living-room",
+        "gw-factory-floor",
+        "gw-family-kitchen-dining",
+        "gw-grocery-store",
+        "gw-hospital-room-corridor",
+        "gw-military-admin-operations",
+        "gw-military-barracks",
+        "gw-motel-room-walkway",
+        "gw-office-workplace",
+        "gw-rural-house-porch",
+        "gw-school-classroom-hallway",
+        "gw-warehouse"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "cb4990c40d0b3edc76ad143fa10c2e0c6814addf9ded360ab86aef8a0a6a111d",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-airport-concourse-counter:v1",
+      "providerSpecSha256": "f8c73bcf1e187c2450d8d18c1a184b2b936b26c51daa9e11e8d2d640447c62c6",
+      "reusableByWorlds": [
+        "gw-airport-concourse"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "9e24cb59268892d1c540bb6651a0f0992299dcfdd26bb685a4be407f95e98254",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-airport-concourse-seats-left:v1",
+      "providerSpecSha256": "b0a7debdc20b1cc1b0db8eb0be1a76deea9756f6d5bc02e7bc973b621c94c70a",
+      "reusableByWorlds": [
+        "gw-airport-concourse"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "08042a23b73dd144d49aef3bd42d3efefb2017cfc589c4fb89f2f4eff7564da0",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-airport-concourse-seats-right:v1",
+      "providerSpecSha256": "0d29a3ba7810ec367f083daad176cc1b4f5b93721a289571d9b10e3b6c0e358f",
+      "reusableByWorlds": [
+        "gw-airport-concourse"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "5ecfff16ede3f9df6faad132441b7dbb9d2842f13c7a693089d445a4ec697834",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-airport-concourse-shell:v1",
+      "providerSpecSha256": "d27d4c19b2996280126ec6b82cdfeb5b4247ebff8f458d466a0e207b310a4b3a",
+      "reusableByWorlds": [
+        "gw-airport-concourse"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "c3559a66ebd56d559c77032594a840e7909508eec0cc8815aede8fa864143526",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-apartment-living-shell:v1",
+      "providerSpecSha256": "abcad4b211ed8393639f7e01a1df053f594d18b0a08759a9628712c5773eee16",
+      "reusableByWorlds": [
+        "gw-apartment-living"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "aa13e8a5829be655d39907e4241c5a5831a9df27b8ada752788126c987380c27",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-apartment-living-sofa:v1",
+      "providerSpecSha256": "c27bbfe4805f796c69ec131904be45579ef1d8bbc1b508208fd9a59ef05cf22b",
+      "reusableByWorlds": [
+        "gw-apartment-living"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "032263cd80713c1c1cbe3e5caa0d0925ce5693d170a939f148668f86870640ca",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-apartment-living-storage:v1",
+      "providerSpecSha256": "4e1d4bb4a3984ed095200db230c00523debd9c20ae248cfcd7faae6147cdbe9c",
+      "reusableByWorlds": [
+        "gw-apartment-living"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "ac80e9c45d2b6be524a7191f4a87723f4496271052b33e1b7605dc3715a488ac",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-apartment-living-table:v1",
+      "providerSpecSha256": "36651c762570c4b5eb775976aa37d1246288396b223d52d4bc4105c27e22c57a",
+      "reusableByWorlds": [
+        "gw-apartment-living"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "a68b1a02690a2b47c559c29fc2aeb743baa6a221f8b7d3e32bf602b1832ae2df",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-backyard-garage-workshop-bench:v1",
+      "providerSpecSha256": "02c5e53a84820e2c19b349414232bf4491344e1feba9131707c04b058e14c8d8",
+      "reusableByWorlds": [
+        "gw-backyard-garage-workshop"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "a5a0c2384123fa1468ea614fbda3a23368184146f5c421a488a9f645e437c713",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-backyard-garage-workshop-ground-shell:v1",
+      "providerSpecSha256": "4deb5769ebd11a82d13664fe48955f4891aaac43e502a337e6753b48a0228942",
+      "reusableByWorlds": [
+        "gw-backyard-garage-workshop"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "a884a94dbd53f9ed4bd302a80bd267b3836b34401dcd32c20bcd37e3799d29e9",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-backyard-garage-workshop-patio-table:v1",
+      "providerSpecSha256": "bd53a4c9c344dce3e1f3134f4d0e410b0de5874889ebd6c590702f65c67f9ee3",
+      "reusableByWorlds": [
+        "gw-backyard-garage-workshop"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "bdc98c511ef3e9cb42736f85ada8d2b3c42cb56d409e510d083e6a5d79ed9b1c",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-backyard-garage-workshop-shelf:v1",
+      "providerSpecSha256": "056868f90164f263bc2f1bf6db3de22ace50060ba245e81c8faac291c28b17ea",
+      "reusableByWorlds": [
+        "gw-backyard-garage-workshop"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "0d33ef28f7c1b50691c22ca11cca3bf7a8c0fe35125dab56f02c8d0958898036",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-backyard-garage-workshop-vegetation-1:v1",
+      "providerSpecSha256": "b2bd809f94223381230d913df2ef9f88533f4be79db16284ad82e976c35dfcc9",
+      "reusableByWorlds": [
+        "gw-backyard-garage-workshop"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "37f9aeab668dbec9c56475a98c46c89a0a392a2cf428a9644e8d44fc080f72a4",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-backyard-garage-workshop-vegetation-2:v1",
+      "providerSpecSha256": "2cc2d808e4a718d981f1cf1fcbbf22458a69bae2cfb3a5987c90697f3782a297",
+      "reusableByWorlds": [
+        "gw-backyard-garage-workshop"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "869d02f51c3f4b0b71da672966c51ec347b0bd466fbc9514e6367d5f5ae52a8d",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-backyard-garage-workshop-vegetation-3:v1",
+      "providerSpecSha256": "3e625905967fec294a23e47235e14c2823eeb05f0c33cebdbba8772c3ecf0b17",
+      "reusableByWorlds": [
+        "gw-backyard-garage-workshop"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "b6be372a8dab45e1d668fb1e8a8fc927efc801b5399d852f11b65f16eb6e98c4",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-beach-boardwalk-bench:v1",
+      "providerSpecSha256": "2f06d44583cb01d4dbf17aa8298e0f53c29e8ce88b446464d7c6e84cf10021db",
+      "reusableByWorlds": [
+        "gw-beach-boardwalk"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "b3a45ccec78294b6a3db9a1896ae02e132acd41297d0a71ad950886d5d3a85c7",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-beach-boardwalk-ground-shell:v1",
+      "providerSpecSha256": "807c9c322269a1075c1a6605a4d4138a480e7ef8a53aad1b355e34b2b8b82ed5",
+      "reusableByWorlds": [
+        "gw-beach-boardwalk"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "293b7c35825a974bb22fe8c17aace2966f895b4c899a7d7114c92952fc2c2941",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-beach-boardwalk-vegetation-1:v1",
+      "providerSpecSha256": "08ad0fe6e0ac018f3617470ada84455f0d163e58e844e0f00e3b164b574f97f2",
+      "reusableByWorlds": [
+        "gw-beach-boardwalk"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "f8c5f141df347e2f6662a1006f445fe83b73f5ddecb040231d1511a14a35a83f",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-bedroom-era-bed:v1",
+      "providerSpecSha256": "fb1e952db402a1cbfcf4676eb73c79bdaee31728e66f3c80da5b45d8e152dbbe",
+      "reusableByWorlds": [
+        "gw-bedroom-era"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "175bb826c7c6f4e90a65e5e45a3fb85095a32e9b7985c5e5a13c4ac2cd4fa052",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-bedroom-era-chair:v1",
+      "providerSpecSha256": "b83782d9000d85798475007ac50ca110978e3a5019e7be35485c454ed0f3fd58",
+      "reusableByWorlds": [
+        "gw-bedroom-era"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "70ffbad75316b733669e52d103741999f8f2b176787cf4965556c0f6ae38d915",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-bedroom-era-dresser:v1",
+      "providerSpecSha256": "a9cda0179f2dcce6156dd3add3f1acfd34edad3a5c774b6051ac6a78ec6e6c0d",
+      "reusableByWorlds": [
+        "gw-bedroom-era"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "ab09f287bab71f964ced27d8aa37ee257d7e764df498a40704fc7686f1fdec85",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-bedroom-era-shell:v1",
+      "providerSpecSha256": "92f8219bff5b94a74ad4c6f09572a9664ccfada1163c57bd4372d91bf5d2fa5d",
+      "reusableByWorlds": [
+        "gw-bedroom-era"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "7a8da4b158c0af30779757983665b59c35e354c2bd03b039fd79738a55d11adf",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-cemetery-bench:v1",
+      "providerSpecSha256": "323437e332bbcb1c7b036fe85e3d0ec0744fcb0b1e347bbf939089be5268b7db",
+      "reusableByWorlds": [
+        "gw-cemetery"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "8e3d6327ea21bd3d247a537401447afc05e60ee231ce6eb159be6ddd819e6880",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-cemetery-ground-shell:v1",
+      "providerSpecSha256": "293403c5aa940e39a59ab9daa48bab5068baf4da51ab4a98a78934615c3c6876",
+      "reusableByWorlds": [
+        "gw-cemetery"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "48094f9ec7d3a6ecdc5d7b9e48a7edc05224aa6d7b262eac383fa9277397251f",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-cemetery-vegetation-1:v1",
+      "providerSpecSha256": "0066514756a545551db82d003c2409f103990881d978ed52c228c414421092bb",
+      "reusableByWorlds": [
+        "gw-cemetery"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "b4ac4d2b2e63b18d5d20fad9a3a22f7e29db2eb5dac8b9c2dc28b2a4aaf90bec",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-cemetery-vegetation-2:v1",
+      "providerSpecSha256": "ca5746b0876f6d68969440240c03194536ccf07eda360e118848545c2be7929a",
+      "reusableByWorlds": [
+        "gw-cemetery"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "4df5932eab00d332453d515297a70a7785ed43a5b55874aea1c92c91d4c04297",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-church-sanctuary-fellowship-fellowship-tables:v1",
+      "providerSpecSha256": "0b14689d74e51d8ec3d854a48935fd2b8d3e85db22494412ffb3d8ddf719f0dd",
+      "reusableByWorlds": [
+        "gw-church-sanctuary-fellowship"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "fdf02c221b4d0fc8613f759010e19c3c841d2d6163d95cbe3435cbd72a3db495",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-church-sanctuary-fellowship-lectern:v1",
+      "providerSpecSha256": "621b60c7d3d03a6df3c194180e8f54b3ef33d44086766323307e45f5b415fda3",
+      "reusableByWorlds": [
+        "gw-church-sanctuary-fellowship"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "11346f62f08b932e802074f791b4d66a7de11c4aa9b66fa5eb54f823ac19143b",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-church-sanctuary-fellowship-pews-left:v1",
+      "providerSpecSha256": "2520bc7b32961cdb40a77c843d7db4ca6a97acc28be048176ee652e637b9fa9f",
+      "reusableByWorlds": [
+        "gw-church-sanctuary-fellowship"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "2445d7bda34f9961e0bd1fbcfcdaf1d5425f50574522f8ab5990ef70a993c703",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-church-sanctuary-fellowship-pews-right:v1",
+      "providerSpecSha256": "36f7d321af57899f62d51773ce21a0a852c11f3ff433871a37e1e64f6c4f538e",
+      "reusableByWorlds": [
+        "gw-church-sanctuary-fellowship"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "01e0b316ebb23c96fb3598dedbd2c817795b175bbe4070c3ca7e58e040990be6",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-church-sanctuary-fellowship-shell:v1",
+      "providerSpecSha256": "e1986e702ce36e05f2e442014e573b46374b795704c2f0861aa4b6432c8b8836",
+      "reusableByWorlds": [
+        "gw-church-sanctuary-fellowship"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "8e5f40f74c6ed2af65a6421d601ef6b4b6f355f41ee45fb6e3dbbb073e867f84",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-clinic-waiting-room-exam-bench:v1",
+      "providerSpecSha256": "ef3614024a1eb4455a3ec736700a7d732e4729af61a68f661f67f635447499f3",
+      "reusableByWorlds": [
+        "gw-clinic-waiting-room"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "c8703a014bf1183970803ac892f44c6569ddc4897442bdfac008815e8ae734a1",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-clinic-waiting-room-reception:v1",
+      "providerSpecSha256": "f5c4f8689c97d2f999aed419d93e85e6485a5ff5a7817708dee6dce82912bb7a",
+      "reusableByWorlds": [
+        "gw-clinic-waiting-room"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "8091b04162f301be770a6de0a9dfdfcd7d4420a78c56b33508c97fed2a318b4e",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-clinic-waiting-room-seats-left:v1",
+      "providerSpecSha256": "0f1a1387914b01a14fca13c449b2dffc436badbfd79506fcc17dfbd387a824df",
+      "reusableByWorlds": [
+        "gw-clinic-waiting-room"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "88b08ff6637f319dc635c047acdb147f4e87f4735f1554b9d4daa339f3a62d5b",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-clinic-waiting-room-shell:v1",
+      "providerSpecSha256": "a105a718f24e526e373485180ffa915e9eaa4187b3d483c3aacf5e7aaae2bfc3",
+      "reusableByWorlds": [
+        "gw-clinic-waiting-room"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "0659d81a8c60f95e192f538a799006876c3735991f3a2cc247226d817d58ce97",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-college-dorm-campus-bed-left:v1",
+      "providerSpecSha256": "41e100d03dc40db783eabaeca9e10b3b89590e2904b6381fbdfa5b176413038c",
+      "reusableByWorlds": [
+        "gw-college-dorm-campus"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "8c6e655171dd6fc7b0059a39f3d1da10fa78da0d6c153052fc45b743e0e110b1",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-college-dorm-campus-bed-right:v1",
+      "providerSpecSha256": "e8542bf4de74cd904d0c2a952cf07bd2ad61df945e315d057266e583a1619ed5",
+      "reusableByWorlds": [
+        "gw-college-dorm-campus"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "9e43f398be292e6b5bff093d4c0367df68272280819287afba4966927f4b2596",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-college-dorm-campus-desk-left:v1",
+      "providerSpecSha256": "0ab319d6c7b028e81a3c8872e5b7b7f55f802d9cfeb2f3dabd7f2bef3c952810",
+      "reusableByWorlds": [
+        "gw-college-dorm-campus"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "2725d9a40c23cde644ff8217e4976a83c05d5895fc2259609eba5606a25622b0",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-college-dorm-campus-shell:v1",
+      "providerSpecSha256": "128c1fe2f16973add884b51e8199210f68b09a381c6d91837f03e03dc3c0298e",
+      "reusableByWorlds": [
+        "gw-college-dorm-campus"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "34cf66a29487bd188a9b3bc13c00250a1f66eb3e2e7aa4b89a736e6296472ff4",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-college-dorm-campus-wardrobe:v1",
+      "providerSpecSha256": "9f63d298006bff9734aff27c3c992c36748ff3de284f68e546855e0d8c0f0d4c",
+      "reusableByWorlds": [
+        "gw-college-dorm-campus"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "9d954f0a5dc6eb11804a29363a1336c72990a12ecdee31adaca3ed5db46e8044",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-courthouse-public-hall-bench-left:v1",
+      "providerSpecSha256": "c267143a603c34e540276824fef0fa340ed9ead9cec881660380fcf5ef488e88",
+      "reusableByWorlds": [
+        "gw-courthouse-public-hall"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "61b6da1e97298350c9a9c7b5c9c564c1fb4f17821897abd3db42fa6f76806cc8",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-courthouse-public-hall-bench-right:v1",
+      "providerSpecSha256": "c2ccefea05d19a73834c61d1583da63235177ac5fba097030ea1f4ab7f8cfd3c",
+      "reusableByWorlds": [
+        "gw-courthouse-public-hall"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "334a50ff1eeba8abaa499fe11ff2ab1d835d8a3a1c7c5b15372290475fe05358",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-courthouse-public-hall-service-desk:v1",
+      "providerSpecSha256": "00e499606bf59c83ba913988b8fd07622e776574d98852d22734a85fe3b484c1",
+      "reusableByWorlds": [
+        "gw-courthouse-public-hall"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "e9704b6e43bc547c9e04a5cb4da8bb8463050589db2d1b494e383a585081bfee",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-courthouse-public-hall-shell:v1",
+      "providerSpecSha256": "52292b15c3b19d62951db545f1756cd01f74f57501fd3a8fd5642d42b5c1a93a",
+      "reusableByWorlds": [
+        "gw-courthouse-public-hall"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "36498677ecb25cd607f991f1bc56f4390420737216ca9bdcc596300b8cacf583",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-diner-cafe-booths-left:v1",
+      "providerSpecSha256": "9f641c49822a56a8e2d06fd0a6301c5e6149925ff2378b7aff958f8bca873e23",
+      "reusableByWorlds": [
+        "gw-diner-cafe"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "8cc95a76f70a65ea253990201a2f7096adcd43e59d789ab1fc1202ab2fa62d7b",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-diner-cafe-counter:v1",
+      "providerSpecSha256": "1dc5db4d54b31bd16616d5daa40f85f653beff16c80d6124e96e9791e5b5e3cd",
+      "reusableByWorlds": [
+        "gw-diner-cafe"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "7d5c9cc0fe7465b9a41311a6049cff8ea344a01eaa24ae2a82b969c495a8500d",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-diner-cafe-shell:v1",
+      "providerSpecSha256": "a51f8a2ea8913ebfbac184bf7834d2c285c092a5e8aaaede97fecf96910960e1",
+      "reusableByWorlds": [
+        "gw-diner-cafe"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "36d32422444758adfd63f16c4e962584f11c7502ac0189a1b016057884ab05e1",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-diner-cafe-table:v1",
+      "providerSpecSha256": "52ab12527dc72ae39e87d9e886232229bda64e904d23227f9a847a94d84e4724",
+      "reusableByWorlds": [
+        "gw-diner-cafe"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "ad90a7a3502025343c608d2a62a24c6ffb1bfa9504f5bae4dc40cb13deaaefe0",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-east-texas-living-room-armchair:v1",
+      "providerSpecSha256": "6721b6235830b08e5cddcc7ff586af78cd28761d14c8da5c8724bb52b259f745",
+      "reusableByWorlds": [
+        "gw-east-texas-living-room"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "f4be19a3a58d7694a388989292f8f94bf6c4e059ba4adb6b141619bc96aeed0d",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-east-texas-living-room-shell:v1",
+      "providerSpecSha256": "ad672e36a2875f77dc12f8fe10e2fc2a9df6c897c738db786ee047f07f8aed18",
+      "reusableByWorlds": [
+        "gw-east-texas-living-room"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "eef37c6bce3edf7011d8249c8e1edbff6174189ad0c67f81c9b83647bfa07583",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-east-texas-living-room-side-table:v1",
+      "providerSpecSha256": "dedd845a3c0191a8cdeab716d646dd1a9d8773d2ef2aa20d3407c74a2d24d6d8",
+      "reusableByWorlds": [
+        "gw-east-texas-living-room"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "c7a9b58f06894213e5e54bafaa26137e1c9d215baf708e78bc2017108f25ea81",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-east-texas-living-room-sideboard:v1",
+      "providerSpecSha256": "d596067723b33ac0482dd13377b5a169ac90b765f172351c37e191a15304b77f",
+      "reusableByWorlds": [
+        "gw-east-texas-living-room"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "a25d3a615a3f82351bd78656a4f5da393140a040d468a7a8cb46e0caf6caade2",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-east-texas-living-room-sofa:v1",
+      "providerSpecSha256": "4b7105e6c0ec186a060019262545a36f106cb06ae61d80d78ed780c5897af728",
+      "reusableByWorlds": [
+        "gw-east-texas-living-room"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "05442920a5d77ef7cf295f23dafd1a7c8180e7d6f085cd654ce318e8d89ed211",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-east-texas-residential-street-ground-shell:v1",
+      "providerSpecSha256": "0fd196997b0008a39ca204d0465182f527e0379514bec028fa3e2cd364de1ac7",
+      "reusableByWorlds": [
+        "gw-east-texas-residential-street"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "b459108d2d8aa6020086c8012e257e8e45ad1fc8974ced808116a9221b628d9e",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-east-texas-residential-street-house-shell:v1",
+      "providerSpecSha256": "fa03c814b51585c1323d9db1f268da6a843783409595c8172f86d99e48bce763",
+      "reusableByWorlds": [
+        "gw-east-texas-residential-street"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "80f4491b407ad7393aada2846807682d39a20772fb194a11284a808bf8fcd6e2",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-east-texas-residential-street-mailbox:v1",
+      "providerSpecSha256": "090637fd695970636487a937459d3dd9aaeb2ec4394ba83bc4ba3428a9ee350e",
+      "reusableByWorlds": [
+        "gw-east-texas-residential-street"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "e4d8f5b4cdfad65564c27ff160eb85de9da7179b5a50546890884589b9917ad4",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-east-texas-residential-street-vegetation-1:v1",
+      "providerSpecSha256": "1794eeac6009fb2539eb019855b2a2ff3a82f6c9ad81e7f6b33105bd1b8d4a7b",
+      "reusableByWorlds": [
+        "gw-east-texas-residential-street"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "b76da211fc8b6ae6b9c312a70e48102a38cdbe595b1f0be2c7681570f4f118ce",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-east-texas-residential-street-vegetation-2:v1",
+      "providerSpecSha256": "68c7936f0200dc097bd7343ab4a7dc169fff06a9bec77891ca35df6a88c11664",
+      "reusableByWorlds": [
+        "gw-east-texas-residential-street"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "633ef69f290b3d684e14a77e714be882ed44d451b8451c061a4508992ef6e4c9",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-east-texas-residential-street-vegetation-3:v1",
+      "providerSpecSha256": "8bb3d59295e63734c55233c7943c6163ed338046ac680f497f50618a86e783d2",
+      "reusableByWorlds": [
+        "gw-east-texas-residential-street"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "91b15d2aa4de3310bf003d66ca3d676440bfc96463cf69c910b1d4fef44f6fe5",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-factory-floor-machine-left:v1",
+      "providerSpecSha256": "708227ce113df11602a696c18e6b53809bdff3d59f3a99a552bac2c6e709082c",
+      "reusableByWorlds": [
+        "gw-factory-floor"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "b51846517246d476fb606a9917759c2ca5c99ba97db71ed382dd767b9ea8603d",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-factory-floor-machine-right:v1",
+      "providerSpecSha256": "a80c4e4600a166503b17f7f626fed22a1f35e48f8b15dc3a3cd1daf30c913596",
+      "reusableByWorlds": [
+        "gw-factory-floor"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "28d6d26b8faeaba8f9481660dc5d312f943e642728cd1fe924da4a621b5bb03e",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-factory-floor-shell:v1",
+      "providerSpecSha256": "7c26eaa1232f3743bed3a9605bd186b9af975583d88b9ae20be1cff4cdf44881",
+      "reusableByWorlds": [
+        "gw-factory-floor"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "ad1b7abdb8cc7b1bb3888cacdfac37075a4ebb76ff46e00ce965ea065fd9792e",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-family-kitchen-dining-cabinet-run:v1",
+      "providerSpecSha256": "9f768fd78d5e637805e0a2b09bffdf311aada481ac4ab2220bd30ca8b90168c7",
+      "reusableByWorlds": [
+        "gw-family-kitchen-dining"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "a02ab8b514d8b1d3a6d2993bde51183146bafa179b4d584e6c63096001056b22",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-family-kitchen-dining-china-cabinet:v1",
+      "providerSpecSha256": "65d056d387cb8552bd71c3a07c6b43a8749657e23db6535f208fe860b7ea447e",
+      "reusableByWorlds": [
+        "gw-family-kitchen-dining"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "6bc7cd7a52c5454537ff41fe904660a64eafdb28eafb39ba7d597630225afc00",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-family-kitchen-dining-dining-table:v1",
+      "providerSpecSha256": "a173cfe09206223a94ad5e281d8a66ca9fe27e24ddc63be27fbcea812694b2bc",
+      "reusableByWorlds": [
+        "gw-family-kitchen-dining"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "6a81295d5737803684960def7bad1179475a905fd607821be9078871c476dc36",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-family-kitchen-dining-range:v1",
+      "providerSpecSha256": "b1fdc5427cddff8afaa33ed61123711fe84babcc7b2658028a311994a1923e3c",
+      "reusableByWorlds": [
+        "gw-family-kitchen-dining"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "2a10b3e46aacda14629721369dbfbe5d2f482f13c8cf500b19efd34c0a8b5e23",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-family-kitchen-dining-refrigerator:v1",
+      "providerSpecSha256": "bc2744754b480917bd2cf3b7ce4d81d6c64daf114e25e4162e829d58a03bebd6",
+      "reusableByWorlds": [
+        "gw-family-kitchen-dining"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "ca238d7fe5b4668a6bda0ce896be3867162a749532ea2468775f5d393f88a80a",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-family-kitchen-dining-shell:v1",
+      "providerSpecSha256": "5cb466a2c373fd9da2639bbda9f1bd31d352f8bf78095fd13f4835bae47f5d70",
+      "reusableByWorlds": [
+        "gw-family-kitchen-dining"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "7ebc776822dfe7b77c144b3490867bf58fcd0edc97bcbde5048e03318d745918",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-forest-trail-bench:v1",
+      "providerSpecSha256": "fa6fef6c38cf685fd45c73548d15df75204fff70927d69f13b008f66c081d1f0",
+      "reusableByWorlds": [
+        "gw-forest-trail"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "675ea63a792189f6858d57f15d91e169a0a74a8624c9da4006019ca9d9be37a0",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-forest-trail-ground-shell:v1",
+      "providerSpecSha256": "a6bec2f24f6ec8353252886a16249d5f78fc7f581f25423a8a3d3fcf24529654",
+      "reusableByWorlds": [
+        "gw-forest-trail"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "e2145010b18f1c0f08edf20a3d1a2c900c5c201f2701907cd5bc5116eb0e02b7",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-forest-trail-vegetation-1:v1",
+      "providerSpecSha256": "79342fc90e974e4d21f9d8cadefe8ed1979a836442f7c48a84a26bde3ad9ce0c",
+      "reusableByWorlds": [
+        "gw-forest-trail"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "9c5471d1b4213475cf48ab71bca996c27b78076449a32b80c59d6e31d745e24d",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-forest-trail-vegetation-2:v1",
+      "providerSpecSha256": "65acaf88ec3bb5f69dd188e19c4c839afb86292d2a76a8279965e933f6c83dcb",
+      "reusableByWorlds": [
+        "gw-forest-trail"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "a0d1163146fac8d712e838a66c325c8b147a59bf40585cd9a558289c456d3873",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-forest-trail-vegetation-3:v1",
+      "providerSpecSha256": "ec35d7e26c272869945b450e4e817a8ac186137b3b7877ae24324fee5e500257",
+      "reusableByWorlds": [
+        "gw-forest-trail"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "3127a05b3013328fc41ef0d55f39b4ff230e6969dc00d0c7218acdd5604e4671",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-gas-station-counter:v1",
+      "providerSpecSha256": "54580d4c16a6ac5870df48614a400bab83fc626b65ab10b5919200fc0dd211a1",
+      "reusableByWorlds": [
+        "gw-gas-station"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "83aa55579075421cb8e603a91c755462fb120f8078bc1ac53e5898d708eac3b0",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-gas-station-ground-shell:v1",
+      "providerSpecSha256": "f4f00c82e249e889e5969dd0f4d875b8a6a8397f715de0ad55378433dc0e9933",
+      "reusableByWorlds": [
+        "gw-gas-station"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "e547ee4fa5d5e6bc2dbd8acc560078f541fc8f11f135c80137ee82573192ac4b",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-gas-station-pump-left:v1",
+      "providerSpecSha256": "592831d32f087df5ba643faf6ee93b36e5bc9136e775d1f937ff121d15ad5ff4",
+      "reusableByWorlds": [
+        "gw-gas-station"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "88ad7c85a67fafb069373e6a6966705ac0182675909c2756bcb1993a9bee3d31",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-gas-station-pump-right:v1",
+      "providerSpecSha256": "566f70af4dcbda279378051c2ed2749a0b3c0d635cd3be75f6803d8c2b1e0d1f",
+      "reusableByWorlds": [
+        "gw-gas-station"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "58a834c480af65cb014cd394623938561b1008297160b694fbcbface4a286103",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-grocery-store-checkout:v1",
+      "providerSpecSha256": "3d3a8076e77de2b7d64391292a37ac59b7b096d669c83873fbbf7d62db23b66c",
+      "reusableByWorlds": [
+        "gw-grocery-store"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "385fee19ba316e3cdec6f049e0f55506f31af0f6959960b06202f302b7eb9d39",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-grocery-store-shell:v1",
+      "providerSpecSha256": "50ad14fff368bf51a108956acc125d58489b9e9da27b338d3b3e0e3555d90c96",
+      "reusableByWorlds": [
+        "gw-grocery-store"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "0f6d5f00dd591333d93be103ce095384c446327e24f0afcb45630042f24ecba3",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-grocery-store-shelves-left:v1",
+      "providerSpecSha256": "d571f7e3f45ab44ae511ab70404abc7fd7a42d42cc918c3c0af43bc85e6eb23c",
+      "reusableByWorlds": [
+        "gw-grocery-store"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "ca34d7079033603206a35ac7ddcba165d9ad7a577c0e95452232a171ed8af86f",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-grocery-store-shelves-right:v1",
+      "providerSpecSha256": "fbe8481b889a3fc47f41cc5792238d9b956cc5d5e4bbc3f33b2c89855ed931e9",
+      "reusableByWorlds": [
+        "gw-grocery-store"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "c768a2ee3659650244c4082780602574b7bd27ce7b8b2a5ad38a319763bfc200",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-hospital-room-corridor-bed:v1",
+      "providerSpecSha256": "dbc36ecd2f51f48797a25e45d1006cb00a4549db26845fc1048f01a85dcdd9ae",
+      "reusableByWorlds": [
+        "gw-hospital-room-corridor"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "5a80a66a138ee58ae7edeb787c841fa611153d093a823eeb96ff5dff107a6790",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-hospital-room-corridor-cabinet:v1",
+      "providerSpecSha256": "3a8e507d4d5c81a75200e104a7ac7adf0bd9b407b76f482fbb77d66ebb9f945e",
+      "reusableByWorlds": [
+        "gw-hospital-room-corridor"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "b0b06ce66ea7dce238e9742d18a353c958d84109b45143d039ced2bd69a6e532",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-hospital-room-corridor-shell:v1",
+      "providerSpecSha256": "db8ccbcade18c2cd12bc86023476e9965054a64aba6d08fdf5e51a694d975798",
+      "reusableByWorlds": [
+        "gw-hospital-room-corridor"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "bcde822a14a9a5e9144476dad11f8c2ada53c9f80a99f17113dc0f127750cbd7",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-hospital-room-corridor-visitor-chair:v1",
+      "providerSpecSha256": "4cf6b605badc53abdcbd062e47318c3296502c4b17e15d33865e61efe141071d",
+      "reusableByWorlds": [
+        "gw-hospital-room-corridor"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "80dc5bd609e7317fdfdb8f81bd53da6e78ee914dc811b17b779b3822b0ce5b2f",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-lake-dock-shoreline-bench:v1",
+      "providerSpecSha256": "22637c0204d1feece304099c082de0a65273505227d623907b446ac8a61c618f",
+      "reusableByWorlds": [
+        "gw-lake-dock-shoreline"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "3807daea39755a5cc5a3576ee0a6f8b14f2272c77a830a7ade571643cdbca248",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-lake-dock-shoreline-ground-shell:v1",
+      "providerSpecSha256": "846d1afdfcfa14a719c07493194870038e14004c646180c84a0c07058f4fa49a",
+      "reusableByWorlds": [
+        "gw-lake-dock-shoreline"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "57e0ef285eb57628cc7acd507705cc285ca3d31c9ce5002d92d4dcae585ea41a",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-lake-dock-shoreline-storage:v1",
+      "providerSpecSha256": "a31c957a6cb6bf3e65151c2e44485af3f2ac3f244fab82c314522d3ebe858ff7",
+      "reusableByWorlds": [
+        "gw-lake-dock-shoreline"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "13e73e9970a28b72202f49d1bdcf0416c11c64c71c89c5488da208dbd4ddb0b7",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-lake-dock-shoreline-vegetation-1:v1",
+      "providerSpecSha256": "29557722bdac0f88e6ef41706d3f773b91e8847e3cf9398cee5dc05bfb4cee75",
+      "reusableByWorlds": [
+        "gw-lake-dock-shoreline"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "fee19e934de9685d563ece37ec5071833905a0064e2a254cf9162b53d9a2bad0",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-lake-dock-shoreline-vegetation-2:v1",
+      "providerSpecSha256": "a34401a30595a880734ca75c6b03590d917ed20dd08c8f4fb9954a8062436af9",
+      "reusableByWorlds": [
+        "gw-lake-dock-shoreline"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "e4f14e0d854d255d651767852e2975a01ba3b7134fb6d523b9a0eb3818265980",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-lake-dock-shoreline-vegetation-3:v1",
+      "providerSpecSha256": "b0b72b18408a4af146bf43bfc8e18886f682e6ffb30032bfb356f58984bb68b8",
+      "reusableByWorlds": [
+        "gw-lake-dock-shoreline"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "c02022cf2ca2c421ff8c8fe95f624c94e2cd402d41a138b0016889cddfad0770",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-military-admin-operations-cabinets:v1",
+      "providerSpecSha256": "d2ff75135cc6405ac83b4a4a6e1578a69dd1e335b81b83b00f646a1fbe43cd05",
+      "reusableByWorlds": [
+        "gw-military-admin-operations"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "fbca47b370861177320855d36bafbb899bd2dc8509089bdd70e4af7ddc84d187",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-military-admin-operations-console-bank:v1",
+      "providerSpecSha256": "c1b9f87c93886f20a75d050e7fd4eea69888601915cdc31d41c9c2c3239a1e74",
+      "reusableByWorlds": [
+        "gw-military-admin-operations"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "5e8fb84fda1be60fecdceda13cb2f56f4d6467a17e71fa29ebc14655f519c9a7",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-military-admin-operations-desks-left:v1",
+      "providerSpecSha256": "ba28ca05a6e3e8d4fe6b7c93789c690c8c76b28d0fd1e9f0f6287aa3f79e3d23",
+      "reusableByWorlds": [
+        "gw-military-admin-operations"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "4ac5675161c58aadeb51a255ac795cc6c900c7e30e70e4063223294a07da15db",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-military-admin-operations-operations-table:v1",
+      "providerSpecSha256": "5c9c75aeb1ae964dc9e92d649b698b2d49b8abf8a781875e5557f3858fe16c9c",
+      "reusableByWorlds": [
+        "gw-military-admin-operations"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "d98e41c81cf77eb71dc2e518f81b14d1ef56bf0c98ac79499b61b9a975b7aa32",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-military-admin-operations-shell:v1",
+      "providerSpecSha256": "197a9739be7415a1fa1e770512862515e8e5c436394e77febaff460efe19b89e",
+      "reusableByWorlds": [
+        "gw-military-admin-operations"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "c084859bff5eebd9edba950b59382bab33bba33b53ca10639f6a01febf896d67",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-military-barracks-beds-left:v1",
+      "providerSpecSha256": "933d4f9e2c1b6a6effbc5630f700fa51a543cac277602f7eb0aac123d58d80d2",
+      "reusableByWorlds": [
+        "gw-military-barracks"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "33bd69290965893e2edaeb14a72feb9f4199713041e3c2669127214521c452d8",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-military-barracks-beds-right:v1",
+      "providerSpecSha256": "5655349c0f5dc14038fe1ad99f79ce537320cf4ed2af9b386221341cb641438e",
+      "reusableByWorlds": [
+        "gw-military-barracks"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "a0eb629bfb764fac14c1237e70efb115aaedde408884430d0483120082122bef",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-military-barracks-lockers:v1",
+      "providerSpecSha256": "acd00c6973afe804407409983a16a960dad61542a4cd0abb09f18f75c1f98d95",
+      "reusableByWorlds": [
+        "gw-military-barracks"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "515bc677aaa5cbeb64676cbc00645c38333e8d5f76b04247291ce4195f43a12e",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-military-barracks-shell:v1",
+      "providerSpecSha256": "f20ada6dd96c30c1786fce1a10602640fa67b2ff12e50def7d6e3aff9e3af567",
+      "reusableByWorlds": [
+        "gw-military-barracks"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "292275ec5534e51b58afa039936801cf3b67f6b4b8c100ec87dfd134a0025897",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-motel-room-walkway-bed:v1",
+      "providerSpecSha256": "c0b32ccfbcb63977fb8792ebe5a7bae7f3e1a6644220aa15b561f68e89975b8c",
+      "reusableByWorlds": [
+        "gw-motel-room-walkway"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "1aadd2dc516bb49157bdbc92320cee7198a92dc99ac7f3ecb9fdd4856fc8cfe0",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-motel-room-walkway-desk:v1",
+      "providerSpecSha256": "81e594a10c38759a19bd3e8a50ecfb462805b9c763eab5883d508f90f81072dc",
+      "reusableByWorlds": [
+        "gw-motel-room-walkway"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "3757be39a91fa43193497794212e0cea29db19ad069a5e413034626d01599c79",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-motel-room-walkway-shell:v1",
+      "providerSpecSha256": "5bf5d5e5ad86e76814480eb3989cbcc49f802de8d487d9428327dcdfe40f6c71",
+      "reusableByWorlds": [
+        "gw-motel-room-walkway"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "d496afa05f32d57afea3fbc32761acb4aad2b73ee0e9aa1b7ff48a6ae026ab94",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-motel-room-walkway-wardrobe:v1",
+      "providerSpecSha256": "918c5e358964bc198685074aa7690ea05bec4a01ba5446c44ea92828ed844cd5",
+      "reusableByWorlds": [
+        "gw-motel-room-walkway"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "a3497322c9e5953ad65d015dc0032bc0a0eae67714167d6936958592e2de4fdd",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-office-workplace-desks-left:v1",
+      "providerSpecSha256": "ba742c2ce29f9b72d5c8c4d34a114ef64fa790006e9cda81294d8e8904ac7486",
+      "reusableByWorlds": [
+        "gw-office-workplace"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "86ad092992b0d56c1eb3000b47779bee971c1b4710abe524c8054dd9661e1c10",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-office-workplace-desks-right:v1",
+      "providerSpecSha256": "8b433712540364e19159b05ae36f1a4d0f932aa642a52ac117da8e8f9b38a711",
+      "reusableByWorlds": [
+        "gw-office-workplace"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "6ccfea3967b1bc026b2fad24dcf7a3e889e4e739b7b2053ed0cbcafcee9f315c",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-office-workplace-shell:v1",
+      "providerSpecSha256": "856106f23f65462fb014652cf9132eed2516bd7f091f6025fb2a584d2ce2ff15",
+      "reusableByWorlds": [
+        "gw-office-workplace"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "0d716ad12b0b85b65bdab808ddec9c91a5de27e970bf4770855ff44f20e5f439",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-office-workplace-storage:v1",
+      "providerSpecSha256": "673989f822ca464a8c6c92acf899d5aab92108fc512f6ab5f48c77e8bf667f1c",
+      "reusableByWorlds": [
+        "gw-office-workplace"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "5740aa010d335773f591449242fe79c58c7aaf06a9e71c862dcaa8d1c1de36b5",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-park-playground-bench:v1",
+      "providerSpecSha256": "e7e01bef7def4889037798c27a8d2cd70ae751597686ed45417a0977721c01bc",
+      "reusableByWorlds": [
+        "gw-park-playground"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "209618f7c5705d63c402156fe28cf42bd04c1878b068fb6df629308b8bf12190",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-park-playground-ground-shell:v1",
+      "providerSpecSha256": "ead59d5c71a430e3a785c1c7624ab73d40ca48c662ebf3b4699aaf45328421f2",
+      "reusableByWorlds": [
+        "gw-park-playground"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "9c46f5f075eb93977051fc3cfd6225db8bb61f8679a7af32bc95b547918f94a0",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-park-playground-vegetation-1:v1",
+      "providerSpecSha256": "c3005c4459d86186b45fd8e8421ef42b5232527fe96cfce07efd22aa76dcb027",
+      "reusableByWorlds": [
+        "gw-park-playground"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "9ab3a1acbc8ad9c65746f2e45ff449ecc6d143e3da039739ed93c84af26aa382",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-park-playground-vegetation-2:v1",
+      "providerSpecSha256": "e65e82e8f819d658ab0bdc424f4dca8e4c6004818526fd43cf34cb2a4fb64f1e",
+      "reusableByWorlds": [
+        "gw-park-playground"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "85c67eb98cf38f53fecaeacd89923679501ce93f5a82086e2db02005b97e2448",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-park-playground-vegetation-3:v1",
+      "providerSpecSha256": "f63e5e19cd3d4cd086341291ec12dfa3c270e80bf56835fe54a2d5832f199f6a",
+      "reusableByWorlds": [
+        "gw-park-playground"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "042f69e9f929b1b232fd5655662884b9a5ea7405641b4781542741e9fde9254a",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-rural-house-porch-cabinet:v1",
+      "providerSpecSha256": "b265c6302a9dff13279e794185475daf2f6cf5cd173cd6fca0bebceafe62b847",
+      "reusableByWorlds": [
+        "gw-rural-house-porch"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "40b93fe0aaed9d2522c214d6c90099a22258967f6f7cd0db7624fdb1a5f929ab",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-rural-house-porch-porch-bench:v1",
+      "providerSpecSha256": "eabaceb2e40d171c1f65e729f6607b57cb896de6bfb4042264e7b0af0e917cb2",
+      "reusableByWorlds": [
+        "gw-rural-house-porch"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "82b8d6b4d33683efa0eecca1756201d4a6ec9d315cd5952eb350ab789033b471",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-rural-house-porch-shell:v1",
+      "providerSpecSha256": "3c18efab9e85342c4599e48e74ec5717c69e1c9da9d02f4b8a8a12e9e4ae2f43",
+      "reusableByWorlds": [
+        "gw-rural-house-porch"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "7c4d142996d8709c85be61296c92042e229507a044c508f4a0e32f97e20fc38c",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-rural-house-porch-sofa:v1",
+      "providerSpecSha256": "1eb8a04d70dd427bd3f83757a3ed126d3acbfb332edee4d8d059584ad4cc76fb",
+      "reusableByWorlds": [
+        "gw-rural-house-porch"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "012f4c03eef34d97044a6644e3b9e43992b4124ef0b34c84717ceee78700c108",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-rural-house-porch-vegetation-1:v1",
+      "providerSpecSha256": "ee2af88737eee0ebb1a531e1f163c2c4e4df4e45a291147dc08b4429a0edee6c",
+      "reusableByWorlds": [
+        "gw-rural-house-porch"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "323ae3b8dbb6154401558dd9040113a76a336b34e706ee0a0c4fbed1ad4c8453",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-rural-house-porch-vegetation-2:v1",
+      "providerSpecSha256": "25df7684ea759ad47874acb3ced88e143710d0b4398ce19eafd16b8626a0f05e",
+      "reusableByWorlds": [
+        "gw-rural-house-porch"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "fef9696673f1f8f2c16304b46f1cacd8792fcff99e0472d797c5549ccd303ad4",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-rural-road-bench:v1",
+      "providerSpecSha256": "2b667f0f06753a2bf94ede83c5b7eaabbaad78671d7e86c914021311893f3adb",
+      "reusableByWorlds": [
+        "gw-rural-road"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "98aff327f369645ef785a20455d2fd5cb3b753f6c9c7103e9dbd25fe54841fbf",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-rural-road-fence-left:v1",
+      "providerSpecSha256": "033bb262000932a91095aa16b936e5017a23ea995755da882610faf2e9219633",
+      "reusableByWorlds": [
+        "gw-rural-road"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "8bbdc5ac358a046a09c46f4f81c8bcb628bf27e96842122d71c71c5032fbcf6c",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-rural-road-ground-shell:v1",
+      "providerSpecSha256": "800625075be67100315b8882da9c0da20cf92f0199a1cfbc6a735573134b4bd6",
+      "reusableByWorlds": [
+        "gw-rural-road"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "893a0456383ba153834984c2eabb7093bd80bfb90538eee613d7e1861f554722",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-rural-road-vegetation-1:v1",
+      "providerSpecSha256": "280a92eae2a45a6501e4e1db2b18709e5c686293ca675af0f7937f78df827ed3",
+      "reusableByWorlds": [
+        "gw-rural-road"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "2c9954bb498f73f341e63eaf9635977628949f16b30ab6f68f466f54c20062f0",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-rural-road-vegetation-2:v1",
+      "providerSpecSha256": "24e8c61e5de790a4548c674978d21b155bcb6b2167bde1372e2a77faf4ef27a3",
+      "reusableByWorlds": [
+        "gw-rural-road"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "d3158dea75d60ec188c4a122845b88557fa7f60b8115e292127fec3288103bf0",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-school-classroom-hallway-desk-left:v1",
+      "providerSpecSha256": "6598459201da71a73822ff09d61eb4a481bc0c4d61c75c60d0f4aa8ea04447a3",
+      "reusableByWorlds": [
+        "gw-school-classroom-hallway"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "cc0c5037ab46d34860258ab242250d96d4b28ca1541ec50f98deb201065e0357",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-school-classroom-hallway-desk-right:v1",
+      "providerSpecSha256": "1b142957110174493119fa51c913ec678480d4f9a7f19c05a9c8c465d6a56fab",
+      "reusableByWorlds": [
+        "gw-school-classroom-hallway"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "9ff71921832c5962bc280970b25a5cb77a6c252b09b9887f4ce4e9e70e5b88af",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-school-classroom-hallway-shell:v1",
+      "providerSpecSha256": "3b822b4f8010aa14155d8878dac40acf96ba3e2f97cf67f85cb6c7840f112c8b",
+      "reusableByWorlds": [
+        "gw-school-classroom-hallway"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "b7402a0c5f769db648e30c56b9e4341b74b15e2ed24abe09712044b940f60f7b",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-school-classroom-hallway-storage:v1",
+      "providerSpecSha256": "91698bd30158cd450d723ec93a6d924000aa4faaaf835bae64d6145b645d6562",
+      "reusableByWorlds": [
+        "gw-school-classroom-hallway"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "632e52b86cb329c222607eb895704e754532f434cbce8d38b2b2528f95bfe6e3",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-school-classroom-hallway-teacher-desk:v1",
+      "providerSpecSha256": "ffd5dd7ada52242565a793b7ac645e0b72bf19446b37cac3aca6b295a6bc0953",
+      "reusableByWorlds": [
+        "gw-school-classroom-hallway"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "e63903122895cab3f1bcb0a5f52478ece9498c083f503cfe11f3c140553c8ef9",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-warehouse-rack-left:v1",
+      "providerSpecSha256": "abbb5ca807119e1d4e2290c0347ba399b6c79712029da37f9003c6ae851d4d8b",
+      "reusableByWorlds": [
+        "gw-warehouse"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "5314ece8d2c78001ac4b95ec2e3158019d7c5d9bb27c60aad78d9f93e3c6518a",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-warehouse-rack-right:v1",
+      "providerSpecSha256": "da0f75ee0d0ecfb7763fb9fe7fa34a51967d4b2785a741f7508117b4f84800ee",
+      "reusableByWorlds": [
+        "gw-warehouse"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "74c0b72a4f8cf1d09904a8b2b7205a1817da6ab6f8cd7615f58bae5b2f1c682b",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:gw-warehouse-shell:v1",
+      "providerSpecSha256": "b3d69a734d50bbe5500c656b9633d6bddbd6f1c0079ad172dd31806562497c55",
+      "reusableByWorlds": [
+        "gw-warehouse"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "dd45fa8b6c44ddf62a7c34a191841178cdfa130cc7ecabbd260c1f3b6d20aea7",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:sidewalk-concrete-one-meter:v1",
+      "providerSpecSha256": "94c73045d244fbd2d76c1fbb7db3893630123a6582a277500c6443ff64a543ce",
+      "reusableByWorlds": [
+        "gw-backyard-garage-workshop",
+        "gw-beach-boardwalk",
+        "gw-cemetery",
+        "gw-east-texas-residential-street",
+        "gw-forest-trail",
+        "gw-gas-station",
+        "gw-lake-dock-shoreline",
+        "gw-park-playground",
+        "gw-rural-road"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "1205b1c38e22389ed6c9a0f926abede7919175130ce119c13d8921edf2964964",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    },
+    {
+      "id": "kit:window-residential-neutral:v1",
+      "providerSpecSha256": "1500cf06d14d64bb0c199cb76f0453b5ffc7698bc073e3375b7b8db14c5e9b19",
+      "reusableByWorlds": [
+        "gw-airport-concourse",
+        "gw-apartment-living",
+        "gw-bedroom-era",
+        "gw-church-sanctuary-fellowship",
+        "gw-clinic-waiting-room",
+        "gw-college-dorm-campus",
+        "gw-courthouse-public-hall",
+        "gw-diner-cafe",
+        "gw-east-texas-living-room",
+        "gw-factory-floor",
+        "gw-family-kitchen-dining",
+        "gw-grocery-store",
+        "gw-hospital-room-corridor",
+        "gw-military-admin-operations",
+        "gw-military-barracks",
+        "gw-motel-room-walkway",
+        "gw-office-workplace",
+        "gw-rural-house-porch",
+        "gw-school-classroom-hallway",
+        "gw-warehouse"
+      ],
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "sha256": "5169f3062d7ee63eeca4e7d2d5795e65127e40807de2f96c9786f578384c31ff",
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "READY_FOR_PROVIDER"
+    }
+  ],
+  "launchIntegrated": false,
+  "outputAssets": 0,
+  "packageId": "gwq-07728fb3b8542d2e59f0f321c78c93deaa0ce4e892d62e73c2653c8f2963da88",
+  "previewRenders": 0,
+  "providerCalls": 0,
+  "schemaVersion": "urai-generic-world-provider-queue-v1",
+  "spendAuthorized": false,
+  "truthClassification": "GENERIC",
+  "worlds": [
+    {
+      "batch": 2,
+      "id": "gw-airport-concourse",
+      "relativePath": "gw-airport-concourse.json",
+      "sha256": "594fdc25053fca03788e5bd09f18711fcbdc5dd75e9672a3715d6c2f19d9ddcb",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-apartment-living",
+      "relativePath": "gw-apartment-living.json",
+      "sha256": "be1d87488467924f4a870d71df43c1d78f2b701d780327d184b102cf89320f0a",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-backyard-garage-workshop",
+      "relativePath": "gw-backyard-garage-workshop.json",
+      "sha256": "e1447787a6305e9f5351fd893026a7fb6954dedefcc59742e7d23b619fdae34d",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-beach-boardwalk",
+      "relativePath": "gw-beach-boardwalk.json",
+      "sha256": "c427c724409d1346c7bd521cb6a26e260824e2ab2ae8de152a0f843475a77e48",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-bedroom-era",
+      "relativePath": "gw-bedroom-era.json",
+      "sha256": "5e1cc357f63a41d719e5f1e982d4ba8e57beabd5346d9bf1b2c741e77fb6c496",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-cemetery",
+      "relativePath": "gw-cemetery.json",
+      "sha256": "411ac6db194fce1f7476d53ef9bfa27ffe33e1d057b82c1394988e320912705c",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-church-sanctuary-fellowship",
+      "relativePath": "gw-church-sanctuary-fellowship.json",
+      "sha256": "3f00153258a34f902d5237b9dc5917bf79081596ae0ff5c8c3ab1fc4260a0b48",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-clinic-waiting-room",
+      "relativePath": "gw-clinic-waiting-room.json",
+      "sha256": "306dfda86046a954415a5936a4a8d6913c45b7e4a064fcb14717c6f0804dbab0",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-college-dorm-campus",
+      "relativePath": "gw-college-dorm-campus.json",
+      "sha256": "3f8b52efe5f435f688c0ce29111fb6f1c3686d9ef67e8f161723c34875ea531a",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-courthouse-public-hall",
+      "relativePath": "gw-courthouse-public-hall.json",
+      "sha256": "604cc513d720caa358a55e78a378d993838cd80e885a08b9ce9b95932c19d962",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-diner-cafe",
+      "relativePath": "gw-diner-cafe.json",
+      "sha256": "974021af1b7d57ea01219027abf813b576d6ef094b02538dd36c01c43e507f15",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-east-texas-living-room",
+      "relativePath": "gw-east-texas-living-room.json",
+      "sha256": "faa57ef86a9d1d5629aacf1ee6ad03280546a73e60d9b760f33ca726122b0857",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-east-texas-residential-street",
+      "relativePath": "gw-east-texas-residential-street.json",
+      "sha256": "19b70ac77b1c62b6bc5efbcf0f775a465796174e6e9856f08d7576ba23591815",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-factory-floor",
+      "relativePath": "gw-factory-floor.json",
+      "sha256": "9b2feb2aafbe95d7bdf6ebe1018581316a7f3daf3b2e6f1fe046719babdbd431",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-family-kitchen-dining",
+      "relativePath": "gw-family-kitchen-dining.json",
+      "sha256": "14dd8392b2b9589f4d6d6145ff065e160003df31bd4e27cbde48cf7ad46a3037",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-forest-trail",
+      "relativePath": "gw-forest-trail.json",
+      "sha256": "631cf458f8e06f074f29d46e1fd19a0144f2ac9c1b0bbe9ae7edc1d6c46ec4b0",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-gas-station",
+      "relativePath": "gw-gas-station.json",
+      "sha256": "fdac334d879acdf17fd7c541ac77e1c14dbe9a3e24e9debfd978b4a3e31e3a16",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-grocery-store",
+      "relativePath": "gw-grocery-store.json",
+      "sha256": "a8a7382bde860263e0a7e8e86cc86f0345a5000adc50f549cdb45bf3a6231510",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-hospital-room-corridor",
+      "relativePath": "gw-hospital-room-corridor.json",
+      "sha256": "882565ad9641d9df900d64a86ee685e13bf5c5b5fbafb7df386c1580db1bf3fa",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-lake-dock-shoreline",
+      "relativePath": "gw-lake-dock-shoreline.json",
+      "sha256": "436f75fa4b110036b0e82708d8a6e79bf019c0c3de6280b5f8e50fedebd481ce",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-military-admin-operations",
+      "relativePath": "gw-military-admin-operations.json",
+      "sha256": "64754f87113e68c7b2b4ee729b8ea4e1161963f070efd181428d55561466c992",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-military-barracks",
+      "relativePath": "gw-military-barracks.json",
+      "sha256": "04ac8f734291497b091cd67d07ad02d93728af396e3bdf73b7f092db7c9ec48e",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-motel-room-walkway",
+      "relativePath": "gw-motel-room-walkway.json",
+      "sha256": "ba6c87fbf8bfc9421428699852d759e4a49c79203c9b18819c9982ee12b57ab8",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-office-workplace",
+      "relativePath": "gw-office-workplace.json",
+      "sha256": "73e6887aac79b33f9e0df93cb701985fcaac9d62f86720e78c9688022dd30688",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-park-playground",
+      "relativePath": "gw-park-playground.json",
+      "sha256": "e3708cd946acc6f4cdbfd14f9435d49f679c19224265d79f8ef7fb97b3843a40",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-rural-house-porch",
+      "relativePath": "gw-rural-house-porch.json",
+      "sha256": "a120bd15740676e7ff286bed1efdf88936bd4382b1d6638f859b5a1c8ea466d8",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-rural-road",
+      "relativePath": "gw-rural-road.json",
+      "sha256": "23c7e89379a543794b73a82faca52756b9380b3da5088d56b6ce45b6a4849297",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 1,
+      "id": "gw-school-classroom-hallway",
+      "relativePath": "gw-school-classroom-hallway.json",
+      "sha256": "1ca5e0ac9db50cce43872e1debaac1a66c3197baa1538f7d51a24ef0e10c3e11",
+      "version": "1.0.0"
+    },
+    {
+      "batch": 2,
+      "id": "gw-warehouse",
+      "relativePath": "gw-warehouse.json",
+      "sha256": "25dce089395052787b26dccbddff761fa6bc3118e0b84fe365f54436ae874bb6",
+      "version": "1.0.0"
+    }
+  ],
+  "xrCertified": false
+}
