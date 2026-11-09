@@ -113,5 +113,53 @@
     "NO BILLING ACTION",
     "NO PAID COMPUTE",
     "NO PRODUCTION GO"
-  ]
+  ],
+  "r969_additional_reports": {
+    "full_reconciliation": "docs/estate/JOBS_R969_FULL_RECONCILIATION_NEXT_CHALK_HOLD_20261109.md",
+    "full_stack_branch_ci_governance": "docs/estate/JOBS_R969_FULL_STACK_BRANCH_CI_GOVERNANCE_RECONCILIATION_HOLD_20261109.md",
+    "current_lineage_security_c1_rules": "docs/estate/JOBS_R969_CURRENT_LINEAGE_SECURITY_AND_C1_RULES_RECONCILIATION_HOLD_20261109.md"
+  },
+  "latest_refinement": {
+    "jobs371_declared_base": "review/chalk-r891-jobs-quota-owner-runtime-convergence-20261107",
+    "jobs371_declared_base_sha": "ebdf5f62338822f99b7293bdd5b9a0cda4917dd9",
+    "jobs371_head_sha": "df19633466eaebdda844569ed0d562245bd31dc6",
+    "jobs371_ahead_of_declared_base": 60,
+    "jobs371_behind_declared_base": 0,
+    "jobs371_ahead_of_main": 629,
+    "jobs371_behind_main": 2,
+    "jobs371_net_changed_paths_vs_main": 236,
+    "r836_declared_base": "846d2ffa469af5634374bd77fbdc2d41bca8e964",
+    "r836_head": "e1e2dee63c39590d343d727aa53618ac97a52691",
+    "r836_compare_ahead": 1,
+    "r836_compare_behind": 1,
+    "r836_next_env_blob_both_refs": "ce4e94a6b10f160ee021fe18939af160d2927dcf",
+    "r836_four_emulator_exact_head_run": false,
+    "branch_protection_visibility": "main and key review branches report protected=false; ruleset APIs empty; direct protection detail 403; organization rulesets unavailable; effective governance not certified",
+    "ci_execution_evidence": "sampled Jobs R923 and Privacy R836 workflow conclusions failed; job steps empty and one job-log fetch BlobNotFound; do not classify as application tests failed",
+    "privacy183": {
+      "head": "389aa638f99a6394b46be335ee0465168a7a1a4c",
+      "authorization_blob": "a75e4f2297c331baa52b044f2842820adbdc7fc8",
+      "scoped_receipt_blob": "a41f4cf9c2efb525115ec31359d936c8b2f66f6e",
+      "consent_api_blob": "43da4d49ccbee7cbe145d0729d921e10d859ba63",
+      "classification": "scoped verifier and integrity receipt source; hash is not signature or human authorization; positive trusted issuer/deployment not certified"
+    },
+    "privacy224": {
+      "head": "f9e7786854f7ec70cab9a6e22d2c90ad95b834ed",
+      "test_blob": "51c5279295f07fde06c7f89b1472c5f147fdf8f0",
+      "classification": "denial-only Jobs transport to Privacy callable; local ephemeral synthetic signing only; no positive C6 or production identity"
+    },
+    "c1_rules": {
+      "privacy_main_rules": "7c0051eb6d148791198127e625c99973abdc49c1",
+      "privacy186_head": "2d0c7b621b63ac63ae83e44f5c40ac2ca5344cdc",
+      "privacy186_rules": "295e5d27623cceddec8245759ff28128b17be28c",
+      "spatial_main_rules": "26330636a18a3675da049aa4bdadb34c82293882",
+      "spatial1964_head": "e3347d0e1ee57eaabafcfd50e2b033f7476aecf8",
+      "spatial1964_rules": "8b015a8bbe123bb7857bff5d98ba5a153067c41c",
+      "shared_rules_deployment": "not verified; do not deploy entire rulesets over one another; confirm Firebase project/database topology and authority first"
+    }
+  },
+  "latest_docs_verified_by_r969": {
+    "report": "c12c7f1c6783e99f1d0d84c0c1794ccc68d0048f",
+    "report_blob": "3d8a8394ed975672785b7e21368a4295c9afa604"
+  }
 }
