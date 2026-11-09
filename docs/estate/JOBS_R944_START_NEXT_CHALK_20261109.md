@@ -1,3 +1,42 @@
+# START HERE — ONE URAI GENESIS JOBS NEXT CHALK, R958
+
+**Current checkpoint:** R958 · November 9, 2026  
+**Release:** **PRODUCTION HOLD / NO-GO**  
+**Current Jobs engineering candidate:** PR #389, open/draft/unmerged, exact head `b865209cc352241602d8b9714672f3401aed7669`.  
+**Do not assume any branch head is unchanged. Re-fetch GitHub metadata before action.**
+
+## R958 supersedes this older R944 entrypoint as the first reading step
+
+Read these current documents first:
+1. [R958 canonical next-Chalk reconciliation](JOBS_R958_CANONICAL_NEXT_CHALK_RECONCILIATION_20261109.md)
+2. [R958 machine-readable checkpoint](JOBS_R958_MACHINE_CHECKPOINT_20261109.json)
+3. [R957 branch protection and Actions governance audit](JOBS_R957_BRANCH_PROTECTION_ACTIONS_GOVERNANCE_HOLD_20261109.md)
+4. [R956 Actions runner-allocation forensics](JOBS_R956_ACTIONS_RUNNER_ALLOCATION_FORENSICS_HOLD_20261109.md)
+5. [R955 independent authentication gate and CI review](JOBS_R955_INDEPENDENT_REVIEW_R952_GATE_AND_CI_HOLD_20261109.md)
+6. [R954 complete-source authentication reconciliation](JOBS_R954_FULL_SOURCE_RECONCILIATION_NEXT_CHALK_HOLD_20261109.md)
+7. Continue with the original R944 forensic inventory, evidence ledger and P0–P3 taskbook below.
+
+## Immediate critical conditions
+- Jobs `main` observed SHA: `9d29be1bcd3a45a4b9a743df9c9706c00811f38b`; GitHub API reports `protected=false`, required status-check enforcement `off`, empty required contexts/checks, and Rulesets including parents returned `[]`.
+- The ten recorded #389 Actions failures had 12 executed jobs with runner ID 0, empty runner metadata and zero steps. Workflow source uses `ubuntu-latest`. Exact GitHub-side cause remains **UNKNOWN**; do not rerun blindly or claim app tests failed.
+- PR #389 includes the R951 auth regression in the root and R879 gates; 78 command segments are enrolled, **not executed**.
+- The checked-in R951 test reads four worker source files and evaluates source guard expressions. It is not an HTTP route test.
+- Studio consent authority and private output writes remain hard-off. Live IAM/GCS 403, upload drain, exact-generation purge ACK and owner Replay remain uncertified.
+- No merge, deployment, IAM/Rules changes, CI bypass, paid compute or private media.
+
+## Mandatory next Chalk actions
+1. Diagnose hosted runner allocation from complete GitHub-side error details before retrying.
+2. Have authorized repository administration establish main protection, required checks and independent review/no-bypass policy; read settings back.
+3. On an approved free credential-free complete checkout, execute the original auth test, all 78 root command segments, builds/typechecks and guarded four-emulator R879 acceptance on one immutable SHA.
+4. Add actual HTTP auth tests.
+5. Independently prove live Storage post-revocation denial, upload drain, exact-generation deletion/ACK and owner-authorized private Replay.
+6. Verify actual Firebase/GCP deployed resources, identities, effective IAM, image digests and rollback.
+7. Update Jobs #379 and Genesis #304 with exact receipts and unresolved blockers.
+
+**Do not interpret UNKNOWN as absent, source code as deployed, test enrollment as test execution, or local pass as production certification. Production HOLD remains mandatory.**
+
+---
+
 # START HERE — ONE URAI GENESIS JOBS NEXT CHALK, R944
 
 **Date:** November 9, 2026 UTC. **Production:** HARD HOLD / NO-GO. **Project discovery seed:** `urai-jobs`. **Expense authorization:** **$0**. **Private media / production cloud writes:** NONE.
