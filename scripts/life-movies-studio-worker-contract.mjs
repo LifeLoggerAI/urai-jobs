@@ -9,6 +9,7 @@ const sharedContract = fs.readFileSync(new URL('../functions/src/jobs/studioLife
 assert.ok(sharedContract.includes("!value.includes('\\\\')"), 'Studio render admission must reject a single backslash in private object paths');
 assert.ok(worker.includes("value.includes('\\\\')"), 'Studio worker must retain matching single-backslash rejection');
 const bridge = fs.readFileSync(new URL('../functions/src/jobs/studioLifeMovieBridge.ts', import.meta.url), 'utf8');
+const ownerDeletion = fs.readFileSync(new URL('../functions/src/jobs/lifeMovieOwnerDeletion.ts', import.meta.url), 'utf8');
 const functionsIndex = fs.readFileSync(new URL('../functions/src/index.ts', import.meta.url), 'utf8');
 const deploy = fs.readFileSync(new URL('./deploy-workers.sh', import.meta.url), 'utf8');
 const approved = fs.readFileSync(new URL('./deploy-workers-approved.sh', import.meta.url), 'utf8');
@@ -50,8 +51,8 @@ assert.ok(sharedContract.includes('sceneTruthReceiptRef: z.string()'), 'Life Mov
 assert.ok(worker.includes('sceneTruthReceiptRef: input.sceneTruthReceiptRef'), 'Render manifest must retain SceneTruth receipt provenance');
 assert.ok(sharedContract.includes('assertLifeMovieTenantPaths'), 'Life Movies contract must bind source/output paths to tenant authority');
 assert.ok(bridge.includes("defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN')"), 'Studio bridge must use a dedicated Secret Manager identity');
-assert.ok(bridge.includes("action: z.literal('create')"), 'Studio bridge must expose bounded create semantics');
-assert.ok(bridge.includes("purpose: z.literal('life-movie.render')"), 'Short Life Movie creation must require canonical render consent');
+assert.ok(sharedContract.includes("action: z.literal('create')") && bridge.includes('const CreateSchema = StudioLifeMovieCreateRequestSchema'), 'Studio bridge must use the shared bounded create contract');
+assert.ok(sharedContract.includes("purpose: z.literal('life-movie.render')"), 'Short Life Movie creation must require canonical render consent');
 assert.ok(bridge.includes("consentBlockRef(input.userId, consent.purpose)"), 'Short Life Movie creation must fail closed on revoked consent');
 assert.ok(bridge.includes("const consent: JobConsentContext = { purpose, policyVersion, decisionReceiptId }") && bridge.includes("    consent,"), 'Short Life Movie jobs must persist canonical consent context');
 assert.ok(bridge.includes("const fingerprintPayload = { tenantId: input.tenantId, userId: input.userId, consent, payload }"), 'Short Life Movie idempotency must bind consent identity');
@@ -77,10 +78,11 @@ assert.ok(bridge.includes('output_delete_boundary_mismatch'), 'Deletion must fai
 assert.ok(bridge.includes('allowedLifeMovieOutputBuckets'), 'Playback/delete must enforce configured output bucket authority');
 assert.ok(bridge.includes('life_movie_output_boundary_mismatch'), 'Playback must fail closed outside bucket/path authority');
 assert.ok(bridge.includes('life_movie_output_bucket_authority_unavailable'), 'Playback must fail closed when output bucket authority is not configured');
-assert.ok(bridge.includes('retainedSourceMedia: true'), 'Deleting generated output must not silently delete source memories');
-assert.ok(bridge.includes('output: FieldValue.delete()'), 'Deletion must scrub generated-output references from the job');
-assert.ok(bridge.includes('result: FieldValue.delete()'), 'Deletion must scrub duplicate generated-result references from the job');
-assert.ok(bridge.includes('outputDeletedAt: now'), 'Deletion must retain an audit timestamp');
+assert.ok(bridge.includes('deleteOwnedMovieOutputs({ tenantId, userId, jobId })'), 'Deletion must delegate to the owner-bound cleanup');
+assert.ok(ownerDeletion.includes('retainedSourceMedia: true'), 'Deleting generated output must not silently delete source memories');
+assert.ok(ownerDeletion.includes('output: FieldValue.delete()'), 'Deletion must scrub generated-output references from the job');
+assert.ok(ownerDeletion.includes('result: FieldValue.delete()'), 'Deletion must scrub duplicate generated-result references from the job');
+assert.ok(ownerDeletion.includes('outputDeletedAt: now'), 'Deletion must retain an audit timestamp');
 assert.ok(!bridge.includes('output: job.output'), 'Status must not expose raw internal GCS output refs');
 assert.ok(bridge.includes("sourceSystem: 'urai-studio'"), 'Studio bridge jobs must retain source-system authority');
 assert.ok(bridge.includes("'execution.leaseToken': FieldValue.delete()"), 'Studio bridge cancellation must revoke the active lease');

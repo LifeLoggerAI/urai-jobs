@@ -7,6 +7,7 @@ import { returnLeaseAfterPublishFailure } from '../core/dispatchRecovery.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { isTerminalJobStatus } from './executionGuards.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { deferLifeMovieJob, LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS } from '../privacy/lifeMovieConsentGate.js';
 
 const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
 const LEASE_DURATION_MS = 60 * 1000;
@@ -142,6 +143,15 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
 
       if (job.status !== 'PENDING') {
         return { lease: null, outcome: 'master-not-pending' as const };
+      }
+
+      if (deferLifeMovieJob(job)) {
+        transaction.update(queueRef, {
+          availableAt: new Date(Date.now() + LIFE_MOVIE_CONSENT_RECHECK_DELAY_MS),
+          updatedAt: now,
+          'dispatch.blockedReason': LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE,
+        });
+        return { lease: null, outcome: 'consent-authority-unavailable' as const };
       }
 
       const consentContexts = jobConsentContexts(job);

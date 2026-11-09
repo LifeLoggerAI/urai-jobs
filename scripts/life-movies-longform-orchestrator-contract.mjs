@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const bridge = fs.readFileSync(new URL('../functions/src/jobs/studioLifeMovieLongformBridge.ts', import.meta.url), 'utf8')
+const ownerDeletion = fs.readFileSync(new URL('../functions/src/jobs/lifeMovieOwnerDeletion.ts', import.meta.url), 'utf8')
 const contract = fs.readFileSync(new URL('../functions/src/jobs/studioLifeMovieLongformContract.ts', import.meta.url), 'utf8')
 const index = fs.readFileSync(new URL('../functions/src/index.ts', import.meta.url), 'utf8')
 const shared = fs.readFileSync(new URL('../packages/shared-types/src/index.ts', import.meta.url), 'utf8')
@@ -54,8 +55,6 @@ for (const marker of [
   "'execution.attemptCount': 0",
   "async function deletePlanOutputs(",
   "retainedSourceMedia: true",
-  "output: FieldValue.delete()",
-  "result: FieldValue.delete()",
   "if (parsed.data.action === 'resume')",
   "if (parsed.data.action === 'delete-output')",
   "async function assemblePlan(",
@@ -71,6 +70,9 @@ for (const marker of [
   "assemblyResumed",
   "assemblyCancelled",
 ]) assert.ok(bridge.includes(marker), `long-form orchestrator missing ${marker}`)
+assert.ok(bridge.includes('deleteOwnedMovieOutputs(owner)'), 'long-form cleanup must use the owner-bound deletion')
+assert.ok(ownerDeletion.includes('output: FieldValue.delete()') && ownerDeletion.includes('result: FieldValue.delete()'),
+  'owner deletion must scrub both output aliases')
 
 assert.ok(contract.includes('assertLifeMovieLongformTenantPaths'), 'long-form contract must bind source/output paths to tenant authority')
 assert.ok(index.includes('studioLifeMovieLongformBridge'), 'long-form bridge must be exported')

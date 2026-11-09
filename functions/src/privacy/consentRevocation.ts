@@ -1,9 +1,11 @@
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import { onRequest } from 'firebase-functions/v2/https';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import {
   canonicalConsentAckHash,
+  canonicalSourceRevocationAckHash,
   consentBlockRef,
   consentEventReceiptRef,
 } from './consentBlocks.js';
@@ -11,16 +13,28 @@ import { invalidateLifeMovieDerivativesForConsent, type LifeMovieRevocationEvent
 
 const privacyEventToken = defineSecret('URAI_JOBS_PRIVACY_EVENT_TOKEN');
 
-const ConsentRevokedEventSchema = z.object({
-  type: z.literal('consent.revoked.v1'),
+const revocationFields = {
   eventId: z.string().trim().min(8).max(160),
   ownerUid: z.string().trim().min(1).max(160),
   purpose: z.string().trim().min(1).max(160),
   policyVersion: z.string().trim().min(1).max(80),
-  decisionReceiptId: z.string().trim().min(1).max(160),
   correlationId: z.string().trim().min(1).max(160),
   revokedAt: z.string().datetime(),
-}).strict();
+};
+
+const ConsentRevokedEventSchema = z.discriminatedUnion('type', [
+  z.object({ ...revocationFields, type: z.literal('consent.revoked.v1'),
+    decisionReceiptId: z.string().trim().min(1).max(160) }).strict(),
+  z.object({ ...revocationFields, type: z.literal('consent.revoked.v2'), eventId: z.string().regex(/^[0-9a-f]{64}$/),
+    ownerUid: z.string().min(1).max(160).refine(value => value === value.trim() && !/[\r\n]/.test(value)),
+    purpose: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/),
+    policyVersion: z.string().min(1).max(80).refine(value => value === value.trim() && !/[\r\n]/.test(value)),
+    sourceReceiptHash: z.string().regex(/^[0-9a-f]{64}$/) }).strict(),
+]).superRefine((value, context) => {
+  if (value.type === 'consent.revoked.v2' && value.correlationId !== `revocation:${value.eventId}`) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['correlationId'], message: 'Invalid revocation correlation.' });
+  }
+});
 
 function expectedBearer(): string {
   try {
@@ -41,7 +55,9 @@ export const ingestConsentRevocation = onRequest({
 
   const expected = expectedBearer();
   const authorization = String(request.headers.authorization || '');
-  if (!expected || authorization !== `Bearer ${expected}`) {
+  const expectedTokenHash = createHash('sha256').update(`Bearer ${expected}`).digest();
+  const actualTokenHash = createHash('sha256').update(authorization).digest();
+  if (!expected || !timingSafeEqual(expectedTokenHash, actualTokenHash)) {
     response.status(401).json({ ok: false, error: 'unauthorized' });
     return;
   }
@@ -65,46 +81,100 @@ export const ingestConsentRevocation = onRequest({
   const db = getFirestore();
   const blockRef = consentBlockRef(event.ownerUid, event.purpose);
   const receiptRef = consentEventReceiptRef(event.eventId);
+  const expectedHash = event.type === 'consent.revoked.v2'
+    ? canonicalSourceRevocationAckHash({
+      eventId: event.eventId, ownerUid: event.ownerUid, purpose: event.purpose,
+      policyVersion: event.policyVersion, sourceReceiptHash: event.sourceReceiptHash,
+      correlationId: event.correlationId, revokedAt: event.revokedAt, status: 'blocked',
+    })
+    : canonicalConsentAckHash({
+      eventId: event.eventId, ownerUid: event.ownerUid, purpose: event.purpose,
+      policyVersion: event.policyVersion, decisionReceiptId: event.decisionReceiptId,
+      status: 'blocked',
+    });
+  const referenceMatches = (record: Record<string, unknown>) => event.type === 'consent.revoked.v2'
+    ? record.eventType === event.type && record.sourceReceiptHash === event.sourceReceiptHash
+      && record.decisionReceiptId === undefined
+    : (record.eventType === undefined || record.eventType === event.type)
+      && record.decisionReceiptId === event.decisionReceiptId && record.sourceReceiptHash === undefined;
 
-  const ack = await db.runTransaction(async (transaction) => {
+  const outcome = await db.runTransaction(async (transaction) => {
     const existing = await transaction.get(receiptRef);
     if (existing.exists) {
-      return existing.data();
+      const receipt = existing.data() ?? {};
+      const receiptMatches = receipt.consumerId === 'urai-jobs'
+        && receipt.eventId === event.eventId
+        && receipt.ownerUid === event.ownerUid
+        && receipt.purpose === event.purpose
+        && receipt.policyVersion === event.policyVersion
+        && referenceMatches(receipt)
+        && receipt.correlationId === event.correlationId
+        && receipt.status === 'blocked'
+        && receipt.integrityHash === expectedHash;
+      if (!receiptMatches) return { conflict: true as const };
+
+      // Older receipts did not persist revokedAt. The corresponding active
+      // block contains the original timestamp and event binding, so only an
+      // exact, still-current replay can safely retry derivative cleanup.
+      const block = await transaction.get(blockRef);
+      const blockData = block.data() ?? {};
+      const blockMatches = block.exists && blockData.active === true
+        && blockData.eventId === event.eventId
+        && blockData.ownerUid === event.ownerUid
+        && blockData.purpose === event.purpose
+        && blockData.policyVersion === event.policyVersion
+        && referenceMatches(blockData)
+        && blockData.correlationId === event.correlationId
+        && blockData.revokedAt === event.revokedAt;
+      if (!blockMatches || (receipt.revokedAt !== undefined && receipt.revokedAt !== event.revokedAt)) {
+        return { conflict: true as const };
+      }
+      return { conflict: false as const, ack: receipt };
     }
 
     const now = FieldValue.serverTimestamp();
     const status = 'blocked';
-    const integrityHash = canonicalConsentAckHash({
-      eventId: event.eventId,
-      ownerUid: event.ownerUid,
-      purpose: event.purpose,
-      policyVersion: event.policyVersion,
-      decisionReceiptId: event.decisionReceiptId,
-      status,
-    });
-
     const receipt = {
       consumerId: 'urai-jobs',
+      eventType: event.type,
       eventId: event.eventId,
       correlationId: event.correlationId,
       ownerUid: event.ownerUid,
       purpose: event.purpose,
       policyVersion: event.policyVersion,
-      decisionReceiptId: event.decisionReceiptId,
+      ...(event.type === 'consent.revoked.v2'
+        ? { sourceReceiptHash: event.sourceReceiptHash }
+        : { decisionReceiptId: event.decisionReceiptId }),
+      revokedAt: event.revokedAt,
       status,
-      integrityHash,
+      integrityHash: expectedHash,
       receivedAt: now,
     };
 
     transaction.set(blockRef, {
       active: true,
       ...receipt,
+      // A prior event may have used the other receipt version. Remove its
+      // reference so a later exact replay is checked against only this event.
+      ...(event.type === 'consent.revoked.v2'
+        ? { decisionReceiptId: FieldValue.delete() }
+        : { sourceReceiptHash: FieldValue.delete() }),
       revokedAt: event.revokedAt,
       updatedAt: now,
     }, { merge: true });
     transaction.create(receiptRef, receipt);
-    return receipt;
+    return { conflict: false as const, ack: receipt };
   });
+
+  if (outcome.conflict) {
+    response.status(409).json({ ok: false, error: 'revocation-event-conflict' });
+    return;
+  }
+  const ack = outcome.ack;
+  // Generation fences are internal recovery state, not part of the
+  // acknowledgement contract; especially on retries they may be large.
+  const responseAck: Record<string, unknown> = { ...ack };
+  delete responseAck.storageGenerationFences;
 
   try {
     // Re-run derivative invalidation even for a replayed event receipt. The consent
@@ -118,21 +188,32 @@ export const ingestConsentRevocation = onRequest({
     response.status(200).json({
       ok: true,
       acknowledgement: {
-        ...ack,
+        ...responseAck,
         derivativeInvalidation,
       },
     });
   } catch (error) {
+    // Storage and Firestore errors may contain private object paths or other
+    // request details. Log only known local error codes, never raw exceptions.
+    const knownCleanupErrors = new Set([
+      'life_movie_revocation_output_ref_invalid', 'life_movie_revocation_output_boundary_mismatch',
+      'life_movie_revocation_job_changed', 'life_movie_revocation_plan_changed',
+      'life_movie_revocation_output_changed', 'life_movie_revocation_inflight_unresolved',
+      'life_movie_revocation_output_generation_invalid', 'life_movie_revocation_output_generation_changed',
+      'life_movie_revocation_receipt_invalid',
+    ]);
+    const message = error && typeof error === 'object' && 'message' in error
+      ? (error as { message?: unknown }).message : undefined;
     console.error('Consent revocation derivative invalidation failed', {
       eventId: event.eventId,
       ownerUid: event.ownerUid,
       purpose: event.purpose,
-      error,
+      errorCode: typeof message === 'string' && knownCleanupErrors.has(message) ? message : 'storage_or_firestore_failure',
     });
     response.status(500).json({
       ok: false,
       error: 'derivative-invalidation-failed',
-      acknowledgement: ack,
+      acknowledgement: responseAck,
     });
   }
 });

@@ -13,9 +13,11 @@ import {
   buildRequestFingerprint,
   type IdempotencyBinding,
 } from '../core/jobsReliability.js';
-import { StudioLifeMovieRenderPayloadSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
+import { StudioLifeMovieCreateRequestSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
 import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
+import { deleteOwnedMovieOutputs } from './lifeMovieOwnerDeletion.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
 const sceneTruthReceiptSecret = defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC');
@@ -28,16 +30,7 @@ const IdentitySchema = z.object({
   userId: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
 }).strict();
 
-const CreateSchema = IdentitySchema.extend({
-  action: z.literal('create'),
-  idempotencyKey: z.string().trim().min(8).max(160),
-  consent: z.object({
-    purpose: z.literal('life-movie.render'),
-    policyVersion: z.string().trim().min(1).max(80),
-    decisionReceiptId: z.string().trim().min(1).max(160),
-  }).strict(),
-  payload: StudioLifeMovieRenderPayloadSchema,
-}).strict();
+const CreateSchema = StudioLifeMovieCreateRequestSchema;
 
 const JobActionSchema = IdentitySchema.extend({
   action: z.enum(['status', 'cancel', 'playback', 'download', 'delete-output']),
@@ -288,7 +281,7 @@ async function loadBoundJob(tenantId: string, userId: string, jobId: string) {
   const snapshot = await jobDoc(jobId).get();
   if (!snapshot.exists) throw new Error('job_not_found');
   const job = snapshot.data() as Job & { sourceSystem?: string };
-  if (job.sourceSystem !== 'urai-studio' || job.tenantId !== tenantId || job.ownerUid !== userId || (job.jobType || job.type) !== 'studio.render.video') {
+  if (job.jobId !== jobId || job.sourceSystem !== 'urai-studio' || job.tenantId !== tenantId || job.ownerUid !== userId || (job.jobType || job.type) !== 'studio.render.video') {
     throw new Error('job_boundary_mismatch');
   }
   return job;
@@ -370,57 +363,7 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
 }
 
 async function deleteBoundMovieOutput(tenantId: string, userId: string, jobId: string) {
-  const job = await loadBoundJob(tenantId, userId, jobId);
-  const output = job.output as WorkerOutput | undefined;
-  const artifacts = Array.isArray(output?.outputs) ? output!.outputs! : [];
-  const locations = artifacts
-    .map((artifact) => artifact?.ref)
-    .filter((ref): ref is string => typeof ref === 'string' && ref.startsWith('gs://'))
-    .map(parseGcsRef);
-
-  const expectedPrefix = `tenants/${tenantId}/life-movies/`;
-  const allowedBuckets = allowedLifeMovieOutputBuckets();
-  for (const location of locations) {
-    if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(expectedPrefix)) {
-      throw new Error('output_delete_boundary_mismatch');
-    }
-  }
-
-  await Promise.all(locations.map(({ bucket, objectPath }) =>
-    getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true })));
-
-  const db = getFirestore();
-  const now = FieldValue.serverTimestamp();
-  await db.runTransaction(async (transaction) => {
-    const ref = jobDoc(jobId);
-    const snapshot = await transaction.get(ref);
-    if (!snapshot.exists) throw new Error('job_not_found');
-    const current = snapshot.data() as Job & { sourceSystem?: string };
-    if (current.sourceSystem !== 'urai-studio' || current.tenantId !== tenantId || current.ownerUid !== userId || (current.jobType || current.type) !== 'studio.render.video') {
-      throw new Error('job_boundary_mismatch');
-    }
-    transaction.update(ref, {
-      output: FieldValue.delete(),
-      result: FieldValue.delete(),
-      outputDeletedAt: now,
-      outputDeletedBy: userId,
-      updatedAt: now,
-    });
-    transaction.create(ref.collection('logs').doc(`output-deleted-${Date.now()}`), {
-      level: 'info',
-      source: 'studioLifeMovieBridge',
-      message: 'Life Movie generated outputs deleted by the bound owner.',
-      metadata: {
-        tenantId,
-        ownerUid: userId,
-        deletedObjectCount: locations.length,
-        retainedSourceMedia: true,
-      },
-      createdAt: now,
-    });
-  });
-
-  return { deleted: true, deletedObjectCount: locations.length, retainedSourceMedia: true };
+  return deleteOwnedMovieOutputs({ tenantId, userId, jobId });
 }
 
 async function cancelBoundJob(tenantId: string, userId: string, jobId: string) {
@@ -430,7 +373,7 @@ async function cancelBoundJob(tenantId: string, userId: string, jobId: string) {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists) throw new Error('job_not_found');
     const job = snapshot.data() as Job & { sourceSystem?: string };
-    if (job.sourceSystem !== 'urai-studio' || job.tenantId !== tenantId || job.ownerUid !== userId || (job.jobType || job.type) !== 'studio.render.video') {
+    if (job.jobId !== jobId || job.sourceSystem !== 'urai-studio' || job.tenantId !== tenantId || job.ownerUid !== userId || (job.jobType || job.type) !== 'studio.render.video') {
       throw new Error('job_boundary_mismatch');
     }
     if (['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].includes(String(job.status))) return safeJobProjection(job);
@@ -438,11 +381,15 @@ async function cancelBoundJob(tenantId: string, userId: string, jobId: string) {
     const now = FieldValue.serverTimestamp();
     transaction.update(ref, {
       status: 'CANCELLED',
+      ...(['RUNNING', 'LEASED'].includes(String(job.status)) ? { outputDeletionInFlightUnresolved: true } : {}),
       updatedAt: now,
       completedAt: now,
       lease: FieldValue.delete(),
       'execution.leaseToken': FieldValue.delete(),
       'execution.asyncCallbackPending': false,
+      'execution.callbackTokenHash': FieldValue.delete(),
+      'execution.callbackLeaseToken': FieldValue.delete(),
+      'execution.callbackDeadlineAt': FieldValue.delete(),
     });
     transaction.set(jobQueueEntryDoc(jobId), {
       jobId,
@@ -480,6 +427,11 @@ export const studioLifeMovieBridge = onRequest({
     return;
   }
 
+  if (['create', 'playback', 'download'].includes(parsed.data.action) && !lifeMovieConsentAuthorityAvailable()) {
+    res.status(503).json({ ok: false, error: LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE });
+    return;
+  }
+
   try {
     if (parsed.data.action === 'create') {
       const result = await createLifeMovieJob(parsed.data);
@@ -514,7 +466,17 @@ export const studioLifeMovieBridge = onRequest({
     const job = await cancelBoundJob(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId);
     res.status(200).json({ ok: true, job });
   } catch (error) {
-    const code = error instanceof Error ? error.message : 'bridge_failed';
+    const known = new Set([
+      'job_not_found', 'job_boundary_mismatch', 'idempotency_conflict', 'job_not_ready_for_playback',
+      'life_movie_consent_missing', 'life_movie_consent_revoked', 'output_delete_boundary_mismatch',
+      'life_movie_output_boundary_mismatch', 'life_movie_output_bucket_authority_unavailable',
+      'scene_truth_receipt_authority_unavailable', 'scene_truth_receipt_expired',
+      'invalid_scene_truth_receipt_signature', 'scene_truth_receipt_replay_conflict',
+      'life_movie_owner_job_boundary_mismatch', 'life_movie_output_inflight_unresolved',
+      'life_movie_output_ref_invalid', 'life_movie_output_limit_exceeded', 'life_movie_output_changed',
+      'life_movie_output_generation_invalid', 'life_movie_output_generation_changed',
+    ]);
+    const code = error instanceof Error && known.has(error.message) ? error.message : 'bridge_failed';
     const status = code === 'job_not_found' ? 404
       : code === 'job_boundary_mismatch' ? 403
       : code === 'idempotency_conflict' ? 409
@@ -524,11 +486,14 @@ export const studioLifeMovieBridge = onRequest({
       : code === 'output_delete_boundary_mismatch' ? 403
       : code === 'life_movie_output_boundary_mismatch' ? 403
       : code === 'life_movie_output_bucket_authority_unavailable' ? 503
+      : code === 'life_movie_owner_job_boundary_mismatch' ? 403
+      : code === 'life_movie_output_inflight_unresolved' || code === 'life_movie_output_changed'
+        || code === 'life_movie_output_generation_changed' ? 409
       : code === 'scene_truth_receipt_authority_unavailable' ? 503
       : code === 'scene_truth_receipt_expired' ? 409
       : code === 'invalid_scene_truth_receipt_signature' ? 403
       : code === 'scene_truth_receipt_replay_conflict' ? 409
-      : 400;
+      : code === 'bridge_failed' ? 500 : 400;
     res.status(status).json({ ok: false, error: code });
   }
 });

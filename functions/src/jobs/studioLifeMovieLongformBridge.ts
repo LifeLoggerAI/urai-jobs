@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { defineSecret } from 'firebase-functions/params';
@@ -8,6 +9,8 @@ import { z } from 'zod';
 import type { Job, JobQueueEntry, JobStatus } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef } from '../privacy/consentBlocks.js';
+import { LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE, lifeMovieConsentAuthorityAvailable } from '../privacy/lifeMovieConsentGate.js';
+import { deleteOwnedMovieOutputs, preflightOwnedMovieOutputs, validateOwnedMovieJob } from './lifeMovieOwnerDeletion.js';
 import {
   bindingMatches,
   buildIdempotencyBindingId,
@@ -174,6 +177,26 @@ function boundedArtifact(output: unknown, kind: 'mp4' | 'srt') {
 function assertPlanOwner(plan: StoredPlan, tenantId: string, userId: string) {
   if (plan.tenantId !== tenantId || plan.ownerUid !== userId) throw new Error('longform_plan_boundary_mismatch');
   return plan;
+}
+
+function assertPlanStructure(plan: StoredPlan, planId: string) {
+  if (plan.planId !== planId || !Array.isArray(plan.childJobIds) || !Array.isArray(plan.segments)
+    || plan.childJobIds.length < 1 || plan.childJobIds.length > 180
+    || plan.segments.length !== plan.childJobIds.length
+    || new Set(plan.childJobIds).size !== plan.childJobIds.length
+    || plan.childJobIds.some((jobId, index) => jobId !== makeChildId(planId, index)
+      || plan.segments[index]?.jobId !== jobId || plan.segments[index]?.index !== index)
+    || (plan.assemblyJobId !== undefined && plan.assemblyJobId !== makeAssemblyJobId(planId))) {
+    throw new Error('longform_plan_structure_invalid');
+  }
+}
+
+function boundPlanJob(plan: StoredPlan, jobId: string, kind: 'segment' | 'assembly') {
+  const expectedOutputPrefix = kind === 'assembly'
+    ? `tenants/${plan.tenantId}/life-movies/${plan.projectId}/final/`
+    : `tenants/${plan.tenantId}/life-movies/${plan.projectId}/segments/${String(plan.childJobIds.indexOf(jobId)).padStart(4, '0')}/`;
+  return { tenantId: plan.tenantId, userId: plan.ownerUid, jobId, planId: plan.planId,
+    projectId: plan.projectId, kind, expectedOutputPrefix } as const;
 }
 
 function deriveStatus(plan: StoredPlan, statuses: JobStatus[]) {
@@ -750,76 +773,37 @@ async function resumePlan(planId: string, tenantId: string, userId: string) {
 
 async function deletePlanOutputs(planId: string, tenantId: string, userId: string) {
   const plan = await loadPlan(planId, tenantId, userId);
+  assertPlanStructure(plan, planId);
+  if (plan.status !== 'CANCELLED') throw new Error('longform_plan_cancel_required');
   const db = getFirestore();
-  const snapshots = await db.getAll(...plan.childJobIds.map((jobId) => jobDoc(jobId)));
-  const assemblySnapshotForDelete = plan.assemblyJobId ? await jobDoc(plan.assemblyJobId).get() : null;
-  const allowedBuckets = allowedLifeMovieOutputBuckets();
-  const requiredPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/segments/`;
-  const deletions: Array<{ bucket: string; objectPath: string }> = [];
-
-  for (const snapshot of snapshots) {
-    if (!snapshot.exists) continue;
-    const job = snapshot.data() as Job;
-    const output = job.output as WorkerOutput | undefined;
-    for (const artifact of Array.isArray(output?.outputs) ? output!.outputs! : []) {
-      if (typeof artifact?.ref !== 'string' || !artifact.ref.startsWith('gs://')) continue;
-      const location = parseGcsRef(artifact.ref);
-      if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(requiredPrefix)) {
-        throw new Error('longform_output_boundary_mismatch');
-      }
-      deletions.push(location);
-    }
+  const owners = plan.childJobIds.map((jobId) => boundPlanJob(plan, jobId, 'segment'));
+  if (plan.assemblyJobId) owners.push(boundPlanJob(plan, plan.assemblyJobId, 'assembly'));
+  const snapshots = await db.getAll(...owners.map((owner) => jobDoc(owner.jobId)));
+  // Preflight the entire plan before deleting any object. Individual jobs are
+  // revalidated again by the deletion routine and the plan is checked last.
+  for (const [index, snapshot] of snapshots.entries()) {
+    if (!snapshot.exists) throw new Error('longform_child_not_found');
+    const job = snapshot.data() as Record<string, unknown>;
+    preflightOwnedMovieOutputs(job, owners[index]);
   }
-
-  if (assemblySnapshotForDelete?.exists) {
-    const assembly = assemblySnapshotForDelete.data() as Job;
-    const output = assembly.output as WorkerOutput | undefined;
-    const finalPrefix = `tenants/${tenantId}/life-movies/${plan.projectId}/final/`;
-    for (const artifact of Array.isArray(output?.outputs) ? output!.outputs! : []) {
-      if (typeof artifact?.ref !== 'string' || !artifact.ref.startsWith('gs://')) continue;
-      const location = parseGcsRef(artifact.ref);
-      if (!allowedBuckets.has(location.bucket) || !location.objectPath.startsWith(finalPrefix)) {
-        throw new Error('longform_output_boundary_mismatch');
-      }
-      deletions.push(location);
-    }
+  let deletedObjectCount = 0;
+  for (const owner of owners) {
+    const result = await deleteOwnedMovieOutputs(owner);
+    deletedObjectCount += result.deletedObjectCount;
   }
-
-  await Promise.all(deletions.map(({ bucket, objectPath }) =>
-    getStorage().bucket(bucket).file(objectPath).delete({ ignoreNotFound: true })));
-
-  const now = FieldValue.serverTimestamp();
-  const batch = db.batch();
-  for (const jobId of plan.childJobIds) {
-    batch.update(jobDoc(jobId), {
-      output: FieldValue.delete(),
-      result: FieldValue.delete(),
-      outputDeletedAt: now,
-      outputDeletedBy: userId,
-      updatedAt: now,
-    });
-  }
-  if (plan.assemblyJobId) {
-    batch.update(jobDoc(plan.assemblyJobId), {
-      output: FieldValue.delete(),
-      result: FieldValue.delete(),
-      outputDeletedAt: now,
-      outputDeletedBy: userId,
-      updatedAt: now,
-    });
-  }
-  batch.update(planRef(planId), {
-    outputDeletedAt: now,
-    outputDeletedBy: userId,
-    updatedAt: now,
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(planRef(planId));
+    if (!snapshot.exists) throw new Error('longform_plan_not_found');
+    const current = assertPlanOwner(snapshot.data() as StoredPlan, tenantId, userId);
+    assertPlanStructure(current, planId);
+    if (current.status !== 'CANCELLED' || current.projectId !== plan.projectId
+      || current.assemblyJobId !== plan.assemblyJobId
+      || !isDeepStrictEqual(current.childJobIds, plan.childJobIds)
+      || !isDeepStrictEqual(current.segments, plan.segments)) throw new Error('longform_plan_changed');
+    const now = FieldValue.serverTimestamp();
+    transaction.update(planRef(planId), { outputDeletedAt: now, outputDeletedBy: userId, updatedAt: now });
   });
-  await batch.commit();
-
-  return {
-    planId,
-    deletedObjectCount: deletions.length,
-    retainedSourceMedia: true,
-  };
+  return { planId, deletedObjectCount, retainedSourceMedia: true };
 }
 
 async function cancelPlan(planId: string, tenantId: string, userId: string) {
@@ -829,11 +813,21 @@ async function cancelPlan(planId: string, tenantId: string, userId: string) {
     const planSnapshot = await transaction.get(ref);
     if (!planSnapshot.exists) throw new Error('longform_plan_not_found');
     const plan = assertPlanOwner(planSnapshot.data() as StoredPlan, tenantId, userId);
+    assertPlanStructure(plan, planId);
     const childRefs = plan.childJobIds.map((jobId) => jobDoc(jobId));
     const [childSnapshots, assemblySnapshot] = await Promise.all([
       childRefs.length ? transaction.getAll(...childRefs) : Promise.resolve([]),
       plan.assemblyJobId ? transaction.get(jobDoc(plan.assemblyJobId)) : Promise.resolve(null),
     ]);
+    // Validate every child before any writes, including already-terminal jobs.
+    for (const [index, snapshot] of childSnapshots.entries()) {
+      if (!snapshot.exists) throw new Error('longform_child_not_found');
+      validateOwnedMovieJob(snapshot.data() as Record<string, unknown>, boundPlanJob(plan, plan.childJobIds[index], 'segment'));
+    }
+    if (plan.assemblyJobId) {
+      if (!assemblySnapshot?.exists) throw new Error('longform_child_not_found');
+      validateOwnedMovieJob(assemblySnapshot.data() as Record<string, unknown>, boundPlanJob(plan, plan.assemblyJobId, 'assembly'));
+    }
     const now = FieldValue.serverTimestamp();
     let cancelledChildren = 0;
 
@@ -844,6 +838,7 @@ async function cancelPlan(planId: string, tenantId: string, userId: string) {
       const jobId = plan.childJobIds[index];
       transaction.update(childRefs[index], {
         status: 'CANCELLED',
+        ...(['RUNNING', 'LEASED'].includes(String(child.status)) ? { outputDeletionInFlightUnresolved: true } : {}),
         completedAt: now,
         updatedAt: now,
         lease: FieldValue.delete(),
@@ -868,6 +863,7 @@ async function cancelPlan(planId: string, tenantId: string, userId: string) {
         if (!TERMINAL.has(assembly.status)) {
           transaction.update(assemblyRef, {
             status: 'CANCELLED',
+            ...(['RUNNING', 'LEASED'].includes(String(assembly.status)) ? { outputDeletionInFlightUnresolved: true } : {}),
             completedAt: now,
             updatedAt: now,
             lease: FieldValue.delete(),
@@ -923,6 +919,12 @@ export const studioLifeMovieLongformBridge = onRequest({
     return;
   }
 
+  if (['create', 'playback', 'download', 'resume', 'assemble'].includes(parsed.data.action)
+    && !lifeMovieConsentAuthorityAvailable()) {
+    res.status(503).json({ ok: false, error: LIFE_MOVIE_CONSENT_AUTHORITY_UNAVAILABLE });
+    return;
+  }
+
   try {
     if (parsed.data.action === 'create') {
       const result = await createPlan(parsed.data);
@@ -963,11 +965,29 @@ export const studioLifeMovieLongformBridge = onRequest({
     const result = await cancelPlan(parsed.data.planId, parsed.data.tenantId, parsed.data.userId);
     res.status(200).json({ ok: true, cancellation: result });
   } catch (error) {
-    const code = error instanceof Error ? error.message : 'longform_bridge_failed';
+    const known = new Set([
+      'longform_plan_not_found', 'longform_plan_boundary_mismatch', 'longform_output_boundary_mismatch',
+      'longform_output_bucket_authority_unavailable', 'longform_plan_not_ready_for_playback',
+      'longform_plan_not_ready_for_assembly', 'longform_final_assembly_not_ready',
+      'longform_segment_checksum_missing', 'longform_assembly_binding_mismatch', 'longform_plan_cancelled',
+      'longform_plan_structure_invalid', 'longform_child_not_found', 'longform_plan_cancel_required', 'longform_plan_changed',
+      'scene_truth_receipt_replay_conflict', 'idempotency_conflict', 'life_movie_longform_disabled',
+      'life_movie_longform_consent_revoked', 'scene_truth_receipt_authority_unavailable',
+      'scene_truth_receipt_expired', 'invalid_scene_truth_receipt_signature', 'life_movie_owner_job_boundary_mismatch',
+      'life_movie_output_inflight_unresolved', 'life_movie_output_ref_invalid', 'life_movie_output_limit_exceeded',
+      'life_movie_output_changed', 'life_movie_output_generation_invalid', 'life_movie_output_generation_changed',
+      'life_movie_output_boundary_mismatch', 'life_movie_output_bucket_authority_unavailable',
+    ]);
+    const code = error instanceof Error && known.has(error.message) ? error.message : 'longform_bridge_failed';
     const status = code === 'longform_plan_not_found' ? 404
       : code === 'longform_plan_boundary_mismatch' ? 403
+      : code === 'life_movie_owner_job_boundary_mismatch' || code === 'life_movie_output_boundary_mismatch' ? 403
       : code === 'longform_output_boundary_mismatch' ? 403
-      : code === 'longform_output_bucket_authority_unavailable' ? 503
+      : code === 'longform_output_bucket_authority_unavailable' || code === 'life_movie_output_bucket_authority_unavailable' ? 503
+      : code === 'longform_child_not_found' ? 404
+      : code === 'longform_plan_structure_invalid' || code === 'longform_plan_cancel_required'
+        || code === 'longform_plan_changed' || code === 'life_movie_output_inflight_unresolved'
+        || code === 'life_movie_output_changed' || code === 'life_movie_output_generation_changed' ? 409
       : code === 'longform_plan_not_ready_for_playback' ? 409
       : code === 'longform_plan_not_ready_for_assembly' ? 409
       : code === 'longform_final_assembly_not_ready' ? 409
@@ -981,7 +1001,7 @@ export const studioLifeMovieLongformBridge = onRequest({
       : code === 'scene_truth_receipt_authority_unavailable' ? 503
       : code === 'scene_truth_receipt_expired' ? 409
       : code === 'invalid_scene_truth_receipt_signature' ? 403
-      : 400;
+      : code === 'longform_bridge_failed' ? 500 : 400;
     res.status(status).json({ ok: false, error: code });
   }
 });
