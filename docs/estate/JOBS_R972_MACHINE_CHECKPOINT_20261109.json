@@ -1,0 +1,100 @@
+{
+  "schema": "one-urai-genesis-r972-source-authority-verification-v1",
+  "checkpoint": "R972",
+  "date": "2026-11-09",
+  "status": "PRODUCTION_HOLD_NO_GO",
+  "report": "docs/estate/JOBS_R972_SOURCE_AUTHORITY_VERIFICATION_NEXT_CHALK_HOLD_20261109.md",
+  "report_commit": "06c7eaa33859eacf07fe6680d24da13877cc617a",
+  "live_refs": {
+    "jobs_main": "2bcdbcf34da4a3fe58619286d6917e2d4fa624e1",
+    "jobs_main_tree": "282bd75464cc23d9a6add6a1340c6ae7d3adfc9a",
+    "privacy_main": "1163d6f32a123ef9a6638e092a3eee5ec4a3b317",
+    "spatial_main": "da94837c2457b0a7590e26a7a644cd728de8afb8",
+    "jobs378": "5881a650230c55245c87a001c58f3ebc6835196b",
+    "jobs379_pre_r972": "ca7f88f4c7f47b9a200f70e86184f03792ca26b2",
+    "jobs389": "b865209cc352241602d8b9714672f3401aed7669",
+    "jobs390": "e8ba07fc26f154169f2e065d9aa65e77014635d2",
+    "jobs391": "9f5759f072370fbd42a82560ff6c5d4f37169c6b",
+    "labs261": "2980ca804fe04c37256a00af6e291a79a05004e4",
+    "labs284": "6e1f9c8ae8ac2d80835da008d46cf1d6d089ef23",
+    "privacy186": "2d0c7b621b63ac63ae83e44f5c40ac2ca5344cdc",
+    "spatial1964": "e3347d0e1ee57eaabafcfd50e2b033f7476aecf8"
+  },
+  "rules_publishers": {
+    "target": "urai-4dc1d/(default)",
+    "spatial": {
+      "firebaserc": "0d4fc68d65f23254829cc0502621a6ffe2215788",
+      "firebase_json": "2466dd32ddb52c672f9d6700cf1470c451c55b7c",
+      "rules": "26330636a18a3675da049aa4bdadb34c82293882",
+      "rules_path": "firebase/firestore.rules"
+    },
+    "admin": {
+      "firebaserc": "48b58a1e42c3554ead35cba801e980f0afdeaf2f",
+      "firebase_json": "9cdb6bfa298c46376fbdd1b1604df5b530ccd39b",
+      "rules": "1b9926316d2c5f5911bbbd52b000967f5e935030",
+      "rules_path": "firestore.rules"
+    },
+    "b2bportal": {
+      "firebaserc": "ea4ae23452b00fea090b411114cfd164200205fd",
+      "firebase_json": "f93da458dc32acd6b4217a24f0d2db902deb086a",
+      "rules": "b17ec9f4ef896870722905a279ac0d8206fcf24a",
+      "rules_path": "firestore.rules"
+    },
+    "classification": "source-level potential publisher collision; provider-effective deployed state UNKNOWN"
+  },
+  "privacy": {
+    "main": "1163d6f32a123ef9a6638e092a3eee5ec4a3b317",
+    "root_firebaserc": "not found at inspected ref",
+    "firebase_json": "04a0a54c96abde147a61ab800d924a8c56130109",
+    "guarded_deploy_scope": "functions:privacy only",
+    "privacy_rules_deployment_by_that_wrapper": false,
+    "real_project_and_region": "UNKNOWN"
+  },
+  "jobs380": {
+    "issue": "OPEN",
+    "main_rules_blob": "7dc63626c6e1a2e7b20ded280ea2dd070f16abc9",
+    "review_rules_blob": "cfa77a8fa5e69327ab352b31450c59a036d21e38",
+    "protected_field_missing": "dataRightsDeletionRequestId",
+    "rules_path_in_jobs378_pr_diff": false,
+    "jobs378_changed_file_count": 7,
+    "native_rules_engine_test": false,
+    "live_rules_state": "UNKNOWN"
+  },
+  "issues": {
+    "jobs-252": "OPEN P0",
+    "jobs-345": "OPEN P2",
+    "jobs-376": "OPEN P1",
+    "jobs-380": "OPEN P1",
+    "privacy-83": "OPEN; source implementation exists; deployed runtime, downstream ACK and provider suppression unproven"
+  },
+  "ci": {
+    "sampled_conclusions": "failure",
+    "sampled_steps": "null/empty",
+    "logs": "BlobNotFound 404",
+    "application_test_result": "UNKNOWN",
+    "protected_ci_certificate": false
+  },
+  "actions": {
+    "tests_run": false,
+    "builds": false,
+    "typecheck": false,
+    "firebase_emulators": false,
+    "ci_reruns": false,
+    "provider_inventory": false,
+    "effective_iam_or_rules": false,
+    "deployment": false,
+    "merge": false,
+    "private_media": false,
+    "paid_compute": false
+  },
+  "next": "Owner-authorized read-only provider inventory for urai-4dc1d/(default); assign one Rules publisher or approved DB separation; separate Jobs #380 Rules fix including dataRightsDeletionRequestId with native signed-in Rules emulator tests; diagnose protected CI; prove P0 GCS future-write denial, upload drain, exact-generation delete and durable purge ACK.",
+  "prohibitions": [
+    "NO MERGE",
+    "NO DEPLOY",
+    "NO RULES/IAM MUTATION",
+    "NO CI BYPASS",
+    "NO PRIVATE MEDIA",
+    "NO PAID COMPUTE",
+    "NO PRODUCTION GO"
+  ]
+}
