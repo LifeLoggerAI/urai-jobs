@@ -71,9 +71,12 @@ for(const [label,value] of [
  test('canonical create rejects '+label+' before any writes',async()=>{
   const record={role:'user',dataRightsDeletionPendingCentralPrivacy:value};
   assert.throws(()=>assertOwnerJobsNotDeleting(record),/central Privacy|deletion/i);
-  // All these records have valid current server-owned role, so rejection must
-  // occur at the central Privacy deletion fence, never a missing-role shortcut.
-  await assert.rejects(checkCurrentOwner(getLatest(record),ref),/central Privacy|deletion/i);
+  // This checks two independent vetoes on ORIGINAL production source:
+  // (a) assertOwnerJobsNotDeleting itself rejects the bad pending flag above;
+  // (b) current account authorization rejects it even EARLIER inside the
+  // transaction. Do not mislabel (b) as proof that (a) ran during admission.
+  await assert.rejects(checkCurrentOwner(getLatest(record),ref),
+    /Current user is not allowed to create runtime jobs/i);
  });
 }
 test('stale pre-check cannot bypass newly activated transaction fence',async()=>{
@@ -81,7 +84,17 @@ test('stale pre-check cannot bypass newly activated transaction fence',async()=>
  await assert.rejects(checkCurrentOwner(getLatest({
   role:'user',dataRightsDeletionPendingCentralPrivacy:true,
   dataRightsDeletionRequestId:'synthetic-deletion-request'
- }),ref),/reconciliation/i);
+ }),ref),/Current user is not allowed to create runtime jobs/i);
+});
+// The original explicit fence is still asserted separately from the earlier
+// current Firestore caller gate. No fake positive authority is substituted.
+test('explicit central Privacy fence independently denies pending deletion',()=>{
+ for(const flag of [true, 'false', null, 0, {}]) {
+  assert.throws(
+   ()=>assertOwnerJobsNotDeleting({role:'user',dataRightsDeletionPendingCentralPrivacy:flag}),
+   /central Privacy|deletion/i
+  );
+ }
 });
 test('canonical create rejects vanished owner before creating job or queue',async()=>{
  await assert.rejects(checkCurrentOwner(getLatest(null,false),ref),/Owner record missing/i);
