@@ -17,7 +17,7 @@ function load(relativePath, imports = {}) {
   }).outputText;
   const module = { exports: {} };
   vm.runInNewContext(compiled, {
-    module, exports: module.exports, Buffer, URL, console, Error, process: { env },
+    module, exports: module.exports, Buffer, URL, console, Error, Object, Array, process: { env },
     require(id) {
       if (id === 'zod') return zod;
       if (id === 'node:crypto' || id === 'node:util') return require(id);
@@ -112,6 +112,25 @@ const mocks = {
   './lifeMoviePrivateDeliveryContract.js': { parseLifeMoviePrivateDeliveryRequest: () => { throw new Error('life_movie_private_delivery_request_invalid'); } },
   '../privacy/lifeMovieOutputGeneration.js': { requirePinnedOutputGeneration: async () => { throw new Error('generation_unavailable_in_test'); }, signedMovieAccessForPinnedGeneration: async () => { throw new Error('generation_unavailable_in_test'); } },
 };
+// R934: Execute the ORIGINAL server-owned owner/org and current-owner helper
+// implementations. The smoke fixture must not replace either with an allow-all.
+const liveOwnerOrg = load('jobs/lifeMovieLongformOwnerOrg.ts');
+const liveCallerAuthority = load('jobs/currentJobCallerAuthority.ts');
+assert.equal(typeof liveOwnerOrg.assertLifeMoviePlanCurrentOrg, 'function');
+assert.equal(typeof liveOwnerOrg.assertLifeMovieJobPlanOrg, 'function');
+assert.equal(typeof liveCallerAuthority.currentJobOwnerEligibleForDispatch, 'function');
+assert.throws(
+  () => liveOwnerOrg.assertLifeMoviePlanCurrentOrg({ orgId: 'synthetic-org-A' }, { orgId: 'synthetic-org-B' }),
+  /life_movie_owner_org_authority_unavailable/
+);
+assert.equal(
+  liveCallerAuthority.currentJobOwnerEligibleForDispatch(
+    { ownerUid: 'synthetic-owner', tenantId: 't', orgId: 'A' },
+    { uid: 'synthetic-owner', role: 'user', tenantId: 't', orgId: 'B', disabled: false, deleted: false, markedForDeletion: false, dataRightsDeletionPendingCentralPrivacy: false }
+  ), false, 'cross-org worker must be rejected'
+);
+mocks['./lifeMovieLongformOwnerOrg.js'] = liveOwnerOrg;
+mocks['./currentJobCallerAuthority.js'] = liveCallerAuthority;
 const artifactRefs = load('privacy/lifeMovieArtifactRefs.ts');
 const ownerDeletion = load('jobs/lifeMovieOwnerDeletion.ts', {
   ...mocks,
@@ -198,8 +217,20 @@ for (const action of ['status', 'cancel', 'delete-output']) {
 assert.equal(writes.length, 0, 'denied bridge requests must not write jobs');
 console.log('[PASS] Short and long-form admission and output access reject unverified consent; status, cancel, and deletion remain reachable.');
 
+// The original dispatcher requires current Firestore owner/operator identity.
+// Supply synthetic *valid* accounts rather than disabling the production veto.
+documents.set(`users/${owner}`, {
+  uid: owner, role: 'user', tenantId: tenant, accountStatus: 'active',
+  disabled: false, deleted: false, markedForDeletion: false,
+  dataRightsDeletionPendingCentralPrivacy: false,
+});
+documents.set('users/synthetic-operator', {
+  uid: 'synthetic-operator', role: 'operator', accountStatus: 'active',
+  disabled: false, deleted: false, markedForDeletion: false,
+  dataRightsDeletionPendingCentralPrivacy: false,
+});
 function queue(jobId, jobType) {
-  documents.set(`jobs/${jobId}`, { jobId, status: 'PENDING', type: jobType, ownerUid: owner });
+  documents.set(`jobs/${jobId}`, { jobId, status: 'PENDING', type: jobType, ownerUid: owner, tenantId: tenant });
   documents.set(`jobQueue/${jobId}`, { jobId, status: 'PENDING', availableAt: new Date(Date.now() - 1000) });
 }
 queue('life-job', 'studio.render.video');
@@ -210,7 +241,7 @@ assert.ok(documents.get('jobQueue/life-job').availableAt.getTime() > Date.now())
 assert.equal(documents.get('jobs/other-job').status, 'LEASED');
 assert.equal(published, 1, 'an unrelated job must still be published');
 queue('life-manual', 'studio.assemble.video');
-const manualResult = await manual({ auth: { token: { role: 'operator' } }, data: { limit: 10 } });
+const manualResult = await manual({ auth: { uid: 'synthetic-operator', token: { role: 'operator' } }, data: { limit: 10 } });
 assert.ok(manualResult.skipped.includes('life-manual'));
 assert.equal(documents.get('jobs/life-manual').status, 'PENDING');
 assert.ok(documents.get('jobQueue/life-manual').availableAt.getTime() > Date.now());

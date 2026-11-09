@@ -160,6 +160,9 @@ function make(phase){
   assertLifeMovieOwnerTenantAuthorityClear:verifiedOwnerTenantFence,
   assertPlanOwner:shape.assertPlanOwner,
   assertLifeMoviePlanCurrentOrg:realOrg.assertLifeMoviePlanCurrentOrg,
+  // R939: production resumePlan invokes this guard on child and assembly jobs.
+  // Retain actual original source, never a permissive test-only substitute.
+  assertLifeMovieJobPlanOrg:realOrg.assertLifeMovieJobPlanOrg,
   assertPlanStructure:shape.assertPlanStructure,
   boundPlanJob:shape.boundPlanJob,validateOwnedMovieJob:owners.exports,buildRequestFingerprint:fingerprint,
   isDeepStrictEqual,consentBlockRef:()=>ref('jobConsentBlocks/'+owner),

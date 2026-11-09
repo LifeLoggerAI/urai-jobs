@@ -44,7 +44,10 @@ for (const marker of [
   "outcome: 'terminal-job'",
   "outcome: 'master-not-pending'",
 ]) assert.ok(manual.includes(marker), `processQueueNow missing ${marker}`);
-assert.match(manual, /const \[queueDoc, masterJobDoc\] = await Promise\.all\(\[[\s\S]*transaction\.get\(queueRef\),[\s\S]*transaction\.get\(masterJobRef\),[\s\S]*\]\);/);
+// R937: the queue and job must be read WITH the current operator profile
+// in the SAME transaction, otherwise stale claims could lease on role withdrawal.
+assert.match(manual, /const \[queueDoc, masterJobDoc, operatorSnapshot\] = await Promise\.all\(\[[\s\S]*transaction\.get\(queueRef\),[\s\S]*transaction\.get\(masterJobRef\),[\s\S]*transaction\.get\(operatorRef\),[\s\S]*\]\);/);
+assert.ok(manual.indexOf('requireCurrentOperator(request.auth, operatorSnapshot.exists ? operatorSnapshot.data() : null)') > manual.indexOf('transaction.get(operatorRef)'), 'current operator denial must follow transactional role read');
 assert.match(manual, /transaction\.update\(queueRef, leaseUpdate\);\s*transaction\.update\(masterJobRef, leaseUpdate\);/);
 
 for (const marker of [

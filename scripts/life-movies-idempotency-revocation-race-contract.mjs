@@ -19,6 +19,17 @@ const ownerFence=ownerModule.exports.assertOwnerDeletionFenceClear;
 assert.equal(typeof ownerFence,'function');
 const ownerTenantFence=ownerModule.exports.assertLifeMovieOwnerTenantAuthorityClear;
 assert.equal(typeof ownerTenantFence,'function');
+// R940: import the actual current owner-org authority helper. Source-only
+// idempotency replay must not substitute a permissive organization decision.
+const ownerOrgModule={exports:{}};
+vm.runInNewContext(compile(read('jobs/lifeMovieLongformOwnerOrg.ts')), {
+  module:ownerOrgModule,exports:ownerOrgModule.exports,Object,Array,Error
+});
+const originalOrg=ownerOrgModule.exports;
+assert.equal(typeof originalOrg.serverLifeMovieOwnerOrgId,'function');
+assert.equal(typeof originalOrg.assertLifeMoviePlanCurrentOrg,'function');
+assert.equal(typeof originalOrg.assertLifeMovieJobPlanOrg,'function');
+assert.throws(()=>originalOrg.assertLifeMoviePlanCurrentOrg({orgId:'A'}, {orgId:'B'}),/life_movie_owner_org_authority_unavailable/);
 const absent={exists:false};
 const stored=active=>({exists:true,data:()=>({active})});
 const existing={exists:true,data:()=>({jobId:'prior-accepted-job'})};
@@ -49,6 +60,9 @@ function harness(mode,phase){
   const env={module:{exports:{}},Error,Date,Promise,createHash,assertJobConsentBlockClear:block.exports.assertJobConsentBlockClear,
     assertOwnerDeletionFenceClear:ownerFence,
     assertLifeMovieOwnerTenantAuthorityClear:ownerTenantFence,
+    serverLifeMovieOwnerOrgId:originalOrg.serverLifeMovieOwnerOrgId,
+    assertLifeMoviePlanCurrentOrg:originalOrg.assertLifeMoviePlanCurrentOrg,
+    assertLifeMovieJobPlanOrg:originalOrg.assertLifeMovieJobPlanOrg,
     getFirestore:()=>db,consentBlockRef:()=>ref('jobConsentBlocks/owner-1'),requireLifeMovieCreationAdmission:async()=>{},
     assertStudioLifeMovieRenderPlanDigest:x=>x,assertLifeMovieTenantPaths:x=>x,assertStudioLifeMovieLongformPlanDigest:x=>x,assertLifeMovieLongformTenantPaths:x=>x,
     verifySceneTruthReceipt:()=>({expiresAt:'2030-01-01T00:00:00.000Z'}),assertSceneTruthReceiptValue:()=>({receiptId:'receipt',expiresAt:'2030-01-01T00:00:00.000Z'}),
