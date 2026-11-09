@@ -64,7 +64,7 @@ function timestampMillis(value) {
 }
 
 function requireWorkerAuth(req, res, next) {
-  const localBypass = runtimeEnv === 'local' || runtimeEnv === 'test' || process.env.FUNCTIONS_EMULATOR === 'true';
+  const localBypass = !productionRuntime && (runtimeEnv === 'local' || runtimeEnv === 'test' || process.env.FUNCTIONS_EMULATOR === 'true');
   if (!workerToken && localBypass) return next();
   if (!workerToken) return res.status(503).send({ ok: false, error: 'worker auth is not configured' });
   if (!timingSafeEqual(bearer(req), workerToken)) {
