@@ -26,3 +26,16 @@ A standalone read-only Node 22 receipt auditor was authored and run locally outs
 Sources: Jobs PRs #394/#395/#396/#398; Issue #397; Labs benchmark registry V10 #354 and mathematics R(4,6) #359, both separate from product release.
 
 **Verdict: local evidence consistency review performed; GitHub source admission, full native acceptance, and production release remain HOLD.**
+
+## R998 executable admission continuation — supersedes earlier "not committed" status
+
+As of this later checkpoint, the previously external audited source is **now committed**. Preserve the original local experiment above as historical provenance; do not treat its earlier "NOT committed" statement as the present branch state.
+
+- `scripts/r998-verify-r997-local-receipt.mjs` Git blob `f1e373a3312c424bb55d4f6855124507fce5a8fb`; SHA256 `dca01686a9687cb47b7879002a8b62325c839dc6c4b6ca327b53169ef05ad0ed`.
+- `tests/r998-verify-r997-local-receipt.test.mjs` Git blob `0e980a6fa4a3c6d6b86e5a182dc549aff0e969d5`; SHA256 `704243d5ccb915b8abe7b56f9b493f0c1e5368dba6ea3ace24b754029baea5ba`. Relative import changed to `../scripts/...` for the repository layout.
+- Exact local repository-layout test: `node --test tests/r998-verify-r997-local-receipt.test.mjs` **18/18 PASS**; resulting TAP SHA256 `1742242c2e8951e07bc0863f272b692d22a4b6ca14bf688d2c3d1de820b095bb`.
+- `.github/workflows/urai-jobs-runtime-ci.yml` blob `344e1eb9ae3b56e5e55a552a85ecf709e7eeeee3` includes the test in both `validate` and `emulator-e2e` jobs, only once per job after Node setup.
+- Connected GitHub readback matched the two tested local Git blob hashes. Review PR #399 updated to reflect executable source admission.
+- Jobs protected GitHub Actions runs on the new exact head still report failure without trusted execution steps. **CI acceptance stays blocked.** This new code verifies internal consistency only and does not bridge the signed C6 issuer, physical GCS write fence, or authenticated lifecycle.
+- Live R954 first logs contain a **17/17 passing subset and a different 11/14 failing longform suite** due `serverLifeMovieOwnerOrgId is not defined`; later repeat loops are clone destination failures. R955 `exit=128` still repeats. Documented separately in Issue #397. Pod container disk not durably exported; no destructive lifecycle operation.
+- Release authority remains **PRODUCTION HOLD / NO-GO**.
