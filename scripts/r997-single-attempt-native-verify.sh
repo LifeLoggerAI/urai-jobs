@@ -31,24 +31,76 @@ start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 start_epoch=$(date -u +%s)
 source_tree=$(git -C "$checkout" rev-parse 'HEAD^{tree}')
 printf 'R997_ATTEMPT_CREATED sha=%s tree=%s started=%s\n' "$sha" "$source_tree" "$start_utc" > "$receipt/metadata.log"
-status='NATIVE_TOOL_MISSING'
-rc=127
-if command -v pnpm >/dev/null 2>&1; then
-  set +e
-  (cd -- "$checkout" && timeout --signal=TERM --kill-after=5s 300s env CI=1 GIT_TERMINAL_PROMPT=0 pnpm urai-jobs:verify) >"$receipt/native.log" 2>&1
-  rc=$?
-  set -e
-  status='FAILED'
-  if (( rc == 0 )); then status='PASSED'; fi
-  if (( rc == 124 || rc == 137 )); then status='TIMEOUT_OR_KILLED'; fi
+# R1000: Explicit toolchain/dependency admission, before any real native test.
+# A one-shot attempt installs dependencies only after clean HEAD attestation.
+status='PRECHECK_FAILED'
+rc=125
+: > "$receipt/native.log"
+: > "$receipt/install.log"
+: > "$receipt/toolchain.log"
+if ! command -v node >/dev/null 2>&1 || ! command -v pnpm >/dev/null 2>&1; then
+  printf 'node and pnpm must both exist before native verification\n' > "$receipt/toolchain.log"
+elif [[ ! -f "$checkout/package.json" || ! -f "$checkout/pnpm-lock.yaml" ]]; then
+  printf 'package.json or pnpm-lock.yaml missing from pinned source\n' > "$receipt/toolchain.log"
 else
-  printf 'pnpm not installed; no native command attempted\n' > "$receipt/native.log"
+  node_v=$(node --version 2>&1) || node_v='unavailable'
+  pnpm_v=$(timeout 20s env COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm --version 2>&1) || pnpm_v='unavailable'
+  printf 'node_version=%s\npnpm_version=%s\nnode_path=%s\npnpm_path=%s\n' "$node_v" "$pnpm_v" "$(command -v node)" "$(command -v pnpm)" > "$receipt/toolchain.log"
+  if [[ "$node_v" != v22.* || "$pnpm_v" != 8.15.9 ]]; then
+    printf 'Pinned toolchain refused (requires Node 22 and pnpm 8.15.9)\n' >> "$receipt/toolchain.log"
+  elif ! node - "$checkout/package.json" >> "$receipt/toolchain.log" 2>&1 <<'R1000_PACKAGE_CHECK'
+const fs = require('node:fs');
+try {
+  const pkg = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  if (pkg.packageManager !== 'pnpm@8.15.9' || typeof pkg.scripts?.['urai-jobs:verify'] !== 'string' || !pkg.scripts['urai-jobs:verify'].trim()) {
+    process.stderr.write('Pinned packageManager or urai-jobs:verify script mismatch\n'); process.exit(1);
+  }
+} catch (e) { process.stderr.write(String(e) + '\n'); process.exit(1); }
+R1000_PACKAGE_CHECK
+  then
+    printf 'Pinned package manifest refused\n' >> "$receipt/toolchain.log"
+  else
+    printf 'Pinned package manifest accepted\n' >> "$receipt/toolchain.log"
+    set +e
+    (cd -- "$checkout" && timeout --signal=TERM --kill-after=5s 180s env CI=1 GIT_TERMINAL_PROMPT=0 COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile) > "$receipt/install.log" 2>&1
+    rc=$?
+    set -e
+    if (( rc != 0 )); then
+      status='INSTALL_FAILED'
+      if (( rc == 124 || rc == 137 )); then status='INSTALL_TIMEOUT_OR_KILLED'; fi
+      printf 'Native suite not attempted: frozen dependency install failed (exit %s)\n' "$rc" > "$receipt/native.log"
+    else
+      # Native tests may run only if installation did not alter tracked or
+      # non-ignored source; ignored node_modules is expected after pnpm install.
+      post_status=''; post_flags=''
+      if ! post_status=$(git -C "$checkout" status --porcelain=v1 --untracked-files=all 2>&1) || \
+         ! post_flags=$(git -C "$checkout" ls-files -v -- 2>/dev/null | LC_ALL=C awk '/^[a-zS]/ { if (!bad) bad=$0 } END { if (bad) print bad }') || \
+         [[ -n "$post_status" || -n "$post_flags" || "$(git -C "$checkout" rev-parse HEAD 2>/dev/null)" != "$sha" ]]; then
+        status='SOURCE_MUTATED_AFTER_INSTALL'
+        rc=126
+        printf 'Native suite not attempted: frozen install changed protected source or index flags\n%s\n%s\n' "$post_status" "$post_flags" > "$receipt/native.log"
+      else
+        set +e
+        (cd -- "$checkout" && timeout --signal=TERM --kill-after=5s 300s env CI=1 GIT_TERMINAL_PROMPT=0 COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm urai-jobs:verify) > "$receipt/native.log" 2>&1
+        rc=$?
+        set -e
+        status='FAILED'
+        if (( rc == 0 )); then status='PASSED'; fi
+        if (( rc == 124 || rc == 137 )); then status='TIMEOUT_OR_KILLED'; fi
+      fi
+    fi
+  fi
+fi
+if [[ "$status" == PRECHECK_FAILED ]]; then
+  printf 'Native suite not attempted: toolchain precheck failed\n' > "$receipt/native.log"
 fi
 end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 end_epoch=$(date -u +%s)
 log_sha=$(sha256sum "$receipt/native.log" | awk '{print $1}')
-printf '{"schema":"R997_NATIVE_VERIFY_V1","evidence_class":"LOCAL_SCRIPT_EXECUTION_NOT_PROTECTED_CI","source_sha":"%s","tree_sha":"%s","start_utc":"%s","end_utc":"%s","duration_seconds":%d,"exit_code":%d,"status":"%s","log_sha256":"%s"}\n' "$sha" "$source_tree" "$start_utc" "$end_utc" "$((end_epoch-start_epoch))" "$rc" "$status" "$log_sha" > "$receipt/receipt.json"
-printf 'R997_NATIVE_STATUS=%s EXIT=%d RECEIPT=%s\n' "$status" "$rc" "$receipt"
+install_sha=$(sha256sum "$receipt/install.log" | awk '{print $1}')
+toolchain_sha=$(sha256sum "$receipt/toolchain.log" | awk '{print $1}')
+printf '{"schema":"R1000_NATIVE_VERIFY_V1","evidence_class":"LOCAL_SCRIPT_EXECUTION_NOT_PROTECTED_CI","source_sha":"%s","tree_sha":"%s","start_utc":"%s","end_utc":"%s","duration_seconds":%d,"exit_code":%d,"status":"%s","log_sha256":"%s","install_log_sha256":"%s","toolchain_log_sha256":"%s"}\n' "$sha" "$source_tree" "$start_utc" "$end_utc" "$((end_epoch-start_epoch))" "$rc" "$status" "$log_sha" "$install_sha" "$toolchain_sha" > "$receipt/receipt.json"
+printf 'R1000_NATIVE_STATUS=%s EXIT=%d RECEIPT=%s\n' "$status" "$rc" "$receipt"
 # Propagate the *actual* native process status to downstream automation.
 # A receipt is not certification.
 exit "$rc"

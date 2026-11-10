@@ -10,7 +10,11 @@ git init -q "$sandbox/source"
 git -C "$sandbox/source" config user.email test@example.invalid
 git -C "$sandbox/source" config user.name Test
 printf 'safe-source\n' > "$sandbox/source/entry.txt"
-git -C "$sandbox/source" add entry.txt
+cat > "$sandbox/source/package.json" <<'PACKAGE_JSON'
+{"name":"test-jobs","packageManager":"pnpm@8.15.9","scripts":{"urai-jobs:verify":"echo test"}}
+PACKAGE_JSON
+printf "lockfileVersion: '6.0'\n" > "$sandbox/source/pnpm-lock.yaml"
+git -C "$sandbox/source" add entry.txt package.json pnpm-lock.yaml
 git -C "$sandbox/source" commit -qm init
 sha=$(git -C "$sandbox/source" rev-parse HEAD)
 git -C "$sandbox/source" remote add origin "$sandbox/remote.git"
@@ -18,7 +22,15 @@ git -C "$sandbox/source" push -q origin HEAD:refs/heads/main
 uri="file://$sandbox/remote.git"
 cat > "$sandbox/bin/pnpm" <<'SH'
 #!/bin/sh
-printf 'MOCK_NATIVE_TEST_RAN\n'
+if [ "${1:-}" = "--version" ]; then printf '%s\n' "${R1000_MOCK_VERSION:-8.15.9}"; exit 0; fi
+if [ "${1:-}" = "install" ]; then
+  printf 'MOCK_FROZEN_INSTALL %s\n' "${2:-}"
+  if [ "${R1000_MOCK_INSTALL_FAIL:-0}" = 1 ]; then exit 17; fi
+  if [ "${R1000_MOCK_INSTALL_TAMPER:-0}" = 1 ]; then printf 'changed by install\n' >> entry.txt; fi
+  exit 0
+fi
+[ "${1:-}" = "urai-jobs:verify" ] || exit 45
+printf 'MOCK_NATIVE_TEST_RAN\n' 
 if [ "${R997_MOCK_FAIL:-0}" = 1 ]; then exit 12; fi
 if [ -n "${R999_MOCK_EXIT:-}" ]; then exit "$R999_MOCK_EXIT"; fi
 if [ "${R997_MOCK_SLEEP:-0}" = 1 ]; then sleep 999; fi
@@ -31,8 +43,10 @@ pass() { ok=$((ok+1)); printf 'ok %s - %s\n' "$ok" "$1"; }
 denied() { local label=$1;shift; if "$@" > "$sandbox/deny.log" 2>&1; then echo "unexpected success: $label" >&2; exit 1;fi; grep -Eq 'R997_DENIED:|R996_CHECKOUT_DENIED:' "$sandbox/deny.log" || { cat "$sandbox/deny.log";exit 1;}; pass "$label"; }
 target="$sandbox/checkouts/jobs";rec="$sandbox/receipts/success"
 out=$(bash "$runner" "$uri" "$sha" "$target" "$rec")
-[[ "$out" == *R997_NATIVE_STATUS=PASSED* ]]
+[[ "$out" == *R1000_NATIVE_STATUS=PASSED* ]]
 grep -q MOCK_NATIVE_TEST_RAN "$rec/native.log"
+grep -q 'MOCK_FROZEN_INSTALL --frozen-lockfile' "$rec/install.log"
+grep -q '"install_log_sha256"' "$rec/receipt.json"
 grep -q '"exit_code":0' "$rec/receipt.json"
 pass 'first real local source checkout and native stub writes immutable success receipt'
 
@@ -42,7 +56,7 @@ pass 'duplicate attempt does not overwrite prior receipt'
 
 mv "$sandbox/remote.git" "$sandbox/remote.unavailable"
 out=$(bash "$runner" "$uri" "$sha" "$target" "$sandbox/receipts/reused")
-[[ "$out" == *R997_NATIVE_STATUS=PASSED* ]]
+[[ "$out" == *R1000_NATIVE_STATUS=PASSED* ]]
 pass 'pinned clean checkout reuses source without network'
 mv "$sandbox/remote.unavailable" "$sandbox/remote.git"
 
@@ -101,4 +115,36 @@ git -C "$target" update-index --no-skip-worktree entry.txt
 git -C "$target" restore entry.txt
 
 # The test does not consume paid compute, real providers, or authentic protected CI.
-printf 'R999_TEST_PASS=%d\n' "$ok"
+export R1000_MOCK_VERSION=9.0.0
+set +e
+bash "$runner" "$uri" "$sha" "$target" "$sandbox/receipts/wrong-version" > "$sandbox/wrong-version.log" 2>&1
+wrong_version_rc=$?
+set -e
+[[ "$wrong_version_rc" -eq 125 ]]
+grep -q '"status":"PRECHECK_FAILED"' "$sandbox/receipts/wrong-version/receipt.json"
+pass 'wrong pnpm version fails closed before install or native test'
+unset R1000_MOCK_VERSION
+
+export R1000_MOCK_INSTALL_FAIL=1
+set +e
+bash "$runner" "$uri" "$sha" "$target" "$sandbox/receipts/install-fail" > "$sandbox/install-fail.log" 2>&1
+install_rc=$?
+set -e
+[[ "$install_rc" -eq 17 ]]
+grep -q '"status":"INSTALL_FAILED"' "$sandbox/receipts/install-fail/receipt.json"
+! grep -q MOCK_NATIVE_TEST_RAN "$sandbox/receipts/install-fail/native.log"
+pass 'failed dependency install preserves exact code and skips native suite'
+unset R1000_MOCK_INSTALL_FAIL
+
+export R1000_MOCK_INSTALL_TAMPER=1
+set +e
+bash "$runner" "$uri" "$sha" "$target" "$sandbox/receipts/install-tamper" > "$sandbox/install-tamper.log" 2>&1
+mutation_rc=$?
+set -e
+[[ "$mutation_rc" -eq 126 ]]
+grep -q '"status":"SOURCE_MUTATED_AFTER_INSTALL"' "$sandbox/receipts/install-tamper/receipt.json"
+! grep -q MOCK_NATIVE_TEST_RAN "$sandbox/receipts/install-tamper/native.log"
+pass 'frozen install cannot mutate tracked source before native suite'
+unset R1000_MOCK_INSTALL_TAMPER
+
+printf 'R1000_TEST_PASS=%d\n' "$ok"
