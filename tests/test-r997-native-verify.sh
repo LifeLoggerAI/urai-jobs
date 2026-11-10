@@ -60,6 +60,16 @@ out=$(bash "$runner" "$uri" "$sha" "$target" "$sandbox/receipts/reused")
 pass 'pinned clean checkout reuses source without network'
 mv "$sandbox/remote.unavailable" "$sandbox/remote.git"
 
+# Real GitHub source checkouts may lack an executable bit on the helper.
+# The runner must invoke the helper through bash rather than direct exec.
+helper="$(dirname "$runner")/r996-safe-pinned-git-checkout.sh"
+chmod a-x "$helper"
+out=$(bash "$runner" "$uri" "$sha" "$target" "$sandbox/receipts/nonexec-helper")
+[[ "$out" == *R1000_NATIVE_STATUS=PASSED* ]]
+[[ -f "$sandbox/receipts/nonexec-helper/receipt.json" ]]
+chmod +x "$helper"
+pass 'non-executable helper in Git checkout is invoked via bash'
+
 printf 'tampered\n' >> "$target/entry.txt"
 denied 'dirty checkout fails before receipt created' bash "$runner" "$uri" "$sha" "$target" "$sandbox/receipts/dirty"
 [[ ! -e "$sandbox/receipts/dirty" ]]
