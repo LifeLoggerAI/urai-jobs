@@ -32,6 +32,7 @@ function requiredStringHash(value) {
 function expectedPath(scope, attemptId, fileKind) {
   return `tenants/${scope.tenantId}/life-movies/${scope.projectId}/attempt-${attemptId}/${fileKind}`;
 }
+
 /**
  * Rejects caller authority and returns canonical data for a future trusted
  * transaction controller. Never returns a capability or 'authorized=true'.
