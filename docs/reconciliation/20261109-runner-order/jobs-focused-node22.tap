@@ -1,0 +1,142 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+(node:18) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:25) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: clean acceptance installs dependencies before real-Zod producer stage
+ok 1 - clean acceptance installs dependencies before real-Zod producer stage
+  ---
+  duration_ms: 15.97492
+  type: 'test'
+  ...
+# Subtest: failed prerequisite never runs producer acceptance
+ok 2 - failed prerequisite never runs producer acceptance
+  ---
+  duration_ms: 6.870403
+  type: 'test'
+  ...
+# Subtest: failed producer acceptance remains fatal after successful install
+ok 3 - failed producer acceptance remains fatal after successful install
+  ---
+  duration_ms: 10.891776
+  type: 'test'
+  ...
+# (node:26) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: matching HEAD blob pin is accepted
+ok 4 - matching HEAD blob pin is accepted
+  ---
+  duration_ms: 76.483337
+  type: 'test'
+  ...
+# Subtest: stale blob pin is refused even when file exists
+ok 5 - stale blob pin is refused even when file exists
+  ---
+  duration_ms: 69.170059
+  type: 'test'
+  ...
+# Subtest: missing checked path is refused
+ok 6 - missing checked path is refused
+  ---
+  duration_ms: 66.43975
+  type: 'test'
+  ...
+# Subtest: duplicated check cannot inflate evidence
+ok 7 - duplicated check cannot inflate evidence
+  ---
+  duration_ms: 62.147505
+  type: 'test'
+  ...
+# Subtest: zero pinned paths fail closed
+ok 8 - zero pinned paths fail closed
+  ---
+  duration_ms: 59.283634
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 419.696594
+(node:142) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:149) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:149) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///workspace/scratch/b5781a95d0b5/jobs/scripts/fixtures/studio-r931-producer.ts is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to /workspace/scratch/b5781a95d0b5/jobs/package.json.
+# Subtest: pinned Studio producer fixture provenance is exact and consent remains absent
+ok 1 - pinned Studio producer fixture provenance is exact and consent remains absent
+  ---
+  duration_ms: 1.961962
+  type: 'test'
+  ...
+# Subtest: actual Studio builder output and actual dispatch mapping are missing required canonical consent
+ok 2 - actual Studio builder output and actual dispatch mapping are missing required canonical consent
+  ---
+  duration_ms: 6.410933
+  type: 'test'
+  ...
+# Subtest: missing consent must not be filled by a dummy client receipt or a purpose substitution
+ok 3 - missing consent must not be filled by a dummy client receipt or a purpose substitution
+  ---
+  duration_ms: 1.520319
+  type: 'test'
+  ...
+# Subtest: current Studio fixture and Jobs boundary match immutable source pins
+ok 4 - current Studio fixture and Jobs boundary match immutable source pins
+  ---
+  duration_ms: 0.752933
+  type: 'test'
+  ...
+# Subtest: current Studio sceneTruthReceiptRef rejects JSON array coercion before Jobs admission
+ok 5 - current Studio sceneTruthReceiptRef rejects JSON array coercion before Jobs admission
+  ---
+  duration_ms: 0.771151
+  type: 'test'
+  ...
+# Subtest: current Studio sceneTruthReceiptRef rejects objects without invoking toString
+ok 6 - current Studio sceneTruthReceiptRef rejects objects without invoking toString
+  ---
+  duration_ms: 0.172916
+  type: 'test'
+  ...
+# Subtest: current Studio sceneTruthDigest rejects JSON array coercion before Jobs admission
+ok 7 - current Studio sceneTruthDigest rejects JSON array coercion before Jobs admission
+  ---
+  duration_ms: 0.232964
+  type: 'test'
+  ...
+# Subtest: current Studio sceneTruthDigest rejects objects without invoking toString
+ok 8 - current Studio sceneTruthDigest rejects objects without invoking toString
+  ---
+  duration_ms: 0.100358
+  type: 'test'
+  ...
+# Subtest: current Studio preserves the valid historical payload and still lacks canonical consent
+ok 9 - current Studio preserves the valid historical payload and still lacks canonical consent
+  ---
+  duration_ms: 1.395344
+  type: 'test'
+  ...
+# Subtest: current Studio with a shape-only dummy receipt cannot open consent authority
+ok 10 - current Studio with a shape-only dummy receipt cannot open consent authority
+  ---
+  duration_ms: 1.049782
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 145.792586
