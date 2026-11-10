@@ -85,8 +85,11 @@ export function inspectGenerationEvidence(value) {
     typeof value.objectPath !== 'string' || value.objectPath.length > 1024 ||
     !generation(value.generation) || value.bytesCommitted !== true ||
     value.writerDrained !== true) deny();
-  if (value.objectPath.includes('..') || value.objectPath.includes('\\') ||
-      value.objectPath.startsWith('/') || value.objectPath.split('/').some(p => !p)) deny();
+  // Generation metadata is untrusted. Accept only the canonical life-movie
+  // object layout; matching the attempt prevents mixing artifacts from other
+  // attempts. This is input validation, NOT proof of cloud ownership or deletion.
+  const match = /^tenants\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})\/life-movies\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})\/attempt-([A-Za-z0-9][A-Za-z0-9_-]{0,127})\/(life-movie\.(?:mp4|srt)|life-movie\.render-manifest\.json)$/.exec(value.objectPath);
+  if (!match || match[3] !== value.attemptId) deny();
   return Object.freeze({
     schema: 'R1001_REVIEW_ONLY_GENERATION_INPUT_V1',
     attemptId: value.attemptId,

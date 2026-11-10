@@ -26,3 +26,32 @@ test('generation evidence is never cloud authorization',()=>{const x=inspectGene
 test('unsettled upload cannot become generation evidence',()=>assert.throws(()=>inspectGenerationEvidence({attemptId:'attempt1',epoch:4,objectPath:r().objectPath,generation:'123',bytesCommitted:true,writerDrained:false}),{message:DENIED}));
 test('unknown generation cannot become evidence',()=>assert.throws(()=>inspectGenerationEvidence({attemptId:'attempt1',epoch:4,objectPath:r().objectPath,generation:'0',bytesCommitted:true,writerDrained:true}),{message:DENIED}));
 test('untrusted provider metadata extension denies',()=>assert.throws(()=>inspectGenerationEvidence({attemptId:'attempt1',epoch:4,objectPath:r().objectPath,generation:'123',bytesCommitted:true,writerDrained:true,cloudVerified:true}),{message:DENIED}));
+
+test('noncanonical path is denied even with alleged committed bytes', () => {
+  for (const objectPath of [
+    'arbitrary/relative/file.mp4',
+    'tenants/tenant1/life-movies/project1/attempt-other/life-movie.mp4',
+    'tenants/tenant1/life-movies/project1/attempt-attempt1/secrets.json',
+    'tenants/tenant1/life-movies/project1/attempt-attempt1/life-movie.mp4/extra',
+    'tenants/tenant1/life-movies/project1/attempt-attempt1//life-movie.mp4',
+    'tenants/tenant1/life-movies/project1/attempt-attempt1/../life-movie.mp4',
+    'tenants/.hidden/life-movies/project1/attempt-attempt1/life-movie.mp4',
+    'tenants/tenant1/life-movies/project1/attempt-attempt1/life-movie.mp4\\\\suffix',
+  ]) {
+    assert.throws(() => inspectGenerationEvidence({
+      attemptId: 'attempt1', epoch: 4, objectPath, generation: '123',
+      bytesCommitted: true, writerDrained: true,
+    }), { message: DENIED }, objectPath);
+  }
+});
+test('all allowed canonical generation artifact names remain review-only', () => {
+  for (const kind of ['life-movie.mp4', 'life-movie.srt', 'life-movie.render-manifest.json']) {
+    const x = inspectGenerationEvidence({
+      attemptId: 'attempt1', epoch: 4,
+      objectPath: 'tenants/tenant1/life-movies/project1/attempt-attempt1/' + kind,
+      generation: '123', bytesCommitted: true, writerDrained: true,
+    });
+    assert.equal(x.verifiedByCloud, false);
+    assert.equal(x.deletionAcknowledged, false);
+  }
+});
