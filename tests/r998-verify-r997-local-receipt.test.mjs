@@ -39,3 +39,24 @@ caseWith('reject malformed evidence class',f=>{f.j.evidence_class='PROTECTED_CI'
 caseWith('reject time reversal',f=>{f.j.end_utc='2026-11-10T06:59:59Z';f.save();assert.throws(()=>audit(f.d,SHA,TREE),/time reversal/)});
 caseWith('reject missing receipt file',f=>{fs.unlinkSync(path.join(f.d,'receipt.json'));assert.throws(()=>audit(f.d,SHA,TREE),/missing receipt.json/)});
 caseWith('reject unsupported exit statuses',f=>{f.j.status='TIMEOUT_OR_KILLED';f.j.exit_code=13;f.save();assert.throws(()=>audit(f.d,SHA,TREE),/time-out code mismatch/)});
+
+
+function modern(f) {
+ f.j.schema='R1000_NATIVE_VERIFY_V1';
+ for(const [file,key] of [['install.log','install_log_sha256'],['toolchain.log','toolchain_log_sha256']]) {
+  fs.writeFileSync(path.join(f.d,file),'mock '+file+'\n');
+  f.j[key]=createHash('sha256').update(fs.readFileSync(path.join(f.d,file))).digest('hex');
+ }
+ f.save();
+}
+caseWith('R1000 success verifies all three logs without certification',f=>{modern(f); const a=audit(f.d,SHA,TREE);assert.equal(a.classification,'LOCAL_COMMAND_EXIT_ZERO_UNVERIFIED');assert.equal(a.release_authorized,false)});
+for(const file of ['install.log','toolchain.log']) {
+ caseWith('R1000 rejects altered '+file,f=>{modern(f);fs.appendFileSync(path.join(f.d,file),'tamper');assert.throws(()=>audit(f.d,SHA,TREE),/digest/)});
+ caseWith('R1000 rejects missing '+file,f=>{modern(f);fs.unlinkSync(path.join(f.d,file));assert.throws(()=>audit(f.d,SHA,TREE),/missing/)});
+ caseWith('R1000 rejects symlink '+file,f=>{modern(f);fs.unlinkSync(path.join(f.d,file));fs.symlinkSync('/etc/hosts',path.join(f.d,file));assert.throws(()=>audit(f.d,SHA,TREE),/symlink/)});
+}
+for(const [status,code] of [['PRECHECK_FAILED',125],['INSTALL_FAILED',17],['INSTALL_TIMEOUT_OR_KILLED',124],['SOURCE_MUTATED_AFTER_INSTALL',126]]) {
+ caseWith('R1000 classifies '+status,f=>{modern(f);f.j.status=status;f.j.exit_code=code;f.save();assert.equal(audit(f.d,SHA,TREE).original_local_status,status)});
+ caseWith('R1000 refuses wrong code for '+status,f=>{modern(f);f.j.status=status;f.j.exit_code=43; if(status==='INSTALL_FAILED')f.j.exit_code=124;f.save();assert.throws(()=>audit(f.d,SHA,TREE),/code mismatch/)});
+}
+caseWith('legacy schema cannot smuggle R1000 statuses',f=>{f.j.status='PRECHECK_FAILED';f.j.exit_code=125;f.save();assert.throws(()=>audit(f.d,SHA,TREE),/unknown local status/)});

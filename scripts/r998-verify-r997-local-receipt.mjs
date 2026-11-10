@@ -46,14 +46,24 @@ export function audit(receiptDir, expectedSha, expectedTree) {
   try { json = JSON.parse(regularFile(receiptDir, 'receipt.json').toString('utf8')); }
   catch (e) { if (e instanceof ReceiptRejected) throw e; deny('invalid JSON receipt'); }
   if (json === null || typeof json !== 'object' || Array.isArray(json)) deny('invalid JSON object');
-  exactly(json.schema, 'R997_NATIVE_VERIFY_V1', 'schema');
+  const modern = json.schema === 'R1000_NATIVE_VERIFY_V1';
+  if (!modern) exactly(json.schema, 'R997_NATIVE_VERIFY_V1', 'schema');
   exactly(json.evidence_class, 'LOCAL_SCRIPT_EXECUTION_NOT_PROTECTED_CI', 'evidence class');
   exactly(json.source_sha, expectedSha, 'source SHA');
   exactly(json.tree_sha, expectedTree, 'tree SHA');
   if (!SHA256.test(json.log_sha256 ?? '')) deny('invalid SHA256 digest');
   if (!Number.isSafeInteger(json.exit_code) || json.exit_code < 0 || json.exit_code > 255) deny('invalid exit code');
   if (!Number.isSafeInteger(json.duration_seconds) || json.duration_seconds < 0 || json.duration_seconds > 3600) deny('invalid recorded duration');
-  if (!Object.hasOwn(CLASSES, json.status)) deny('unknown local status');
+  const classes = modern ? {...CLASSES, PRECHECK_FAILED: 'LOCAL_PRECHECK_FAILED', INSTALL_FAILED: 'LOCAL_INSTALL_FAILED', INSTALL_TIMEOUT_OR_KILLED: 'LOCAL_INSTALL_TIMED_OUT_OR_KILLED', SOURCE_MUTATED_AFTER_INSTALL: 'LOCAL_SOURCE_MUTATED_AFTER_INSTALL'} : CLASSES;
+  if (!Object.hasOwn(classes, json.status) || (modern && json.status === 'NATIVE_TOOL_MISSING')) deny('unknown local status');
+  if (modern && json.status === 'PRECHECK_FAILED' && json.exit_code !== 125) deny('precheck code mismatch');
+  if (modern && json.status === 'SOURCE_MUTATED_AFTER_INSTALL' && json.exit_code !== 126) deny('source mutation code mismatch');
+  if (modern && json.status === 'INSTALL_TIMEOUT_OR_KILLED' && ![124,137].includes(json.exit_code)) deny('install timeout code mismatch');
+  if (modern && json.status === 'INSTALL_FAILED' && [0,124,137].includes(json.exit_code)) deny('install failure code mismatch');
+  if (modern) for (const [file, key] of [['install.log','install_log_sha256'],['toolchain.log','toolchain_log_sha256']]) {
+    if (!SHA256.test(json[key] ?? '')) deny(`invalid ${key}`);
+    exactly(createHash('sha256').update(regularFile(receiptDir,file)).digest('hex'), json[key], `${file} digest`);
+  }
   const start = parseDate(json.start_utc, 'start timestamp');
   const end = parseDate(json.end_utc, 'end timestamp');
   if (end < start) deny('time reversal');
@@ -80,7 +90,7 @@ export function audit(receiptDir, expectedSha, expectedTree) {
     source_sha: expectedSha,
     tree_sha: expectedTree,
     original_local_status: json.status,
-    classification: CLASSES[json.status],
+    classification: classes[json.status],
     raw_log_sha256: json.log_sha256,
     evidence_only: true,
   });
@@ -96,3 +106,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(im
     process.exitCode = 2;
   }
 }
+
