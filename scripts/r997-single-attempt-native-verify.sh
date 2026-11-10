@@ -23,7 +23,7 @@ real_receipt=$(cd -- "$receipt_parent" && pwd -P)/$(basename -- "$receipt")
 command -v git >/dev/null || fail 'Git unavailable'
 command -v timeout >/dev/null || fail 'timeout unavailable'
 # Pin source *before* consuming an attempt. Failed preflight does not create receipt.
-"$(dirname -- "${BASH_SOURCE[0]}")/r996-safe-pinned-git-checkout.sh" "$repo" "$sha" "$checkout" >/dev/null || fail 'Source attestation refused'
+bash "$(dirname -- "${BASH_SOURCE[0]}")/r996-safe-pinned-git-checkout.sh" "$repo" "$sha" "$checkout" >/dev/null || fail 'Source attestation refused'
 [[ ! -e "$receipt" ]] || fail 'Receipt appeared during source verification'
 mkdir -m 700 -- "$receipt" || fail 'Receipt reservation failed; another execution may own it'
 # The receipt directory reservation is permanent, even if native verification fails.
