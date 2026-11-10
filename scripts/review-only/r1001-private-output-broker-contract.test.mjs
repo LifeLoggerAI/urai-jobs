@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { inspectPrivateWriteRequest, inspectGenerationEvidence, DENIED } from './r1001-private-output-broker-contract.mjs';
+const H='a'.repeat(64), J='b'.repeat(64);
+const r=()=>({ownerUid:'owner1',tenantId:'tenant1',projectId:'project1',purpose:'life-movie.render',epoch:4,attemptId:'attempt1',bucket:'owner-private-bucket',objectPath:'tenants/tenant1/life-movies/project1/attempt-attempt1/life-movie.mp4',fileKind:'life-movie.mp4',sourceSetDigest:H,renderPlanDigest:J});
+const p=()=>({ownerUid:'owner1',tenantId:'tenant1',projectId:'project1',purpose:'life-movie.render',epoch:4,phase:'OPEN',bucket:'owner-private-bucket',acceptedSourceSetDigest:H,acceptedRenderPlanDigest:J});
+function rejected(change){assert.throws(()=>{const [a,b]=[r(),p()];change(a,b);inspectPrivateWriteRequest(a,b);},{message:DENIED});}
+test('valid structured input never grants write or deletion authority',()=>{const a=inspectPrivateWriteRequest(r(),p());assert.equal(a.reviewOnly,true);assert.equal(a.storageWriteAuthorized,false);assert.equal(a.deletionAcknowledged,false);assert.ok(Object.isFrozen(a));});
+test('revoked scope denies',()=>rejected((a,b)=>b.phase='FENCING'));
+test('stale epoch denies',()=>rejected((a,b)=>a.epoch=3));
+test('future caller epoch denies',()=>rejected((a,b)=>a.epoch=5));
+test('owner mismatch denies',()=>rejected((a,b)=>a.ownerUid='other'));
+test('tenant mismatch denies',()=>rejected((a,b)=>a.tenantId='other'));
+test('project mismatch denies',()=>rejected((a,b)=>a.projectId='other'));
+test('purpose mismatch denies',()=>rejected((a,b)=>a.purpose='admin'));
+test('alternate bucket denies',()=>rejected((a,b)=>a.bucket='other-bucket'));
+test('source substitution denies',()=>rejected((a,b)=>a.sourceSetDigest=J));
+test('plan substitution denies',()=>rejected((a,b)=>a.renderPlanDigest=H));
+test('path traversal denies',()=>rejected((a,b)=>a.objectPath='../owner-private-bucket'));
+test('old attempt path denies',()=>rejected((a,b)=>a.attemptId='old'));
+test('unknown output kind denies',()=>rejected((a,b)=>a.fileKind='secrets.json'));
+test('forged capability field denies',()=>rejected((a,b)=>a.authorized=true));
+test('forged trusted policy field denies',()=>rejected((a,b)=>b.trusted=true));
+test('invalid digest format denies',()=>rejected((a,b)=>a.sourceSetDigest='123'));
+test('generation evidence is never cloud authorization',()=>{const x=inspectGenerationEvidence({attemptId:'attempt1',epoch:4,objectPath:r().objectPath,generation:'123',bytesCommitted:true,writerDrained:true});assert.equal(x.verifiedByCloud,false);assert.equal(x.deletionAcknowledged,false);});
+test('unsettled upload cannot become generation evidence',()=>assert.throws(()=>inspectGenerationEvidence({attemptId:'attempt1',epoch:4,objectPath:r().objectPath,generation:'123',bytesCommitted:true,writerDrained:false}),{message:DENIED}));
+test('unknown generation cannot become evidence',()=>assert.throws(()=>inspectGenerationEvidence({attemptId:'attempt1',epoch:4,objectPath:r().objectPath,generation:'0',bytesCommitted:true,writerDrained:true}),{message:DENIED}));
+test('untrusted provider metadata extension denies',()=>assert.throws(()=>inspectGenerationEvidence({attemptId:'attempt1',epoch:4,objectPath:r().objectPath,generation:'123',bytesCommitted:true,writerDrained:true,cloudVerified:true}),{message:DENIED}));
