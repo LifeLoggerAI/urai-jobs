@@ -68,6 +68,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: R998 audit local native receipts (integrity only; NOT certified integration)
+        run: node --test tests/r998-verify-r997-local-receipt.test.mjs
+
       - name: Verify exact-head safety and offline emulator preflight
         run: node --test scripts/run-four-emulator-acceptance.contract.test.mjs
 
@@ -161,6 +164,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+
+      - name: R998 audit local native receipts (integrity only; NOT certified integration)
+        run: node --test tests/r998-verify-r997-local-receipt.test.mjs
 
       - name: Verify exact-head safety and offline emulator preflight
         run: node --test scripts/run-four-emulator-acceptance.contract.test.mjs

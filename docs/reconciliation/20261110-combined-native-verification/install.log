@@ -1,0 +1,22 @@
+Scope: all 13 workspace projects
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +513
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 513, reused 513, downloaded 0, added 513, done
+
+dependencies:
++ axios 1.16.0
+
+devDependencies:
++ @types/uuid 10.0.0
++ @urai-jobs/shared-types 1.0.0 <- packages/shared-types
++ firebase-admin 12.7.0
++ ulid 2.4.0
+
+. postinstall$ npm run build --prefix packages/shared-types
+. postinstall: npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+. postinstall: > @urai-jobs/shared-types@1.0.0 build
+. postinstall: > tsc
+. postinstall: Done
+Done in 2.2s

@@ -1,0 +1,21 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+ok 1 - first real local source checkout and native stub writes immutable success receipt
+ok 2 - same attempt cannot run twice
+ok 3 - duplicate attempt does not overwrite prior receipt
+ok 4 - pinned clean checkout reuses source without network
+ok 5 - non-executable helper in Git checkout is invoked via bash
+ok 6 - dirty checkout fails before receipt created
+ok 7 - preflight failure keeps attempted receipt slot reusable
+ok 8 - ignored output denied
+ok 9 - assume-unchanged masked edit denied
+ok 10 - failed native command has preserved receipt and propagates exact exit status 12
+ok 11 - nonstandard native exit 43 is preserved at launcher boundary
+ok 12 - reject overlapping receipt within checkout
+ok 13 - reject symlink parent alias of checkout
+ok 14 - reject abbreviated SHA
+ok 15 - reject dot-dot path
+ok 16 - skip-worktree masked edit denied
+ok 17 - wrong pnpm version fails closed before install or native test
+ok 18 - failed dependency install preserves exact code and skips native suite
+ok 19 - frozen install cannot mutate tracked source before native suite
+R1000_TEST_PASS=19
