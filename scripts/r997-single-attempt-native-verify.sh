@@ -49,5 +49,6 @@ end_epoch=$(date -u +%s)
 log_sha=$(sha256sum "$receipt/native.log" | awk '{print $1}')
 printf '{"schema":"R997_NATIVE_VERIFY_V1","evidence_class":"LOCAL_SCRIPT_EXECUTION_NOT_PROTECTED_CI","source_sha":"%s","tree_sha":"%s","start_utc":"%s","end_utc":"%s","duration_seconds":%d,"exit_code":%d,"status":"%s","log_sha256":"%s"}\n' "$sha" "$source_tree" "$start_utc" "$end_utc" "$((end_epoch-start_epoch))" "$rc" "$status" "$log_sha" > "$receipt/receipt.json"
 printf 'R997_NATIVE_STATUS=%s EXIT=%d RECEIPT=%s\n' "$status" "$rc" "$receipt"
-# Propagate failure to any downstream automation; a receipt is not certification.
-(( rc == 0 ))
+# Propagate the *actual* native process status to downstream automation.
+# A receipt is not certification.
+exit "$rc"
