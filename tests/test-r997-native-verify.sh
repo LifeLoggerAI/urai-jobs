@@ -20,6 +20,7 @@ cat > "$sandbox/bin/pnpm" <<'SH'
 #!/bin/sh
 printf 'MOCK_NATIVE_TEST_RAN\n'
 if [ "${R997_MOCK_FAIL:-0}" = 1 ]; then exit 12; fi
+if [ -n "${R999_MOCK_EXIT:-}" ]; then exit "$R999_MOCK_EXIT"; fi
 if [ "${R997_MOCK_SLEEP:-0}" = 1 ]; then sleep 999; fi
 exit 0
 SH
@@ -63,12 +64,27 @@ git -C "$target" update-index --no-assume-unchanged entry.txt
 git -C "$target" restore entry.txt
 
 export R997_MOCK_FAIL=1
-if bash "$runner" "$uri" "$sha" "$target" "$sandbox/receipts/failed" > "$sandbox/failed.log" 2>&1; then echo 'failed native command was successful' >&2;exit 1;fi
+set +e
+bash "$runner" "$uri" "$sha" "$target" "$sandbox/receipts/failed" > "$sandbox/failed.log" 2>&1
+failure_rc=$?
+set -e
+[[ "$failure_rc" -eq 12 ]] || { printf 'expected rc 12 got %s\n' "$failure_rc" >&2; exit 1; }
 [[ -f "$sandbox/receipts/failed/receipt.json" ]]
 grep -q '"exit_code":12' "$sandbox/receipts/failed/receipt.json"
 grep -q '"status":"FAILED"' "$sandbox/receipts/failed/receipt.json"
-pass 'failed native command has preserved receipt and propagates exit status'
+pass 'failed native command has preserved receipt and propagates exact exit status 12'
 unset R997_MOCK_FAIL
+
+export R999_MOCK_EXIT=43
+set +e
+bash "$runner" "$uri" "$sha" "$target" "$sandbox/receipts/exit43" > "$sandbox/exit43.log" 2>&1
+failure_rc=$?
+set -e
+[[ "$failure_rc" -eq 43 ]] || { printf 'expected rc 43 got %s\n' "$failure_rc" >&2; exit 1; }
+grep -q '"exit_code":43' "$sandbox/receipts/exit43/receipt.json"
+grep -q '"status":"FAILED"' "$sandbox/receipts/exit43/receipt.json"
+pass 'nonstandard native exit 43 is preserved at launcher boundary'
+unset R999_MOCK_EXIT
 
 denied 'reject overlapping receipt within checkout' bash "$runner" "$uri" "$sha" "$target" "$target/rec"
 mkdir -p "$sandbox/checkouts/outside"
@@ -85,4 +101,4 @@ git -C "$target" update-index --no-skip-worktree entry.txt
 git -C "$target" restore entry.txt
 
 # The test does not consume paid compute, real providers, or authentic protected CI.
-printf 'R997_TEST_PASS=%d\n' "$ok"
+printf 'R999_TEST_PASS=%d\n' "$ok"
