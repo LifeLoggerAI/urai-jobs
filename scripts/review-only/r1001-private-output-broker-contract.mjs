@@ -32,7 +32,6 @@ function requiredStringHash(value) {
 function expectedPath(scope, attemptId, fileKind) {
   return `tenants/${scope.tenantId}/life-movies/${scope.projectId}/attempt-${attemptId}/${fileKind}`;
 }
-
 /**
  * Rejects caller authority and returns canonical data for a future trusted
  * transaction controller. Never returns a capability or 'authorized=true'.
@@ -74,6 +73,7 @@ export function inspectPrivateWriteRequest(request, policy) {
     reviewOnly: true,
   });
 }
+
 /**
  * A future broker MUST obtain these fields in a server-owned transaction,
  * not from untrusted user input or stale cached job snapshots.
