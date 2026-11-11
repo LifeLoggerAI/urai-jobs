@@ -33,6 +33,8 @@ function fixture(opts={}){
   markedForDeletion:false,disabled:false,deletionPending:false});
  db.seed('jobs/'+job,{ownerUid:owner,tenantId:tenant,status:'RUNNING',sourceSystem:'urai-studio',
   jobType:c.jobType,payload:{projectId:project},consent:{purpose:c.purpose,decisionReceiptId:c.consentReceiptId}});
+ // Scope IDs are private to this library. To seed test-only authoritative scope,
+ // derive its exactly documented deterministic owner/purpose key.
  const {createHash}=require('node:crypto');
  const h=(s)=>createHash('sha256').update(s).digest('hex');
  const scopeId=h(`urai-owner-purpose-v1\n${owner}\nlife-movie.render`);
