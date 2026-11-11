@@ -79,6 +79,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // R1027: durable server-owned revocation state, never client authority.
+    match /lifeMoviePrivateOutputRevocationFences/{fenceId} {
+      allow read, write: if false;
+    }
+
     // Server-only data-rights workflow. Access is mediated by authenticated callables.
     match /dataRightsRequests/{requestId} {
       allow read, write: if false;
