@@ -152,6 +152,11 @@ export const ingestConsentRevocation = onRequest({
             ...transition.state, createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
           });
+        } else if (transition.kind === 'update') {
+          // Repair historical false lineage without changing epoch/event binding.
+          transaction.update(outputFenceRef, {
+            ...transition.state, updatedAt: FieldValue.serverTimestamp(),
+          });
         }
       }
       return { conflict: false as const, ack: receipt };
