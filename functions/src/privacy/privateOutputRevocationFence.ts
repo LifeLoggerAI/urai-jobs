@@ -34,15 +34,23 @@ export function nextPrivateOutputFence(
       storageWriteAuthorized:false, storageWriteFenceVerified:false,
       allWritersDrained:false, privateOutputDeletionAcknowledged:false}};
   }
-  if (typeof existing !== 'object' || Array.isArray(existing) ||
-      ![Object.prototype, null].includes(Object.getPrototypeOf(existing))) deny();
+  // VM-based original-handler contract tests return plain objects created in
+  // another JavaScript realm. Compare prototype shape rather than realm identity.
+  if (typeof existing !== 'object' || Array.isArray(existing)) deny();
+  const prototype = Object.getPrototypeOf(existing);
+  if (prototype !== null &&
+      (Object.getPrototypeOf(prototype) !== null ||
+       Object.getOwnPropertyDescriptor(prototype, 'constructor')?.value?.name !== 'Object')) deny();
   const value = existing as Record<string, unknown>;
   const required = new Set(['schemaVersion','ownerUid','purpose','eventId','epoch',
     'phase','legacyLineageUnverified','storageWriteAuthorized',
     'storageWriteFenceVerified','allWritersDrained','privateOutputDeletionAcknowledged']);
   const allowed = new Set([...required,'createdAt','updatedAt']);
-  if (Reflect.ownKeys(value).some(k => typeof k !== 'string' || !allowed.has(k)) ||
-      [...required].some(k => !Object.hasOwn(value,k))) deny();
+  if (Reflect.ownKeys(value).some(k => {
+        if (typeof k !== 'string' || !allowed.has(k)) return true;
+        const descriptor = Object.getOwnPropertyDescriptor(value, k);
+        return !descriptor || !Object.hasOwn(descriptor, 'value');
+      }) || [...required].some(k => !Object.hasOwn(value,k))) deny();
   if (value.schemaVersion !== 'R1027_PRIVATE_OUTPUT_FENCE_V1' ||
       value.ownerUid !== event.ownerUid || value.purpose !== event.purpose ||
       !safeId(value.eventId) ||
