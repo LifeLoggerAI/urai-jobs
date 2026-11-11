@@ -6,7 +6,7 @@ const e=readFileSync(new URL('./life-movies-write-reservations.review-emulator.m
 const off=readFileSync(new URL('../workers/studio-worker/private-output-write-authority.js',import.meta.url),'utf8');
 test('both simulator admissions consult canonical revocation transactionally',()=>{
  assert.equal((s.match(/transaction\.get\(canonicalRevocation\)/g)||[]).length,3);
- assert.equal((s.match(/if \(canonicalSnap\.exists\) throw new Error\('life_movie_review_write_canonical_revocation_fenced'\)/g)||[]).length,3);
+ assert.equal((s.match(/if \(canonicalSnap\.exists\) throw new Error\('life_movie_review_write_canonical_revocation_fenced'\)/g)||[]).length,4, 'three admission boundaries plus first-scope seed must deny canonical withdrawal');
  assert.match(s,/PRIVATE_OUTPUT_FENCE_COLLECTION, privateOutputFenceId/);
 });
 test('malformed, owner-wide and in-flight cases enrolled in real emulator runner',()=>{
