@@ -237,3 +237,24 @@ test('R1097 zero unsettled is never broker-write or deletion-ACK authorization',
  await invalid(f.protocol.deletionAck());
  await invalid(f.protocol.storageWrite());
 });
+
+test('R1098 malformed revocation counters fail closed before fencing epoch or deletion ACK',async()=>{
+ for(const patch of [
+  {attemptsEverReserved:-1,unsettledAttemptCount:0},
+  {attemptsEverReserved:Number.MAX_SAFE_INTEGER,unsettledAttemptCount:0},
+  {attemptsEverReserved:0,unsettledAttemptCount:Number.MAX_SAFE_INTEGER},
+  {attemptsEverReserved:0,unsettledAttemptCount:-1},
+  {attemptsEverReserved:0.5,unsettledAttemptCount:0},
+  {epoch:0},{epoch:-1},{version:0},{version:-1},
+ ]) {
+  const f=fixture();
+  const prior=f.db.docs.get(f.scope);
+  f.db.seed(f.scope,{...prior,...patch});
+  const stateBefore=structuredClone(f.db.docs.get(f.scope));
+  seedCanonical(f,'withdrawal-counter-invalid');
+  await invalid(f.protocol.fence(x(),'withdrawal-counter-invalid'));
+  assert.deepEqual(f.db.docs.get(f.scope),stateBefore);
+  await invalid(f.protocol.storageWrite());
+  await invalid(f.protocol.deletionAck());
+ }
+});
