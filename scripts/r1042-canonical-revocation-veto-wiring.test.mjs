@@ -35,3 +35,22 @@ test('R1043: simulated pre-byte check and begin both re-read canonical owner rev
  }
  assert.match(off,/return false;/);
 });
+
+test('R1045: both later simulator stages re-read owner and job authority in one transaction',()=>{
+ const begin=s.slice(s.indexOf('export async function beginReviewOnlySimulatedUpload'),s.indexOf('export async function revokeReviewOnlyOutputScope'));
+ const pre=s.slice(s.indexOf('export async function assertReviewOnlyBrokerPreByte'),s.indexOf('export async function recordReviewOnlyBrokerPhysicalGeneration'));
+ for(const part of [begin,pre]){
+  for(const item of ['transaction.get(owner)','transaction.get(job)','user.disabled !== false',
+    'user.deletionPending !== false',"currentJob.status !== 'RUNNING'",
+    'currentJob.ownerUid !== s.ownerUid','currentJob.tenantId !== s.tenantId',
+    'payload.projectId !== s.projectId','currentJob.consent?.purpose !== PURPOSE']) {
+    assert.ok(part.includes(item),item);
+  }
+ }
+ for(const name of ['R1045 job cancellation after reservation vetoes simulated begin and pre-byte',
+  'R1045 owner disable and deletion after reservation veto later stages',
+  'R1045 mutated job owner, tenant, source, project, purpose deny after reserve and begin']) {
+   assert.ok(e.includes(name),name);
+ }
+ assert.match(off,/return false;/);
+});
