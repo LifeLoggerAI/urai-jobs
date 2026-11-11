@@ -60,3 +60,49 @@ test('original source transaction reads both records before writes; storage auth
  assert.match(worker,/return false;/);
  assert.equal(PRIVATE_OUTPUT_FENCE_COLLECTION,'lifeMoviePrivateOutputRevocationFences');
 });
+
+test('R1028: server fence refuses extra authority aliases and prototype manipulation',()=>{
+ const state=first().state;
+ for(const key of ['authorized','storageWriteEnabled','providerProofAuthenticated',
+   'releaseAuthorized','deletionAcknowledged','extraEventId']) {
+   denied(()=>nextPrivateOutputFence({...state,[key]:true},event(),context(true,true,{})));
+ }
+ const forged=Object.create({storageWriteAuthorized:true});
+ Object.assign(forged,state);
+ denied(()=>nextPrivateOutputFence(forged,event(),context(true,true,{})));
+ const accessor={...state};
+ Object.defineProperty(accessor,'unexpectedPrivilege',{get(){throw new Error('getter should not run');},enumerable:true});
+ denied(()=>nextPrivateOutputFence(accessor,event(),context(true,true,{})));
+});
+test('R1028: missing mandatory persisted fence fields always fail closed',()=>{
+ for(const key of Object.keys(first().state)) {
+   const state={...first().state};delete state[key];
+   denied(()=>nextPrivateOutputFence(state,event(),context(true,true,{})));
+ }
+});
+test('R1028: malformed event scope and hidden identity separators fail closed',()=>{
+ const bad=['','owner/other',' owner','owner\nother','owner\rmore',
+   'owner\\other','other\u0000owner','👁'];
+ for(const owner of bad) {
+   denied(()=>nextPrivateOutputFence(undefined,event('event1',owner),context()));
+ }
+ for(const e of bad) denied(()=>nextPrivateOutputFence(undefined,event(e),context()));
+});
+test('R1028: legitimate timestamp metadata never confers authority',()=>{
+ const state={...first().state,createdAt:{_seconds:123,_nanoseconds:0},
+   updatedAt:{_seconds:124,_nanoseconds:0}};
+ const x=nextPrivateOutputFence(state,event(),context(true,true,{}));
+ assert.deepEqual(x,{kind:'replay'});
+});
+
+test('R1028: cross-realm Firestore-like plain documents preserve exact replay',async()=>{
+ const vm=await import('node:vm');
+ const state=vm.runInNewContext('({...source})',{source:first().state});
+ const result=nextPrivateOutputFence(state,event(),context(true,true,{}));
+ assert.deepEqual(result,{kind:'replay'});
+});
+test('R1028: forged getter under an allowed field cannot confer authority',()=>{
+ const state={...first().state};
+ Object.defineProperty(state,'createdAt',{get(){throw new Error('untrusted getter executed');},enumerable:true});
+ denied(()=>nextPrivateOutputFence(state,event(),context(true,true,{})));
+});
