@@ -273,6 +273,7 @@ test('R1104 reserve preserves one increment of revocation-fence headroom',async(
  const max=Number.MAX_SAFE_INTEGER;
  for(const patch of [
   {version:max-1},
+  {version:max-2},
   {attemptsEverReserved:max-1,unsettledAttemptCount:0},
   {attemptsEverReserved:max-1,unsettledAttemptCount:max-1},
  ]) {
@@ -307,6 +308,22 @@ test('R1104 begin preserves version headroom for owner withdrawal',async()=>{
  await f.protocol.fence(x(),'withdrawal-begin-headroom');
  assert.equal(f.db.docs.get(f.scope).phase,'FENCING');
  assert.equal(f.db.docs.get(f.scope).version,Number.MAX_SAFE_INTEGER);
+ await invalid(f.protocol.storageWrite());
+ await invalid(f.protocol.deletionAck());
+});
+
+test('R1104 successful reservation and begin still permit withdrawal at last safe headroom',async()=>{
+ const f=fixture(),max=Number.MAX_SAFE_INTEGER;
+ const current=f.db.docs.get(f.scope);
+ f.db.seed(f.scope,{...current,version:max-3});
+ await f.protocol.reserve(x());
+ assert.equal(f.db.docs.get(f.scope).version,max-2);
+ await f.protocol.begin(x());
+ assert.equal(f.db.docs.get(f.scope).version,max-1);
+ seedCanonical(f,'withdrawal-three-increments');
+ await f.protocol.fence(x(),'withdrawal-three-increments');
+ assert.equal(f.db.docs.get(f.scope).version,max);
+ assert.equal(f.db.docs.get(f.scope).phase,'FENCING');
  await invalid(f.protocol.storageWrite());
  await invalid(f.protocol.deletionAck());
 });
