@@ -52,9 +52,9 @@ test('environment spoofing and test mode cannot turn on private output', () => {
 
 test('R1061: Studio upload helpers have two broker-only paths with no direct GCS writer', () => {
   const source = readFileSync(workerPath, 'utf8');
-  const uploadStarts = [...source.matchAll(/async function uploadPrivateFile\\s*\\(/g)].map(m => m.index);
-  const brokerCalls = [...source.matchAll(/await submitPrivateOutputToExclusiveBroker\\(\\{/g)].map(m => m.index);
-  const outputStreams = [...source.matchAll(/\\bfile\\.createWriteStream\\s*\\(/g)].map(m => m.index);
+  const uploadStarts = [...source.matchAll(/async function uploadPrivateFile\s*\(/g)].map(m => m.index);
+  const brokerCalls = [...source.matchAll(/await submitPrivateOutputToExclusiveBroker\(\{/g)].map(m => m.index);
+  const outputStreams = [...source.matchAll(/\bfile\.createWriteStream\s*\(/g)].map(m => m.index);
   assert.equal(uploadStarts.length, 2, 'unexpected private output helper count: re-audit worker');
   assert.equal(brokerCalls.length, 2, 'both output paths must route to trusted broker boundary');
   assert.equal(outputStreams.length, 0, 'direct GCS output streaming may not reappear');
