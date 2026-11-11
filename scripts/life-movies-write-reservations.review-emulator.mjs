@@ -14,7 +14,8 @@ assert.equal(process.env.FIRESTORE_EMULATOR_HOST, '127.0.0.1:8080');
 assert.equal(process.env.FIREBASE_STORAGE_EMULATOR_HOST, '127.0.0.1:9199');
 for (const name of ['GOOGLE_APPLICATION_CREDENTIALS',
   'FIREBASE_TOKEN', 'GITHUB_TOKEN', 'RUNPOD_API_KEY']) {
-  assert.equal(process.env[name] || '', '', name + ' must be absent');
+  // Never echo a credential value into CI or provider logs.
+  if (process.env[name]) throw new Error(name + ' must be absent');
 }
 for (const name of ['GCLOUD_PROJECT', 'GOOGLE_CLOUD_PROJECT']) {
   if (process.env[name]) assert.equal(process.env[name], PROJECT,
