@@ -19,8 +19,8 @@ function gitBlob(text, expected, label) {
   assert.equal(actual, expected, label + ' must match reviewed source');
 }
 gitBlob(privacyText, '6cca2b9456319927cf22511c7d51c1f16ddf051c', 'Privacy sender');
-gitBlob(endpointText, 'bc105dbd9f0936650fecad364e22c68e4a9886fb', 'Jobs receiver');
-gitBlob(outputFenceText, 'cae39b3e5acaf03e9b6b0c4aaa15f1907f17cfdd', 'Jobs private output epoch');
+gitBlob(endpointText, '48e565f82a267de41316b590430004986f46369c', 'Jobs receiver');
+gitBlob(outputFenceText, 'b87c2deec95c37372584b58c69542932c64c1d55', 'Jobs private output epoch');
 gitBlob(orderText, '33c71b71a7a505d17f8b5b51189573a954873593', 'Jobs ordering guard');
 gitBlob(hashText, '8bd86161687402ebb610cc30f6677f88521c2c1c', 'Jobs canonical digest');
 const transpile = (text) => {
