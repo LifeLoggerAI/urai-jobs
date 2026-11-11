@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# R1089 / Jobs #252: this legacy deploy bootstrap includes a project-wide
+# roles/storage.admin grant. It is unsafe to run for the private-memory estate
+# before the broker's sole-writer IAM and all inherited grants are reviewed.
+# Fail before even a gcloud read or mutation; no env flag can override this.
+# Preserve historical configuration below for security review and migration.
+echo '[BLOCKED] GCP_PROJECTWIDE_STORAGE_BOOTSTRAP_HARD_OFF: independently review scoped broker IAM (Jobs #252).' >&2
+exit 1
+
 PROJECT_ID="${PROJECT_ID:-urai-jobs}"
 DEPLOY_SA="${DEPLOY_SA:-}"
 
