@@ -116,3 +116,37 @@ test('R1033: no prior consent block never proves old GCS objects or uploads abse
    assert.equal(x.state[key],false);
  }
 });
+
+
+test('R1035: historical false lineage on exact replay is repaired without changing event or epoch',()=>{
+ const old={...first().state,legacyLineageUnverified:false};
+ const x=nextPrivateOutputFence(old,event(),context(true,true,{}));
+ assert.equal(x.kind,'update');
+ assert.deepEqual(x.state,{
+   legacyLineageUnverified:true,
+   storageWriteAuthorized:false,storageWriteFenceVerified:false,
+   allWritersDrained:false,privateOutputDeletionAcknowledged:false,
+ });
+ assert.equal(old.epoch,1);
+ assert.equal(old.eventId,'event1');
+});
+test('R1035: newer revocation never carries a historical false lineage claim',()=>{
+ const old={...first().state,legacyLineageUnverified:false};
+ const x=newer(old);
+ assert.equal(x.kind,'update');
+ assert.equal(x.state.epoch,2);
+ assert.equal(x.state.eventId,'event2');
+ assert.equal(x.state.legacyLineageUnverified,true);
+});
+test('R1035: true lineage replay stays a no-op; malformed old authority still denies',()=>{
+ assert.deepEqual(nextPrivateOutputFence(first().state,event(),context(true,true,{})),{kind:'replay'});
+ const old={...first().state,legacyLineageUnverified:false,storageWriteAuthorized:true};
+ denied(()=>nextPrivateOutputFence(old,event(),context(true,true,{})));
+});
+test('R1035: canonical replay transaction writes repaired fence inside transaction',()=>{
+ const endpoint=readFileSync(new URL('../functions/src/privacy/consentRevocation.ts',import.meta.url),'utf8');
+ const region=endpoint.slice(endpoint.indexOf('if (existing.exists) {'),endpoint.indexOf('// First delivery of this event'));
+ assert.match(region,/transition.kind === 'update'/);
+ assert.match(region,/transaction.update\(outputFenceRef/);
+ assert.ok(region.indexOf('transaction.update(outputFenceRef') > region.indexOf('nextPrivateOutputFence(outputFenceSnap.data()'));
+});

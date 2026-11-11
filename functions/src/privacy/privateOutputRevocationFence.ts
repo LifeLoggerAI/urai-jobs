@@ -66,6 +66,16 @@ export function nextPrivateOutputFence(
       value.privateOutputDeletionAcknowledged !== false) deny();
   if (context.replay) {
     if (value.eventId !== event.eventId) deny();
+    // Historical R1027 fences may persist false despite no provider-authoritative
+    // inventory or alternate-writer/drain proof. Repair conservatively in the
+    // same authenticated receipt transaction; do NOT alter eventId or epoch.
+    if (value.legacyLineageUnverified === false) {
+      return {kind:'update',state:{
+        legacyLineageUnverified:true,
+        storageWriteAuthorized:false,storageWriteFenceVerified:false,
+        allWritersDrained:false,privateOutputDeletionAcknowledged:false,
+      }};
+    }
     return {kind:'replay'};
   }
   if (!context.priorBlockExists || !context.priorBlock ||
@@ -75,7 +85,8 @@ export function nextPrivateOutputFence(
       prior.purpose !== event.purpose || prior.active !== true ||
       event.eventId === value.eventId) deny();
   return {kind:'update',state:{epoch:(value.epoch as number)+1,eventId:event.eventId,
-    phase:'FENCING',legacyLineageUnverified:value.legacyLineageUnverified,
+    // Never propagate an old false lineage claim into a newer epoch.
+    phase:'FENCING',legacyLineageUnverified:true,
     storageWriteAuthorized:false,storageWriteFenceVerified:false,
     allWritersDrained:false,privateOutputDeletionAcknowledged:false}};
 }
