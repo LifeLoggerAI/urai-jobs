@@ -42,3 +42,11 @@ test('R1043: simulated pre-byte check and begin both re-read canonical owner rev
  }
  assert.match(off,/return false;/);
 });
+
+test('R1046 retains distinct R1044 residual attempt and owner/job drift regressions',()=>{
+ assert.match(e,/R1046 preserve R1044 open review fence and unresolved in-flight attempt on canonical veto/);
+ assert.match(e,/R1046 job owner, tenant and consent purpose drift deny begin\/prebyte/);
+ assert.match(e,/x\.activeOrUnproven,1/);
+ for(const field of ['ownerUid','tenantId','consent']) assert.ok(e.includes(field),field);
+ assert.match(off,/return false;/);
+});
