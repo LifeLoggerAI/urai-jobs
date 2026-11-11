@@ -227,6 +227,32 @@ try {
     await r.set({active:false});
     await assertReviewOnlyBrokerPreByte(p);
   });
+  await check('R1043 cancelled job is denied after reservation and after simulated begin',async()=>{
+    const s10=scope('joblive'), q=ident(s10,'q');
+    await fixture(s10,q);await seedReviewOnlyOutputScope(s10);
+    await reserveReviewOnlyOutputAttempt(q,1);
+    const job=db.collection('jobs').doc(q.jobId);
+    await job.update({status:'CANCELLED'});
+    await denied(beginReviewOnlySimulatedUpload(q),'job_unverified');
+    await job.update({status:'RUNNING'});
+    await beginReviewOnlySimulatedUpload(q);
+    await job.update({status:'CANCELLED'});
+    await denied(assertReviewOnlyBrokerPreByte(q),'job_unverified');
+  });
+  await check('R1043 owner disabled or deletion-pending is denied at both later stages',async()=>{
+    const s11=scope('ownerlive'), t=ident(s11,'t');
+    await fixture(s11,t);await seedReviewOnlyOutputScope(s11);
+    await reserveReviewOnlyOutputAttempt(t,1);
+    const owner=db.collection('users').doc(s11.ownerUid);
+    await owner.update({disabled:true});
+    await denied(beginReviewOnlySimulatedUpload(t),'owner_unverified');
+    await owner.update({disabled:false});
+    await beginReviewOnlySimulatedUpload(t);
+    await owner.update({deletionPending:true});
+    await denied(assertReviewOnlyBrokerPreByte(t),'owner_unverified');
+    await owner.update({deletionPending:false});
+    await assertReviewOnlyBrokerPreByte(t);
+  });
   await check('R1042 no physical deletion ACK follows canonical denial',async()=>{
     const status=await reviewOnlyDrainStatus(s5);
     assert.equal(status.revocationAcknowledgementPermitted,false);
