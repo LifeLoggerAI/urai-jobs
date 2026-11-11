@@ -50,3 +50,25 @@ test('R1046 retains distinct R1044 residual attempt and owner/job drift regressi
  for(const field of ['ownerUid','tenantId','consent']) assert.ok(e.includes(field),field);
  assert.match(off,/return false;/);
 });
+
+// R1050: verify three independent donor fixture regressions survive convergence.
+test('R1050 preserves peer R1045 owner and job mutation regressions in hermetic simulator',()=>{
+ for(const name of [
+  'R1045 job cancellation after reservation vetoes simulated begin and pre-byte',
+  'R1045 owner disable and deletion after reservation veto later stages',
+  'R1045 mutated job owner, tenant, source, project, purpose deny after reserve and begin',
+ ]) assert.ok(e.includes(name),name);
+ const start=s.indexOf('function assertReviewOnlyCurrentOwnerAndJob(');
+ const end=s.indexOf('export async function beginReviewOnlySimulatedUpload',start);
+ assert.ok(start>=0&&end>start);
+ const helper=s.slice(start,end);
+ for(const invariant of ['user.disabled !== false','user.deletionPending !== false',
+  "currentJob.status !== 'RUNNING'",'currentJob.ownerUid !== scope.ownerUid',
+  'currentJob.tenantId !== scope.tenantId','currentJob.sourceSystem',
+  'payload.projectId !== scope.projectId','currentJob.consent?.purpose !== PURPOSE'])
+  assert.ok(helper.includes(invariant),invariant);
+ const begin=s.slice(s.indexOf('export async function beginReviewOnlySimulatedUpload'),s.indexOf('export async function revokeReviewOnlyOutputScope'));
+ const pre=s.slice(s.indexOf('export async function assertReviewOnlyBrokerPreByte'),s.indexOf('export async function recordReviewOnlyBrokerPhysicalGeneration'));
+ for(const part of [begin,pre])assert.match(part,/assertReviewOnlyCurrentOwnerAndJob\(ownerSnap, jobSnap, s\)/);
+ assert.match(off,/return false;/);
+});
