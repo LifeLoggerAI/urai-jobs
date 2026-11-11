@@ -39,6 +39,7 @@ const checked = (raw) => {
   if (!exact(raw,keys) || !['ownerUid','tenantId','projectId','jobId','attemptId'].every(k=>goodId(raw[k])) ||
       !['studio.render.video','studio.assemble.video'].includes(raw.jobType) || raw.purpose!==PURPOSE ||
       !Number.isSafeInteger(raw.expectedEpoch) || raw.expectedEpoch<1 ||
+      raw.expectedEpoch>=Number.MAX_SAFE_INTEGER ||
       !HASH.test(raw.expectedHash) || !HASH.test(raw.consentReceiptId) ||
       typeof raw.destination!=='string') deny();
   const prefix=`tenants/${raw.tenantId}/life-movies/${raw.projectId}/`;
@@ -68,7 +69,8 @@ const jobValid=(j,x)=>snapValid(j) && j.ownerUid===x.ownerUid && j.tenantId===x.
   j.consent?.purpose===PURPOSE && j.consent?.decisionReceiptId===x.consentReceiptId;
 const scopeValid=(s,x)=>snapValid(s) && s.schema==='R1073_OWNER_PURPOSE_CANDIDATE_V1' &&
   s.ownerUid===x.ownerUid && s.purpose===PURPOSE && s.phase==='OPEN' &&
-  s.epoch===x.expectedEpoch && s.productionAuthorized===false &&
+  s.epoch===x.expectedEpoch && s.epoch<Number.MAX_SAFE_INTEGER &&
+  s.productionAuthorized===false &&
   Number.isSafeInteger(s.version) && s.version>=1 && s.version<Number.MAX_SAFE_INTEGER &&
   Number.isSafeInteger(s.attemptsEverReserved) && s.attemptsEverReserved>=0 &&
   s.attemptsEverReserved<Number.MAX_SAFE_INTEGER &&
