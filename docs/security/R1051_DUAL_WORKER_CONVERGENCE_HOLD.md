@@ -1,0 +1,11 @@
+# ONE URAI Genesis R1051 -- dual-worker convergence; production HOLD
+
+This review-only integration preserves both independent worker branches as literal Git parents:
+- Jobs #430 commit b8abb70c84d4001404feef62abce7a41eda8d8e7 (tree c7eefb226fc4a727d1ca6b9484b59864e7a39368): unique Jobs #427 post-reservation owner/job drift and cancellation emulator fixtures, credential-isolated review runner, synthetic non-echo regression, canonical revocation checks and no-ACK invariants.
+- Jobs #431 commit 30dbffdaee77684c904750e7099762ba551e504e (tree 76695bf145a53181b77fc26ad6dcccb1c655fa01): actual two-parent historical custody joining Jobs #429 and independently verified Jobs #428, with unique R1049 custody document.
+
+Working code comes from #430; copy #431's unique docs/security/R1049_TWO_PARENT_SECURITY_VERIFICATION_CUSTODY_HOLD.md byte-for-byte from Git blob 5dd48e8b6afb88866824fc9e7403efe50677ea8a. Keep #430 R1050 custody doc. This creates exactly two immediate Git parents, not three. Preserve all original PR branches, no force push or closure.
+
+Read-only source inspection: #430 package.json still enrolls R1046 synthetic credential non-echo checks and R1047 isolated emulator guard. The Studio private-output authority remains hard-off, with blob ea6b25f3949ec2c17f65a9da68fa9cf937e86e76. Previous verified Jobs #428 native PASS and Privacy #271 ↔ #428 four-emulator denial PASS, plus isolated #429 7/7 PASS, DO NOT certify this newly merged source. No R1051 full native/real Firebase emulator execution, IAM denial, authenticated positive lifecycle or protected CI success is claimed.
+
+Security incident Labs #370: possible exposed Runpod API key needs provider-side revocation/rotation and restricted audit receipt; avoid any secret-bearing logs or credential-bearing new pods until confirmed. Jobs P0 #252: real GCS exclusive write broker/IAM, post-revocation stale/alternate writer denial, in-flight drain, generation-specific deletion ACK still not proven. Other gates: signed positive consent→Studio→Jobs→Replay, deletion lifecycle, independent protected CI/reviewer, physical devices, accessibility, visuals, rollback and founder release signoff. Keep private writes disabled; no production merger, deployment, IAM change, C6 grant, or Genesis GO.
