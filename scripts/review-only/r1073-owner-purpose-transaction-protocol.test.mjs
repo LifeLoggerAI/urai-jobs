@@ -112,6 +112,7 @@ test('no cloud-writer capability, no deletion ACK, no dynamic privilege flags',a
  await invalid(f.protocol.reserve({...x(),destination:'tenants/tenant-one/life-movies/other/render/attempt-abc/life-movie.mp4'}));
  assert.equal(f.db.findPrefix(ATTEMPTS+'/').length,0);
 });
+
 test('missing or forged authoritative scope cannot initialize a usable writer',async()=>{
  for(const variant of [null,{productionAuthorized:true},{schema:'OTHER'}]){
   const f=fixture();if(variant===null)f.db.docs.delete(f.scope);
@@ -147,4 +148,3 @@ test('one owner-purpose fence serializes multiple legitimate projects',async()=>
  await invalid(f.protocol.begin(x()));await invalid(f.protocol.begin(other));
  assert.equal(f.db.docs.get(f.scope).epoch,2);
 });
-
