@@ -227,18 +227,37 @@ export async function beginReviewOnlySimulatedUpload(identity: ReviewAttemptIden
   const attemptId = segment(identity.attemptId, 'attempt');
   const { db, fence } = refs(s);
   const item = attemptRef(s, jobId, attemptId);
+  const owner = db.collection('users').doc(s.ownerUid);
+  const job = db.collection('jobs').doc(jobId);
   const canonicalRevocation = db.collection(PRIVATE_OUTPUT_FENCE_COLLECTION)
     .doc(privateOutputFenceId(s.ownerUid, PURPOSE));
   const consentBlockId = createHash('sha256').update(s.ownerUid + '\n' + PURPOSE).digest('hex');
   const block = db.collection('jobConsentBlocks').doc(consentBlockId);
   return db.runTransaction(async (transaction) => {
-    const [fenceSnap, itemSnap, canonicalSnap, blockSnap] = await Promise.all([
+    const [fenceSnap, itemSnap, canonicalSnap, blockSnap, ownerSnap, jobSnap] = await Promise.all([
       transaction.get(fence), transaction.get(item), transaction.get(canonicalRevocation),
-      transaction.get(block),
+      transaction.get(block), transaction.get(owner), transaction.get(job),
     ]);
     if (canonicalSnap.exists) throw new Error('life_movie_review_write_canonical_revocation_fenced');
     if (blockSnap.exists && blockSnap.data()?.active !== false) {
       throw new Error('life_movie_review_write_consent_blocked_or_unverified');
+    }
+    // Revalidate job lifecycle and owner deletion/disable state after reservation.
+    // These are additional DENIAL checks, never proof of positive consent or GCS IAM.
+    const user = ownerSnap.data();
+    if (!ownerSnap.exists || !user || user.disabled !== false ||
+        user.deletionPending !== false) {
+      throw new Error('life_movie_review_write_owner_unverified');
+    }
+    const currentJob = jobSnap.data();
+    const payload = currentJob?.payload;
+    if (!jobSnap.exists || !currentJob || currentJob.ownerUid !== s.ownerUid ||
+        currentJob.tenantId !== s.tenantId || currentJob.sourceSystem !== 'urai-studio' ||
+        currentJob.status !== 'RUNNING' ||
+        !['studio.render.video', 'studio.assemble.video'].includes(String(currentJob.jobType || currentJob.type)) ||
+        !payload || typeof payload !== 'object' || Array.isArray(payload) ||
+        payload.projectId !== s.projectId || currentJob.consent?.purpose !== PURPOSE) {
+      throw new Error('life_movie_review_write_job_unverified');
     }
     if (!fenceSnap.exists) throw new Error('life_movie_review_write_fence_missing');
     const current = checkedFence(fenceSnap.data(), s);
@@ -365,18 +384,37 @@ export async function assertReviewOnlyBrokerPreByte(identity: ReviewAttemptIdent
   const attemptId = segment(identity.attemptId, 'attempt');
   const { db, fence } = refs(s);
   const item = attemptRef(s, jobId, attemptId);
+  const owner = db.collection('users').doc(s.ownerUid);
+  const job = db.collection('jobs').doc(jobId);
   const canonicalRevocation = db.collection(PRIVATE_OUTPUT_FENCE_COLLECTION)
     .doc(privateOutputFenceId(s.ownerUid, PURPOSE));
   const consentBlockId = createHash('sha256').update(s.ownerUid + '\n' + PURPOSE).digest('hex');
   const block = db.collection('jobConsentBlocks').doc(consentBlockId);
   await db.runTransaction(async (transaction) => {
-    const [fenceSnap, attemptSnap, canonicalSnap, blockSnap] = await Promise.all([
+    const [fenceSnap, attemptSnap, canonicalSnap, blockSnap, ownerSnap, jobSnap] = await Promise.all([
       transaction.get(fence), transaction.get(item), transaction.get(canonicalRevocation),
-      transaction.get(block),
+      transaction.get(block), transaction.get(owner), transaction.get(job),
     ]);
     if (canonicalSnap.exists) throw new Error('life_movie_review_write_canonical_revocation_fenced');
     if (blockSnap.exists && blockSnap.data()?.active !== false) {
       throw new Error('life_movie_review_write_consent_blocked_or_unverified');
+    }
+    // Revalidate job lifecycle and owner deletion/disable state after reservation.
+    // These are additional DENIAL checks, never proof of positive consent or GCS IAM.
+    const user = ownerSnap.data();
+    if (!ownerSnap.exists || !user || user.disabled !== false ||
+        user.deletionPending !== false) {
+      throw new Error('life_movie_review_write_owner_unverified');
+    }
+    const currentJob = jobSnap.data();
+    const payload = currentJob?.payload;
+    if (!jobSnap.exists || !currentJob || currentJob.ownerUid !== s.ownerUid ||
+        currentJob.tenantId !== s.tenantId || currentJob.sourceSystem !== 'urai-studio' ||
+        currentJob.status !== 'RUNNING' ||
+        !['studio.render.video', 'studio.assemble.video'].includes(String(currentJob.jobType || currentJob.type)) ||
+        !payload || typeof payload !== 'object' || Array.isArray(payload) ||
+        payload.projectId !== s.projectId || currentJob.consent?.purpose !== PURPOSE) {
+      throw new Error('life_movie_review_write_job_unverified');
     }
     if (!fenceSnap.exists) throw new Error('life_movie_review_write_fence_missing');
     const current = checkedFence(fenceSnap.data(), s);
