@@ -204,7 +204,7 @@ try {
   const blockSeed=scope('blockseed'), blockSeedAttempt=ident(blockSeed,'blockseed');
   await fixture(blockSeed,blockSeedAttempt);
   await check('R1061 active or malformed consent block vetoes first scope seed',async()=>{
-    const id=createHash('sha256').update(blockSeed.ownerUid+'\\n'+'life-movie.render').digest('hex');
+    const id=createHash('sha256').update(blockSeed.ownerUid+'\n'+'life-movie.render').digest('hex');
     const block=db.collection('jobConsentBlocks').doc(id);
     await block.create({active:true,eventId:'synthetic-block'});
     await denied(seedReviewOnlyOutputScope(blockSeed),'consent_blocked_or_unverified');
