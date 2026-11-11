@@ -83,8 +83,8 @@ test('R1061: first scope seed atomically refuses canonical withdrawal and owner 
   assert.match(seed,/transaction\.get\(fence\)/);
   assert.match(seed,/if \(canonicalSnap\.exists\) throw new Error\('life_movie_review_write_canonical_revocation_fenced'\)/);
   assert.match(seed,/blockSnap\.exists && blockSnap\.data\(\)\?\.active !== false/);
-  assert.ok(seed.indexOf('transaction.get(ownerFence)') < seed.indexOf('transaction.create(fence'));
-  assert.ok(seed.indexOf('transaction.get(block)') < seed.indexOf('transaction.create(fence'));
+  assert.ok(seed.indexOf('transaction.get(ownerFence)') < seed.indexOf('transaction.create(fence,'));
+  assert.ok(seed.indexOf('transaction.get(block)') < seed.indexOf('transaction.create(fence,'));
   assert.match(e,/R1061 withdrawal before first scope seed cannot create OPEN project/);
   assert.match(e,/R1061 active or malformed consent block vetoes first scope seed/);
   assert.match(off,/return false;/);
