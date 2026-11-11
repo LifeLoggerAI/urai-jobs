@@ -147,3 +147,4 @@ test('one owner-purpose fence serializes multiple legitimate projects',async()=>
  await invalid(f.protocol.begin(x()));await invalid(f.protocol.begin(other));
  assert.equal(f.db.docs.get(f.scope).epoch,2);
 });
+
