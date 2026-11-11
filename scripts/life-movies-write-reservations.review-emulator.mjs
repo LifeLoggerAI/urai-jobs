@@ -199,6 +199,10 @@ try {
     await assertReviewOnlyBrokerPreByte(k);
     await canonicalPrebyte.create({phase:'FENCING',eventId:'synthetic-r1043'});
     await denied(assertReviewOnlyBrokerPreByte(k),'canonical_revocation_fenced');
+    const unresolved=await reviewOnlyDrainStatus(s7);
+    assert.equal(unresolved.state,'OPEN');
+    assert.equal(unresolved.activeOrUnproven,1);
+    assert.equal(unresolved.revocationAcknowledgementPermitted,false);
   });
   await check('R1043 active consent block added after reservation vetoes begin',async()=>{
     await reserveReviewOnlyOutputAttempt(m,1).then(()=>assert.fail('canonical veto should reject'),error=>
@@ -226,6 +230,72 @@ try {
     await denied(assertReviewOnlyBrokerPreByte(p),'consent_blocked_or_unverified');
     await r.set({active:false});
     await assertReviewOnlyBrokerPreByte(p);
+  });
+  // R1045: owner/job state must be fresh at every simulated stage, not
+  // inherited from a reserved attempt; all transitions remain nonauthorizing.
+  const sa=scope('latejob'), xa=ident(sa,'xa');
+  await fixture(sa,xa);await seedReviewOnlyOutputScope(sa);
+  await check('R1045 job cancellation after reservation vetoes simulated begin and pre-byte',async()=>{
+    await reserveReviewOnlyOutputAttempt(xa,1);
+    const ref=db.collection('jobs').doc(xa.jobId);
+    await ref.update({status:'CANCELLED'});
+    await denied(beginReviewOnlySimulatedUpload(xa),'job_unverified');
+    await ref.update({status:'RUNNING'});
+    await beginReviewOnlySimulatedUpload(xa);
+    await ref.update({status:'FAILED'});
+    await denied(assertReviewOnlyBrokerPreByte(xa),'job_unverified');
+    assert.equal((await reviewOnlyDrainStatus(sa)).revocationAcknowledgementPermitted,false);
+  });
+  const sb=scope('lateowner'), xb=ident(sb,'xb');
+  await fixture(sb,xb);await seedReviewOnlyOutputScope(sb);
+  await check('R1045 owner disable and deletion after reservation veto later stages',async()=>{
+    await reserveReviewOnlyOutputAttempt(xb,1);
+    const ref=db.collection('users').doc(sb.ownerUid);
+    await ref.update({disabled:true});
+    await denied(beginReviewOnlySimulatedUpload(xb),'owner_unverified');
+    await ref.update({disabled:false});
+    await beginReviewOnlySimulatedUpload(xb);
+    await ref.update({deletionPending:true});
+    await denied(assertReviewOnlyBrokerPreByte(xb),'owner_unverified');
+    const status=await reviewOnlyDrainStatus(sb);
+    assert.equal(status.activeOrUnproven,1);
+    assert.equal(status.revocationAcknowledgementPermitted,false);
+    assert.equal(status.productionAuthorized,false);
+  });
+  const sc=scope('lateidentity'), xc=ident(sc,'xc');
+  await fixture(sc,xc);await seedReviewOnlyOutputScope(sc);
+  await check('R1045 mutated job owner, tenant, source, project, purpose deny after reserve and begin',async()=>{
+    await reserveReviewOnlyOutputAttempt(xc,1);
+    const ref=db.collection('jobs').doc(xc.jobId);
+    const mutations=[
+      {ownerUid:'other-owner'},
+      {tenantId:'other-tenant'},
+      {sourceSystem:'unknown-system'},
+      {payload:{projectId:'other-project'}},
+      {consent:{purpose:'unrelated-purpose'}},
+    ];
+    const restore=[
+      {ownerUid:sc.ownerUid},
+      {tenantId:sc.tenantId},
+      {sourceSystem:'urai-studio'},
+      {payload:{projectId:sc.projectId}},
+      {consent:{purpose:'life-movie.render'}},
+    ];
+    for(let i=0;i<mutations.length;i++){
+      await ref.update(mutations[i]);
+      await denied(beginReviewOnlySimulatedUpload(xc),'job_unverified');
+      await ref.update(restore[i]);
+    }
+    await beginReviewOnlySimulatedUpload(xc);
+    for(let i=0;i<mutations.length;i++){
+      await ref.update(mutations[i]);
+      await denied(assertReviewOnlyBrokerPreByte(xc),'job_unverified');
+      await ref.update(restore[i]);
+    }
+    await assertReviewOnlyBrokerPreByte(xc);
+    const state=await reviewOnlyDrainStatus(sc);
+    assert.equal(state.storageWriteFenceVerified,false);
+    assert.equal(state.revocationAcknowledgementPermitted,false);
   });
   await check('R1042 no physical deletion ACK follows canonical denial',async()=>{
     const status=await reviewOnlyDrainStatus(s5);
