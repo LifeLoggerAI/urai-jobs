@@ -1,0 +1,13 @@
+# ONE URAI Genesis R1050 — three-worker historical and test convergence (HOLD)
+
+This branch starts from Jobs #429 `0116a91658603c07f0635a2904d7a6c985bcd046`, retaining the R1046 source merger, the synthetic credential non-echo regression and R1047 hermetic disposable Firebase environment guard. The result incorporates the distinct native emulator owner/job mutation fixtures from Jobs #427 `3800bed31495137f2eaff1f8eae48d35dc9dae74` without changing their assertions, including cancellation after reservation, owner disable/deletion after reservation, and owner/tenant/source/project/purpose drift after simulated upload begins. Jobs #428 `ded67b8eed6320dfc42d0f1705996d2fa62b07f9` independently records the two-parent R1044/1043 convergence, unresolved attempt invariant and exact-source Jobs/Privacy tests. Its unique results and tests are preserved through explicit Git ancestry and semantic source readback.
+
+The current integration branch is a LINEAR child of #429. It preserves #428 and #427 unique regression behavior and source identities in the code and documentation, while their original donor Git history remains on their independent open PR branches. The connected GitHub commit reader does not expose a verified tree SHA needed to construct a genuine multi-parent merge object, so **three-parent ancestry is not yet achieved**. No donor branch is rewritten or closed. The source tree favors #429's stricter credential-isolated runner and reuses the central `assertReviewOnlyCurrentOwnerAndJob` validation from #426/#428. The new full repo head **must be independently tested**; donor PASS receipts do not certify it.
+
+## Credential incident and safe execution boundary
+
+An earlier Runpod test reportedly echoed a Runpod API key in provider logs. No proof of key revocation or rotation is available and account-level audit remains incomplete. Do not retrieve/log old keys or launch credential-bearing worker tests. Security containment is tracked in Labs issue #370. Runpod audit log observations for Pod-level actions do not prove API key rotation. Account-owner action is required if no working connected credential-revocation tool exists.
+
+## Release gate
+
+This is a REVIEW-ONLY simulation and source-integration candidate, not a production Storage writer. No actual GCS exclusive broker, IAM stale-writer denial, active upload drain, generation-aware deletion ACK, approved owner-positive Replay lifecycle, protected CI/independent review, physical device or AAA visual acceptance. Studio `privateOutputWriteAuthorityAvailable()` stays hard-false. No release deployment, IAM mutation or grant. Jobs #252 and ONE URAI Genesis remain **HOLD**.
