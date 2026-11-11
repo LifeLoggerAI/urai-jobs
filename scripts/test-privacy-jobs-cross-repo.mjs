@@ -20,7 +20,7 @@ function gitBlob(text, expected, label) {
 }
 gitBlob(privacyText, '6cca2b9456319927cf22511c7d51c1f16ddf051c', 'Privacy sender');
 gitBlob(endpointText, 'bc105dbd9f0936650fecad364e22c68e4a9886fb', 'Jobs receiver');
-gitBlob(outputFenceText, '17934dcc4849b7cfca198b90c413bc0f7f48b8e6', 'Jobs private output epoch');
+gitBlob(outputFenceText, '7abc055465ed1e150121d50c4bf77febe8856cc7', 'Jobs private output epoch');
 gitBlob(orderText, '33c71b71a7a505d17f8b5b51189573a954873593', 'Jobs ordering guard');
 gitBlob(hashText, '8bd86161687402ebb610cc30f6677f88521c2c1c', 'Jobs canonical digest');
 const transpile = (text) => {
