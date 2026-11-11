@@ -40,6 +40,7 @@ function worker(storage) {
       if (name === 'firebase-admin') return { initializeApp() {}, storage: () => storage };
       // Load the original worker-local denial guard in the same Node realm, not the functions-scoped module resolver.
       if (name === './private-output-write-authority') return createRequire(new URL('../../workers/studio-worker/index.js', import.meta.url))(name);
+      if (name === './private-output-broker-boundary') return createRequire(new URL('../../workers/studio-worker/index.js', import.meta.url))(name);
       if (name === './private-output-cleanup') return { cleanupPrivateOutputs: async () => { throw new Error('test_cleanup_not_available'); } };
       return require(name);
     },
