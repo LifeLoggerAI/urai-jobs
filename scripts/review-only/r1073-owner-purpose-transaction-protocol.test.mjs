@@ -258,3 +258,13 @@ test('R1098 malformed revocation counters fail closed before fencing epoch or de
   await invalid(f.protocol.deletionAck());
  }
 });
+
+test('R1102 an unadvanceable maximum-safe-integer epoch denies new reservations', async()=>{
+  const f=fixture();
+  const state=f.db.docs.get(f.scope);
+  f.db.seed(f.scope,{...state,epoch:Number.MAX_SAFE_INTEGER});
+  await invalid(f.protocol.reserve({...x(),expectedEpoch:Number.MAX_SAFE_INTEGER}));
+  assert.equal(f.db.findPrefix(ATTEMPTS+'/').length,0);
+  await invalid(f.protocol.storageWrite());
+  await invalid(f.protocol.deletionAck());
+});
