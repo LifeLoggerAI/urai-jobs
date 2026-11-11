@@ -7,8 +7,11 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { randomUUID, createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import { assertDisposableEmulatorEnvironment } from './review-only/r1047-disposable-emulator-env.mjs';
 
 const PROJECT = 'urai-staging-test';
+// Fail before Firebase Admin import, without echoing inherited secret values.
+assertDisposableEmulatorEnvironment(process.env);
 assert.equal(process.env.URAI_EMULATOR_PROJECT, PROJECT);
 assert.equal(process.env.FIRESTORE_EMULATOR_HOST, '127.0.0.1:8080');
 assert.equal(process.env.FIREBASE_STORAGE_EMULATOR_HOST, '127.0.0.1:9199');
