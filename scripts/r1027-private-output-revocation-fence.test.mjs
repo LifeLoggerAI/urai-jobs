@@ -10,7 +10,7 @@ const denied=(fn)=>assert.throws(fn,{message:PRIVATE_OUTPUT_FENCE_DENIED});
 test('first authenticated event creates a deny-by-default revocation epoch',()=>{
  const x=first();assert.equal(x.kind,'create');assert.equal(x.state.epoch,1);
  for(const k of ['storageWriteAuthorized','storageWriteFenceVerified','allWritersDrained','privateOutputDeletionAcknowledged']) assert.equal(x.state[k],false);
- assert.equal(x.state.phase,'FENCING');assert.equal(x.state.legacyLineageUnverified,false);
+ assert.equal(x.state.phase,'FENCING');assert.equal(x.state.legacyLineageUnverified,true);
 });
 test('historical replay with missing fence marks lineage unverified',()=>{
  const x=nextPrivateOutputFence(null,event(),context(true,true,{}));
@@ -105,4 +105,17 @@ test('R1028: forged getter under an allowed field cannot confer authority',()=>{
  const state={...first().state};
  Object.defineProperty(state,'createdAt',{get(){throw new Error('untrusted getter executed');},enumerable:true});
  denied(()=>nextPrivateOutputFence(state,event(),context(true,true,{})));
+});
+
+
+test('R1033: first revocation without prior Jobs consent block retains unknown historical Storage lineage',()=>{
+  const x=nextPrivateOutputFence(undefined,event('untracked-preexisting-object'),context(false,false,undefined));
+  assert.equal(x.kind,'create');
+  assert.equal(x.state.legacyLineageUnverified,true);
+  for(const key of ['storageWriteAuthorized','storageWriteFenceVerified','allWritersDrained','privateOutputDeletionAcknowledged']) {
+    assert.equal(x.state[key],false);
+  }
+  const y=nextPrivateOutputFence(x.state,event('event2'),context(false,true,{eventId:'untracked-preexisting-object',ownerUid:'owner1',purpose:'life-movie.render',active:true}));
+  assert.equal(y.kind,'update');
+  assert.equal(y.state.legacyLineageUnverified,true);
 });
