@@ -11,6 +11,8 @@
  * storage write broker may implement the corresponding operations for real.
  * This model NEVER issues deletion ACK or private-write authorization.
  */
+import { assertReviewLedgerIntegrity } from './r1020-ledger-integrity.mjs';
+
 export const DENIED = 'R1016_REVIEW_ONLY_DENIED';
 const IDENT = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const GENERATION = /^[1-9][0-9]*$/;
@@ -36,6 +38,7 @@ function freezeLedger(s) {
   return Object.freeze(s);
 }
 function ledger(s, version) {
+  assertReviewLedgerIntegrity(s);
   if (!s || s.schema !== LEDGER_SCHEMA || s.reviewOnly !== true ||
     s.storageWriteAuthorized !== false || s.deletionAcknowledged !== false ||
     s.releaseAuthorized !== false || !integer(s.version) ||
@@ -124,6 +127,7 @@ export function observeDrainCandidate(s, observation, expectedVersion) {
 }
 
 export function inspectDrainForReview(s) {
+  assertReviewLedgerIntegrity(s);
   if (!s || s.schema !== LEDGER_SCHEMA || !Object.isFrozen(s)) deny();
   const unresolved = s.reservations.filter(a => a.state !== 'DRAIN_CANDIDATE');
   return Object.freeze({
