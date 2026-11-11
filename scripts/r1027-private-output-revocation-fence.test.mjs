@@ -116,3 +116,32 @@ test('R1033: no prior consent block never proves old GCS objects or uploads abse
    assert.equal(x.state[key],false);
  }
 });
+
+test('R1035 exact authenticated replay repairs older false lineage without granting writes',()=>{
+ const historic={...first().state,legacyLineageUnverified:false};
+ const result=nextPrivateOutputFence(historic,event(),context(true,true,{}));
+ assert.deepEqual(result,{kind:'repair',state:{legacyLineageUnverified:true}});
+ assert.equal(historic.epoch,1);
+ const repaired={...historic,...result.state};
+ assert.deepEqual(nextPrivateOutputFence(repaired,event(),context(true,true,{})),{kind:'replay'});
+ for(const k of ['storageWriteAuthorized','storageWriteFenceVerified','allWritersDrained','privateOutputDeletionAcknowledged']) assert.equal(repaired[k],false);
+});
+test('R1035 newer event monotonically promotes an older false lineage',()=>{
+ const old={...first().state,legacyLineageUnverified:false};
+ const out=newer(old);
+ assert.equal(out.kind,'update');assert.equal(out.state.epoch,2);
+ assert.equal(out.state.legacyLineageUnverified,true);
+ for(const k of ['storageWriteAuthorized','storageWriteFenceVerified','allWritersDrained','privateOutputDeletionAcknowledged']) assert.equal(out.state[k],false);
+});
+test('R1035 stale replay or forged persisted authority cannot trigger lineage repair',()=>{
+ const old={...first().state,legacyLineageUnverified:false};
+ denied(()=>nextPrivateOutputFence(old,event('other'),context(true,true,{})));
+ denied(()=>nextPrivateOutputFence({...old,storageWriteAuthorized:true},event(),context(true,true,{})));
+ denied(()=>nextPrivateOutputFence({...old,authorized:true},event(),context(true,true,{})));
+});
+test('R1035 source replay repair is transactionally paired with exact receipt/block verification',()=>{
+ const endpoint=readFileSync(new URL('../functions/src/privacy/consentRevocation.ts',import.meta.url),'utf8');
+ assert.match(endpoint,/if \(transition\.kind === 'repair'\)/);
+ assert.match(endpoint,/transaction\.update\(outputFenceRef/);
+ assert.ok(endpoint.indexOf("if (transition.kind === 'repair')") > endpoint.indexOf('if (!blockMatches'));
+});
