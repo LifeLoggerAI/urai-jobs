@@ -45,6 +45,14 @@ function fixture(opts={}){
   verifyRevocationEvent:async({eventId})=>opts.revokeVerified!==false && eventId.startsWith('withdrawal-')});
  return {db,protocol,scope:`${SCOPES}/${scopeId}`,canonical:`${OWNER_FENCES}/${canonicalId}`,block:`jobConsentBlocks/${blockId}`};
 }
+function seedCanonical(f,eventId){
+  f.db.seed(f.block,{active:true,consumerId:'urai-jobs',status:'blocked',
+    ownerUid:owner,purpose:'life-movie.render',eventId,policyVersion:'v1',integrityHash:'a'.repeat(64)});
+  f.db.seed(f.canonical,{schemaVersion:'R1027_PRIVATE_OUTPUT_FENCE_V1',ownerUid:owner,
+    purpose:'life-movie.render',eventId,phase:'FENCING',epoch:1,
+    legacyLineageUnverified:true,storageWriteAuthorized:false,storageWriteFenceVerified:false,
+    allWritersDrained:false,privateOutputDeletionAcknowledged:false});
+}
 const invalid = async p=>assert.rejects(p,denied);
 const flagFalse=r=>{for(const k of ['productionAuthorized','storageWriteAuthorized','deletionAcknowledged','storageWriteFenceVerified'])assert.equal(r[k],false,k)};
 
@@ -91,17 +99,17 @@ test('phase/epoch/version preconditions prevent reused or stale write attempts',
  await invalid(f.protocol.begin(x()));
 });
 test('owner-wide withdrawal before begin permanently fences, no deletion acknowledgment',async()=>{
- const f=fixture();await f.protocol.reserve(x());const r=await f.protocol.fence(x(),'withdrawal-a');flagFalse(r);
+ const f=fixture();await f.protocol.reserve(x());seedCanonical(f,'withdrawal-a');const r=await f.protocol.fence(x(),'withdrawal-a');flagFalse(r);
  await invalid(f.protocol.begin(x()));await invalid(f.protocol.reserve({...x(),attemptId:'attempt-later',destination:'tenants/tenant-one/life-movies/project-one/render/attempt-later/life-movie.mp4'}));
  const state=f.db.docs.get(f.scope);assert.equal(state.phase,'FENCING');assert.equal(state.epoch,2);
  assert.equal(f.db.findPrefix(ATTEMPTS+'/').length,1);await invalid(f.protocol.deletionAck());
 });
 test('same-event withdrawal replay idempotent; conflicting event denies',async()=>{
- const f=fixture();await f.protocol.fence(x(),'withdrawal-a');await f.protocol.fence(x(),'withdrawal-a');
+ const f=fixture();seedCanonical(f,'withdrawal-a');await f.protocol.fence(x(),'withdrawal-a');await f.protocol.fence(x(),'withdrawal-a');
  assert.equal(f.db.docs.get(f.scope).epoch,2);await invalid(f.protocol.fence(x(),'withdrawal-b'));
 });
 test('in-flight physical generation after withdrawal is retained as UNKNOWN not ACK',async()=>{
- const f=fixture();await f.protocol.reserve(x());await f.protocol.begin(x());await f.protocol.fence(x(),'withdrawal-a');
+ const f=fixture();await f.protocol.reserve(x());await f.protocol.begin(x());seedCanonical(f,'withdrawal-a');await f.protocol.fence(x(),'withdrawal-a');
  const r=await f.protocol.observeLateGeneration(x(),'1234567');flagFalse(r);
  assert.equal(r.attemptState,'UNVERIFIED_GENERATION');
  assert.equal(f.db.findPrefix(ATTEMPTS+'/')[0][1].generationObservedUnverified,'1234567');
@@ -129,9 +137,16 @@ test('issuer errors are masked, leaving no credential in rejection',async()=>{
 test('begin versus withdrawal races serialize; late result never provides ACK',async()=>{
  for(const order of ['begin-first','fence-first']){
   const f=fixture();await f.protocol.reserve(x());
-  const result=order==='begin-first'?
-    await Promise.allSettled([f.protocol.begin(x()),f.protocol.fence(x(),'withdrawal-race')]):
-    await Promise.allSettled([f.protocol.fence(x(),'withdrawal-race'),f.protocol.begin(x())]);
+  let result;
+  if(order==='begin-first') {
+    const first=await Promise.allSettled([f.protocol.begin(x())]);
+    seedCanonical(f,'withdrawal-race');
+    const second=await Promise.allSettled([f.protocol.fence(x(),'withdrawal-race')]);
+    result=[...first,...second];
+  } else {
+    seedCanonical(f,'withdrawal-race');
+    result=await Promise.allSettled([f.protocol.fence(x(),'withdrawal-race'),f.protocol.begin(x())]);
+  }
   assert.equal(f.db.docs.get(f.scope).phase,'FENCING');
   assert.equal(f.db.docs.get(f.scope).epoch,2);
   assert.equal(f.db.findPrefix(ATTEMPTS+'/').length,1);
@@ -145,7 +160,7 @@ test('one owner-purpose fence serializes multiple legitimate projects',async()=>
  f.db.seed('jobs/job-two',{...f.db.docs.get('jobs/'+job),payload:{projectId:'project-two'}});
  await f.protocol.reserve(x());await f.protocol.reserve(other);
  assert.equal(f.db.findPrefix(ATTEMPTS+'/').length,2);
- await f.protocol.fence(x(),'withdrawal-wide');
+ seedCanonical(f,'withdrawal-wide');await f.protocol.fence(x(),'withdrawal-wide');
  await invalid(f.protocol.begin(x()));await invalid(f.protocol.begin(other));
  assert.equal(f.db.docs.get(f.scope).epoch,2);
 });
@@ -154,4 +169,18 @@ test('withdrawal requires verified event; forged revoker cannot advance epoch',a
  assert.equal(f.db.docs.get(f.scope).phase,'OPEN');
  const g=fixture();await invalid(g.protocol.fence(x(),'fake-event'));
  assert.equal(g.db.docs.get(g.scope).epoch,1);
+});
+test('R1074 positive callback cannot fence without matching canonical Privacy state',async()=>{
+ const missing=fixture();await invalid(missing.protocol.fence(x(),'withdrawal-a'));
+ assert.equal(missing.db.docs.get(missing.scope).phase,'OPEN');
+ for(const mutation of [{active:false},{eventId:'withdrawal-other'},{integrityHash:'bogus'}]){
+  const f=fixture();seedCanonical(f,'withdrawal-a');f.db.seed(f.block,{...f.db.docs.get(f.block),...mutation});
+  await invalid(f.protocol.fence(x(),'withdrawal-a'));
+  assert.equal(f.db.docs.get(f.scope).epoch,1);
+ }
+ for(const mutation of [{eventId:'withdrawal-other'},{phase:'OPEN'},{allWritersDrained:true}]){
+  const f=fixture();seedCanonical(f,'withdrawal-a');f.db.seed(f.canonical,{...f.db.docs.get(f.canonical),...mutation});
+  await invalid(f.protocol.fence(x(),'withdrawal-a'));
+  assert.equal(f.db.docs.get(f.scope).epoch,1);
+ }
 });
