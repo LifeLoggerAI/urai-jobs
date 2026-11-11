@@ -250,10 +250,10 @@ test('R1098 malformed revocation counters fail closed before fencing epoch or de
   const f=fixture();
   const prior=f.db.docs.get(f.scope);
   f.db.seed(f.scope,{...prior,...patch});
+  const stateBefore=structuredClone(f.db.docs.get(f.scope));
   seedCanonical(f,'withdrawal-counter-invalid');
   await invalid(f.protocol.fence(x(),'withdrawal-counter-invalid'));
-  assert.equal(f.db.docs.get(f.scope).phase,'OPEN');
-  assert.equal(f.db.docs.get(f.scope).epoch,1);
+  assert.deepEqual(f.db.docs.get(f.scope),stateBefore);
   await invalid(f.protocol.storageWrite());
   await invalid(f.protocol.deletionAck());
  }
