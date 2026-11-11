@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
 const PROJECT = 'urai-staging-test';
@@ -30,6 +30,7 @@ const {
   seedReviewOnlyOutputScope,
   reserveReviewOnlyOutputAttempt,
   beginReviewOnlySimulatedUpload,
+  assertReviewOnlyBrokerPreByte,
   revokeReviewOnlyOutputScope,
   cancelUnstartedReviewOnlyAttempt,
   reviewOnlyDrainStatus,
@@ -183,6 +184,48 @@ try {
     const independent=scope('independent'),j=ident(independent,'j');
     await fixture(independent,j);await seedReviewOnlyOutputScope(independent);
     const result=await reserveReviewOnlyOutputAttempt(j,1);assert.equal(result.productionAuthorized,false);
+  });
+  // R1043: both simulated pre-byte boundaries must recheck the canonical
+  // owner revocation and current consent block, not trust admission snapshots.
+  const s7=scope('prebyte'), k=ident(s7,'k'), m=ident(s7,'m');
+  await fixture(s7,k);await fixture(s7,m);await seedReviewOnlyOutputScope(s7);
+  const blockId=createHash('sha256').update(s7.ownerUid+'\\n'+'life-movie.render').digest('hex');
+  const blockRef=db.collection('jobConsentBlocks').doc(blockId);
+  const canonicalPrebyte=db.collection(PRIVATE_OUTPUT_FENCE_COLLECTION)
+    .doc(privateOutputFenceId(s7.ownerUid,'life-movie.render'));
+  await check('R1043 canonical revocation after simulated upload start vetoes pre-byte',async()=>{
+    await reserveReviewOnlyOutputAttempt(k,1);
+    await beginReviewOnlySimulatedUpload(k);
+    await assertReviewOnlyBrokerPreByte(k);
+    await canonicalPrebyte.create({phase:'FENCING',eventId:'synthetic-r1043'});
+    await denied(assertReviewOnlyBrokerPreByte(k),'canonical_revocation_fenced');
+  });
+  await check('R1043 active consent block added after reservation vetoes begin',async()=>{
+    await reserveReviewOnlyOutputAttempt(m,1).then(()=>assert.fail('canonical veto should reject'),error=>
+      assert.match(error.message,/canonical_revocation_fenced/));
+    // A fresh owner allows us to isolate block revocation from canonical veto.
+    const s8=scope('consentblock'), n=ident(s8,'n'), o=ident(s8,'o');
+    await fixture(s8,n);await fixture(s8,o);await seedReviewOnlyOutputScope(s8);
+    await reserveReviewOnlyOutputAttempt(n,1);
+    const consentId=createHash('sha256').update(s8.ownerUid+'\\n'+'life-movie.render').digest('hex');
+    const consentRef=db.collection('jobConsentBlocks').doc(consentId);
+    await consentRef.create({active:true,eventId:'withdrawn'});
+    await denied(beginReviewOnlySimulatedUpload(n),'consent_blocked_or_unverified');
+    await denied(reserveReviewOnlyOutputAttempt(o,1),'consent_blocked_or_unverified');
+  });
+  await check('R1043 active or malformed consent block after in-flight start vetoes pre-byte',async()=>{
+    const s9=scope('lateblock'), p=ident(s9,'p');
+    await fixture(s9,p);await seedReviewOnlyOutputScope(s9);
+    await reserveReviewOnlyOutputAttempt(p,1);
+    await beginReviewOnlySimulatedUpload(p);
+    const id=createHash('sha256').update(s9.ownerUid+'\\n'+'life-movie.render').digest('hex');
+    const r=db.collection('jobConsentBlocks').doc(id);
+    await r.create({active:true});
+    await denied(assertReviewOnlyBrokerPreByte(p),'consent_blocked_or_unverified');
+    await r.set({active:'forged'});
+    await denied(assertReviewOnlyBrokerPreByte(p),'consent_blocked_or_unverified');
+    await r.set({active:false});
+    await assertReviewOnlyBrokerPreByte(p);
   });
   await check('R1042 no physical deletion ACK follows canonical denial',async()=>{
     const status=await reviewOnlyDrainStatus(s5);
