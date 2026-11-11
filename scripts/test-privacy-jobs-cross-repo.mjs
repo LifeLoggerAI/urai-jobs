@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
 const ts = require('typescript');
+const outputFenceModule = require('../functions/lib/functions/privacy/privateOutputRevocationFence.js');
 const source = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const privacyText = source('./fixtures/privacy-revocation-contract-65e7d7ec.ts');
 const endpointText = source('../functions/src/privacy/consentRevocation.ts');
@@ -18,7 +19,7 @@ function gitBlob(text, expected, label) {
   assert.equal(actual, expected, label + ' must match reviewed source');
 }
 gitBlob(privacyText, '6cca2b9456319927cf22511c7d51c1f16ddf051c', 'Privacy sender');
-gitBlob(endpointText, 'bf28abe6dec01330909f6e6f8bdea909d5a3b920', 'Jobs receiver');
+gitBlob(endpointText, 'bc105dbd9f0936650fecad364e22c68e4a9886fb', 'Jobs receiver');
 gitBlob(orderText, '33c71b71a7a505d17f8b5b51189573a954873593', 'Jobs ordering guard');
 gitBlob(hashText, '8bd86161687402ebb610cc30f6677f88521c2c1c', 'Jobs canonical digest');
 const transpile = (text) => {
@@ -67,20 +68,21 @@ function harness({existingBlock=null,failOnce=false,tamperAck=false}={}) {
   if (existingBlock) data.set('block',existingBlock);
   let failures=failOnce?1:0, cleanup=0, receipts=0;
   const receiptRef={id:'receipt',async set(fields){data.set('receipt',{...data.get('receipt'),...fields})}};
-  const firestore={async runTransaction(callback){
+  const firestore={collection:name=>({doc:id=>({id:name+'-'+id})}),async runTransaction(callback){
     const writes=[];
     const tx={
       async get(ref){const row=data.get(ref.id);return {exists:row!==undefined,data:()=>row}},
       set(ref,row,options){writes.push({type:'set',ref,row,options})},
-      create(ref,row){writes.push({type:'create',ref,row})}
+      create(ref,row){writes.push({type:'create',ref,row})},
+      update(ref,row){writes.push({type:'update',ref,row})}
     };
     const result=await callback(tx);
     for (const w of writes) {
       if (w.type==='create') {
         assert.equal(data.has(w.ref.id),false,'receipt must not be created twice');
-        receipts++;
+        if(w.ref.id==='receipt')receipts++;
       }
-      const updated=w.options?.merge?{...data.get(w.ref.id),...w.row}:{...w.row};
+      const updated=w.type==='update'||w.options?.merge?{...data.get(w.ref.id),...w.row}:{...w.row};
       for (const [key,value] of Object.entries(updated)) if(value===DELETE) delete updated[key];
       data.set(w.ref.id,updated);
     }
@@ -90,6 +92,7 @@ function harness({existingBlock=null,failOnce=false,tamperAck=false}={}) {
   const context={exports,console:{error:()=>{}},process,Error,Set,String,Promise,Date,Object,createHash,timingSafeEqual,
     onRequest:(_opts,callback)=>callback, privacyEventToken:{value:()=>TOKEN}, expectedBearer:()=>TOKEN, getFirestore:()=>firestore,
     consentBlockRef:()=>({id:'block'}),consentEventReceiptRef:()=>receiptRef,
+    ...outputFenceModule,
     canonicalSourceRevocationAckHash:digest,canonicalConsentAckHash:digest,
     mayApplyNewConsentRevocation:order.mayApplyNewConsentRevocation,
     FieldValue:{serverTimestamp:()=> 'server-time',delete:()=>DELETE},
