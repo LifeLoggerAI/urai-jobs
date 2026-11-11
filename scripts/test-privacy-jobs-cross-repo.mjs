@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
 const ts = require('typescript');
-const outputFenceModule = require('../functions/lib/functions/privacy/privateOutputRevocationFence.js');
+const outputFenceText = readFileSync(new URL('../functions/src/privacy/privateOutputRevocationFence.ts', import.meta.url), 'utf8');
 const source = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const privacyText = source('./fixtures/privacy-revocation-contract-65e7d7ec.ts');
 const endpointText = source('../functions/src/privacy/consentRevocation.ts');
@@ -20,6 +20,7 @@ function gitBlob(text, expected, label) {
 }
 gitBlob(privacyText, '6cca2b9456319927cf22511c7d51c1f16ddf051c', 'Privacy sender');
 gitBlob(endpointText, 'bc105dbd9f0936650fecad364e22c68e4a9886fb', 'Jobs receiver');
+gitBlob(outputFenceText, '97d3362dd2ac36333cf8e3066cbd19032c8ff701', 'Jobs private output epoch');
 gitBlob(orderText, '33c71b71a7a505d17f8b5b51189573a954873593', 'Jobs ordering guard');
 gitBlob(hashText, '8bd86161687402ebb610cc30f6677f88521c2c1c', 'Jobs canonical digest');
 const transpile = (text) => {
@@ -41,6 +42,7 @@ function execute(code, context={}) {
   vm.runInNewContext(transpile(code), {exports,require,Buffer,Date,URL,AbortSignal,TextDecoder,Response,fetch,process,Promise,Array,Object,String,Number,Error,RegExp,Set,createHash,timingSafeEqual,...context});
   return exports;
 }
+const outputFenceModule = execute(outputFenceText);
 const privacy = execute(privacyText);
 const order = execute(orderText);
 const digest = execute(sourceFunction(hashText, 'canonicalSourceRevocationAckHash', false) +
