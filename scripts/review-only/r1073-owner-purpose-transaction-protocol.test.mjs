@@ -245,6 +245,7 @@ test('R1098 malformed revocation counters fail closed before fencing epoch or de
   {attemptsEverReserved:0,unsettledAttemptCount:Number.MAX_SAFE_INTEGER},
   {attemptsEverReserved:0,unsettledAttemptCount:-1},
   {attemptsEverReserved:0.5,unsettledAttemptCount:0},
+  {epoch:0},{epoch:-1},{version:0},{version:-1},
  ]) {
   const f=fixture();
   const prior=f.db.docs.get(f.scope);
