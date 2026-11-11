@@ -25,12 +25,19 @@ test('R1043: simulated pre-byte check and begin both re-read canonical owner rev
  for(const fragment of [begin,pre]){
    assert.match(fragment,/transaction\.get\(canonicalRevocation\)/);
    assert.match(fragment,/transaction\.get\(block\)/);
+   assert.match(fragment,/transaction\.get\(owner\)/);
+   assert.match(fragment,/transaction\.get\(job\)/);
+   assert.match(fragment,/assertReviewOnlyCurrentOwnerAndJob\(ownerSnap, jobSnap, s\)/);
    assert.match(fragment,/if \(canonicalSnap\.exists\)/);
    assert.match(fragment,/blockSnap\.exists && blockSnap\.data\(\)\?\.active !== false/);
  }
  for(const name of ['R1043 canonical revocation after simulated upload start vetoes pre-byte',
   'R1043 active consent block added after reservation vetoes begin',
   'R1043 active or malformed consent block after in-flight start vetoes pre-byte']) {
+   assert.ok(e.includes(name),name);
+ }
+ for(const name of ['R1043 cancelled job is denied after reservation and after simulated begin',
+  'R1043 owner disabled or deletion-pending is denied at both later stages']) {
    assert.ok(e.includes(name),name);
  }
  assert.match(off,/return false;/);
