@@ -42,6 +42,31 @@ test('direct GCS createWriteStream or save in Studio causes finding',()=>{
     has(x,'DIRECT_STUDIO_STORAGE_WRITER_REINTRODUCED');
   }
 });
+test('R1072 alternate GCS upload APIs, bracket aliases and signed POST bypasses are caught',()=>{
+  for(const suffix of [
+    'bucket.upload(localPath)',
+    'file.createResumableUpload({})',
+    'file.getSignedPostPolicyV4({})',
+    'file?.save(bytes)',
+    `file['save'](bytes)`,
+    `file["getSignedUrl"]({ action: 'write' })`,
+    `storage.objects.insert({})`,
+    `fetch('https://storage.googleapis.com/upload/storage/v1/b/other/o')`,
+    `fetch('https://www.googleapis.com/upload/storage/v1/b/other/o')`,
+    `gcloud storage rsync /tmp gs://private`,
+    `gsutil mv /tmp/output gs://private`,
+  ]) {
+    const x=base();x.studio+='\n'+suffix;
+    has(x,'DIRECT_STUDIO_STORAGE_WRITER_REINTRODUCED');
+  }
+});
+test('R1072 audit retains local fs-only stream exception and unconditional HOLD',()=>{
+  const s=base();s.studio+='\nfs.createWriteStream("local")';
+  const r=check(s);
+  assert.equal(r.findings.includes('DIRECT_STUDIO_STORAGE_WRITER_REINTRODUCED'),false);
+  assert.equal(r.effectiveIamVerified,false);
+  assert.equal(r.deletionAcknowledged,false);
+});
 test('a forged environment flag cannot convert deny-only broker to certified',()=>{
   const x=base();x.broker=x.broker.replace('return false;','return !!process.env.ENABLE;');
   has(x,'BROKER_UNCONDITIONAL_DENIAL_CHANGED');

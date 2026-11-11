@@ -57,9 +57,17 @@ export function auditKnownJobsWriteSurfaces(src) {
   // A local fs stream is allowed; every OTHER .createWriteStream is treated as
   // a potential GCS path until a reviewer updates the exact-source inventory.
   const streamCalls = [...studio.matchAll(/\b([A-Za-z_$][\w$]*)\s*\.\s*createWriteStream\s*\(/g)];
+  // Additional GCS SDK upload entrypoints include bucket.upload(),
+  // file.createResumableUpload(), signed POST policies and bracket/optional
+  // member access. Exact source matching is a tripwire, NOT a semantic code
+  // analyzer or proof that every possible SDK alias is covered.
+  const gcsWriteMethod = /(?:\?\.\s*|\.\s*|\[\s*['"])(?:save|upload|createResumableUpload|getSignedUrl|getSignedPostPolicyV4|insert)(?:\s*['"]\s*\])?\s*\(/;
+  const gcsUrl = /(?:storage\.googleapis\.com\/(?:upload\/|storage\/v1\/b\/)|www\.googleapis\.com\/upload\/storage\/v1\/|storage\.cloud\.google\.com\/)/;
+  const cloudCliWrite = /\b(?:gcloud\s+storage\s+(?:cp|rsync|mv)|gsutil\s+(?:cp|rsync|mv))\b/;
   if (streamCalls.some(x=>x[1]!=='fs') ||
-      /\b(?:\.save|\.getSignedUrl|uploadToGcs)\s*\(/.test(studio) ||
-      /\b(?:gcloud\s+storage\s+cp|gsutil\s+cp)\b/.test(studio))
+      gcsWriteMethod.test(studio) ||
+      /\buploadToGcs\s*\(/.test(studio) ||
+      gcsUrl.test(studio) || cloudCliWrite.test(studio))
     findings.add('DIRECT_STUDIO_STORAGE_WRITER_REINTRODUCED');
   // These are SEPARATE product boundaries; discovering one is a reviewer
   // obligation, not a request to remove legitimate exports or narrator audio.
