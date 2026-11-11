@@ -40,7 +40,7 @@ function fixture(opts={}){
  const scopeId=h(`urai-owner-purpose-v1\n${owner}\nlife-movie.render`);
  const canonicalId=h(`urai-private-output-revocation-fence-v1\n${owner}\nlife-movie.render`);
  const blockId=h(`${owner}\nlife-movie.render`);
- db.seed(`${SCOPES}/${scopeId}`,{schema:'R1073_OWNER_PURPOSE_CANDIDATE_V1',ownerUid:owner,purpose:'life-movie.render',phase:'OPEN',epoch:1,version:1,productionAuthorized:false});
+ db.seed(`${SCOPES}/${scopeId}`,{schema:'R1073_OWNER_PURPOSE_CANDIDATE_V1',ownerUid:owner,purpose:'life-movie.render',phase:'OPEN',epoch:1,version:1,attemptsEverReserved:0,unsettledAttemptCount:0,productionAuthorized:false});
  const protocol=makeOwnerPurposeReservationProtocol({db,verifyPositiveConsentReceipt:async({job,claim})=>(opts.throwIssuer ? (()=>{throw Error('synthetic_private_issuer_error')})() : opts.verified!==false) && job.consent.decisionReceiptId===claim.consentReceiptId,
   verifyRevocationEvent:async({eventId})=>opts.revokeVerified!==false && eventId.startsWith('withdrawal-')});
  return {db,protocol,scope:`${SCOPES}/${scopeId}`,canonical:`${OWNER_FENCES}/${canonicalId}`,block:`jobConsentBlocks/${blockId}`};
@@ -183,4 +183,57 @@ test('R1074 positive callback cannot fence without matching canonical Privacy st
   await invalid(f.protocol.fence(x(),'withdrawal-a'));
   assert.equal(f.db.docs.get(f.scope).epoch,1);
  }
+});
+
+test('R1097 durable counters increment once with attempt creation and retain outstanding on withdrawal',async()=>{
+ const f=fixture();const second={...x(),projectId:'project-two',jobId:'job-two',attemptId:'attempt-two',
+   destination:'tenants/tenant-one/life-movies/project-two/render/attempt-two/life-movie.mp4'};
+ f.db.seed('jobs/job-two',{...f.db.docs.get('jobs/'+job),payload:{projectId:'project-two'}});
+ const initial=f.db.docs.get(f.scope);
+ assert.equal(initial.attemptsEverReserved,0);assert.equal(initial.unsettledAttemptCount,0);
+ await f.protocol.reserve(x());await f.protocol.reserve(second);
+ let state=f.db.docs.get(f.scope);
+ assert.equal(state.attemptsEverReserved,2);assert.equal(state.unsettledAttemptCount,2);
+ await invalid(f.protocol.reserve(x()));
+ state=f.db.docs.get(f.scope);assert.equal(state.unsettledAttemptCount,2);
+ await f.protocol.begin(x());
+ seedCanonical(f,'withdrawal-counters');await f.protocol.fence(x(),'withdrawal-counters');
+ state=f.db.docs.get(f.scope);
+ assert.equal(state.phase,'FENCING');assert.equal(state.epoch,2);
+ assert.equal(state.unsettledAttemptCount,2);
+ await f.protocol.observeLateGeneration(x(),'1234');
+ assert.equal(f.db.docs.get(f.scope).unsettledAttemptCount,2);
+ await invalid(f.protocol.deletionAck());await invalid(f.protocol.storageWrite());
+});
+
+test('R1097 untrusted or missing scope drain counters deny all new admissions',async()=>{
+ for(const patch of [
+  {attemptsEverReserved:undefined},{unsettledAttemptCount:undefined},
+  {attemptsEverReserved:-1},{unsettledAttemptCount:-1},
+  {attemptsEverReserved:'0'},{unsettledAttemptCount:0.5},
+  {attemptsEverReserved:0,unsettledAttemptCount:1},
+  {attemptsEverReserved:Number.MAX_SAFE_INTEGER,unsettledAttemptCount:0},
+  {attemptsEverReserved:0,unsettledAttemptCount:Number.MAX_SAFE_INTEGER},
+ ]) {
+  const f=fixture();const current=f.db.docs.get(f.scope);f.db.seed(f.scope,{...current,...patch});
+  await invalid(f.protocol.reserve(x()));
+  assert.equal(f.db.findPrefix(ATTEMPTS+'/').length,0);
+ }
+});
+
+test('R1097 one contested reservation creates exactly one counted attempt',async()=>{
+ const f=fixture();
+ const out=await Promise.allSettled([...Array(16)].map(()=>f.protocol.reserve(x())));
+ assert.equal(out.filter(v=>v.status==='fulfilled').length,1);
+ assert.equal(f.db.docs.get(f.scope).attemptsEverReserved,1);
+ assert.equal(f.db.docs.get(f.scope).unsettledAttemptCount,1);
+});
+
+test('R1097 zero unsettled is never broker-write or deletion-ACK authorization',async()=>{
+ const f=fixture();
+ seedCanonical(f,'withdrawal-empty');
+ await f.protocol.fence(x(),'withdrawal-empty');
+ assert.equal(f.db.docs.get(f.scope).unsettledAttemptCount,0);
+ await invalid(f.protocol.deletionAck());
+ await invalid(f.protocol.storageWrite());
 });
