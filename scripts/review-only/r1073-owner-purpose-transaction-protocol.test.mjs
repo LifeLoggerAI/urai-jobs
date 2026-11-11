@@ -41,7 +41,8 @@ function fixture(opts={}){
  const canonicalId=h(`urai-private-output-revocation-fence-v1\n${owner}\nlife-movie.render`);
  const blockId=h(`${owner}\nlife-movie.render`);
  db.seed(`${SCOPES}/${scopeId}`,{schema:'R1073_OWNER_PURPOSE_CANDIDATE_V1',ownerUid:owner,purpose:'life-movie.render',phase:'OPEN',epoch:1,version:1,productionAuthorized:false});
- const protocol=makeOwnerPurposeReservationProtocol({db,verifyPositiveConsentReceipt:async({job,claim})=>(opts.throwIssuer ? (()=>{throw Error('synthetic_private_issuer_error')})() : opts.verified!==false) && job.consent.decisionReceiptId===claim.consentReceiptId});
+ const protocol=makeOwnerPurposeReservationProtocol({db,verifyPositiveConsentReceipt:async({job,claim})=>(opts.throwIssuer ? (()=>{throw Error('synthetic_private_issuer_error')})() : opts.verified!==false) && job.consent.decisionReceiptId===claim.consentReceiptId,
+  verifyRevocationEvent:async({eventId})=>opts.revokeVerified!==false && eventId.startsWith('withdrawal-')});
  return {db,protocol,scope:`${SCOPES}/${scopeId}`,canonical:`${OWNER_FENCES}/${canonicalId}`,block:`jobConsentBlocks/${blockId}`};
 }
 const invalid = async p=>assert.rejects(p,denied);
@@ -147,4 +148,10 @@ test('one owner-purpose fence serializes multiple legitimate projects',async()=>
  await f.protocol.fence(x(),'withdrawal-wide');
  await invalid(f.protocol.begin(x()));await invalid(f.protocol.begin(other));
  assert.equal(f.db.docs.get(f.scope).epoch,2);
+});
+test('withdrawal requires verified event; forged revoker cannot advance epoch',async()=>{
+ const f=fixture({revokeVerified:false});await invalid(f.protocol.fence(x(),'withdrawal-forged'));
+ assert.equal(f.db.docs.get(f.scope).phase,'OPEN');
+ const g=fixture();await invalid(g.protocol.fence(x(),'fake-event'));
+ assert.equal(g.db.docs.get(g.scope).epoch,1);
 });
