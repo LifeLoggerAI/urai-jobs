@@ -268,3 +268,62 @@ test('R1102 an unadvanceable maximum-safe-integer epoch denies new reservations'
   await invalid(f.protocol.storageWrite());
   await invalid(f.protocol.deletionAck());
 });
+
+test('R1104 reserve preserves one increment of revocation-fence headroom',async()=>{
+ const max=Number.MAX_SAFE_INTEGER;
+ for(const patch of [
+  {version:max-1},
+  {version:max-2},
+  {attemptsEverReserved:max-1,unsettledAttemptCount:0},
+  {attemptsEverReserved:max-1,unsettledAttemptCount:max-1},
+ ]) {
+  const f=fixture(),current=f.db.docs.get(f.scope);
+  f.db.seed(f.scope,{...current,...patch});
+  const before=structuredClone(f.db.docs.get(f.scope));
+  await invalid(f.protocol.reserve(x()));
+  assert.deepEqual(f.db.docs.get(f.scope),before);
+  assert.equal(f.db.findPrefix(ATTEMPTS+'/').length,0);
+  seedCanonical(f,'withdrawal-headroom');
+  await f.protocol.fence(x(),'withdrawal-headroom');
+  const after=f.db.docs.get(f.scope);
+  assert.equal(after.phase,'FENCING');
+  assert.equal(after.version,before.version+1);
+  assert.equal(after.unsettledAttemptCount,before.unsettledAttemptCount);
+  await invalid(f.protocol.storageWrite());
+  await invalid(f.protocol.deletionAck());
+ }
+});
+
+test('R1104 begin preserves version headroom for owner withdrawal',async()=>{
+ const f=fixture();
+ await f.protocol.reserve(x());
+ const before={...f.db.docs.get(f.scope),version:Number.MAX_SAFE_INTEGER-1};
+ f.db.seed(f.scope,before);
+ const attemptsBefore=f.db.findPrefix(ATTEMPTS+'/');
+ await invalid(f.protocol.begin(x()));
+ assert.deepEqual(f.db.docs.get(f.scope),before);
+ assert.equal(f.db.findPrefix(ATTEMPTS+'/')[0][1].state,'RESERVED');
+ assert.equal(f.db.findPrefix(ATTEMPTS+'/').length,attemptsBefore.length);
+ seedCanonical(f,'withdrawal-begin-headroom');
+ await f.protocol.fence(x(),'withdrawal-begin-headroom');
+ assert.equal(f.db.docs.get(f.scope).phase,'FENCING');
+ assert.equal(f.db.docs.get(f.scope).version,Number.MAX_SAFE_INTEGER);
+ await invalid(f.protocol.storageWrite());
+ await invalid(f.protocol.deletionAck());
+});
+
+test('R1104 successful reservation and begin still permit withdrawal at last safe headroom',async()=>{
+ const f=fixture(),max=Number.MAX_SAFE_INTEGER;
+ const current=f.db.docs.get(f.scope);
+ f.db.seed(f.scope,{...current,version:max-3});
+ await f.protocol.reserve(x());
+ assert.equal(f.db.docs.get(f.scope).version,max-2);
+ await f.protocol.begin(x());
+ assert.equal(f.db.docs.get(f.scope).version,max-1);
+ seedCanonical(f,'withdrawal-three-increments');
+ await f.protocol.fence(x(),'withdrawal-three-increments');
+ assert.equal(f.db.docs.get(f.scope).version,max);
+ assert.equal(f.db.docs.get(f.scope).phase,'FENCING');
+ await invalid(f.protocol.storageWrite());
+ await invalid(f.protocol.deletionAck());
+});

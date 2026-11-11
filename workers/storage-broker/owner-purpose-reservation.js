@@ -121,7 +121,9 @@ function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt, 
     const x=checked(raw),r=refs(x);
     return db.runTransaction(async tx=>{
       const {scope,attempt}=await readAuthorities(tx,x,r);
-      if(attempt.exists)deny();
+      if(attempt.exists || scope.version>=Number.MAX_SAFE_INTEGER-2 ||
+         scope.attemptsEverReserved>=Number.MAX_SAFE_INTEGER-1 ||
+         scope.unsettledAttemptCount>=Number.MAX_SAFE_INTEGER-1)deny();
       tx.create(r.attempt,{
         ownerUid:x.ownerUid,tenantId:x.tenantId,projectId:x.projectId,
         jobId:x.jobId,attemptId:x.attemptId,epoch:x.expectedEpoch,
@@ -129,6 +131,7 @@ function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt, 
         consentReceiptId:x.consentReceiptId,state:'RESERVED',
         productionAuthorized:false,generationObservedUnverified:null,
       });
+      // Preserve headroom for reserve, begin and a later canonical withdrawal fence.
       // Count all admitted attempts in the same durable transaction as create.
       // This counter is deliberately monotonic/unsettled: never infer a drain
       // or release the last outstanding writer from a timeout or callback.
@@ -142,7 +145,8 @@ function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt, 
     const x=checked(raw),r=refs(x);
     return db.runTransaction(async tx=>{
       const {scope,attempt}=await readAuthorities(tx,x,r);
-      if(!attempt.exists || !attemptValid(attempt.data,x) || attempt.data.state!=='RESERVED' ||
+      if(scope.version>=Number.MAX_SAFE_INTEGER-1 ||
+         !attempt.exists || !attemptValid(attempt.data,x) || attempt.data.state!=='RESERVED' ||
          attempt.data.expectedHash!==x.expectedHash ||
          attempt.data.consentReceiptId!==x.consentReceiptId)deny();
       tx.update(r.attempt,{state:'IN_FLIGHT'});
