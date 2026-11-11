@@ -82,9 +82,10 @@ const noCapability=()=>Object.freeze({productionAuthorized:false,storageWriteAut
 
 /** Caller may not seed an OPEN scope using this interface. Initialization
  * requires a separate, security-reviewed Privacy issuer/owner transaction. */
-function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt}) {
+function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt, verifyRevocationEvent}) {
   if(!db || typeof db.runTransaction!=='function' || typeof db.collection!=='function')deny();
   const verify=requireIssuer(verifyPositiveConsentReceipt);
+  const verifyWithdrawal=requireIssuer(verifyRevocationEvent);
   const refs=x=>{const k=ids(x);return {
     scope:db.collection(SCOPES).doc(k.scope),
     attempt:db.collection(ATTEMPTS).doc(k.attempt),
@@ -163,6 +164,10 @@ function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt})
          sc.data.purpose!==PURPOSE || sc.data.schema!=='R1073_OWNER_PURPOSE_CANDIDATE_V1' ||
          sc.data.productionAuthorized!==false || !Number.isSafeInteger(sc.data.epoch) ||
          !Number.isSafeInteger(sc.data.version))deny();
+      let authenticated=false;
+      try {authenticated=await verifyWithdrawal({ownerUid:x.ownerUid,purpose:PURPOSE,
+        eventId,transaction:tx,scope:sc.data});} catch {deny();}
+      if(authenticated!==true)deny();
       if(sc.data.phase==='FENCING' && sc.data.eventId===eventId)return noCapability();
       if(sc.data.phase!=='OPEN' || sc.data.epoch>=Number.MAX_SAFE_INTEGER ||
          sc.data.version>=Number.MAX_SAFE_INTEGER)deny();
