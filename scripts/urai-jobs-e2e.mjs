@@ -255,6 +255,51 @@ async function main() {
     }
     pass('Consent revocation ingestion is authenticated, replay-safe, block-persisting, and integrity-acknowledged.');
 
+    log('R1027: testing atomic private-output epoch, replay and newer consent withdrawal...');
+    const movieEvent = {
+      ...revocationEvent, purpose: 'life-movie.render',
+      eventId: `life-movie-revoked-e2e-${E2E_TIMESTAMP}`,
+      decisionReceiptId: `movie-decision-${E2E_TIMESTAMP}`,
+      revokedAt: new Date(E2E_TIMESTAMP - 120000).toISOString(),
+    };
+    const movieFenceId = createHash('sha256').update(
+      'urai-private-output-revocation-fence-v1\n' + USER_UID + '\nlife-movie.render'
+    ).digest('hex');
+    const movieFenceRef = db.collection('lifeMoviePrivateOutputRevocationFences').doc(movieFenceId);
+    const noMovieBefore = await movieFenceRef.get();
+    if (noMovieBefore.exists) fail('R1027 synthetic movie fence existed before first event.');
+    const movieFirst = await invokeHttpFunction('ingestConsentRevocation', movieEvent, privacyToken);
+    if (!movieFirst.response.ok || movieFirst.body?.ok !== true) fail('R1027 first movie revocation failed: ' + JSON.stringify(movieFirst.body));
+    let movieState = (await movieFenceRef.get()).data();
+    if (!movieState || movieState.epoch !== 1 || movieState.phase !== 'FENCING' ||
+        movieState.eventId !== movieEvent.eventId || movieState.legacyLineageUnverified !== false ||
+        movieState.storageWriteAuthorized !== false || movieState.storageWriteFenceVerified !== false ||
+        movieState.privateOutputDeletionAcknowledged !== false || movieState.allWritersDrained !== false) {
+      fail('R1027 first movie fence state is not fail-closed: ' + JSON.stringify(movieState));
+    }
+    const movieReplay = await invokeHttpFunction('ingestConsentRevocation', movieEvent, privacyToken);
+    if (!movieReplay.response.ok || movieReplay.body?.ok !== true || (await movieFenceRef.get()).data()?.epoch !== 1) {
+      fail('R1027 exact movie event replay was not idempotent.');
+    }
+    const movieNewer = { ...movieEvent,
+      eventId: `life-movie-newer-e2e-${E2E_TIMESTAMP}`,
+      decisionReceiptId: `movie-newer-decision-${E2E_TIMESTAMP}`,
+      revokedAt: new Date(E2E_TIMESTAMP - 60000).toISOString(),
+    };
+    const newerResponse = await invokeHttpFunction('ingestConsentRevocation', movieNewer, privacyToken);
+    if (!newerResponse.response.ok || newerResponse.body?.ok !== true) fail('R1027 newer movie event rejected.');
+    movieState = (await movieFenceRef.get()).data();
+    if (movieState?.epoch !== 2 || movieState.eventId !== movieNewer.eventId ||
+        movieState.storageWriteAuthorized !== false || movieState.privateOutputDeletionAcknowledged !== false) {
+      fail('R1027 newer movie revocation did not atomically advance deny fence.');
+    }
+    const staleReplay = await invokeHttpFunction('ingestConsentRevocation', movieEvent, privacyToken);
+    if (staleReplay.response.status !== 409 || (await movieFenceRef.get()).data()?.epoch !== 2) {
+      fail('R1027 stale movie event replay was not rejected.');
+    }
+    pass('R1027 atomic private-output fence: first epoch, exact replay, strictly newer withdrawal and stale-event denial.');
+
+
     log('Testing Data Rights request control plane...');
     const exportRequest = await callCallable('submitDataRightsRequest', userToken, {
       requestType: 'EXPORT',
