@@ -178,7 +178,7 @@ function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt, 
       if(!sc.exists || !snapValid(sc.data) || sc.data.ownerUid!==x.ownerUid ||
          sc.data.purpose!==PURPOSE || sc.data.schema!=='R1073_OWNER_PURPOSE_CANDIDATE_V1' ||
          sc.data.productionAuthorized!==false || !Number.isSafeInteger(sc.data.epoch) ||
-         !Number.isSafeInteger(sc.data.version) ||
+         sc.data.epoch<1 || !Number.isSafeInteger(sc.data.version) || sc.data.version<1 ||
          !Number.isSafeInteger(sc.data.attemptsEverReserved) ||
          sc.data.attemptsEverReserved<0 ||
          sc.data.attemptsEverReserved>=Number.MAX_SAFE_INTEGER ||
