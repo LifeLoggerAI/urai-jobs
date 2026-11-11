@@ -30,6 +30,7 @@ const {
   seedReviewOnlyOutputScope,
   reserveReviewOnlyOutputAttempt,
   beginReviewOnlySimulatedUpload,
+  assertReviewOnlyBrokerPreByte,
   revokeReviewOnlyOutputScope,
   cancelUnstartedReviewOnlyAttempt,
   reviewOnlyDrainStatus,
@@ -183,6 +184,24 @@ try {
     const independent=scope('independent'),j=ident(independent,'j');
     await fixture(independent,j);await seedReviewOnlyOutputScope(independent);
     const result=await reserveReviewOnlyOutputAttempt(j,1);assert.equal(result.productionAuthorized,false);
+  });
+  // R1044: the third, pre-byte check must also veto canonical owner withdrawal.
+  // The per-project review-only fence deliberately remains OPEN throughout.
+  const s7=scope('prebyte'),k=ident(s7,'k');
+  await fixture(s7,k);await seedReviewOnlyOutputScope(s7);
+  await check('R1044 canonical withdrawal after simulated upload-start denies final pre-byte',async()=>{
+    await reserveReviewOnlyOutputAttempt(k,1);
+    await beginReviewOnlySimulatedUpload(k);
+    await assertReviewOnlyBrokerPreByte(k);
+    const canonicalPreByte=db.collection(PRIVATE_OUTPUT_FENCE_COLLECTION)
+      .doc(privateOutputFenceId(s7.ownerUid,'life-movie.render'));
+    await canonicalPreByte.create({phase:'FENCING',eventId:'r1044-synthetic',ownerUid:s7.ownerUid,purpose:'life-movie.render'});
+    await denied(assertReviewOnlyBrokerPreByte(k),'canonical_revocation_fenced');
+    const status=await reviewOnlyDrainStatus(s7);
+    assert.equal(status.state,'OPEN');
+    assert.equal(status.activeOrUnproven,1);
+    assert.equal(status.revocationAcknowledgementPermitted,false);
+    assert.equal(status.productionAuthorized,false);
   });
   await check('R1042 no physical deletion ACK follows canonical denial',async()=>{
     const status=await reviewOnlyDrainStatus(s5);

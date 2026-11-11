@@ -359,10 +359,15 @@ export async function assertReviewOnlyBrokerPreByte(identity: ReviewAttemptIdent
   const attemptId = segment(identity.attemptId, 'attempt');
   const { db, fence } = refs(s);
   const item = attemptRef(s, jobId, attemptId);
+  const canonicalRevocation = db.collection(PRIVATE_OUTPUT_FENCE_COLLECTION)
+    .doc(privateOutputFenceId(s.ownerUid, PURPOSE));
   await db.runTransaction(async (transaction) => {
-    const [fenceSnap, attemptSnap] = await Promise.all([
-      transaction.get(fence), transaction.get(item),
+    const [fenceSnap, attemptSnap, canonicalSnap] = await Promise.all([
+      transaction.get(fence), transaction.get(item), transaction.get(canonicalRevocation),
     ]);
+    // Canonical owner withdrawal may occur after reservation/upload-start.
+    // This is a simulator veto only; Firestore cannot authorize GCS bytes.
+    if (canonicalSnap.exists) throw new Error('life_movie_review_write_canonical_revocation_fenced');
     if (!fenceSnap.exists) throw new Error('life_movie_review_write_fence_missing');
     const current = checkedFence(fenceSnap.data(), s);
     const attempt = checkedAttempt(attemptSnap.data(), s, jobId, attemptId);
