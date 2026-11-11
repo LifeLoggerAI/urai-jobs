@@ -17,6 +17,16 @@ die() {
 # The in-process R1047 guard cannot stop a Node preload that has already run.
 [[ -z "${NODE_OPTIONS:-}" ]] || die "Inherited NODE_OPTIONS is forbidden in emulator-only acceptance"
 
+# Fail closed on *all* nonempty credential-shaped inherited environment names
+# before running git, Node, pnpm, npm lifecycle hooks, or Firebase tools.
+# Only the variable NAME is ever included in a failure message, not its value.
+while IFS= read -r variable; do
+  if [[ "$variable" =~ (^|_)(TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|ACCESS_KEY|CREDENTIALS?)(_|$) ]] &&
+     [[ -n "${!variable:-}" ]]; then
+    die "Inherited credential variable forbidden: $variable"
+  fi
+done < <(compgen -e)
+
 command -v git >/dev/null || die "git is required"
 # The reviewed SHA must come from the independent release controller, never
 # default to whatever branch happens to be checked out at execution time.
