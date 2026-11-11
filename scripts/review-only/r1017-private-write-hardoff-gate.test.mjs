@@ -50,26 +50,32 @@ test('environment spoofing and test mode cannot turn on private output', () => {
   }
 });
 
-test('Studio source has exactly two direct output upload paths and both guard before stream creation', () => {
+test('R1061: Studio upload helpers have two broker-only paths with no direct GCS writer', () => {
   const source = readFileSync(workerPath, 'utf8');
-  const uploadStarts = [...source.matchAll(/async function uploadPrivateFile\s*\(/g)].map(m => m.index);
-  const outputStreams = [...source.matchAll(/\bfile\.createWriteStream\s*\(/g)].map(m => m.index);
-  assert.equal(uploadStarts.length, 2, 'unexpected upload path count: re-audit before changing guard');
-  assert.equal(outputStreams.length, 2, 'unexpected direct GCS write count: re-audit worker');
+  const uploadStarts = [...source.matchAll(/async function uploadPrivateFile\\s*\\(/g)].map(m => m.index);
+  const brokerCalls = [...source.matchAll(/await submitPrivateOutputToExclusiveBroker\\(\\{/g)].map(m => m.index);
+  const outputStreams = [...source.matchAll(/\\bfile\\.createWriteStream\\s*\\(/g)].map(m => m.index);
+  assert.equal(uploadStarts.length, 2, 'unexpected private output helper count: re-audit worker');
+  assert.equal(brokerCalls.length, 2, 'both output paths must route to trusted broker boundary');
+  assert.equal(outputStreams.length, 0, 'direct GCS output streaming may not reappear');
   for (let i = 0; i < uploadStarts.length; i++) {
-    const start = uploadStarts[i], write = outputStreams[i];
-    assert.ok(write > start, 'direct stream appears before its expected upload function');
-    const preWrite = source.slice(start, write);
-    assert.ok(preWrite.length < 1500, 'unexpected upload body needs a manual re-audit');
-    const guard = preWrite.indexOf('assertPrivateOutputWriteAuthority();');
-    const consentCheck = preWrite.indexOf('await control.check();');
-    assert.ok(guard >= 0, 'no hard-off guard before output write');
-    assert.ok(consentCheck > guard, 'expected worker control check after hard-off guard');
-    assert.ok(preWrite.includes('pendingUnfencedOutputWrite = true;'), 'in-flight marker removed');
+    const start = uploadStarts[i], broker = brokerCalls[i];
+    assert.ok(broker > start, 'broker appears before its output helper');
+    const preBroker = source.slice(start, broker);
+    assert.ok(preBroker.length < 1800, 'unexpected upload body needs manual re-audit');
+    const guard = preBroker.indexOf('assertPrivateOutputWriteAuthority();');
+    const consentCheck = preBroker.indexOf('await control.check();');
+    assert.ok(guard >= 0 && consentCheck > guard,
+      'hard-off and current consent control checks must precede broker request');
+    assert.ok(preBroker.includes('pendingUnfencedOutputWrite = true;'),
+      'in-flight marker must remain unresolved if broker rejects');
     if (i + 1 < uploadStarts.length) {
-      assert.ok(write < uploadStarts[i + 1], 'output write mapped to the wrong function');
+      assert.ok(broker < uploadStarts[i + 1], 'broker call mapped to wrong upload function');
     }
   }
+  const boundary = require(join(root, 'workers/studio-worker/private-output-broker-boundary.js'));
+  assert.equal(boundary.privateOutputBrokerCertified(), false);
+  assert.equal(typeof boundary.submitPrivateOutputToExclusiveBroker, 'function');
 });
 
 test('Studio readiness cannot claim a private Storage write authority without hard-off check', () => {
