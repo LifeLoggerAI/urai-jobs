@@ -23,7 +23,8 @@ for(const key of ['RUNPOD_API_KEY','GITHUB_TOKEN','GOOGLE_APPLICATION_CREDENTIAL
    env:{...base,[key]:marker},encoding:'utf8',timeout:5000
   });
   assert.notEqual(result.status,0,'unsafe credential was not rejected');
-  assert.match(result.stderr,new RegExp(key+' must be absent'));
+  // The earlier hermetic R1047 preflight rejects credentials before the legacy guard.
+  assert.match(result.stderr,new RegExp('R1047_DISPOSABLE_EMULATOR_ENV_DENIED:CREDENTIAL_PRESENT:'+key));
   assert.equal((result.stdout+result.stderr).includes(marker),false,'synthetic token leaked to output');
  });
 }
@@ -32,5 +33,7 @@ test('R1046 emulator fixture refuses sensitive credentials before any Firebase i
  const checks=src.indexOf("for (const name of ['GOOGLE_APPLICATION_CREDENTIALS'");
  const imports=src.indexOf("const require = createRequire(");
  assert.ok(checks>=0&&imports>checks,'credential protection must precede Firebase SDK loads');
+ const preflight=src.indexOf('assertDisposableEmulatorEnvironment(process.env)');
+ assert.ok(preflight>=0&&preflight<checks,'R1047 hermetic veto must precede legacy R1046 guard');
  assert.match(src,/if \(process\.env\[name\]\) throw new Error\(name \+ ' must be absent'\)/);
 });
