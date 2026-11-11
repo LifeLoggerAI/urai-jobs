@@ -200,6 +200,13 @@ try {
     await assertReviewOnlyBrokerPreByte(k);
     await canonicalPrebyte.create({phase:'FENCING',eventId:'synthetic-r1043'});
     await denied(assertReviewOnlyBrokerPreByte(k),'canonical_revocation_fenced');
+    // Preserve R1044 peer's independent invariant: the old project review fence
+    // can still read OPEN while the canonical owner-wide veto blocks all bytes.
+    const status = await reviewOnlyDrainStatus(s7);
+    assert.equal(status.state, 'OPEN');
+    assert.equal(status.activeOrUnproven, 1);
+    assert.equal(status.revocationAcknowledgementPermitted, false);
+    assert.equal(status.productionAuthorized, false);
   });
   await check('R1043 active consent block added after reservation vetoes begin',async()=>{
     await reserveReviewOnlyOutputAttempt(m,1).then(()=>assert.fail('canonical veto should reject'),error=>
