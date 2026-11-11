@@ -27,10 +27,12 @@ export function nextPrivateOutputFence(
   if (!event || !context || !safeId(event.eventId) || !safeId(event.ownerUid) ||
       event.purpose !== 'life-movie.render' ||
       typeof context.replay !== 'boolean' || typeof context.priorBlockExists !== 'boolean') deny();
+  // Missing consent state is not proof of historical cloud bytes or drained writers.
+  // Keep lineage unknown until separately proven by provider-authoritative evidence.
   if (existing === undefined || existing === null) {
     return {kind:'create',state:{schemaVersion:'R1027_PRIVATE_OUTPUT_FENCE_V1',
       ownerUid:event.ownerUid,purpose:event.purpose,eventId:event.eventId,
-      epoch:1,phase:'FENCING', legacyLineageUnverified:context.replay || context.priorBlockExists,
+      epoch:1,phase:'FENCING', legacyLineageUnverified:true,
       storageWriteAuthorized:false, storageWriteFenceVerified:false,
       allWritersDrained:false, privateOutputDeletionAcknowledged:false}};
   }
