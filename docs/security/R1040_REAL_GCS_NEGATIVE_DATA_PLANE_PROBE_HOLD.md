@@ -1,0 +1,10 @@
+# ONE URAI R1040 — staging-only real GCS data-plane negative probe — HOLD
+
+Parent Jobs #420 exact 0d15962fc9e4631b60220165fc9717892aab51d4; preserves earlier two-parent #419, #415/#416 and peer #417/#418/#421, all open. Previous exact Jobs #420 native and Privacy #269 cross-service negative emulator are independently PASS for their pinned revisions.
+
+New capability: one actual Google Cloud Storage JSON API media create attempt on a zero-byte synthetic canary, under an explicitly reviewed legacy/alternate staging credential and project/bucket both restricted to urai-security-canary prefix. GenerationMatch=0 avoids overwriting. No production targets or customer media.
+By default CLI refuses to execute. Protected explicit invocation needs exact scope env and --protected-staging-negative-only; bearer token is received on stdin from protected runner, never stored in source or logs. No live canary was run or cloud credential obtained in R1040.
+Observed HTTP403 is intentionally NOT a release pass. It produces OBSERVED_HTTP_403_CAUSE_UNVERIFIED with all IAM, actual credential identity, bucket existence, broker sole-writer, drain, ACK and release fields false. Any 200/201 is a serious red result; canary might need generation-pinned cleanup. 401/404/412/429/500 cannot be called IAM denial.
+Before a real protected staging proof: independent reviewer attests live bucket and inherited IAM, enumerates actual original/alternate principals and old credentials, verifies execution identity, and checks scoped GCS readback. This harness alone cannot prove identity or a broker. Do not run in production.
+Existing IAM policy snapshots and review-only broker contract already reside in repository; this does not duplicate them. The unchanged studio-worker/private-output-write-authority.js remains unconditional hard-off. Jobs #252 P0, protected CI, positive authenticated owner consent-to-Replay, stream drain, generation-bound deletion, device acceptance and independent release review remain outstanding.
+GENESIS PRODUCTION HOLD. No production IAM changes, private writes, grants, merges or deployments.
