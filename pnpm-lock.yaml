@@ -262,6 +262,8 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  workers/storage-broker: {}
+
   workers/studio-worker:
     dependencies:
       express:
@@ -2682,6 +2684,16 @@ packages:
     engines: {node: '>=6'}
     requiresBuild: true
 
+  /express-rate-limit@8.7.0(express@4.22.1):
+    resolution: {integrity: sha512-hOwV7WOxXfjRpAM1DSJWZDXx3GhplwD8IfwuwvogD8i1Qnkgosw/H45s4ZnFAUHDAhPjlY9hLBvJhKmGMyY26g==}
+    engines: {node: '>= 16'}
+    peerDependencies:
+      express: '>= 4.11'
+    dependencies:
+      debug: 4.4.3
+      express: 4.22.1
+      ip-address: 10.2.0
+
   /express@4.22.1:
     resolution: {integrity: sha512-F2X8g9P1X7uCPZMA3MVf9wcTqlyNp7IhH5qPCI0izhaOIYXaW9L535tGA3qmjRzpH+bZczqq7hVKxTR4NWnu+g==}
     engines: {node: '>= 0.10.0'}
@@ -2720,16 +2732,6 @@ packages:
     transitivePeerDependencies:
       - supports-color
     dev: false
-
-  /express-rate-limit@8.7.0(express@4.22.1):
-    resolution: {integrity: sha512-hOwV7WOxXfjRpAM1DSJWZDXx3GhplwD8IfwuwvogD8i1Qnkgosw/H45s4ZnFAUHDAhPjlY9hLBvJhKmGMyY26g==}
-    engines: {node: '>= 16'}
-    peerDependencies:
-      express: '>= 4.11'
-    dependencies:
-      debug: 4.4.3
-      express: 4.22.1
-      ip-address: 10.2.0
 
   /extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
