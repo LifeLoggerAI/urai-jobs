@@ -17,6 +17,7 @@ import { getApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { assertReviewOnlyHistoricalObservationClaim, assessReviewOnlyGenerationEvidence, canonicalReviewOnlyStorageGeneration } from './lifeMovieGenerationEvidenceReview.js';
 import { getStorage } from 'firebase-admin/storage';
+import { PRIVATE_OUTPUT_FENCE_COLLECTION, privateOutputFenceId } from './privateOutputRevocationFence.js';
 
 const PROJECT = 'urai-staging-test';
 const PURPOSE = 'life-movie.render';
@@ -169,11 +170,16 @@ export async function reserveReviewOnlyOutputAttempt(
   const job = db.collection('jobs').doc(jobId);
   const consentBlockId = createHash('sha256').update(s.ownerUid + '\n' + PURPOSE).digest('hex');
   const block = db.collection('jobConsentBlocks').doc(consentBlockId);
+  const canonicalRevocation = db.collection(PRIVATE_OUTPUT_FENCE_COLLECTION)
+    .doc(privateOutputFenceId(s.ownerUid, PURPOSE));
   return db.runTransaction(async (transaction) => {
-    const [fenceSnap, itemSnap, ownerSnap, jobSnap, blockSnap] = await Promise.all([
+    const [fenceSnap, itemSnap, ownerSnap, jobSnap, blockSnap, canonicalSnap] = await Promise.all([
       transaction.get(fence), transaction.get(item), transaction.get(owner),
-      transaction.get(job), transaction.get(block),
+      transaction.get(job), transaction.get(block), transaction.get(canonicalRevocation),
     ]);
+    // Never infer positive consent from missing revocation state.
+    // Any existing canonical owner/purpose revocation, even malformed, vetoes.
+    if (canonicalSnap.exists) throw new Error('life_movie_review_write_canonical_revocation_fenced');
     if (!fenceSnap.exists) throw new Error('life_movie_review_write_fence_missing');
     const current = checkedFence(fenceSnap.data(), s);
     if (current.state !== 'OPEN' || current.epoch !== expectedEpoch) {
@@ -221,8 +227,13 @@ export async function beginReviewOnlySimulatedUpload(identity: ReviewAttemptIden
   const attemptId = segment(identity.attemptId, 'attempt');
   const { db, fence } = refs(s);
   const item = attemptRef(s, jobId, attemptId);
+  const canonicalRevocation = db.collection(PRIVATE_OUTPUT_FENCE_COLLECTION)
+    .doc(privateOutputFenceId(s.ownerUid, PURPOSE));
   return db.runTransaction(async (transaction) => {
-    const [fenceSnap, itemSnap] = await Promise.all([transaction.get(fence), transaction.get(item)]);
+    const [fenceSnap, itemSnap, canonicalSnap] = await Promise.all([
+      transaction.get(fence), transaction.get(item), transaction.get(canonicalRevocation),
+    ]);
+    if (canonicalSnap.exists) throw new Error('life_movie_review_write_canonical_revocation_fenced');
     if (!fenceSnap.exists) throw new Error('life_movie_review_write_fence_missing');
     const current = checkedFence(fenceSnap.data(), s);
     const attempt = checkedAttempt(itemSnap.data(), s, jobId, attemptId);

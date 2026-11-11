@@ -35,6 +35,8 @@ const {
   reviewOnlyDrainStatus,
   reviewOnlyScopeId,
 } = require('../functions/lib/functions/privacy/lifeMovieWriteReservationsReview.js');
+const { PRIVATE_OUTPUT_FENCE_COLLECTION, privateOutputFenceId } =
+  require('../functions/lib/functions/privacy/privateOutputRevocationFence.js');
 
 const token = randomUUID().replaceAll('-', '').slice(0, 16);
 const results = [];
@@ -153,6 +155,40 @@ try {
     await db.collection('users').doc(s4.ownerUid).update({ deletionPending: false });
     await db.collection('jobs').doc(f.jobId).update({ status: 'CANCELLED' });
     await denied(reserveReviewOnlyOutputAttempt(f, 1), 'job_unverified');
+  });
+  // R1042 extra native tests: canonical withdrawal blocks review reservations
+  // independently of the older per-project review-only OPEN state.
+  const s5=scope('canonical'), g=ident(s5,'g'), h=ident(s5,'h');
+  await fixture(s5,g); await fixture(s5,h); await seedReviewOnlyOutputScope(s5);
+  const canonicalRef=db.collection(PRIVATE_OUTPUT_FENCE_COLLECTION).doc(privateOutputFenceId(s5.ownerUid,'life-movie.render'));
+  await check('R1042 pre-withdrawal review reservation never grants cloud authority',async()=>{
+    const r=await reserveReviewOnlyOutputAttempt(g,1);
+    assert.equal(r.productionAuthorized,false);assert.equal(r.simulatedOnly,true);
+  });
+  await check('R1042 canonical withdrawal denies new reservation and pending start',async()=>{
+    await canonicalRef.create({phase:'FENCING',eventId:'synthetic-event',ownerUid:s5.ownerUid,purpose:'life-movie.render',storageWriteAuthorized:false});
+    await denied(reserveReviewOnlyOutputAttempt(h,1),'canonical_revocation_fenced');
+    await denied(beginReviewOnlySimulatedUpload(g),'canonical_revocation_fenced');
+    assert.equal((await reviewOnlyDrainStatus(s5)).state,'OPEN');
+  });
+  await check('R1042 malformed or privilege-injected canonical fence still denies',async()=>{
+    await canonicalRef.update({phase:'OPEN',authorized:true});
+    await denied(reserveReviewOnlyOutputAttempt(h,1),'canonical_revocation_fenced');
+    await denied(beginReviewOnlySimulatedUpload(g),'canonical_revocation_fenced');
+  });
+  await check('R1042 same owner other tenant blocked, other owner isolated',async()=>{
+    const s6={...scope('ownerwide'),ownerUid:s5.ownerUid},i=ident(s6,'i');
+    await fixture(s6,i);await seedReviewOnlyOutputScope(s6);
+    await denied(reserveReviewOnlyOutputAttempt(i,1),'canonical_revocation_fenced');
+    const independent=scope('independent'),j=ident(independent,'j');
+    await fixture(independent,j);await seedReviewOnlyOutputScope(independent);
+    const result=await reserveReviewOnlyOutputAttempt(j,1);assert.equal(result.productionAuthorized,false);
+  });
+  await check('R1042 no physical deletion ACK follows canonical denial',async()=>{
+    const status=await reviewOnlyDrainStatus(s5);
+    assert.equal(status.revocationAcknowledgementPermitted,false);
+    assert.equal(status.storageWriteFenceVerified,false);
+    assert.equal(status.productionAuthorized,false);
   });
   await check('forged completed REVOKED state fails closed without cloud proof', async () => {
     const forged = scope('forged');
