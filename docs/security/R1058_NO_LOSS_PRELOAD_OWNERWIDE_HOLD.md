@@ -1,0 +1,11 @@
+# ONE URAI Genesis R1058 — two-parent review-only no-loss convergence (PRODUCTION HOLD)
+
+Source parents:
+- Jobs #438: `a0a22d5bf4e89dcf007232711d13568d5329086c`, tree `585a810bee03194c4f94667f7091d7cc8bfe1dba`, previously verified 9/9 focused local guard tests. Includes fail-closed inherited `NODE_OPTIONS` prohibition at shell entry and in disposable emulator helper.
+- Jobs #439: `c35587c97c481185895a8547ee50e5394ee72875`, synthetic owner/purpose-wide revocation/drain model, 17/17 focused local tests. Includes first-scope withdrawal, cross-tenant/project unresolved attempts, future-scope fencing, and unconditional denial of real Storage deletion acknowledgement.
+
+The exact combined Git commit has **both original histories as literal parents**; neither source PR was overwritten, merged into protected branches, closed or deleted. The tree retains all #438 files and imports #439's original three exact blobs (model, tests, evidence doc). Root `package.json` adds both R1056 and R1057 tests to `pnpm urai-jobs:verify` so complete verification can't silently skip either line.
+
+Scope: the owner-wide model remains local synthetic logic only and MUST NOT be imported by production write paths. The Studio worker's `privateOutputWriteAuthorityAvailable()` remains a hard false. R1056 changes only disposable execution protection. Neither addition creates a trusted exclusive Storage writer, effective IAM evidence, physical generation inventory, in-flight upload drain, deletion ACK, signed positive Privacy→Studio→Jobs→Replay or approved consent.
+
+**Release status:** review/HOLD. Independent fresh frozen installation, complete Jobs verification, emulator execution and exact-pair Privacy native denial are required on the combined HEAD; donor results do not certify the new merge. Reported Runpod credential exposure Labs #370 remains uncontained by a provider revoke receipt; if Runpod is used, isolate with no environment secrets and never echo any values. Protected GitHub CI/independent review Labs #248, actual GCS P0 Jobs #252, device/visual/rollback remain unverified. No deploy, production private writes, IAM changes, user data or customer media permitted by this document.
