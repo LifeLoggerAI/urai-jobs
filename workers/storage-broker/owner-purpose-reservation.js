@@ -180,8 +180,11 @@ function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt, 
          sc.data.productionAuthorized!==false || !Number.isSafeInteger(sc.data.epoch) ||
          !Number.isSafeInteger(sc.data.version) ||
          !Number.isSafeInteger(sc.data.attemptsEverReserved) ||
+         sc.data.attemptsEverReserved<0 ||
+         sc.data.attemptsEverReserved>=Number.MAX_SAFE_INTEGER ||
          !Number.isSafeInteger(sc.data.unsettledAttemptCount) ||
          sc.data.unsettledAttemptCount<0 ||
+         sc.data.unsettledAttemptCount>=Number.MAX_SAFE_INTEGER ||
          sc.data.unsettledAttemptCount>sc.data.attemptsEverReserved)deny();
       let authenticated=false;
       try {authenticated=await verifyWithdrawal({ownerUid:x.ownerUid,purpose:PURPOSE,
