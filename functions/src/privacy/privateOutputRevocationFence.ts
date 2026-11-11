@@ -22,10 +22,13 @@ export function nextPrivateOutputFence(
   if (!event || !context || !event.eventId || !event.ownerUid ||
       event.purpose !== 'life-movie.render' ||
       typeof context.replay !== 'boolean' || typeof context.priorBlockExists !== 'boolean') deny();
+  // An absent Jobs consent block does not prove absence of older GCS objects,
+  // unknown generations, alternate-identity writes, or in-flight uploads.
+  // Keep lineage unknown until a separate provider-authoritative audit proves it.
   if (existing === undefined || existing === null) {
     return {kind:'create',state:{schemaVersion:'R1027_PRIVATE_OUTPUT_FENCE_V1',
       ownerUid:event.ownerUid,purpose:event.purpose,eventId:event.eventId,
-      epoch:1,phase:'FENCING', legacyLineageUnverified:context.replay || context.priorBlockExists,
+      epoch:1,phase:'FENCING', legacyLineageUnverified:true,
       storageWriteAuthorized:false, storageWriteFenceVerified:false,
       allWritersDrained:false, privateOutputDeletionAcknowledged:false}};
   }

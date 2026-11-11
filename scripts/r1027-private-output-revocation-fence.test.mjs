@@ -10,7 +10,7 @@ const denied=(fn)=>assert.throws(fn,{message:PRIVATE_OUTPUT_FENCE_DENIED});
 test('first authenticated event creates a deny-by-default revocation epoch',()=>{
  const x=first();assert.equal(x.kind,'create');assert.equal(x.state.epoch,1);
  for(const k of ['storageWriteAuthorized','storageWriteFenceVerified','allWritersDrained','privateOutputDeletionAcknowledged']) assert.equal(x.state[k],false);
- assert.equal(x.state.phase,'FENCING');assert.equal(x.state.legacyLineageUnverified,false);
+ assert.equal(x.state.phase,'FENCING');assert.equal(x.state.legacyLineageUnverified,true);
 });
 test('historical replay with missing fence marks lineage unverified',()=>{
  const x=nextPrivateOutputFence(null,event(),context(true,true,{}));
@@ -59,4 +59,16 @@ test('original source transaction reads both records before writes; storage auth
  assert.ok(endpoint.indexOf('const outputFenceSnap =')<endpoint.indexOf('transaction.set(blockRef'));
  assert.match(worker,/return false;/);
  assert.equal(PRIVATE_OUTPUT_FENCE_COLLECTION,'lifeMoviePrivateOutputRevocationFences');
+});
+
+test('first event without a prior consent block cannot prove absence of preexisting cloud objects or in-flight uploads',()=>{
+ // An absent Jobs block is not a GCS inventory or writer drain.
+ // The model must retain uncertainty even if existing untracked bytes are unknowable to Firestore.
+ const x=nextPrivateOutputFence(undefined,event('untracked-preexisting-object'),context(false,false,undefined));
+ assert.equal(x.kind,'create');
+ assert.equal(x.state.legacyLineageUnverified,true);
+ assert.equal(x.state.storageWriteAuthorized,false);
+ assert.equal(x.state.storageWriteFenceVerified,false);
+ assert.equal(x.state.allWritersDrained,false);
+ assert.equal(x.state.privateOutputDeletionAcknowledged,false);
 });
