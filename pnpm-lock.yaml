@@ -262,6 +262,8 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  workers/storage-broker: {}
+
   workers/studio-worker:
     dependencies:
       express:
