@@ -189,7 +189,7 @@ try {
   // owner revocation and current consent block, not trust admission snapshots.
   const s7=scope('prebyte'), k=ident(s7,'k'), m=ident(s7,'m');
   await fixture(s7,k);await fixture(s7,m);await seedReviewOnlyOutputScope(s7);
-  const blockId=createHash('sha256').update(s7.ownerUid+'\\n'+'life-movie.render').digest('hex');
+  const blockId=createHash('sha256').update(s7.ownerUid+'\n'+'life-movie.render').digest('hex');
   const blockRef=db.collection('jobConsentBlocks').doc(blockId);
   const canonicalPrebyte=db.collection(PRIVATE_OUTPUT_FENCE_COLLECTION)
     .doc(privateOutputFenceId(s7.ownerUid,'life-movie.render'));
@@ -207,7 +207,7 @@ try {
     const s8=scope('consentblock'), n=ident(s8,'n'), o=ident(s8,'o');
     await fixture(s8,n);await fixture(s8,o);await seedReviewOnlyOutputScope(s8);
     await reserveReviewOnlyOutputAttempt(n,1);
-    const consentId=createHash('sha256').update(s8.ownerUid+'\\n'+'life-movie.render').digest('hex');
+    const consentId=createHash('sha256').update(s8.ownerUid+'\n'+'life-movie.render').digest('hex');
     const consentRef=db.collection('jobConsentBlocks').doc(consentId);
     await consentRef.create({active:true,eventId:'withdrawn'});
     await denied(beginReviewOnlySimulatedUpload(n),'consent_blocked_or_unverified');
@@ -218,7 +218,7 @@ try {
     await fixture(s9,p);await seedReviewOnlyOutputScope(s9);
     await reserveReviewOnlyOutputAttempt(p,1);
     await beginReviewOnlySimulatedUpload(p);
-    const id=createHash('sha256').update(s9.ownerUid+'\\n'+'life-movie.render').digest('hex');
+    const id=createHash('sha256').update(s9.ownerUid+'\n'+'life-movie.render').digest('hex');
     const r=db.collection('jobConsentBlocks').doc(id);
     await r.create({active:true});
     await denied(assertReviewOnlyBrokerPreByte(p),'consent_blocked_or_unverified');
