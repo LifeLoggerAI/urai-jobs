@@ -27,7 +27,9 @@ export function nextPrivateOutputFence(
   if (!event || !context || !safeId(event.eventId) || !safeId(event.ownerUid) ||
       event.purpose !== 'life-movie.render' ||
       typeof context.replay !== 'boolean' || typeof context.priorBlockExists !== 'boolean') deny();
-  // R1031 donor #415: missing consent block does not prove absent prior\n  // Storage objects, alternate writers, or in-flight uploads.\n  if (existing === undefined || existing === null) {
+  // R1031 donor #415: missing consent block does not prove absent prior
+  // Storage objects, alternate writers, or in-flight uploads.
+  if (existing === undefined || existing === null) {
     return {kind:'create',state:{schemaVersion:'R1027_PRIVATE_OUTPUT_FENCE_V1',
       ownerUid:event.ownerUid,purpose:event.purpose,eventId:event.eventId,
       epoch:1,phase:'FENCING', legacyLineageUnverified:true,
