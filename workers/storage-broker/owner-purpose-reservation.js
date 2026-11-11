@@ -16,6 +16,7 @@
  * from a worker's arbitrary Firestore path.
  */
 const {createHash} = require('node:crypto');
+const {assertCanonicalPrivacyRevocation} = require('./canonical-privacy-revocation');
 const DENIED = 'life_movie_private_broker_reservation_unverified';
 const PURPOSE = 'life-movie.render';
 const OWNER_FENCES = 'lifeMoviePrivateOutputRevocationFences';
@@ -159,7 +160,11 @@ function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt, 
     const x=checked(raw),r=refs(x);
     if(!goodId(eventId))deny();
     return db.runTransaction(async tx=>{
-      const sc=await read(tx,r.scope);
+      // Both records are canonical Jobs/Privacy authority. Observe them in
+      // the SAME transaction as the owner/purpose fence update.
+      const [sc, privacyBlock, canonicalFence] = await Promise.all([
+        read(tx,r.scope),read(tx,r.consentBlock),read(tx,r.revocation),
+      ]);
       if(!sc.exists || !snapValid(sc.data) || sc.data.ownerUid!==x.ownerUid ||
          sc.data.purpose!==PURPOSE || sc.data.schema!=='R1073_OWNER_PURPOSE_CANDIDATE_V1' ||
          sc.data.productionAuthorized!==false || !Number.isSafeInteger(sc.data.epoch) ||
@@ -168,6 +173,12 @@ function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt, 
       try {authenticated=await verifyWithdrawal({ownerUid:x.ownerUid,purpose:PURPOSE,
         eventId,transaction:tx,scope:sc.data});} catch {deny();}
       if(authenticated!==true)deny();
+      // Do not treat a callback, a worker-provided event ID, or a synthetic
+      // signature-shaped object as a verified canonical Privacy decision.
+      assertCanonicalPrivacyRevocation(
+        {exists:privacyBlock.exists,data:()=>privacyBlock.data},
+        {exists:canonicalFence.exists,data:()=>canonicalFence.data},
+        {ownerUid:x.ownerUid,purpose:PURPOSE,eventId});
       if(sc.data.phase==='FENCING' && sc.data.eventId===eventId)return noCapability();
       if(sc.data.phase!=='OPEN' || sc.data.epoch>=Number.MAX_SAFE_INTEGER ||
          sc.data.version>=Number.MAX_SAFE_INTEGER)deny();
