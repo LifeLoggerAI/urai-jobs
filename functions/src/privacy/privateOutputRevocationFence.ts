@@ -27,10 +27,13 @@ export function nextPrivateOutputFence(
   if (!event || !context || !safeId(event.eventId) || !safeId(event.ownerUid) ||
       event.purpose !== 'life-movie.render' ||
       typeof context.replay !== 'boolean' || typeof context.priorBlockExists !== 'boolean') deny();
+  // Absence of a Jobs consent block is not proof that historical GCS bytes,
+  // alternate privileged writers or in-flight uploads do not exist.
+  // This field cannot authorize upload or deletion acknowledgment.
   if (existing === undefined || existing === null) {
     return {kind:'create',state:{schemaVersion:'R1027_PRIVATE_OUTPUT_FENCE_V1',
       ownerUid:event.ownerUid,purpose:event.purpose,eventId:event.eventId,
-      epoch:1,phase:'FENCING', legacyLineageUnverified:context.replay || context.priorBlockExists,
+      epoch:1,phase:'FENCING', legacyLineageUnverified:true,
       storageWriteAuthorized:false, storageWriteFenceVerified:false,
       allWritersDrained:false, privateOutputDeletionAcknowledged:false}};
   }
