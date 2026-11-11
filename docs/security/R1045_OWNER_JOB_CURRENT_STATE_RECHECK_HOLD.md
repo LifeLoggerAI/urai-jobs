@@ -1,0 +1,9 @@
+# ONE URAI R1045 — reconcile Jobs #424 and #425 and close stale owner/job read window (REVIEW/HOLD)
+
+Parent: peer-authored Jobs #425 `6215956e235ba25ab4487caad31bf78e88afee67` (descendant of #423/#422/#420 and the prior two-parent #419 security convergence). Earlier sibling Jobs #424 exact `e3fb4ef5caca9bad7eeb14a77efa1692dd79e38f` independently verified final pre-byte canonical withdrawal denial; preserved its unique post-withdrawal assertions (simulated scope still OPEN, unresolved attempt count 1, never deletion ACK) in the #425-based emulator tests. Both peer PRs stay open.
+
+#425 brought additional live consent-block checks at simulated upload begin and pre-byte; R1045 keeps those and adds transactional fresh owner and job reads at both later stages. A reservation may predate job cancellation, owner deletion or disablement, ownership/tenant/project/source/consent-purpose mutation. All are denial-only vetoes. Additional native emulator cases mutate and revalidate fields across both transitions, while static tripwires require the reads. Do not confuse a missing block with positive consent.
+
+Security limit: Firestore pre-byte reads are not a GCS atomic write fence; a privileged legacy writer can pause after checks and finalize bytes. The code is emulator/review-only and must not be wired to production private outputs. Studio worker private-write authority remains hard-off. No real provider IAM isolation, broker exclusive principal, stream drain, generation-based deletion acknowledgment, authenticated positive consent lifecycle, protected CI/independent approval, device/visual or rollback GO.
+
+Independent exact-source Runpod verification required before calling any R1045 tests PASS. Preserve all earlier workers, evidence, and failures. Jobs #252 P0 and Genesis production HOLD.
