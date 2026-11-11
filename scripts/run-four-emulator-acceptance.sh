@@ -13,6 +13,10 @@ die() {
   exit 1
 }
 
+# Reject inherited Node flags before invoking any Node/pnpm/npm child process.
+# The in-process R1047 guard cannot stop a Node preload that has already run.
+[[ -z "${NODE_OPTIONS:-}" ]] || die "Inherited NODE_OPTIONS is forbidden in emulator-only acceptance"
+
 command -v git >/dev/null || die "git is required"
 # The reviewed SHA must come from the independent release controller, never
 # default to whatever branch happens to be checked out at execution time.
