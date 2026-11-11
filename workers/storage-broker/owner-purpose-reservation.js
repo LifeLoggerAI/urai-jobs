@@ -69,7 +69,12 @@ const jobValid=(j,x)=>snapValid(j) && j.ownerUid===x.ownerUid && j.tenantId===x.
 const scopeValid=(s,x)=>snapValid(s) && s.schema==='R1073_OWNER_PURPOSE_CANDIDATE_V1' &&
   s.ownerUid===x.ownerUid && s.purpose===PURPOSE && s.phase==='OPEN' &&
   s.epoch===x.expectedEpoch && s.productionAuthorized===false &&
-  Number.isSafeInteger(s.version) && s.version>=1 && s.version<Number.MAX_SAFE_INTEGER;
+  Number.isSafeInteger(s.version) && s.version>=1 && s.version<Number.MAX_SAFE_INTEGER &&
+  Number.isSafeInteger(s.attemptsEverReserved) && s.attemptsEverReserved>=0 &&
+  s.attemptsEverReserved<Number.MAX_SAFE_INTEGER &&
+  Number.isSafeInteger(s.unsettledAttemptCount) && s.unsettledAttemptCount>=0 &&
+  s.unsettledAttemptCount<=s.attemptsEverReserved &&
+  s.unsettledAttemptCount<Number.MAX_SAFE_INTEGER;
 const attemptValid=(a,x)=>snapValid(a) && a.ownerUid===x.ownerUid &&
   a.tenantId===x.tenantId && a.projectId===x.projectId && a.jobId===x.jobId &&
   a.attemptId===x.attemptId && a.destination===x.destination &&
@@ -122,7 +127,12 @@ function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt, 
         consentReceiptId:x.consentReceiptId,state:'RESERVED',
         productionAuthorized:false,generationObservedUnverified:null,
       });
-      tx.update(r.scope,{version:scope.version+1});
+      // Count all admitted attempts in the same durable transaction as create.
+      // This counter is deliberately monotonic/unsettled: never infer a drain
+      // or release the last outstanding writer from a timeout or callback.
+      tx.update(r.scope,{version:scope.version+1,
+        attemptsEverReserved:scope.attemptsEverReserved+1,
+        unsettledAttemptCount:scope.unsettledAttemptCount+1});
       return Object.freeze({...noCapability(),attemptState:'RESERVED',epoch:scope.epoch});
     });
   };
@@ -168,7 +178,14 @@ function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt, 
       if(!sc.exists || !snapValid(sc.data) || sc.data.ownerUid!==x.ownerUid ||
          sc.data.purpose!==PURPOSE || sc.data.schema!=='R1073_OWNER_PURPOSE_CANDIDATE_V1' ||
          sc.data.productionAuthorized!==false || !Number.isSafeInteger(sc.data.epoch) ||
-         !Number.isSafeInteger(sc.data.version))deny();
+         sc.data.epoch<1 || !Number.isSafeInteger(sc.data.version) || sc.data.version<1 ||
+         !Number.isSafeInteger(sc.data.attemptsEverReserved) ||
+         sc.data.attemptsEverReserved<0 ||
+         sc.data.attemptsEverReserved>=Number.MAX_SAFE_INTEGER ||
+         !Number.isSafeInteger(sc.data.unsettledAttemptCount) ||
+         sc.data.unsettledAttemptCount<0 ||
+         sc.data.unsettledAttemptCount>=Number.MAX_SAFE_INTEGER ||
+         sc.data.unsettledAttemptCount>sc.data.attemptsEverReserved)deny();
       let authenticated=false;
       try {authenticated=await verifyWithdrawal({ownerUid:x.ownerUid,purpose:PURPOSE,
         eventId,transaction:tx,scope:sc.data});} catch {deny();}
@@ -182,6 +199,8 @@ function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt, 
       if(sc.data.phase==='FENCING' && sc.data.eventId===eventId)return noCapability();
       if(sc.data.phase!=='OPEN' || sc.data.epoch>=Number.MAX_SAFE_INTEGER ||
          sc.data.version>=Number.MAX_SAFE_INTEGER)deny();
+      // Preserve unsettledAttemptCount unchanged; even zero is not provider
+      // proof of terminated streams, effective IAM, or generation absence.
       tx.update(r.scope,{phase:'FENCING',eventId,epoch:sc.data.epoch+1,version:sc.data.version+1});
       return noCapability();
     });
