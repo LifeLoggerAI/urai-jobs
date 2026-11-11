@@ -220,6 +220,28 @@ export async function reserveReviewOnlyOutputAttempt(
  * Models a pre-byte transition only; it deliberately cannot upload any bytes.
  * An epoch read alone is NOT a production post-check-before-write fence.
  */
+function assertReviewOnlyCurrentOwnerAndJob(
+  ownerSnap: {exists: boolean; data(): Record<string, any> | undefined},
+  jobSnap: {exists: boolean; data(): Record<string, any> | undefined},
+  scope: ReviewOutputScope,
+): void {
+  const user = ownerSnap.data();
+  if (!ownerSnap.exists || !user || user.disabled !== false ||
+      user.deletionPending !== false) {
+    throw new Error('life_movie_review_write_owner_unverified');
+  }
+  const currentJob = jobSnap.data();
+  const payload = currentJob?.payload;
+  if (!jobSnap.exists || !currentJob || currentJob.ownerUid !== scope.ownerUid ||
+      currentJob.tenantId !== scope.tenantId || currentJob.sourceSystem !== 'urai-studio' ||
+      currentJob.status !== 'RUNNING' ||
+      !['studio.render.video', 'studio.assemble.video'].includes(String(currentJob.jobType || currentJob.type)) ||
+      !payload || typeof payload !== 'object' || Array.isArray(payload) ||
+      payload.projectId !== scope.projectId || currentJob.consent?.purpose !== PURPOSE) {
+    throw new Error('life_movie_review_write_job_unverified');
+  }
+}
+
 export async function beginReviewOnlySimulatedUpload(identity: ReviewAttemptIdentity) {
   reviewedOnly();
   const s = checkedScope(identity);
@@ -231,15 +253,18 @@ export async function beginReviewOnlySimulatedUpload(identity: ReviewAttemptIden
     .doc(privateOutputFenceId(s.ownerUid, PURPOSE));
   const consentBlockId = createHash('sha256').update(s.ownerUid + '\n' + PURPOSE).digest('hex');
   const block = db.collection('jobConsentBlocks').doc(consentBlockId);
+  const owner = db.collection('users').doc(s.ownerUid);
+  const job = db.collection('jobs').doc(jobId);
   return db.runTransaction(async (transaction) => {
-    const [fenceSnap, itemSnap, canonicalSnap, blockSnap] = await Promise.all([
+    const [fenceSnap, itemSnap, canonicalSnap, blockSnap, ownerSnap, jobSnap] = await Promise.all([
       transaction.get(fence), transaction.get(item), transaction.get(canonicalRevocation),
-      transaction.get(block),
+      transaction.get(block), transaction.get(owner), transaction.get(job),
     ]);
     if (canonicalSnap.exists) throw new Error('life_movie_review_write_canonical_revocation_fenced');
     if (blockSnap.exists && blockSnap.data()?.active !== false) {
       throw new Error('life_movie_review_write_consent_blocked_or_unverified');
     }
+    assertReviewOnlyCurrentOwnerAndJob(ownerSnap, jobSnap, s);
     if (!fenceSnap.exists) throw new Error('life_movie_review_write_fence_missing');
     const current = checkedFence(fenceSnap.data(), s);
     const attempt = checkedAttempt(itemSnap.data(), s, jobId, attemptId);
@@ -369,15 +394,18 @@ export async function assertReviewOnlyBrokerPreByte(identity: ReviewAttemptIdent
     .doc(privateOutputFenceId(s.ownerUid, PURPOSE));
   const consentBlockId = createHash('sha256').update(s.ownerUid + '\n' + PURPOSE).digest('hex');
   const block = db.collection('jobConsentBlocks').doc(consentBlockId);
+  const owner = db.collection('users').doc(s.ownerUid);
+  const job = db.collection('jobs').doc(jobId);
   await db.runTransaction(async (transaction) => {
-    const [fenceSnap, attemptSnap, canonicalSnap, blockSnap] = await Promise.all([
+    const [fenceSnap, attemptSnap, canonicalSnap, blockSnap, ownerSnap, jobSnap] = await Promise.all([
       transaction.get(fence), transaction.get(item), transaction.get(canonicalRevocation),
-      transaction.get(block),
+      transaction.get(block), transaction.get(owner), transaction.get(job),
     ]);
     if (canonicalSnap.exists) throw new Error('life_movie_review_write_canonical_revocation_fenced');
     if (blockSnap.exists && blockSnap.data()?.active !== false) {
       throw new Error('life_movie_review_write_consent_blocked_or_unverified');
     }
+    assertReviewOnlyCurrentOwnerAndJob(ownerSnap, jobSnap, s);
     if (!fenceSnap.exists) throw new Error('life_movie_review_write_fence_missing');
     const current = checkedFence(fenceSnap.data(), s);
     const attempt = checkedAttempt(attemptSnap.data(), s, jobId, attemptId);
