@@ -175,10 +175,10 @@ function makeOwnerPurposeReservationProtocol({db, verifyPositiveConsentReceipt, 
       if(authenticated!==true)deny();
       // Do not treat a callback, a worker-provided event ID, or a synthetic
       // signature-shaped object as a verified canonical Privacy decision.
-      assertCanonicalPrivacyRevocation(
+      try { assertCanonicalPrivacyRevocation(
         {exists:privacyBlock.exists,data:()=>privacyBlock.data},
         {exists:canonicalFence.exists,data:()=>canonicalFence.data},
-        {ownerUid:x.ownerUid,purpose:PURPOSE,eventId});
+        {ownerUid:x.ownerUid,purpose:PURPOSE,eventId}); } catch { deny(); }
       if(sc.data.phase==='FENCING' && sc.data.eventId===eventId)return noCapability();
       if(sc.data.phase!=='OPEN' || sc.data.epoch>=Number.MAX_SAFE_INTEGER ||
          sc.data.version>=Number.MAX_SAFE_INTEGER)deny();
