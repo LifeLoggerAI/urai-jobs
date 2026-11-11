@@ -260,6 +260,43 @@ try {
     assert.equal(status.storageWriteFenceVerified,false);
     assert.equal(status.productionAuthorized,false);
   });
+
+  // R1046: preserve #424 independent in-flight pre-byte residual-proof assertions.
+  const r1044s=scope('r1044custody'), r1044a=ident(r1044s,'custody');
+  await fixture(r1044s,r1044a);await seedReviewOnlyOutputScope(r1044s);
+  await check('R1046 preserve R1044 open review fence and unresolved in-flight attempt on canonical veto',async()=>{
+    await reserveReviewOnlyOutputAttempt(r1044a,1);
+    await beginReviewOnlySimulatedUpload(r1044a);
+    await assertReviewOnlyBrokerPreByte(r1044a);
+    const canonical=db.collection(PRIVATE_OUTPUT_FENCE_COLLECTION)
+      .doc(privateOutputFenceId(r1044s.ownerUid,'life-movie.render'));
+    await canonical.create({phase:'FENCING',eventId:'r1046-synthetic',ownerUid:r1044s.ownerUid,purpose:'life-movie.render'});
+    await denied(assertReviewOnlyBrokerPreByte(r1044a),'canonical_revocation_fenced');
+    const x=await reviewOnlyDrainStatus(r1044s);
+    assert.equal(x.state,'OPEN');
+    assert.equal(x.activeOrUnproven,1);
+    assert.equal(x.revocationAcknowledgementPermitted,false);
+    assert.equal(x.storageWriteFenceVerified,false);
+    assert.equal(x.productionAuthorized,false);
+  });
+  // R1046: identity drift after reservation must not keep stale simulated authority.
+  const drift=scope('jobdrift'), driftAttempt=ident(drift,'identitydrift');
+  await fixture(drift,driftAttempt);await seedReviewOnlyOutputScope(drift);
+  await check('R1046 job owner, tenant and consent purpose drift deny begin/prebyte',async()=>{
+    await reserveReviewOnlyOutputAttempt(driftAttempt,1);
+    const jobRef=db.collection('jobs').doc(driftAttempt.jobId);
+    await jobRef.update({ownerUid:'synthetic-unrelated-owner'});
+    await denied(beginReviewOnlySimulatedUpload(driftAttempt),'job_unverified');
+    await jobRef.update({ownerUid:drift.ownerUid});
+    await beginReviewOnlySimulatedUpload(driftAttempt);
+    await jobRef.update({tenantId:'synthetic-forged-tenant'});
+    await denied(assertReviewOnlyBrokerPreByte(driftAttempt),'job_unverified');
+    await jobRef.update({tenantId:drift.tenantId,consent:{purpose:'unrelated-purpose'}});
+    await denied(assertReviewOnlyBrokerPreByte(driftAttempt),'job_unverified');
+    const x=await reviewOnlyDrainStatus(drift);
+    assert.equal(x.revocationAcknowledgementPermitted,false);
+    assert.equal(x.productionAuthorized,false);
+  });
   await check('forged completed REVOKED state fails closed without cloud proof', async () => {
     const forged = scope('forged');
     await seedReviewOnlyOutputScope(forged);
