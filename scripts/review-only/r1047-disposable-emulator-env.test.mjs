@@ -38,3 +38,9 @@ test('Node preload and inspection flags are rejected in disposable runner',()=>{
 test('non-environment objects and incomplete safety scope fail closed',()=>{
  for(const value of [null,undefined,[],{},'token'])assert.throws(()=>assertDisposableEmulatorEnvironment(value),new RegExp(R1047_DENIED));
 });
+test('R1056: deny every inherited NODE_OPTIONS value, including aliases and apparently benign flags',()=>{
+ for(const NODE_OPTIONS of ['-r /tmp/preload.js', '--inspect-brk=127.0.0.1:9229', '--max-old-space-size=1024', ' --trace-warnings ']) {
+  assert.throws(()=>assertDisposableEmulatorEnvironment({...base(),NODE_OPTIONS}),err=>
+   err.message==='R1047_DISPOSABLE_EMULATOR_ENV_DENIED:NODE_OPTIONS_UNTRUSTED:NODE_OPTIONS');
+ }
+});

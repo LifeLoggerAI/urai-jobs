@@ -34,6 +34,6 @@ export function assertDisposableEmulatorEnvironment(env) {
     }
   }
   const options = String(env.NODE_OPTIONS || '');
-  if (/--(?:require|import|inspect|eval|experimental-loader)(?:\s|=|$)/.test(options)) fail('NODE_PRELOAD_UNTRUSTED', 'NODE_OPTIONS');
+  if (options.trim()) fail('NODE_OPTIONS_UNTRUSTED', 'NODE_OPTIONS');
   return Object.freeze({ disposableOnly: true, productionAuthorized: false, releaseApproved: false });
 }
