@@ -94,3 +94,15 @@ test('R1028: legitimate timestamp metadata never confers authority',()=>{
  const x=nextPrivateOutputFence(state,event(),context(true,true,{}));
  assert.deepEqual(x,{kind:'replay'});
 });
+
+test('R1028: cross-realm Firestore-like plain documents preserve exact replay',async()=>{
+ const vm=await import('node:vm');
+ const state=vm.runInNewContext('({...source})',{source:first().state});
+ const result=nextPrivateOutputFence(state,event(),context(true,true,{}));
+ assert.deepEqual(result,{kind:'replay'});
+});
+test('R1028: forged getter under an allowed field cannot confer authority',()=>{
+ const state={...first().state};
+ Object.defineProperty(state,'createdAt',{get(){throw new Error('untrusted getter executed');},enumerable:true});
+ denied(()=>nextPrivateOutputFence(state,event(),context(true,true,{})));
+});
