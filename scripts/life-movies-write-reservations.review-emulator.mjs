@@ -187,7 +187,7 @@ try {
     // R1061: no new per-project OPEN scope may be seeded under an existing
     // canonical owner/purpose revocation, even if the caller will later deny.
     await denied(seedReviewOnlyOutputScope(s6),'canonical_revocation_fenced');
-    await denied(reserveReviewOnlyOutputAttempt(i,1),'fence_missing');
+    await denied(reserveReviewOnlyOutputAttempt(i,1),'canonical_revocation_fenced');
     const independent=scope('independent'),j=ident(independent,'j');
     await fixture(independent,j);await seedReviewOnlyOutputScope(independent);
     const result=await reserveReviewOnlyOutputAttempt(j,1);assert.equal(result.productionAuthorized,false);
