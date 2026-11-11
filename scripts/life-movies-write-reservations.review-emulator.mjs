@@ -183,11 +183,34 @@ try {
   });
   await check('R1042 same owner other tenant blocked, other owner isolated',async()=>{
     const s6={...scope('ownerwide'),ownerUid:s5.ownerUid},i=ident(s6,'i');
-    await fixture(s6,i);await seedReviewOnlyOutputScope(s6);
+    await fixture(s6,i);
+    // R1061: no new per-project OPEN scope may be seeded under an existing
+    // canonical owner/purpose revocation, even if the caller will later deny.
+    await denied(seedReviewOnlyOutputScope(s6),'canonical_revocation_fenced');
     await denied(reserveReviewOnlyOutputAttempt(i,1),'canonical_revocation_fenced');
     const independent=scope('independent'),j=ident(independent,'j');
     await fixture(independent,j);await seedReviewOnlyOutputScope(independent);
     const result=await reserveReviewOnlyOutputAttempt(j,1);assert.equal(result.productionAuthorized,false);
+  });
+  const preseed=scope('preseed'), preseedAttempt=ident(preseed,'preseed');
+  await fixture(preseed,preseedAttempt);
+  await check('R1061 withdrawal before first scope seed cannot create OPEN project',async()=>{
+    const canonical=db.collection(PRIVATE_OUTPUT_FENCE_COLLECTION)
+      .doc(privateOutputFenceId(preseed.ownerUid,'life-movie.render'));
+    await canonical.create({phase:'FENCING',ownerUid:preseed.ownerUid,purpose:'life-movie.render',eventId:'synthetic-preseed'});
+    await denied(seedReviewOnlyOutputScope(preseed),'canonical_revocation_fenced');
+    await denied(reviewOnlyDrainStatus(preseed),'fence_missing');
+  });
+  const blockSeed=scope('blockseed'), blockSeedAttempt=ident(blockSeed,'blockseed');
+  await fixture(blockSeed,blockSeedAttempt);
+  await check('R1061 active or malformed consent block vetoes first scope seed',async()=>{
+    const id=createHash('sha256').update(blockSeed.ownerUid+'\n'+'life-movie.render').digest('hex');
+    const block=db.collection('jobConsentBlocks').doc(id);
+    await block.create({active:true,eventId:'synthetic-block'});
+    await denied(seedReviewOnlyOutputScope(blockSeed),'consent_blocked_or_unverified');
+    await block.update({active:'unknown'});
+    await denied(seedReviewOnlyOutputScope(blockSeed),'consent_blocked_or_unverified');
+    await denied(reviewOnlyDrainStatus(blockSeed),'fence_missing');
   });
   // R1043: both simulated pre-byte boundaries must recheck the canonical
   // owner revocation and current consent block, not trust admission snapshots.
