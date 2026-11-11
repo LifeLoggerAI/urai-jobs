@@ -19,7 +19,12 @@ export function nextPrivateOutputFence(
   context: Readonly<{replay:boolean; priorBlockExists:boolean; priorBlock:unknown}>,
 ): PrivateOutputFenceTransition {
   const deny = (): never => { throw new Error(PRIVATE_OUTPUT_FENCE_DENIED); };
-  if (!event || !context || !event.eventId || !event.ownerUid ||
+  // Treat server document data as untrusted until its exact schema is checked.
+  // Reject extra privilege-like fields rather than letting a future broker
+  // accidentally consume an attacker/legacy-written `authorized` alias.
+  const safeId = (value: unknown): value is string =>
+    typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(value);
+  if (!event || !context || !safeId(event.eventId) || !safeId(event.ownerUid) ||
       event.purpose !== 'life-movie.render' ||
       typeof context.replay !== 'boolean' || typeof context.priorBlockExists !== 'boolean') deny();
   if (existing === undefined || existing === null) {
@@ -29,11 +34,18 @@ export function nextPrivateOutputFence(
       storageWriteAuthorized:false, storageWriteFenceVerified:false,
       allWritersDrained:false, privateOutputDeletionAcknowledged:false}};
   }
-  if (typeof existing !== 'object' || Array.isArray(existing)) deny();
+  if (typeof existing !== 'object' || Array.isArray(existing) ||
+      ![Object.prototype, null].includes(Object.getPrototypeOf(existing))) deny();
   const value = existing as Record<string, unknown>;
+  const required = new Set(['schemaVersion','ownerUid','purpose','eventId','epoch',
+    'phase','legacyLineageUnverified','storageWriteAuthorized',
+    'storageWriteFenceVerified','allWritersDrained','privateOutputDeletionAcknowledged']);
+  const allowed = new Set([...required,'createdAt','updatedAt']);
+  if (Reflect.ownKeys(value).some(k => typeof k !== 'string' || !allowed.has(k)) ||
+      [...required].some(k => !Object.hasOwn(value,k))) deny();
   if (value.schemaVersion !== 'R1027_PRIVATE_OUTPUT_FENCE_V1' ||
       value.ownerUid !== event.ownerUid || value.purpose !== event.purpose ||
-      typeof value.eventId !== 'string' || !value.eventId ||
+      !safeId(value.eventId) ||
       !Number.isSafeInteger(value.epoch) || (value.epoch as number) < 1 ||
       (value.epoch as number) >= Number.MAX_SAFE_INTEGER ||
       value.phase !== 'FENCING' ||
