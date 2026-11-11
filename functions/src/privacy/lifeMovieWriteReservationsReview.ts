@@ -137,9 +137,23 @@ export async function seedReviewOnlyOutputScope(scope: ReviewOutputScope) {
   reviewedOnly();
   const s = checkedScope(scope);
   const { db, fence } = refs(s);
+  // This fixture must not invent an OPEN project after canonical owner/purpose
+  // withdrawal. An existing canonical fence, even malformed, is a veto.
+  // The consent block is also an owner/purpose-wide veto and must be read in
+  // the SAME transaction as creation of the per-project review fence.
+  const ownerFence = db.collection(PRIVATE_OUTPUT_FENCE_COLLECTION)
+    .doc(privateOutputFenceId(s.ownerUid, PURPOSE));
+  const consentBlockId = createHash('sha256').update(s.ownerUid + '\n' + PURPOSE).digest('hex');
+  const block = db.collection('jobConsentBlocks').doc(consentBlockId);
   await db.runTransaction(async (transaction) => {
-    const prior = await transaction.get(fence);
+    const [prior, canonicalSnap, blockSnap] = await Promise.all([
+      transaction.get(fence), transaction.get(ownerFence), transaction.get(block),
+    ]);
     if (prior.exists) throw new Error('life_movie_review_write_fence_already_exists');
+    if (canonicalSnap.exists) throw new Error('life_movie_review_write_canonical_revocation_fenced');
+    if (blockSnap.exists && blockSnap.data()?.active !== false) {
+      throw new Error('life_movie_review_write_consent_blocked_or_unverified');
+    }
     transaction.create(fence, {
       ...s, purpose: PURPOSE, epoch: 1, state: 'OPEN',
       revocationEventId: null, reviewOnlyEmulator: true,
