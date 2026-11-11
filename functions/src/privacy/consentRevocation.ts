@@ -11,6 +11,7 @@ import {
 } from './consentBlocks.js';
 import { invalidateLifeMovieDerivativesForConsent, type LifeMovieRevocationEvent } from './lifeMovieDerivativeRevocation.js';
 import { mayApplyNewConsentRevocation } from './consentRevocationOrder.js';
+import { PRIVATE_OUTPUT_FENCE_COLLECTION, nextPrivateOutputFence, privateOutputFenceId } from './privateOutputRevocationFence.js';
 
 const privacyEventToken = defineSecret('URAI_JOBS_PRIVACY_EVENT_TOKEN');
 
@@ -82,6 +83,9 @@ export const ingestConsentRevocation = onRequest({
   const db = getFirestore();
   const blockRef = consentBlockRef(event.ownerUid, event.purpose);
   const receiptRef = consentEventReceiptRef(event.eventId);
+  const outputFenceRef = purpose === 'life-movie.render'
+    ? db.collection(PRIVATE_OUTPUT_FENCE_COLLECTION).doc(privateOutputFenceId(ownerUid, purpose))
+    : null;
   const expectedHash = event.type === 'consent.revoked.v2'
     ? canonicalSourceRevocationAckHash({
       eventId: event.eventId, ownerUid: event.ownerUid, purpose: event.purpose,
@@ -101,6 +105,10 @@ export const ingestConsentRevocation = onRequest({
 
   const outcome = await db.runTransaction(async (transaction) => {
     const existing = await transaction.get(receiptRef);
+    // Read all authority documents before any transaction write. The fence
+    // and consent block therefore serialize under Firestore commit retries.
+    const existingBlock = await transaction.get(blockRef);
+    const outputFenceSnap = outputFenceRef ? await transaction.get(outputFenceRef) : null;
     if (existing.exists) {
       const receipt = existing.data() ?? {};
       const receiptMatches = receipt.consumerId === 'urai-jobs'
@@ -117,7 +125,7 @@ export const ingestConsentRevocation = onRequest({
       // Older receipts did not persist revokedAt. The corresponding active
       // block contains the original timestamp and event binding, so only an
       // exact, still-current replay can safely retry derivative cleanup.
-      const block = await transaction.get(blockRef);
+      const block = existingBlock;
       const blockData = block.data() ?? {};
       const blockMatches = block.exists && blockData.active === true
         && blockData.eventId === event.eventId
@@ -130,18 +138,42 @@ export const ingestConsentRevocation = onRequest({
       if (!blockMatches || (receipt.revokedAt !== undefined && receipt.revokedAt !== event.revokedAt)) {
         return { conflict: true as const };
       }
+      if (outputFenceRef && outputFenceSnap) {
+        let transition;
+        try {
+          transition = nextPrivateOutputFence(outputFenceSnap.data(),
+            { eventId, ownerUid, purpose },
+            { replay: true, priorBlockExists: block.exists, priorBlock: blockData });
+        } catch { return { conflict: true as const }; }
+        // Historical receipts predate this epoch. Import as an *unverified*
+        // fenced lineage, never a cloud write or deletion acknowledgement.
+        if (transition.kind === 'create') {
+          transaction.create(outputFenceRef, {
+            ...transition.state, createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+      }
       return { conflict: false as const, ack: receipt };
     }
 
     // First delivery of this event is not automatically the latest revocation.
     // Check the existing consent block in the same transaction before writing.
     // A stale or ambiguous order must not alter current enforcement state.
-    const existingBlock = await transaction.get(blockRef);
     if (!mayApplyNewConsentRevocation(existingBlock.exists, existingBlock.data(), {
       eventId: event.eventId, ownerUid: event.ownerUid, purpose: event.purpose,
       revokedAt: event.revokedAt,
     })) return { conflict: true as const };
 
+    let outputFenceTransition;
+    if (outputFenceRef && outputFenceSnap) {
+      try {
+        outputFenceTransition = nextPrivateOutputFence(outputFenceSnap.data(),
+          { eventId, ownerUid, purpose },
+          { replay: false, priorBlockExists: existingBlock.exists,
+            priorBlock: existingBlock.data() });
+      } catch { return { conflict: true as const }; }
+    }
     const now = FieldValue.serverTimestamp();
     const status = 'blocked';
     const receipt = {
@@ -173,6 +205,15 @@ export const ingestConsentRevocation = onRequest({
       updatedAt: now,
     }, { merge: true });
     transaction.create(receiptRef, receipt);
+    if (outputFenceRef && outputFenceTransition) {
+      if (outputFenceTransition.kind === 'create') {
+        transaction.create(outputFenceRef, {
+          ...outputFenceTransition.state, createdAt: now, updatedAt: now,
+        });
+      } else if (outputFenceTransition.kind === 'update') {
+        transaction.update(outputFenceRef, { ...outputFenceTransition.state, updatedAt: now });
+      }
+    }
     return { conflict: false as const, ack: receipt };
   });
 
