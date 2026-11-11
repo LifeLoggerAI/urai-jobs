@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { mayApplyNewConsentRevocation } from '../functions/src/privacy/consentRevocationOrder.ts';
+import { PRIVATE_OUTPUT_FENCE_COLLECTION, nextPrivateOutputFence, privateOutputFenceId } from '../functions/src/privacy/privateOutputRevocationFence.ts';
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
 const ts = require('typescript');
 const source = fs.readFileSync(new URL('../functions/src/privacy/consentRevocation.ts', import.meta.url), 'utf8');
@@ -31,11 +32,12 @@ function instantiate(existingBlock) {
     for(const [key,item] of Object.entries(merged))if(item===DELETED)delete merged[key];
     records.set('receipt',merged);
   }};
-  const db={async runTransaction(callback){
+  const db={collection:(name)=>({doc:(id)=>({id:name+'-'+id})}),async runTransaction(callback){
     const writes=[];
     const transaction={async get(ref){let data=records.get(ref.id);return {exists:data!==undefined,data:()=>data};},
       set(ref,value,options){writes.push({kind:'set',ref,value,options});},
-      create(ref,value){writes.push({kind:'create',ref,value});}};
+      create(ref,value){writes.push({kind:'create',ref,value});},
+      update(ref,value){writes.push({kind:'update',ref,value});}};
     const outcome=await callback(transaction);
     for(const w of writes){
       touched.push(w);
@@ -43,7 +45,8 @@ function instantiate(existingBlock) {
         const record=w.options?.merge?{...records.get(w.ref.id),...w.value}:{...w.value};
         for(const [key,value] of Object.entries(record)) if(value===DELETED)delete record[key];
         records.set(w.ref.id,record);
-      }else records.set(w.ref.id,w.value);
+      }else if(w.kind==='update') records.set(w.ref.id,{...records.get(w.ref.id),...w.value});
+      else records.set(w.ref.id,w.value);
     }
     return outcome;
   }};
@@ -52,6 +55,7 @@ function instantiate(existingBlock) {
     privacyEventToken:{value:()=> 'secret'},onRequest:(_options,handler)=>handler,
     expectedBearer:()=> 'secret', getFirestore:()=>db,
     consentBlockRef:()=>({id:'block'}), consentEventReceiptRef:()=>receiptRef,
+    PRIVATE_OUTPUT_FENCE_COLLECTION, privateOutputFenceId, nextPrivateOutputFence,
     canonicalSourceRevocationAckHash:()=> 'ackhash', canonicalConsentAckHash:()=> 'ackhash',
     FieldValue:{serverTimestamp:()=> 'server-time',delete:()=>DELETED},
     ConsentRevokedEventSchema:{safeParse:()=>({success:true,data:event})},
