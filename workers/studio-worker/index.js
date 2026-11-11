@@ -8,6 +8,7 @@ const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { cleanupPinnedPrivateOutputs } = require('./private-output-cleanup');
 const { assertPrivateOutputWriteAuthority, privateOutputWriteAuthorityAvailable } = require('./private-output-write-authority');
+const { submitPrivateOutputToExclusiveBroker } = require('./private-output-broker-boundary');
 const express = require('express');
 const admin = require('firebase-admin');
 
@@ -737,14 +738,22 @@ async function assembleLifeMovie(job) {
     assertPrivateOutputWriteAuthority();
     await control.check();
     pendingUnfencedOutputWrite = true;
-    const file = bucket.file(destination);
-    await pipeline(fs.createReadStream(localPath), file.createWriteStream({
-      resumable: false, preconditionOpts: { ifGenerationMatch: 0 },
-      metadata: { contentType, cacheControl: 'private, no-store', metadata: { uraiSha256: expectedHash } },
-    }), { signal: control.signal });
-    const [metadata] = await file.getMetadata();
-    if (metadata?.metadata?.uraiSha256 !== expectedHash) throw new Error('output_checksum_metadata_mismatch');
-    const uploadedGeneration = pinnedUploadedOutputGeneration(metadata.generation);
+    // No worker GCS mutation is permitted: a future trusted broker must
+    // own authenticated admission, the actual Storage IAM identity, stream
+    // drain and generation-bound receipt. This broker boundary always denies.
+    const brokerReceipt = await submitPrivateOutputToExclusiveBroker({
+      ownerUid: job.ownerUid,
+      tenantId: job.tenantId,
+      jobId: job.jobId,
+      bucketName,
+      destination,
+      localPath,
+      contentType,
+      expectedHash,
+      signal: control.signal,
+    });
+    if (brokerReceipt?.checksum !== expectedHash) throw new Error('output_checksum_metadata_mismatch');
+    const uploadedGeneration = pinnedUploadedOutputGeneration(brokerReceipt.generation);
     writtenObjects.push({ destination, generation: uploadedGeneration });
     pendingUnfencedOutputWrite = false;
     return uploadedGeneration;
@@ -1006,14 +1015,22 @@ async function renderLifeMovie(job) {
       assertPrivateOutputWriteAuthority();
       await control.check();
       pendingUnfencedOutputWrite = true;
-      const file = bucket.file(destination);
-      await pipeline(fs.createReadStream(localPath), file.createWriteStream({
-        resumable: false, preconditionOpts: { ifGenerationMatch: 0 },
-        metadata: { contentType, cacheControl: 'private, no-store', metadata: { uraiSha256: expectedHash } },
-      }), { signal: control.signal });
-      const [metadata] = await file.getMetadata();
-      if (metadata?.metadata?.uraiSha256 !== expectedHash) throw new Error('output_checksum_metadata_mismatch');
-      const uploadedGeneration = pinnedUploadedOutputGeneration(metadata.generation);
+      // No worker GCS mutation is permitted: a future trusted broker must
+      // own authenticated admission, the actual Storage IAM identity, stream
+      // drain and generation-bound receipt. This broker boundary always denies.
+      const brokerReceipt = await submitPrivateOutputToExclusiveBroker({
+        ownerUid: job.ownerUid,
+        tenantId: job.tenantId,
+        jobId: job.jobId,
+        bucketName,
+        destination,
+        localPath,
+        contentType,
+        expectedHash,
+        signal: control.signal,
+      });
+      if (brokerReceipt?.checksum !== expectedHash) throw new Error('output_checksum_metadata_mismatch');
+      const uploadedGeneration = pinnedUploadedOutputGeneration(brokerReceipt.generation);
       writtenObjects.push({ destination, generation: uploadedGeneration });
       pendingUnfencedOutputWrite = false;
       return uploadedGeneration;
