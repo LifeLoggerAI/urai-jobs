@@ -9,7 +9,7 @@ export const PRIVATE_OUTPUT_FENCE_COLLECTION = 'lifeMoviePrivateOutputRevocation
 export const PRIVATE_OUTPUT_FENCE_DENIED = 'life_movie_private_output_fence_unverified';
 export type PrivateOutputFenceEvent = Readonly<{ eventId:string; ownerUid:string; purpose:string }>;
 export type PrivateOutputFenceTransition =
-  | Readonly<{kind:'create' | 'update'; state:Readonly<Record<string, unknown>>}>
+  | Readonly<{kind:'create' | 'update' | 'repair'; state:Readonly<Record<string, unknown>>}>
   | Readonly<{kind:'replay'}>;
 export function privateOutputFenceId(ownerUid: string, purpose: string): string {
   return createHash('sha256').update('urai-private-output-revocation-fence-v1\n'+ownerUid+'\n'+purpose).digest('hex');
@@ -66,6 +66,11 @@ export function nextPrivateOutputFence(
       value.privateOutputDeletionAcknowledged !== false) deny();
   if (context.replay) {
     if (value.eventId !== event.eventId) deny();
+    // A prior review build could persist false without provider-authoritative proof.
+    // Atomically promote only the non-authorizing uncertainty bit on exact replay.
+    if (value.legacyLineageUnverified !== true) {
+      return {kind:'repair',state:{legacyLineageUnverified:true}};
+    }
     return {kind:'replay'};
   }
   if (!context.priorBlockExists || !context.priorBlock ||
@@ -75,7 +80,7 @@ export function nextPrivateOutputFence(
       prior.purpose !== event.purpose || prior.active !== true ||
       event.eventId === value.eventId) deny();
   return {kind:'update',state:{epoch:(value.epoch as number)+1,eventId:event.eventId,
-    phase:'FENCING',legacyLineageUnverified:value.legacyLineageUnverified,
+    phase:'FENCING',legacyLineageUnverified:true,
     storageWriteAuthorized:false,storageWriteFenceVerified:false,
     allWritersDrained:false,privateOutputDeletionAcknowledged:false}};
 }

@@ -152,6 +152,12 @@ export const ingestConsentRevocation = onRequest({
             ...transition.state, createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
           });
+        } else if (transition.kind === 'repair') {
+          // The matching receipt/block were authenticated above. Do not alter
+          // epoch, event, authorization or deletion fields on an exact retry.
+          transaction.update(outputFenceRef, {
+            ...transition.state, updatedAt: FieldValue.serverTimestamp(),
+          });
         }
       }
       return { conflict: false as const, ack: receipt };
