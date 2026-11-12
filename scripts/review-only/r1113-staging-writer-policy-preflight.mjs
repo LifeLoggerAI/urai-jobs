@@ -21,6 +21,13 @@ const READ = new Set([
   'roles/storage.objectViewer', 'roles/storage.legacyBucketReader',
   'roles/storage.legacyObjectReader', 'roles/viewer', 'roles/browser'
 ]);
+// R1117: the write-only preflight must not silently accept independent
+// principals who can view private media bytes or enumerate object metadata.
+// Basic project Viewer may propagate Legacy Object Reader via convenience IAM.
+const SENSITIVE_READ_OR_LIST = new Set([
+  'roles/storage.objectViewer', 'roles/storage.legacyBucketReader',
+  'roles/storage.legacyObjectReader', 'roles/viewer'
+]);
 const own = (v,k) => v !== null && typeof v === 'object' && !Array.isArray(v) && Object.hasOwn(v,k);
 const digest = s => createHash('sha256').update(s).digest('hex');
 const error = () => { throw new Error(DENIED); };
@@ -53,7 +60,7 @@ export function assessStagingWriterPolicy(raw) {
   const publicNames=new Set(['allUsers','allAuthenticatedUsers']);
   let brokerWriterCount=0, brokerBucketObjectAdminCount=0;
   let brokerBucketObjectUserCount=0, brokerCanaryCount=0;
-  let otherWriterCount=0, unknownRoleCount=0, conditionalCount=0;
+  let otherWriterCount=0, otherReaderCount=0, unknownRoleCount=0, conditionalCount=0;
   const writerDigests=new Set();
   for(const b of grants){
     const conditional=own(b,'condition');
@@ -80,6 +87,16 @@ export function assessStagingWriterPolicy(raw) {
       unknownRoleCount++;
       problems.push('UNKNOWN_ROLE_PERMISSIONS');
     }
+    // Granting read/list permissions to any identity other than the broker
+    // requires an explicit confidentiality review. This is conservative:
+    // project Viewer convenience grants and bucket-scoped legacy bindings
+    // may expose object names or bytes, depending on effective policy.
+    if(SENSITIVE_READ_OR_LIST.has(b.role)){
+      for(const member of b.members)if(member!==raw.broker){
+        otherReaderCount++;
+        problems.push('NON_BROKER_PRIVATE_OBJECT_READ_OR_LIST_UNREVIEWED');
+      }
+    }
     if(b.members.some(m=>publicNames.has(m)))problems.push('PUBLIC_PRINCIPAL_BINDING');
   }
   if(brokerWriterCount===0)problems.push('NO_BROKER_WRITE_BINDING');
@@ -101,11 +118,14 @@ export function assessStagingWriterPolicy(raw) {
     brokerBucketObjectUserBindings:brokerBucketObjectUserCount,
     brokerCanaryBindings:brokerCanaryCount,
     otherWriterBindings:otherWriterCount,
+    nonBrokerReaderBindings:otherReaderCount,
     unknownRoleBindings:unknownRoleCount,
     conditionalBindings:conditionalCount,
     structuralPreflightPass:blockers.length===0,
     blockers,
     effectiveIamExclusivityVerified:false,
+    privateReadIsolationVerified:false,
+    signedUrlAndCacheRevocationVerified:false,
     providerPrincipalIdentityVerified:false,
     deniedWriterHttp403Verified:false,
     authorizedBrokerCreateReadDeleteVerified:false,
