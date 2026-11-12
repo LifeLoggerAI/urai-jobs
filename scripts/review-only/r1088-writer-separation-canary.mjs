@@ -64,6 +64,14 @@ export async function probeWriterSeparation({
     schema:'R1088_DISPOSABLE_WRITER_SEPARATION_V1',
     verdict:'OBSERVED_STAGING_CANARY_SEQUENCE_IDENTITY_AND_IAM_UNVERIFIED',
     scopeDigest:digest(s.positive.projectId+'\n'+s.positive.bucket),
+    // Nonsecret correlation for an independent GCS IAM and identity audit.
+    // These are claimed-principal digests, NOT verified provider identities.
+    legacyClaimScopeDigest:old.scopeDigest,
+    alternateClaimScopeDigest:other.scopeDigest,
+    brokerClaimScopeDigest:positive.scopeDigest,
+    brokerCanaryObjectName:positive.objectName,
+    brokerCanaryObjectGeneration:positive.objectGeneration,
+    providerAuditReconciliation:'REQUIRED_NOT_PERFORMED',
     legacyHttp403Observed:true,alternateHttp403Observed:true,
     intendedWriterCreateReadDeleteObserved:true,
     intendedWriterFinalGenerationAbsentObserved:true,
