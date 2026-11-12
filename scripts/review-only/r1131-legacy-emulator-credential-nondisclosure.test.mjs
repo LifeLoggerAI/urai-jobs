@@ -40,5 +40,8 @@ test('R1131 checks credentials before loading Firebase and never compares secret
   const sdk = source.indexOf('const require = createRequire(');
   assert.ok(guard >= 0 && sdk > guard, 'credentials must be rejected before SDK import');
   assert.match(source, /if \(process\.env\[name\]\) throw new Error\(name \+ ' must be absent'\)/);
-  assert.doesNotMatch(source, /assert\.equal\(process\.env\[name\]/);
+  const projectGuard = source.indexOf("for (const name of ['GCLOUD_PROJECT'", guard);
+  assert.ok(projectGuard > guard && projectGuard < sdk, 'credential guard must end before project-name checks');
+  const credentialGuardOnly = source.slice(guard, projectGuard);
+  assert.doesNotMatch(credentialGuardOnly, /assert\.equal\(process\.env\[name\]/);
 });
