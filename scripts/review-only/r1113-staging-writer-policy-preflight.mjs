@@ -42,12 +42,14 @@ export function assessStagingWriterPolicy(raw) {
       typeof bc.publicAccessPrevention !== 'string' ||
       typeof bc.uniformBucketLevelAccess !== 'boolean') error();
   const grants=[
-    ...checkPolicy(raw.projectPolicy).map(b=>({source:'project',...b})),
-    ...checkPolicy(raw.bucketPolicy).map(b=>({source:'bucket',...b}))
+    // Trusted origin always overrides an untrusted exported binding's "source".
+    ...checkPolicy(raw.projectPolicy).map(b=>({...b,source:'project'})),
+    ...checkPolicy(raw.bucketPolicy).map(b=>({...b,source:'bucket'}))
   ];
   const problems=[];
   const publicNames=new Set(['allUsers','allAuthenticatedUsers']);
-  let brokerWriterCount=0, otherWriterCount=0, unknownRoleCount=0, conditionalCount=0;
+  let brokerWriterCount=0, brokerBucketObjectAdminCount=0;
+  let otherWriterCount=0, unknownRoleCount=0, conditionalCount=0;
   const writerDigests=new Set();
   for(const b of grants){
     const conditional=own(b,'condition');
@@ -55,8 +57,16 @@ export function assessStagingWriterPolicy(raw) {
     if(WRITE.has(b.role)) {
       for(const member of b.members){
         writerDigests.add(digest(member));
-        if(member===raw.broker)brokerWriterCount++;
-        else { otherWriterCount++; problems.push('NON_BROKER_WRITE_CAPABILITY'); }
+        if(member===raw.broker){
+          brokerWriterCount++;
+          // The generation canary requires create, readback and exact-delete.
+          // Only the reviewed bucket-scoped objectAdmin grant covers all three
+          // without granting project-wide Storage administration.
+          if(b.source==='bucket' && b.role==='roles/storage.objectAdmin')
+            brokerBucketObjectAdminCount++;
+          else problems.push('BROKER_WRITE_ROLE_INSUFFICIENT_OR_OVERBROAD');
+          if(b.source==='project')problems.push('BROKER_PROJECT_WIDE_WRITE_NOT_LEAST_PRIVILEGE');
+        } else { otherWriterCount++; problems.push('NON_BROKER_WRITE_CAPABILITY'); }
         if(publicNames.has(member))problems.push('PUBLIC_WRITE_BINDING');
       }
     } else if (!READ.has(b.role)) {
@@ -66,6 +76,7 @@ export function assessStagingWriterPolicy(raw) {
     if(b.members.some(m=>publicNames.has(m)))problems.push('PUBLIC_PRINCIPAL_BINDING');
   }
   if(brokerWriterCount===0)problems.push('NO_BROKER_WRITE_BINDING');
+  if(brokerBucketObjectAdminCount===0)problems.push('BROKER_BUCKET_CREATE_READ_DELETE_REQUIRED');
   if(bc.publicAccessPrevention!=='enforced')problems.push('PUBLIC_ACCESS_PREVENTION_NOT_ENFORCED');
   if(bc.uniformBucketLevelAccess!==true)problems.push('UNIFORM_BUCKET_ACCESS_NOT_ENABLED');
   const blockers=[...new Set(problems)].sort();
@@ -75,6 +86,7 @@ export function assessStagingWriterPolicy(raw) {
     // Only anonymous counts/digests escape; no raw principal emails.
     writerPrincipalCount:writerDigests.size,
     brokerWriterBindings:brokerWriterCount,
+    brokerBucketObjectAdminBindings:brokerBucketObjectAdminCount,
     otherWriterBindings:otherWriterCount,
     unknownRoleBindings:unknownRoleCount,
     conditionalBindings:conditionalCount,
