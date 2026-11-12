@@ -55,13 +55,49 @@ export async function probeWriterSeparation({
     if(old.httpStatus!==403 || old.verdict!=='OBSERVED_HTTP_403_CAUSE_UNVERIFIED')fail();
     other=await probeDeniedCreate({scope:s.alternate,token:alternateToken,nonce:nonces[1],transport});
     if(other.httpStatus!==403||other.verdict!=='OBSERVED_HTTP_403_CAUSE_UNVERIFIED')fail();
+    // The broker's zero-byte generation must be confirmed *present* before
+    // testing retired/alternate read access. Intercept only the pinned DELETE:
+    // a 403 after deletion would prove nothing about private-read isolation.
+    const expectedName='security-broker-positive/'+nonces[2]+'/generation-proof.bin';
+    const expectedPath='/storage/v1/b/'+s.positive.bucket+'/o/'+encodeURIComponent(expectedName);
+    const readDenials={legacyMetadata:false,legacyMedia:false,
+      alternateMetadata:false,alternateMedia:false};
+    const withPinnedReadDenials=async(url,opts)=>{
+      if(opts?.method!=='DELETE')return transport(url,opts);
+      const u=new URL(url);
+      const generation=u.searchParams.get('generation');
+      if(u.origin!=='https://storage.googleapis.com' ||
+         u.pathname!==expectedPath || u.username || u.password || u.hash ||
+         [...u.searchParams.keys()].sort().join(',')!=='generation,ifGenerationMatch' ||
+         typeof generation!=='string'||!/^[1-9][0-9]{0,19}$/.test(generation) ||
+         u.searchParams.get('ifGenerationMatch')!==generation)fail();
+      const metadataUrl=new URL(u);
+      metadataUrl.searchParams.delete('ifGenerationMatch');
+      const mediaUrl=new URL(metadataUrl);
+      mediaUrl.searchParams.set('alt','media');
+      for(const [kind,credential] of [['legacy',legacyToken],['alternate',alternateToken]]){
+        for(const [variant,target] of [['Metadata',metadataUrl],['Media',mediaUrl]]){
+          // Only the HTTP status is inspected. Never download an object body
+          // or interpret a missing object (404) as IAM denial (403).
+          let read;
+          try{read=await transport(target.toString(),{
+            method:'GET',headers:{Authorization:'Bearer '+credential},
+            redirect:'error',signal:AbortSignal.timeout(15000)});
+          }catch{fail()}
+          if(!read||read.status!==403)fail();
+          readDenials[kind+variant]=true;
+        }
+      }
+      return transport(url,opts);
+    };
     positive=await probePositiveGenerationCanary({scope:s.positive,token:brokerToken,
-      nonce:nonces[2],transport});
+      nonce:nonces[2],transport:withPinnedReadDenials});
+    if(Object.values(readDenials).some(v=>v!==true))fail();
     if(positive.observedCreate!==true||positive.observedPinnedReadback!==true||
        positive.observedPinnedDelete!==true||positive.observedPinned404!==true)fail();
   }catch{fail()}
   return Object.freeze({
-    schema:'R1088_DISPOSABLE_WRITER_SEPARATION_V1',
+    schema:'R1088_DISPOSABLE_WRITER_SEPARATION_V2',
     verdict:'OBSERVED_STAGING_CANARY_SEQUENCE_IDENTITY_AND_IAM_UNVERIFIED',
     scopeDigest:digest(s.positive.projectId+'\n'+s.positive.bucket),
     // Nonsecret correlation for an independent GCS IAM and identity audit.
@@ -73,6 +109,11 @@ export async function probeWriterSeparation({
     brokerCanaryObjectGeneration:positive.objectGeneration,
     providerAuditReconciliation:'REQUIRED_NOT_PERFORMED',
     legacyHttp403Observed:true,alternateHttp403Observed:true,
+    legacyMetadataHttp403Observed:true,legacyMediaHttp403Observed:true,
+    alternateMetadataHttp403Observed:true,alternateMediaHttp403Observed:true,
+    // Reader deny tests were synthetic and identity claims remain unverified.
+    privateReadIsolationVerified:false,
+    signedUrlAndCacheRevocationVerified:false,
     intendedWriterCreateReadDeleteObserved:true,
     intendedWriterFinalGenerationAbsentObserved:true,
     providerPrincipalIdentityVerified:false,
