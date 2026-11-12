@@ -28,7 +28,7 @@ test('project-wide storage.admin inherited by another identity is a blocker',()=
   assert.equal(JSON.stringify(v).includes('oldworker@'),false);
 });
 test('legacy basic project editor or bucket owner are both writer blockers',()=>{
-  for(const role of ['roles/editor','roles/storage.legacyBucketOwner','roles/storage.legacyObjectOwner']){
+  for(const role of ['roles/editor','roles/storage.legacyBucketOwner','roles/storage.legacyBucketWriter','roles/storage.legacyObjectOwner','roles/storage.objectUser']){
     const x=base();x.projectPolicy.bindings.push({role,members:[other]});
     assert.ok(assess(x).blockers.includes('NON_BROKER_WRITE_CAPABILITY'),role);
   }
@@ -101,5 +101,44 @@ test('bucket-scoped legacy owner grant to broker remains overbroad',()=>{
   const x=base();x.bucketPolicy.bindings[0].role='roles/storage.legacyBucketOwner';
   const v=assess(x);assert.equal(v.structuralPreflightPass,false);
   assert.ok(v.blockers.includes('BROKER_WRITE_ROLE_INSUFFICIENT_OR_OVERBROAD'));
+  assert.equal(v.providerPrincipalIdentityVerified,false);
+});
+
+test('R1116 bucket-scoped objectUser can complete create/read/delete structurally but never certifies provider',()=>{
+  const x=base();x.bucketPolicy.bindings[0].role='roles/storage.objectUser';
+  const v=assess(x);
+  assert.equal(v.structuralPreflightPass,true);
+  assert.equal(v.brokerBucketObjectAdminBindings,0);
+  assert.equal(v.brokerBucketObjectUserBindings,1);
+  assert.equal(v.brokerBucketCanaryBindings,1);
+  assert.equal(v.effectiveIamExclusivityVerified,false);
+  assert.equal(v.authorizedBrokerCreateReadDeleteVerified,false);
+  assert.equal(v.privateMediaWritesEnabled,false);
+});
+test('R1116 objectCreator-only or legacyBucketWriter-only cannot complete scoped broker canary',()=>{
+  for(const role of ['roles/storage.objectCreator','roles/storage.legacyBucketWriter']){
+    const x=base();x.bucketPolicy.bindings[0].role=role;
+    const v=assess(x);
+    assert.equal(v.structuralPreflightPass,false,role);
+    assert.equal(v.brokerBucketCanaryBindings,0);
+    assert.ok(v.blockers.includes('BROKER_BUCKET_CREATE_READ_DELETE_REQUIRED'),role);
+    assert.ok(v.blockers.includes('BROKER_WRITE_ROLE_INSUFFICIENT_OR_OVERBROAD'),role);
+  }
+});
+test('R1116 externally supplied source=bucket cannot disguise project-wide objectUser',()=>{
+  const x=base();x.projectPolicy.bindings.push({role:'roles/storage.objectUser',members:[broker],source:'bucket'});
+  const v=assess(x);
+  assert.equal(v.structuralPreflightPass,false);
+  assert.equal(v.brokerBucketCanaryBindings,1);
+  assert.ok(v.blockers.includes('BROKER_PROJECT_WIDE_WRITE_NOT_LEAST_PRIVILEGE'));
+  assert.ok(v.blockers.includes('BROKER_WRITE_ROLE_INSUFFICIENT_OR_OVERBROAD'));
+  assert.equal(v.productionAuthorized,false);
+});
+test('R1116 bucket source spoofing cannot downgrade alternate legacy writer',()=>{
+  const x=base();x.projectPolicy.bindings.push({role:'roles/storage.legacyBucketWriter',members:[other],source:'bucket'});
+  const v=assess(x);
+  assert.equal(v.structuralPreflightPass,false);
+  assert.equal(v.otherWriterBindings,1);
+  assert.ok(v.blockers.includes('NON_BROKER_WRITE_CAPABILITY'));
   assert.equal(v.providerPrincipalIdentityVerified,false);
 });
