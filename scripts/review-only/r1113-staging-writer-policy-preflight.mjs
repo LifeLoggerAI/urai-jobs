@@ -13,12 +13,15 @@ const WRITE = new Set([
   'roles/storage.admin', 'roles/storage.objectAdmin', 'roles/storage.objectCreator',
   // R1114 peer coverage: objectUser and legacyBucketWriter can write objects.
   'roles/storage.objectUser', 'roles/storage.legacyBucketWriter',
-  // Provider-documented object creation capabilities: fail closed as writers.
-  'roles/storage.editor', 'roles/storage.expressModeServiceInput',
+  // Express Mode Service Input grants storage.objects.create.
+  'roles/storage.expressModeServiceInput',
   'roles/storage.folderAdmin', 'roles/storage.expressModeUserAccess',
   'roles/storage.legacyBucketOwner', 'roles/storage.legacyObjectOwner',
   'roles/editor', 'roles/owner'
 ]);
+// Storage Editor manages buckets and HMAC keys; it does not directly grant
+// storage.objects.create. Account for credential/control-plane escalation separately.
+const CONTROL_PLANE = new Set(['roles/storage.editor']);
 const READ = new Set([
   'roles/storage.objectViewer', 'roles/storage.legacyBucketReader',
   'roles/storage.legacyObjectReader', 'roles/viewer', 'roles/browser'
@@ -63,10 +66,15 @@ export function assessStagingWriterPolicy(raw) {
   let brokerWriterCount=0, brokerBucketObjectAdminCount=0;
   let brokerBucketObjectUserCount=0, brokerCanaryCount=0;
   let otherWriterCount=0, otherReaderCount=0, unknownRoleCount=0, conditionalCount=0;
+  let controlPlaneRiskBindings=0;
   const writerDigests=new Set();
   for(const b of grants){
     const conditional=own(b,'condition');
     if(conditional){conditionalCount++;problems.push('IAM_CONDITIONS_REQUIRE_PROVIDER_EVALUATION');}
+    if(CONTROL_PLANE.has(b.role)) {
+      controlPlaneRiskBindings += b.members.length;
+      problems.push('STORAGE_CONTROL_PLANE_ESCALATION_REQUIRES_PROVIDER_REVIEW');
+    }
     if(WRITE.has(b.role)) {
       for(const member of b.members){
         writerDigests.add(digest(member));
@@ -85,7 +93,7 @@ export function assessStagingWriterPolicy(raw) {
         } else { otherWriterCount++; problems.push('NON_BROKER_WRITE_CAPABILITY'); }
         if(publicNames.has(member))problems.push('PUBLIC_WRITE_BINDING');
       }
-    } else if (!READ.has(b.role)) {
+    } else if (!READ.has(b.role) && !CONTROL_PLANE.has(b.role)) {
       unknownRoleCount++;
       problems.push('UNKNOWN_ROLE_PERMISSIONS');
     }
@@ -123,6 +131,7 @@ export function assessStagingWriterPolicy(raw) {
     nonBrokerReaderBindings:otherReaderCount,
     unknownRoleBindings:unknownRoleCount,
     conditionalBindings:conditionalCount,
+    controlPlaneRiskBindings,
     structuralPreflightPass:blockers.length===0,
     blockers,
     effectiveIamExclusivityVerified:false,

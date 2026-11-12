@@ -209,28 +209,40 @@ test('R1118 forged bucket provenance cannot hide a project legacyBucketWriter',(
   assert.equal(v.privateMediaWritesEnabled,false);
 });
 
-test('R1182: provider-documented Storage Editor and Express Mode Service Input count as writers',()=>{
-  for(const role of ['roles/storage.editor','roles/storage.expressModeServiceInput']){
-    const x=base();
-    x.projectPolicy.bindings.push({role,members:[other]});
-    const v=assess(x);
-    assert.equal(v.structuralPreflightPass,false,role);
-    assert.equal(v.otherWriterBindings,1,role);
-    assert.equal(v.unknownRoleBindings,0,role);
-    assert.ok(v.blockers.includes('NON_BROKER_WRITE_CAPABILITY'),role);
-    assert.equal(v.deniedWriterHttp403Verified,false);
-    assert.equal(v.productionAuthorized,false);
-    assert.equal(JSON.stringify(v).includes('oldworker@'),false);
-  }
+test('R1184: Storage Editor is control-plane/HMAC risk, not direct objects.create',()=>{
+  const x=base(); x.projectPolicy.bindings.push({role:'roles/storage.editor',members:[other]});
+  const v=assess(x);
+  assert.equal(v.structuralPreflightPass,false);
+  assert.equal(v.otherWriterBindings,0);
+  assert.equal(v.controlPlaneRiskBindings,1);
+  assert.equal(v.unknownRoleBindings,0);
+  assert.ok(v.blockers.includes('STORAGE_CONTROL_PLANE_ESCALATION_REQUIRES_PROVIDER_REVIEW'));
+  assert.ok(!v.blockers.includes('NON_BROKER_WRITE_CAPABILITY'));
+  assert.equal(v.effectiveIamExclusivityVerified,false);
+  assert.equal(JSON.stringify(v).includes('oldworker@'),false);
 });
-test('R1182: broker Storage Editor and Express Mode Service Input cannot substitute for narrow bucket grant',()=>{
+test('R1184: Express Mode Service Input directly creates objects',()=>{
+  const x=base(); x.projectPolicy.bindings.push({role:'roles/storage.expressModeServiceInput',members:[other]});
+  const v=assess(x);
+  assert.equal(v.structuralPreflightPass,false);
+  assert.equal(v.otherWriterBindings,1);
+  assert.equal(v.controlPlaneRiskBindings,0);
+  assert.equal(v.unknownRoleBindings,0);
+  assert.ok(v.blockers.includes('NON_BROKER_WRITE_CAPABILITY'));
+  assert.equal(v.deniedWriterHttp403Verified,false);
+  assert.equal(v.productionAuthorized,false);
+});
+test('R1184: neither Storage Editor nor Express Mode Service Input alone can satisfy broker canary',()=>{
   for(const role of ['roles/storage.editor','roles/storage.expressModeServiceInput']){
     const x=base();x.bucketPolicy.bindings=[{role,members:[broker]}];
     const v=assess(x);
     assert.equal(v.structuralPreflightPass,false,role);
     assert.equal(v.brokerCanaryBindings,0,role);
-    assert.ok(v.blockers.includes('BROKER_WRITE_ROLE_INSUFFICIENT_OR_OVERBROAD'),role);
     assert.ok(v.blockers.includes('BROKER_BUCKET_CREATE_READ_DELETE_REQUIRED'),role);
+    if(role==='roles/storage.editor'){
+      assert.equal(v.controlPlaneRiskBindings,1);
+      assert.ok(v.blockers.includes('STORAGE_CONTROL_PLANE_ESCALATION_REQUIRES_PROVIDER_REVIEW'));
+    } else assert.ok(v.blockers.includes('BROKER_WRITE_ROLE_INSUFFICIENT_OR_OVERBROAD'));
     assert.equal(v.effectiveIamExclusivityVerified,false);
   }
 });
