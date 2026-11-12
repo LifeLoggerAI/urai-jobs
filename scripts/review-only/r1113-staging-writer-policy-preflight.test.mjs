@@ -139,3 +139,48 @@ test('R1116: missing broker canary grant exposes both predecessor reason codes',
   assert.ok(v.blockers.includes('BROKER_CANNOT_COMPLETE_BUCKET_SCOPED_CREATE_READ_DELETE'));
   assert.equal(v.brokerCanaryBindings,0);
 });
+
+test('R1117 independent objectViewer blocks private-media confidentiality preflight',()=>{
+  const x=base();x.bucketPolicy.bindings.push({role:'roles/storage.objectViewer',members:[other]});
+  const v=assess(x);
+  assert.equal(v.structuralPreflightPass,false);
+  assert.equal(v.nonBrokerReaderBindings,1);
+  assert.equal(v.otherWriterBindings,0);
+  assert.ok(v.blockers.includes('NON_BROKER_PRIVATE_OBJECT_READ_OR_LIST_UNREVIEWED'));
+  assert.equal(v.privateReadIsolationVerified,false);
+  assert.equal(v.signedUrlAndCacheRevocationVerified,false);
+  assert.equal(JSON.stringify(v).includes('oldworker@'),false);
+});
+test('R1117 project Viewer and legacy object reader are never mistaken for private isolation',()=>{
+  for(const [role,source] of [
+    ['roles/viewer','project'],
+    ['roles/storage.legacyObjectReader','bucket'],
+    ['roles/storage.legacyBucketReader','bucket']
+  ]){
+    const x=base();
+    x[source+'Policy'].bindings.push({role,members:[other]});
+    const v=assess(x);
+    assert.equal(v.structuralPreflightPass,false,role);
+    assert.equal(v.nonBrokerReaderBindings,1,role);
+    assert.ok(v.blockers.includes('NON_BROKER_PRIVATE_OBJECT_READ_OR_LIST_UNREVIEWED'),role);
+  }
+});
+test('R1117 broker own objectViewer does not create a foreign-reader false positive',()=>{
+  const x=base();
+  x.bucketPolicy.bindings.push({role:'roles/storage.objectViewer',members:[broker]});
+  const v=assess(x);
+  assert.equal(v.nonBrokerReaderBindings,0);
+  assert.equal(v.structuralPreflightPass,true);
+  assert.equal(v.privateReadIsolationVerified,false);
+});
+test('R1117 public and federated readers never count as confidentiality approved',()=>{
+  for(const member of ['allUsers','allAuthenticatedUsers','group:auditors@example.invalid']){
+    const x=base();
+    x.projectPolicy.bindings.push({role:'roles/storage.objectViewer',members:[member]});
+    const v=assess(x);
+    assert.equal(v.structuralPreflightPass,false,member);
+    assert.ok(v.blockers.includes('NON_BROKER_PRIVATE_OBJECT_READ_OR_LIST_UNREVIEWED'),member);
+    assert.equal(v.nonBrokerReaderBindings,1,member);
+    assert.equal(v.launchApproved,false);
+  }
+});
