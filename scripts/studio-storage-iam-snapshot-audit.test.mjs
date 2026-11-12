@@ -439,3 +439,38 @@ test('R1184: Express Mode Service Input directly writes and ancestor scope remai
   has(r,'POTENTIAL_DIRECT_STORAGE_WRITE_ANCESTOR');
   assert.ok(!r.findings.includes('PREDEFINED_ROLE_PERMISSIONS_UNRESOLVED_ANCESTOR'));
 });
+
+
+// R1185: private object reader grants are a confidentiality risk even when
+// there is no object-create permission. This is advisory only, never IAM proof.
+test('R1185: nonpublic objectViewer at project and bucket scopes requires private-read review',()=>{
+  const s=baseline();
+  s.projectPolicy.bindings.push({role:'roles/storage.objectViewer',members:['group:auditors@example.test']});
+  s.bucketPolicy.bindings.push({role:'roles/storage.objectViewer',members:['user:foreign@example.test']});
+  const r=run(s); denied(r);
+  has(r,'PRIVATE_OBJECT_READ_OR_LIST_GRANT_REQUIRES_REVIEW_PROJECT');
+  has(r,'PRIVATE_OBJECT_READ_OR_LIST_GRANT_REQUIRES_REVIEW_BUCKET');
+  assert.ok(!r.findings.includes('POTENTIAL_DIRECT_STORAGE_WRITE_PROJECT'));
+  assert.ok(!r.findings.includes('POTENTIAL_DIRECT_STORAGE_WRITE_BUCKET'));
+  assert.equal(r.liveEffectiveIamVerified,false);
+  assert.equal(JSON.stringify(r).includes('foreign@example.test'),false);
+});
+
+test('R1185: inherited legacy object and bucket reader roles are confidentiality blockers',()=>{
+  for(const role of ['roles/storage.legacyObjectReader','roles/storage.legacyBucketReader']){
+    const s=baseline();
+    s.ancestorPolicies[0].policy.bindings.push({role,members:['serviceAccount:retired@urai-review-1.iam.gserviceaccount.com']});
+    const r=run(s); denied(r);
+    has(r,'PRIVATE_OBJECT_READ_OR_LIST_GRANT_REQUIRES_REVIEW_ANCESTOR');
+    assert.ok(!r.findings.includes('PREDEFINED_ROLE_PERMISSIONS_UNRESOLVED_ANCESTOR'));
+    assert.equal(JSON.stringify(r).includes('retired@'),false);
+  }
+});
+
+test('R1185: empty reader binding does not fabricate a member but release remains HOLD',()=>{
+  const s=baseline();
+  s.bucketPolicy.bindings.push({role:'roles/storage.objectViewer',members:[]});
+  const r=run(s); denied(r);
+  assert.ok(!r.findings.includes('PRIVATE_OBJECT_READ_OR_LIST_GRANT_REQUIRES_REVIEW_BUCKET'));
+  has(r,'LIVE_EFFECTIVE_IAM_NOT_VERIFIED');
+});
