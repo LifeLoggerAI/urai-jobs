@@ -8,7 +8,7 @@ const base=()=>({
   projectId:project, bucket:`${project}-private`, broker,
   bucketConfig:{publicAccessPrevention:'enforced',uniformBucketLevelAccess:true},
   projectPolicy:{bindings:[]},
-  bucketPolicy:{bindings:[{role:'roles/storage.objectCreator',members:[broker]}]}
+  bucketPolicy:{bindings:[{role:'roles/storage.objectAdmin',members:[broker]}]}
 });
 const deny=fn=>assert.throws(fn,new RegExp(DENIED));
 test('narrow canary writer is structurally clean but NEVER release-approved',()=>{
@@ -16,6 +16,7 @@ test('narrow canary writer is structurally clean but NEVER release-approved',()=
   assert.equal(v.structuralPreflightPass,true);
   assert.equal(v.writerPrincipalCount,1);
   assert.equal(v.brokerWriterBindings,1);
+  assert.equal(v.brokerBucketObjectAdminBindings,1);
   for(const field of ['effectiveIamExclusivityVerified','providerPrincipalIdentityVerified','deniedWriterHttp403Verified','authorizedBrokerCreateReadDeleteVerified','uploadDrainVerified','deletionAcknowledged','privateMediaWritesEnabled','productionAuthorized','launchApproved'])assert.equal(v[field],false,field);
   assert.equal(v.independentProviderReview,'REQUIRED_NOT_PERFORMED');
   assert.equal(JSON.stringify(v).includes('broker@'),false);
@@ -63,9 +64,42 @@ test('missing broker write binding blocks even without alternate writers',()=>{
   const x=base();x.bucketPolicy={bindings:[]};
   assert.ok(assess(x).blockers.includes('NO_BROKER_WRITE_BINDING'));
 });
-test('duplicate writer grant still needs independent provider proof',()=>{
+test('project-wide broker Storage Admin cannot pass even if bucket-scoped objectAdmin exists',()=>{
   const x=base();x.projectPolicy.bindings.push({role:'roles/storage.admin',members:[broker]});
-  const v=assess(x);assert.equal(v.structuralPreflightPass,true);
+  const v=assess(x);assert.equal(v.structuralPreflightPass,false);
   assert.equal(v.writerPrincipalCount,1);assert.equal(v.brokerWriterBindings,2);
+  assert.equal(v.brokerBucketObjectAdminBindings,1);
+  assert.ok(v.blockers.includes('BROKER_PROJECT_WIDE_WRITE_NOT_LEAST_PRIVILEGE'));
   assert.equal(v.effectiveIamExclusivityVerified,false);
+});
+test('bucket objectCreator alone cannot satisfy generation-readback and delete',()=>{
+  const x=base();x.bucketPolicy.bindings[0].role='roles/storage.objectCreator';
+  const v=assess(x);assert.equal(v.structuralPreflightPass,false);
+  assert.equal(v.brokerWriterBindings,1);
+  assert.equal(v.brokerBucketObjectAdminBindings,0);
+  assert.ok(v.blockers.includes('BROKER_BUCKET_CREATE_READ_DELETE_REQUIRED'));
+  assert.ok(v.blockers.includes('BROKER_WRITE_ROLE_INSUFFICIENT_OR_OVERBROAD'));
+  assert.equal(v.productionAuthorized,false);
+});
+test('project-wide broker grant alone never substitutes for narrow bucket writer',()=>{
+  const x=base();x.bucketPolicy.bindings=[];
+  x.projectPolicy.bindings.push({role:'roles/storage.admin',members:[broker]});
+  const v=assess(x);assert.equal(v.structuralPreflightPass,false);
+  assert.equal(v.brokerWriterBindings,1);
+  assert.equal(v.brokerBucketObjectAdminBindings,0);
+  assert.ok(v.blockers.includes('BROKER_PROJECT_WIDE_WRITE_NOT_LEAST_PRIVILEGE'));
+  assert.ok(v.blockers.includes('BROKER_BUCKET_CREATE_READ_DELETE_REQUIRED'));
+});
+test('untrusted binding source field cannot disguise a broad project grant',()=>{
+  const x=base();
+  x.projectPolicy.bindings.push({role:'roles/storage.admin',members:[broker],source:'bucket'});
+  const v=assess(x);assert.equal(v.structuralPreflightPass,false);
+  assert.ok(v.blockers.includes('BROKER_PROJECT_WIDE_WRITE_NOT_LEAST_PRIVILEGE'));
+  assert.equal(v.brokerBucketObjectAdminBindings,1);
+});
+test('bucket-scoped legacy owner grant to broker remains overbroad',()=>{
+  const x=base();x.bucketPolicy.bindings[0].role='roles/storage.legacyBucketOwner';
+  const v=assess(x);assert.equal(v.structuralPreflightPass,false);
+  assert.ok(v.blockers.includes('BROKER_WRITE_ROLE_INSUFFICIENT_OR_OVERBROAD'));
+  assert.equal(v.providerPrincipalIdentityVerified,false);
 });
