@@ -11,9 +11,14 @@ const PROJECT = /^urai-security-canary-[a-z0-9][a-z0-9-]{5,39}$/;
 const PRINCIPAL = /^serviceAccount:[a-z0-9][a-z0-9._-]*@[a-z0-9][a-z0-9.-]*\.iam\.gserviceaccount\.com$/;
 const WRITE = new Set([
   'roles/storage.admin', 'roles/storage.objectAdmin', 'roles/storage.objectCreator',
+  'roles/storage.objectUser', 'roles/storage.legacyBucketWriter',
   'roles/storage.legacyBucketOwner', 'roles/storage.legacyObjectOwner',
   'roles/editor', 'roles/owner'
 ]);
+// Only a bucket-scoped object role with create, get, and delete can run the
+// independent synthetic generation-bound create/read/delete/404 canary.
+// Storage Object Creator alone cannot read or delete an object.
+const BROKER_CANARY_ROLES = new Set(['roles/storage.objectAdmin','roles/storage.objectUser']);
 const READ = new Set([
   'roles/storage.objectViewer', 'roles/storage.legacyBucketReader',
   'roles/storage.legacyObjectReader', 'roles/viewer', 'roles/browser'
@@ -47,7 +52,7 @@ export function assessStagingWriterPolicy(raw) {
   ];
   const problems=[];
   const publicNames=new Set(['allUsers','allAuthenticatedUsers']);
-  let brokerWriterCount=0, otherWriterCount=0, unknownRoleCount=0, conditionalCount=0;
+  let brokerWriterCount=0, brokerCanaryGrantCount=0, otherWriterCount=0, unknownRoleCount=0, conditionalCount=0;
   const writerDigests=new Set();
   for(const b of grants){
     const conditional=own(b,'condition');
@@ -55,8 +60,11 @@ export function assessStagingWriterPolicy(raw) {
     if(WRITE.has(b.role)) {
       for(const member of b.members){
         writerDigests.add(digest(member));
-        if(member===raw.broker)brokerWriterCount++;
-        else { otherWriterCount++; problems.push('NON_BROKER_WRITE_CAPABILITY'); }
+        if(member===raw.broker){
+          brokerWriterCount++;
+          if(b.source==='bucket' && BROKER_CANARY_ROLES.has(b.role))brokerCanaryGrantCount++;
+          if(b.source!=='bucket')problems.push('BROKER_PROJECT_WIDE_WRITE_GRANT');
+        } else { otherWriterCount++; problems.push('NON_BROKER_WRITE_CAPABILITY'); }
         if(publicNames.has(member))problems.push('PUBLIC_WRITE_BINDING');
       }
     } else if (!READ.has(b.role)) {
@@ -66,6 +74,7 @@ export function assessStagingWriterPolicy(raw) {
     if(b.members.some(m=>publicNames.has(m)))problems.push('PUBLIC_PRINCIPAL_BINDING');
   }
   if(brokerWriterCount===0)problems.push('NO_BROKER_WRITE_BINDING');
+  if(brokerCanaryGrantCount===0)problems.push('BROKER_CANNOT_COMPLETE_BUCKET_SCOPED_CREATE_READ_DELETE');
   if(bc.publicAccessPrevention!=='enforced')problems.push('PUBLIC_ACCESS_PREVENTION_NOT_ENFORCED');
   if(bc.uniformBucketLevelAccess!==true)problems.push('UNIFORM_BUCKET_ACCESS_NOT_ENABLED');
   const blockers=[...new Set(problems)].sort();
@@ -75,6 +84,7 @@ export function assessStagingWriterPolicy(raw) {
     // Only anonymous counts/digests escape; no raw principal emails.
     writerPrincipalCount:writerDigests.size,
     brokerWriterBindings:brokerWriterCount,
+    brokerCanaryBindings:brokerCanaryGrantCount,
     otherWriterBindings:otherWriterCount,
     unknownRoleBindings:unknownRoleCount,
     conditionalBindings:conditionalCount,
