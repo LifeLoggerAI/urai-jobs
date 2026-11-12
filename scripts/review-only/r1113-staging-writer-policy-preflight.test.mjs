@@ -103,3 +103,39 @@ test('bucket-scoped legacy owner grant to broker remains overbroad',()=>{
   assert.ok(v.blockers.includes('BROKER_WRITE_ROLE_INSUFFICIENT_OR_OVERBROAD'));
   assert.equal(v.providerPrincipalIdentityVerified,false);
 });
+
+test('R1116: peer R1114 bucket-scoped objectUser supports canary but never provider authorization',()=>{
+  const x=base();x.bucketPolicy.bindings[0].role='roles/storage.objectUser';
+  const v=assess(x);
+  assert.equal(v.structuralPreflightPass,true);
+  assert.equal(v.brokerCanaryBindings,1);
+  assert.equal(v.brokerBucketObjectUserBindings,1);
+  assert.equal(v.brokerBucketObjectAdminBindings,0);
+  for(const key of ['effectiveIamExclusivityVerified','providerPrincipalIdentityVerified',
+    'authorizedBrokerCreateReadDeleteVerified','productionAuthorized','launchApproved'])
+    assert.equal(v[key],false,key);
+});
+test('R1116: peer R1114 newly recognized legacy and objectUser writer roles cannot hide',()=>{
+  for(const role of ['roles/storage.objectUser','roles/storage.legacyBucketWriter',
+    'roles/storage.folderAdmin','roles/storage.expressModeUserAccess']){
+    const x=base();x.projectPolicy.bindings.push({role,members:[other]});
+    const v=assess(x);
+    assert.equal(v.otherWriterBindings,1,role);
+    assert.ok(v.blockers.includes('NON_BROKER_WRITE_CAPABILITY'),role);
+    assert.equal(v.structuralPreflightPass,false,role);
+  }
+});
+test('R1116: project-wide objectUser for broker remains too broad despite bucket canary role',()=>{
+  const x=base();x.projectPolicy.bindings.push({role:'roles/storage.objectUser',members:[broker]});
+  const v=assess(x);
+  assert.equal(v.structuralPreflightPass,false);
+  assert.ok(v.blockers.includes('BROKER_PROJECT_WIDE_WRITE_NOT_LEAST_PRIVILEGE'));
+  assert.equal(v.brokerCanaryBindings,1);
+});
+test('R1116: missing broker canary grant exposes both predecessor reason codes',()=>{
+  const x=base();x.bucketPolicy.bindings[0].role='roles/storage.objectCreator';
+  const v=assess(x);
+  assert.ok(v.blockers.includes('BROKER_BUCKET_CREATE_READ_DELETE_REQUIRED'));
+  assert.ok(v.blockers.includes('BROKER_CANNOT_COMPLETE_BUCKET_SCOPED_CREATE_READ_DELETE'));
+  assert.equal(v.brokerCanaryBindings,0);
+});

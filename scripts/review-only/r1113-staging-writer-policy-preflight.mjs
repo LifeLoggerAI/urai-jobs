@@ -11,6 +11,9 @@ const PROJECT = /^urai-security-canary-[a-z0-9][a-z0-9-]{5,39}$/;
 const PRINCIPAL = /^serviceAccount:[a-z0-9][a-z0-9._-]*@[a-z0-9][a-z0-9.-]*\.iam\.gserviceaccount\.com$/;
 const WRITE = new Set([
   'roles/storage.admin', 'roles/storage.objectAdmin', 'roles/storage.objectCreator',
+  // R1114 peer coverage: objectUser and legacyBucketWriter can write objects.
+  'roles/storage.objectUser', 'roles/storage.legacyBucketWriter',
+  'roles/storage.folderAdmin', 'roles/storage.expressModeUserAccess',
   'roles/storage.legacyBucketOwner', 'roles/storage.legacyObjectOwner',
   'roles/editor', 'roles/owner'
 ]);
@@ -49,6 +52,7 @@ export function assessStagingWriterPolicy(raw) {
   const problems=[];
   const publicNames=new Set(['allUsers','allAuthenticatedUsers']);
   let brokerWriterCount=0, brokerBucketObjectAdminCount=0;
+  let brokerBucketObjectUserCount=0, brokerCanaryCount=0;
   let otherWriterCount=0, unknownRoleCount=0, conditionalCount=0;
   const writerDigests=new Set();
   for(const b of grants){
@@ -60,11 +64,14 @@ export function assessStagingWriterPolicy(raw) {
         if(member===raw.broker){
           brokerWriterCount++;
           // The generation canary requires create, readback and exact-delete.
-          // Only the reviewed bucket-scoped objectAdmin grant covers all three
-          // without granting project-wide Storage administration.
-          if(b.source==='bucket' && b.role==='roles/storage.objectAdmin')
-            brokerBucketObjectAdminCount++;
-          else problems.push('BROKER_WRITE_ROLE_INSUFFICIENT_OR_OVERBROAD');
+          // Both predefined objectAdmin and objectUser allow all three
+          // when granted on this exact bucket (not across the project).
+          if(b.source==='bucket' &&
+             (b.role==='roles/storage.objectAdmin'||b.role==='roles/storage.objectUser')){
+            brokerCanaryCount++;
+            if(b.role==='roles/storage.objectAdmin')brokerBucketObjectAdminCount++;
+            else brokerBucketObjectUserCount++;
+          } else problems.push('BROKER_WRITE_ROLE_INSUFFICIENT_OR_OVERBROAD');
           if(b.source==='project')problems.push('BROKER_PROJECT_WIDE_WRITE_NOT_LEAST_PRIVILEGE');
         } else { otherWriterCount++; problems.push('NON_BROKER_WRITE_CAPABILITY'); }
         if(publicNames.has(member))problems.push('PUBLIC_WRITE_BINDING');
@@ -76,7 +83,11 @@ export function assessStagingWriterPolicy(raw) {
     if(b.members.some(m=>publicNames.has(m)))problems.push('PUBLIC_PRINCIPAL_BINDING');
   }
   if(brokerWriterCount===0)problems.push('NO_BROKER_WRITE_BINDING');
-  if(brokerBucketObjectAdminCount===0)problems.push('BROKER_BUCKET_CREATE_READ_DELETE_REQUIRED');
+  if(brokerCanaryCount===0){
+    problems.push('BROKER_BUCKET_CREATE_READ_DELETE_REQUIRED');
+    // Preserve peer R1114 reason code in reviewer snapshots.
+    problems.push('BROKER_CANNOT_COMPLETE_BUCKET_SCOPED_CREATE_READ_DELETE');
+  }
   if(bc.publicAccessPrevention!=='enforced')problems.push('PUBLIC_ACCESS_PREVENTION_NOT_ENFORCED');
   if(bc.uniformBucketLevelAccess!==true)problems.push('UNIFORM_BUCKET_ACCESS_NOT_ENABLED');
   const blockers=[...new Set(problems)].sort();
@@ -87,6 +98,8 @@ export function assessStagingWriterPolicy(raw) {
     writerPrincipalCount:writerDigests.size,
     brokerWriterBindings:brokerWriterCount,
     brokerBucketObjectAdminBindings:brokerBucketObjectAdminCount,
+    brokerBucketObjectUserBindings:brokerBucketObjectUserCount,
+    brokerCanaryBindings:brokerCanaryCount,
     otherWriterBindings:otherWriterCount,
     unknownRoleBindings:unknownRoleCount,
     conditionalBindings:conditionalCount,
