@@ -13,6 +13,8 @@ const WRITE = new Set([
   'roles/storage.admin', 'roles/storage.objectAdmin', 'roles/storage.objectCreator',
   // R1114 peer coverage: objectUser and legacyBucketWriter can write objects.
   'roles/storage.objectUser', 'roles/storage.legacyBucketWriter',
+  // Provider-documented object creation capabilities: fail closed as writers.
+  'roles/storage.editor', 'roles/storage.expressModeServiceInput',
   'roles/storage.folderAdmin', 'roles/storage.expressModeUserAccess',
   'roles/storage.legacyBucketOwner', 'roles/storage.legacyObjectOwner',
   'roles/editor', 'roles/owner'
