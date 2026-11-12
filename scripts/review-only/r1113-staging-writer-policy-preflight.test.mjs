@@ -184,3 +184,27 @@ test('R1117 public and federated readers never count as confidentiality approved
     assert.equal(v.launchApproved,false);
   }
 });
+
+
+test('R1118 forged bucket provenance cannot hide a project-wide objectUser broker grant',()=>{
+  const x=base();
+  x.projectPolicy.bindings.push({role:'roles/storage.objectUser',members:[broker],source:'bucket'});
+  const v=assess(x);
+  assert.equal(v.structuralPreflightPass,false);
+  assert.ok(v.blockers.includes('BROKER_PROJECT_WIDE_WRITE_NOT_LEAST_PRIVILEGE'));
+  assert.ok(v.blockers.includes('BROKER_WRITE_ROLE_INSUFFICIENT_OR_OVERBROAD'));
+  assert.equal(v.brokerCanaryBindings,1);
+  assert.equal(v.providerPrincipalIdentityVerified,false);
+  assert.equal(v.privateReadIsolationVerified,false);
+  assert.equal(v.productionAuthorized,false);
+});
+test('R1118 forged bucket provenance cannot hide a project legacyBucketWriter',()=>{
+  const x=base();
+  x.projectPolicy.bindings.push({role:'roles/storage.legacyBucketWriter',members:[other],source:'bucket'});
+  const v=assess(x);
+  assert.equal(v.structuralPreflightPass,false);
+  assert.equal(v.otherWriterBindings,1);
+  assert.ok(v.blockers.includes('NON_BROKER_WRITE_CAPABILITY'));
+  assert.equal(v.deniedWriterHttp403Verified,false);
+  assert.equal(v.privateMediaWritesEnabled,false);
+});
