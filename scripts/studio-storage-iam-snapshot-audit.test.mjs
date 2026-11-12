@@ -424,3 +424,18 @@ test('R586: actual retained-execution collector marker with matching region is r
  assert.equal(r.totals.cloudRunExecutions,1);
  assert.ok(!r.findings.includes('COLLECTOR_COVERAGE_UNVERIFIED'));
 });
+
+// R1184: provider-documented role semantics are distinct, both release-blocking.
+test('R1184: Storage Editor is privileged HMAC/control plane, not direct object creator',()=>{
+  const s=baseline();s.projectPolicy.bindings.push({role:'roles/storage.editor',members:['group:security-ops@example.test']});
+  const r=run(s);denied(r);
+  has(r,'IAM_IMPERSONATION_OR_ADMIN_REVIEW_PROJECT');
+  assert.ok(!r.findings.includes('POTENTIAL_DIRECT_STORAGE_WRITE_PROJECT'));
+  assert.ok(!r.findings.includes('STORAGE_ROLE_SEMANTICS_UNVERIFIED_PROJECT'));
+});
+test('R1184: Express Mode Service Input directly writes and ancestor scope remains unsafe',()=>{
+  const s=baseline();s.ancestorPolicies[0].policy.bindings.push({role:'roles/storage.expressModeServiceInput',members:['serviceAccount:old@urai-review-1.iam.gserviceaccount.com']});
+  const r=run(s);denied(r);
+  has(r,'POTENTIAL_DIRECT_STORAGE_WRITE_ANCESTOR');
+  assert.ok(!r.findings.includes('PREDEFINED_ROLE_PERMISSIONS_UNRESOLVED_ANCESTOR'));
+});

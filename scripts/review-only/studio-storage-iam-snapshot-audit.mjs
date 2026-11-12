@@ -21,6 +21,7 @@ const WRITE_ROLES = new Set([
   'roles/storage.legacyObjectOwner', 'roles/storage.legacyObjectWriter',
   // Folder and Express roles can create private objects without objectAdmin.
   'roles/storage.folderAdmin', 'roles/storage.expressModeUserAccess',
+  'roles/storage.expressModeServiceInput',
   'roles/owner', 'roles/editor',
 ]);
 const IMPERSONATION_ROLES = new Set([
@@ -28,6 +29,9 @@ const IMPERSONATION_ROLES = new Set([
   'roles/iam.workloadIdentityUser', 'roles/iam.securityAdmin',
   'roles/iam.serviceAccountKeyAdmin', 'roles/iam.serviceAccountAdmin',
   'roles/iam.admin', 'roles/iam.editor',
+  // Storage Editor grants HMAC key lifecycle/control-plane permissions,
+  // not direct storage.objects.create. Treat it as privileged, not a writer.
+  'roles/storage.editor',
   // HMAC key issuance can create credentials for Storage XML API callers.
   'roles/storage.hmacKeyAdmin',
   'roles/resourcemanager.projectIamAdmin',
@@ -75,6 +79,7 @@ function collectPolicy(policyObject, scope, findings, counters) {
     }
     if (/^(?:projects|organizations)\/[^/]+\/roles\//.test(role)) findings.add('CUSTOM_ROLE_PERMISSIONS_UNRESOLVED_' + scope);
     if (/^roles\/storage\./.test(role) && !WRITE_ROLES.has(role) &&
+        !IMPERSONATION_ROLES.has(role) &&
         !['roles/storage.objectViewer','roles/storage.legacyBucketReader'].includes(role)) {
       findings.add('STORAGE_ROLE_SEMANTICS_UNVERIFIED_' + scope);
     }
