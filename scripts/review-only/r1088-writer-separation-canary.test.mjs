@@ -59,6 +59,13 @@ test('denied legacy + denied alternate precede broker create/read/delete/absence
     assert.equal(url.hostname,'storage.googleapis.com');
   }
   assert.equal(r.verdict,'OBSERVED_STAGING_CANARY_SEQUENCE_IDENTITY_AND_IAM_UNVERIFIED');
+  assert.equal(r.providerAuditReconciliation,'REQUIRED_NOT_PERFORMED');
+  assert.match(r.legacyClaimScopeDigest,/^[a-f0-9]{64}$/);
+  assert.match(r.alternateClaimScopeDigest,/^[a-f0-9]{64}$/);
+  assert.match(r.brokerClaimScopeDigest,/^[a-f0-9]{64}$/);
+  assert.equal(new Set([r.legacyClaimScopeDigest,r.alternateClaimScopeDigest,r.brokerClaimScopeDigest]).size,3);
+  assert.equal(r.brokerCanaryObjectName,'security-broker-positive/'+nonces[2]+'/generation-proof.bin');
+  assert.equal(r.brokerCanaryObjectGeneration,'123456789012345678');
   for(const [k,v] of Object.entries(r)){
     if(typeof v==='boolean')assert.equal(v,/Observed$/.test(k),k);
   }
@@ -98,4 +105,18 @@ test('missing, repeated, malformed credentials and nonce reuse stop all network 
     {nonces:[...nonces,'d'.repeat(32)]}
   ];
   for(const c of cases){const t=transport();await fail(probeWriterSeparation({...args(),...c,transport:t.send}));assert.equal(t.calls.length,0);}
+});
+
+test('external retired principal is allowed but remains an unverified identity claim',async()=>{
+  const s=scope();
+  // A retired service account can legitimately be owned by another GCP project.
+  s.legacy.claimedPrincipal='retired@external-writer-project.iam.gserviceaccount.com';
+  assert.equal(validateSeparationScope(s).legacy.claimedPrincipal,s.legacy.claimedPrincipal);
+  const t=transport();
+  const r=await probeWriterSeparation({...args(),scope:s,transport:t.send});
+  assert.equal(t.calls.length,6);
+  assert.equal(r.providerPrincipalIdentityVerified,false);
+  assert.equal(r.effectiveIamExclusivityVerified,false);
+  assert.equal(r.providerAuditReconciliation,'REQUIRED_NOT_PERFORMED');
+  assert.notEqual(r.legacyClaimScopeDigest,r.brokerClaimScopeDigest);
 });
