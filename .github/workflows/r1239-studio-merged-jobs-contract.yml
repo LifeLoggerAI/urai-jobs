@@ -60,6 +60,8 @@ jobs:
           test -z "$(git status --porcelain --untracked-files=all)"
           test "$(git -C /tmp/urai-studio-r1239 rev-parse HEAD)" = "$EXPECTED_STUDIO_SHA"
           test "$(git hash-object scripts/review-only/r1098-studio-jobs-exact-contract.test.cjs)" = "ef279c884bae1f00915ce9d7148d1fd93efa5cee"
+          test "$(git hash-object scripts/review-only/r1238-studio-merged-jobs-contract.test.cjs)" = "4baef4b48196735c0c52777659b5995a1adbf127"
+          test "$(git hash-object pnpm-lock.yaml)" = "89802f70c29b0fbcec7f2c5bfbcd975530c4748f"
           test "$(git -C /tmp/urai-studio-r1239 hash-object apps/studio/lib/studio-life-movie-jobs-bridge.ts)" = "9427263442d93c916516a76ae7b953585792be1a"
           test "$(git hash-object functions/src/jobs/studioLifeMovieContract.ts)" = "5f944e906de7243d7415ac479cf92356b09c84c9"
 
@@ -91,7 +93,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           node --test scripts/review-only/r1238-studio-merged-jobs-contract.test.cjs 2>&1 | tee "$RUNNER_TEMP/r1239-evidence/contract.tap"
-          sha256sum "$RUNNER_TEMP/r1239-evidence/install.log" "$RUNNER_TEMP/r1239-evidence/contract.tap"
+          sha256sum "$RUNNER_TEMP/r1239-evidence/install.log" "$RUNNER_TEMP/r1239-evidence/contract.tap" | tee "$RUNNER_TEMP/r1239-evidence/SHA256SUMS.txt"
           test "$(git rev-parse HEAD)" = "$TARGET_JOBS_SHA"
           test -z "$(git status --porcelain --untracked-files=all)"
 
