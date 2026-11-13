@@ -1,0 +1,105 @@
+name: R1239 exact merged Studio to Jobs review contract
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r1239-studio-merged-jobs-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: true
+
+jobs:
+  studio-jobs-merged-contract:
+    if: github.head_ref == 'review/chalk-r1238-studio-merged-contract-hold-20261113'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TARGET_JOBS_SHA: ${{ github.event.pull_request.head.sha }}
+      EXPECTED_STUDIO_SHA: 97a7aaf2a87697e25cbf98373259025402564d3e
+    steps:
+      - name: Checkout exact Jobs PR candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.TARGET_JOBS_SHA }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Require scoped Studio read-only credential
+        shell: bash
+        env:
+          R1239_STUDIO_READ_TOKEN: ${{ secrets.URAI_READONLY_REPO_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$R1239_STUDIO_READ_TOKEN" || {
+            echo "Missing restricted read-only Studio contents credential"
+            exit 1
+          }
+
+      - name: Checkout exact merged Studio review commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: LifeLoggerAI/urai-studio
+          ref: 97a7aaf2a87697e25cbf98373259025402564d3e
+          token: ${{ secrets.URAI_READONLY_REPO_TOKEN }}
+          persist-credentials: false
+          fetch-depth: 1
+          path: studio-source
+
+      - name: Assert immutable checkout SHAs and relocate Studio checkout
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_JOBS_SHA"
+          test "$(git -C studio-source rev-parse HEAD)" = "$EXPECTED_STUDIO_SHA"
+          test -z "$(git -C studio-source status --porcelain --untracked-files=all)"
+          test ! -e /tmp/urai-studio-r1239
+          mv "$GITHUB_WORKSPACE/studio-source" /tmp/urai-studio-r1239
+          test -z "$(git status --porcelain --untracked-files=all)"
+          test "$(git -C /tmp/urai-studio-r1239 rev-parse HEAD)" = "$EXPECTED_STUDIO_SHA"
+          test "$(git hash-object scripts/review-only/r1098-studio-jobs-exact-contract.test.cjs)" = "ef279c884bae1f00915ce9d7148d1fd93efa5cee"
+          test "$(git -C /tmp/urai-studio-r1239 hash-object apps/studio/lib/studio-life-movie-jobs-bridge.ts)" = "9427263442d93c916516a76ae7b953585792be1a"
+          test "$(git hash-object functions/src/jobs/studioLifeMovieContract.ts)" = "5f944e906de7243d7415ac479cf92356b09c84c9"
+
+      - name: Setup Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.0'
+
+      - name: Install exact pnpm
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm install --global pnpm@8.15.9
+          test "$(pnpm --version)" = "8.15.9"
+          test "$(node --version)" = "v22.23.0"
+
+      - name: Install frozen dependencies
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/r1239-evidence"
+          pnpm install --frozen-lockfile 2>&1 | tee "$RUNNER_TEMP/r1239-evidence/install.log"
+
+      - name: Execute original merged Studio Jobs contract
+        shell: bash
+        env:
+          URAI_STUDIO_ROOT: /tmp/urai-studio-r1239
+          URAI_EXPECTED_JOBS_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -Eeuo pipefail
+          node --test scripts/review-only/r1238-studio-merged-jobs-contract.test.cjs 2>&1 | tee "$RUNNER_TEMP/r1239-evidence/contract.tap"
+          sha256sum "$RUNNER_TEMP/r1239-evidence/install.log" "$RUNNER_TEMP/r1239-evidence/contract.tap"
+          test "$(git rev-parse HEAD)" = "$TARGET_JOBS_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Retain original contract evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: r1239-studio-merged-jobs-${{ env.TARGET_JOBS_SHA }}
+          path: ${{ runner.temp }}/r1239-evidence
+          if-no-files-found: warn
+          retention-days: 90
