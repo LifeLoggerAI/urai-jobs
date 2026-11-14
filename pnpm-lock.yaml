@@ -17,7 +17,7 @@ overrides:
   axios@1.16.2: 1.20.0
   axios@1.18.0: 1.20.0
   '@grpc/grpc-js@1.14.3': 1.14.7
-  '@grpc/grpc-js@1.9.15': 1.9.16
+  '@grpc/grpc-js@1.9.15': 1.13.7
   '@grpc/grpc-js@1.8.22': 1.13.7
   fast-xml-parser@4.5.4: 4.5.7
   fast-xml-parser@5.3.8: 5.5.12
@@ -1083,7 +1083,7 @@ packages:
       '@firebase/logger': 0.4.4
       '@firebase/util': 1.12.1
       '@firebase/webchannel-wrapper': 1.0.3
-      '@grpc/grpc-js': 1.9.16
+      '@grpc/grpc-js': 1.13.7
       '@grpc/proto-loader': 0.7.15
       tslib: 2.8.1
     dev: false
@@ -1560,7 +1560,6 @@ packages:
       '@grpc/proto-loader': 0.7.15
       '@js-sdsl/ordered-map': 4.4.2
     dev: false
-    optional: true
 
   /@grpc/grpc-js@1.14.7:
     resolution: {integrity: sha512-W4W/fcBMGRVtG6dW2c7cw2mnpS3hvbBd+oQXjh2iYFTZDk1JJmcNqkM5KSaPubQpamlUUurrlb7G1s9NJeERmQ==}
@@ -1568,14 +1567,6 @@ packages:
     dependencies:
       '@grpc/proto-loader': 0.8.0
       '@js-sdsl/ordered-map': 4.4.2
-
-  /@grpc/grpc-js@1.9.16:
-    resolution: {integrity: sha512-wE4Ut/olIzfKqp631XrG+wbF0v1vWFN4YL9FyXC2LJiG33DsV7PLzURjrCvY/6je2ntdRkeLpPDluzSRGaVltQ==}
-    engines: {node: ^8.13.0 || >=10.10.0}
-    dependencies:
-      '@grpc/proto-loader': 0.7.15
-      '@types/node': 22.19.8
-    dev: false
 
   /@grpc/proto-loader@0.7.15:
     resolution: {integrity: sha512-tMXdRCfYVixjuFK+Hk0Q1s38gV9zDiDJfWL3h1rv4Qc39oILCu1TRTDt7+fGUI8K4G1Fj125Hx/ru3azECWTyQ==}
