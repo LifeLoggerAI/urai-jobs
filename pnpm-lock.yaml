@@ -37,6 +37,8 @@ overrides:
   form-data@2.5.5: 2.5.6
   ip-address@10.2.0: 10.3.1
   body-parser@1.20.4: 1.20.9
+  tmp@0.2.6: 0.2.7
+  '@fastify/busboy@3.2.0': 3.2.1
 
 importers:
 
@@ -740,8 +742,8 @@ packages:
       text-decoding: 1.0.0
     dev: false
 
-  /@fastify/busboy@3.2.0:
-    resolution: {integrity: sha512-m9FVDXU3GT2ITSe0UaMA5rU3QkfC/UXtCU8y0gSN/GugTqtVldOBWIB5V6V3sbmenVZUIpU6f+mPEO2+m5iTaA==}
+  /@fastify/busboy@3.2.1:
+    resolution: {integrity: sha512-tgK4O+57iz5ycYNGXE5ZWj1ES03lD2XnnBYWSbU/3wYZRMQzCUq7Ycds/RdyBZQeL5MU4fxBt6lzbIWf/Bickw==}
 
   /@firebase/ai@1.4.1(@firebase/app-types@0.9.3)(@firebase/app@0.13.2):
     resolution: {integrity: sha512-bcusQfA/tHjUjBTnMx6jdoPMpDl3r8K15Z+snHz9wq0Foox0F/V+kNLXucEOHoTL2hTc9l+onZCyBJs2QoIC3g==}
@@ -2887,7 +2889,7 @@ packages:
     resolution: {integrity: sha512-raFIrOyTqREbyXsNkSHyciQLfv8AUZazehPaQS1lZBSCDYW74FYXU0nQZa3qHI4K+hawohlDbywZ4+qce9YNxA==}
     engines: {node: '>=14'}
     dependencies:
-      '@fastify/busboy': 3.2.0
+      '@fastify/busboy': 3.2.1
       '@firebase/database-compat': 1.0.8
       '@firebase/database-types': 1.0.5
       '@types/node': 22.19.8
@@ -2907,7 +2909,7 @@ packages:
     resolution: {integrity: sha512-iawoQkmZbsA+2DY5UEuB8f6jSlskzzySoye0D2F6e3zlDZX9DUcXf0HhZqLUn/P6WhLGvTf6ZtCmshZvhAgTYg==}
     engines: {node: '>=18'}
     dependencies:
-      '@fastify/busboy': 3.2.0
+      '@fastify/busboy': 3.2.1
       '@firebase/database-compat': 2.0.11
       '@firebase/database-types': 1.0.15
       farmhash-modern: 1.1.0
@@ -4001,7 +4003,7 @@ packages:
       minimist: 1.2.8
       protobufjs: 7.6.2
       semver: 7.7.3
-      tmp: 0.2.6
+      tmp: 0.2.7
       uglify-js: 3.19.3
     dev: false
     optional: true
@@ -4499,8 +4501,8 @@ packages:
       picomatch: 4.0.3
     dev: true
 
-  /tmp@0.2.6:
-    resolution: {integrity: sha512-5sJPdPjfI5Kx+qbrDesxkglRBxW//g7hCsqspEjwkewGvBMGIKMOTKzLt1hFVJzyadba3lDUN20O9qhvbQUSTA==}
+  /tmp@0.2.7:
+    resolution: {integrity: sha512-e0votIpp4Uo2AJYSzVHV6xCcawuiez3DzqDAbrTc3YxBkplN6e+dM13ZeIcZnDg/QpSuU2zfZ3rzwY8ukEnaXw==}
     engines: {node: '>=14.14'}
     requiresBuild: true
     dev: false
