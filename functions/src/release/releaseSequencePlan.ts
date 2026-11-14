@@ -72,7 +72,7 @@ export const ReleasePlanRequestSchema = z.object({
   versions: z.array(VersionSchema).min(1).default([...URAI_RELEASE_VERSIONS]),
   requestedThrough: StageSchema.default('verify-web'),
   dryRun: z.literal(true).default(true),
-  evidence: z.record(z.boolean()).default({}),
+  evidence: z.record(z.string(), z.boolean()).default({}),
   notes: z.string().max(4000).optional(),
 });
 

@@ -55,7 +55,7 @@ const CommunicationsMessagePayloadSchema = z.object({
   channel: z.literal('email').default('email'),
   templateId: z.string().trim().min(6).max(128).regex(/^template_[A-Za-z0-9_-]+$/),
   recipientUid: z.string().trim().min(6).max(128),
-  vars: z.record(z.unknown()).default({}),
+  vars: z.record(z.string(), z.unknown()).default({}),
   urgency: z.enum(['normal', 'urgent']).default('normal'),
 }).strict();
 
@@ -74,7 +74,7 @@ const JobConsentSchema = z.object({
 
 const CreateJobSchema = z.object({
   jobType: z.string().min(3, 'Job type must be at least 3 characters').max(80),
-  payload: z.record(z.any()),
+  payload: z.record(z.string(), z.any()),
   idempotencyKey: z.string().trim().min(1).max(160).optional(),
   consent: JobConsentSchema.optional(),
   consents: z.array(JobConsentSchema).min(1).max(8).optional(),
