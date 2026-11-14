@@ -1,0 +1,15 @@
+# CHALK R1259 — scoped high advisory reduction, Vercel deployment authorization blocker
+
+Base Jobs review merge: `1927172d0fa6fcd0a16130e5c1c95c29b3292cd6`. This is a review-only dependency update, not a production release.
+
+Patch-only transitive overrides: `tmp@0.2.6 -> 0.2.7` and `@fastify/busboy@3.2.0 -> 3.2.1`. An attempted `@grpc/grpc-js@1.9.16 -> 1.13.7` override did not resolve the vulnerable package and was discarded. Existing `lodash` forced downgrade remains unchanged rather than adopting npm-designated bad version 4.18.0. Application code, cloud IAM, Rules, consent and private storage writes untouched.
+
+Exact source blobs: `package.json=55ffac4f866688950b0ddf8eb3e3d57ef9b82744`; `pnpm-lock.yaml=8eb7703d61e3113d572c06e940f88b4fb6be10e8`.
+
+Runpod existing R950 (`bvandlyauxhevl`) isolated checkout, Node22, pnpm8.15.9: lockfile-only resolution and frozen install exit 0, install SHA256 `55acaae9bec3052bacca6618e2745db8a717ea7b16967be42f2496e1d548059b`; Functions build exit 0, SHA256 `c6d5601a3265c3886086b50a52dabfa865f4e11afa481c0b728d5741c3a31f7c`; original writer-separation and session-cancel suite **24/24 PASS**, TAP SHA256 `5997cdf488f38eebf658a7d77a974f542c04871cf6a4be74496bf72b09a1bab8`; production `pnpm audit --prod --json` **exit 1**, **4 HIGH / 25 MODERATE / 6 LOW / 0 CRITICAL**, JSON SHA256 `f38136bdbcbf743e9b2dfa432d33e5fec5f546dfe31d115272823a6ba3d87ac4`. Prev Jobs #506 HIGH 7. Remaining high: lodash, @grpc/grpc-js old resolution, @fastify/busboy v1 chain, zod v3 chain. Candidate not audit-clean. Exact final GitHub PR and merge source must be retested.
+
+Vercel private Genesis project `prj_pt7oOQLnCFki8vJb4ph9XhIjiLwZ` SSO for all deployments; latest deployment ERROR `git_info_fail`; explicit protected preview from Spatial merge `791bd415030b2755030134dff41908af9de10e7d` rejected `no_github_account_connected`. No live Genesis deployment was created. The repo's source is large (disposable Spatial clone ~689MB), and Runpod R950 10GB disk reached 100%; removed only that disposable clean checkout; original test receipts preserved. Vercel GitHub account authorization must be restored by account owner, unless separately audited secure source-upload path can build exact source; no bypass or placeholder deploy should count as Genesis.
+
+Source-level Studio→Jobs #506 12/12 and Privacy #316 native negative denial (synthetic emulators HTTP403) are prior scoped PASS on the previous Jobs merge; they do not automatically transfer to this changed lockfile. Protected CI, positive signed owner consent→replay→deletion, live GCS broker writer, stale PUT and generation-specific deletion, credential closure, external qualified review, spatial device/stores and founder GO all remain uncertified.
+
+**HOLD_NO_GO. All 11 production gates BLOCKED. Private-memory writes DISABLED. No main merge or production promotion.**
