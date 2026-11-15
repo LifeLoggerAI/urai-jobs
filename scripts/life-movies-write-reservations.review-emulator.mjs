@@ -7,19 +7,11 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { randomUUID, createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import { assertDisposableEmulatorEnvironment } from './review-only/r1047-disposable-emulator-env.mjs';
 
 const PROJECT = 'urai-staging-test';
-assert.equal(process.env.URAI_EMULATOR_PROJECT, PROJECT);
-assert.equal(process.env.FIRESTORE_EMULATOR_HOST, '127.0.0.1:8080');
-assert.equal(process.env.FIREBASE_STORAGE_EMULATOR_HOST, '127.0.0.1:9199');
-for (const name of ['GOOGLE_APPLICATION_CREDENTIALS',
-  'FIREBASE_TOKEN', 'GITHUB_TOKEN', 'RUNPOD_API_KEY']) {
-  assert.equal(process.env[name] || '', '', name + ' must be absent');
-}
-for (const name of ['GCLOUD_PROJECT', 'GOOGLE_CLOUD_PROJECT']) {
-  if (process.env[name]) assert.equal(process.env[name], PROJECT,
-    name + ' must identify only the disposable emulator project');
-}
+// Fail closed before importing Firebase Admin; never include secret values in errors.
+assertDisposableEmulatorEnvironment(process.env);
 
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
 const { initializeApp, deleteApp } = require('firebase-admin/app');
