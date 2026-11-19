@@ -55,3 +55,40 @@ test('malformed integrity identity is rejected before any callback',async()=>{
  await assert.rejects(acknowledgeJobsRevocationToPrivacy('bad','c'.repeat(64)),/canonical-receipt-required/);
 });
 
+
+test('emulator test-token identity cannot target production Privacy callable', async()=>{
+ restore();
+ process.env.URAI_PRIVACY_ACK_PROJECT_ID='urai-r1586-policy-disposable';
+ process.env.URAI_PRIVACY_ACK_SERVICE_UID='synthetic-jobs-test';
+ process.env.FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9099';
+ process.env.FIRESTORE_EMULATOR_HOST='127.0.0.1:8080';
+ process.env.URAI_PRIVACY_ACK_TEST_ID_TOKEN='synthetic-only-token';
+ process.env.URAI_PRIVACY_ACK_CALLABLE_URL=
+  'https://us-central1-urai-r1586-policy-disposable.cloudfunctions.net/acknowledgeConsentRevocation';
+ assert.throws(privacyAckUrl(),/privacy-ack-url-denied/);
+ await assert.rejects(
+  acknowledgeJobsRevocationToPrivacy('a'.repeat(64),'b'.repeat(64)),
+  /privacy-ack-url-denied/
+ );
+});
+
+test('partial emulator settings cannot target production Privacy callable',()=>{
+ restore();
+ process.env.FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9099';
+ delete process.env.FIRESTORE_EMULATOR_HOST;
+ process.env.URAI_PRIVACY_ACK_CALLABLE_URL=
+  'https://us-central1-urai-r1586-policy-disposable.cloudfunctions.net/acknowledgeConsentRevocation';
+ assert.throws(privacyAckUrl(),/privacy-ack-url-denied/);
+});
+
+test('full emulator loopback remains valid, but non-emulator loopback is denied',()=>{
+ restore();
+ const loopback='http://127.0.0.1:5001/urai-r1586-policy-disposable/us-central1/acknowledgeConsentRevocation';
+ process.env.URAI_PRIVACY_ACK_CALLABLE_URL=loopback;
+ process.env.FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9099';
+ process.env.FIRESTORE_EMULATOR_HOST='127.0.0.1:8080';
+ assert.equal(privacyAckUrl().hostname,'127.0.0.1');
+ delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+ delete process.env.FIRESTORE_EMULATOR_HOST;
+ assert.throws(privacyAckUrl(),/privacy-ack-url-denied/);
+});
