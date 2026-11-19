@@ -45,7 +45,8 @@ test('untrusted URLs fail closed',()=>{
   assert.throws(()=>privacyAckUrl(),/url-denied/,bad);}
 });
 test('approved provider HTTPS path is parsed without network',()=>{
- restore();process.env.URAI_PRIVACY_ACK_CALLABLE_URL=
+ restore();process.env.URAI_PRIVACY_ACK_PROJECT_ID='urai-r1586-policy-disposable';
+ process.env.URAI_PRIVACY_ACK_CALLABLE_URL=
  'https://us-central1-urai-r1586-policy-disposable.cloudfunctions.net/acknowledgeConsentRevocation';
  assert.equal(privacyAckUrl().protocol,'https:');
 });
@@ -83,6 +84,7 @@ test('partial emulator settings cannot target production Privacy callable',()=>{
 
 test('full emulator loopback remains valid, but non-emulator loopback is denied',()=>{
  restore();
+ process.env.URAI_PRIVACY_ACK_PROJECT_ID='urai-r1586-policy-disposable';
  const loopback='http://127.0.0.1:5001/urai-r1586-policy-disposable/us-central1/acknowledgeConsentRevocation';
  process.env.URAI_PRIVACY_ACK_CALLABLE_URL=loopback;
  process.env.FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9099';

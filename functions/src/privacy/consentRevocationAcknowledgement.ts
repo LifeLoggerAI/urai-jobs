@@ -71,13 +71,39 @@ export function privacyAckUrl():URL {
   const emulator=Boolean(process.env.FIRESTORE_EMULATOR_HOST)
     && Boolean(process.env.FIREBASE_AUTH_EMULATOR_HOST)
     && url.hostname==='127.0.0.1' && url.protocol==='http:';
+  // Do not exchange an authenticated Jobs consumer bearer token with an
+  // arbitrary Cloud Run or other project's Cloud Functions service. The
+  // configured Firebase project is the authoritative Cloud Functions host
+  // suffix; an opaque Cloud Run service hostname must be separately pinned
+  // by deployment review before this endpoint can be enabled.
+  const project=process.env.URAI_PRIVACY_ACK_PROJECT_ID || '';
+  const validProject=/^[a-z][a-z0-9-]{5,79}$/.test(project);
+  const functionSuffix='-'+project+'.cloudfunctions.net';
+  const region=validProject && url.hostname.endsWith(functionSuffix)
+    ? url.hostname.slice(0,-functionSuffix.length) : '';
+  const scopedCloudFunction=validProject
+    && /^(?:us|asia|europe|australia|northamerica|southamerica|africa|me)-(?:north|south|east|west|central|northeast|northwest|southeast|southwest)[1-9][0-9]*$/.test(region);
+  const pinnedRunHost=process.env.URAI_PRIVACY_ACK_PINNED_RUN_HOST || '';
+  const pinnedRunService=validProject
+    && /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.a\.run\.app$/.test(url.hostname)
+    && pinnedRunHost===url.hostname;
   const production=url.protocol==='https:'
-    && (url.hostname.endsWith('.cloudfunctions.net') || url.hostname.endsWith('.run.app'));
-  // Emulator-issued and test-only credentials must never cross into a live
-  // provider endpoint, including when only one emulator variable is set.
+    && (scopedCloudFunction || pinnedRunService);
+  // Local Firebase Functions emulator URLs may use
+  // /<project>/<region>/acknowledgeConsentRevocation; live callables must
+  // never accept that nested form. Keep the original local emulator route.
+  const segments=url.pathname.split('/');
+  const emulatorPath=url.pathname==='/acknowledgeConsentRevocation'
+    || (segments.length===4 && validProject && segments[1]===project
+      && /^(?:us|asia|europe|australia|northamerica|southamerica|africa|me)-(?:north|south|east|west|central|northeast|northwest|southeast|southwest)[1-9][0-9]*$/.test(segments[2])
+      && segments[3]==='acknowledgeConsentRevocation');
+  const endpointPath=emulator ? emulatorPath
+    : url.pathname==='/acknowledgeConsentRevocation';
+  // Reject query tokens, alternative live HTTPS ports, redirects or nested
+  // production callbacks. Run-host pin is not independent provider IAM proof.
   if((emulatorConfigured&&!emulator)||(!emulator&&!production)||
-    url.username||url.password||url.search||url.hash||
-    !url.pathname.endsWith('/acknowledgeConsentRevocation'))
+    url.username||url.password||url.search||url.hash||url.port&&!emulator||
+    !endpointPath)
     throw new Error('privacy-ack-url-denied');
   return url;
 }
