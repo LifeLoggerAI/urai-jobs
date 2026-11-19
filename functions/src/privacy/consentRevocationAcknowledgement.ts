@@ -28,7 +28,7 @@ export async function jobsPrivacyIdToken():Promise<string> {
   if(testToken) {
     if(!emulator ||
       process.env.FIREBASE_AUTH_EMULATOR_HOST!=='127.0.0.1:9099' ||
-      !process.env.FIRESTORE_EMULATOR_HOST.startsWith('127.0.0.1:'))
+      !process.env.FIRESTORE_EMULATOR_HOST?.startsWith('127.0.0.1:'))
       throw new Error('privacy-ack-test-token-production-denied');
     return testToken;
   }
@@ -57,12 +57,17 @@ export function privacyAckUrl():URL {
   const raw=process.env.URAI_PRIVACY_ACK_CALLABLE_URL || '';
   if(!raw)throw new Error('privacy-ack-url-unconfigured');
   const url=new URL(raw);
+  const emulatorConfigured=Boolean(process.env.FIRESTORE_EMULATOR_HOST)
+    || Boolean(process.env.FIREBASE_AUTH_EMULATOR_HOST);
   const emulator=Boolean(process.env.FIRESTORE_EMULATOR_HOST)
     && Boolean(process.env.FIREBASE_AUTH_EMULATOR_HOST)
     && url.hostname==='127.0.0.1' && url.protocol==='http:';
   const production=url.protocol==='https:'
     && (url.hostname.endsWith('.cloudfunctions.net') || url.hostname.endsWith('.run.app'));
-  if((!emulator&&!production)||url.username||url.password||url.search||url.hash||
+  // Emulator-issued and test-only credentials must never cross into a live
+  // provider endpoint, including when only one emulator variable is set.
+  if((emulatorConfigured&&!emulator)||(!emulator&&!production)||
+    url.username||url.password||url.search||url.hash||
     !url.pathname.endsWith('/acknowledgeConsentRevocation'))
     throw new Error('privacy-ack-url-denied');
   return url;
