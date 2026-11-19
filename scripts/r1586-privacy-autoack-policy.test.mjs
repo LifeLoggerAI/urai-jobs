@@ -92,3 +92,36 @@ test('full emulator loopback remains valid, but non-emulator loopback is denied'
  delete process.env.FIRESTORE_EMULATOR_HOST;
  assert.throws(privacyAckUrl(),/privacy-ack-url-denied/);
 });
+
+test('untrusted emulator Auth host rejected before signing or HTTP',async()=>{
+ restore();
+ process.env.URAI_PRIVACY_ACK_PROJECT_ID='urai-r1586-policy-disposable';
+ process.env.URAI_PRIVACY_ACK_SERVICE_UID='synthetic-jobs-test';
+ process.env.URAI_PRIVACY_ACK_FIREBASE_API_KEY='SyntheticOnlyApiKey12345';
+ process.env.FIREBASE_AUTH_EMULATOR_HOST='untrusted.example.test:9099';
+ process.env.FIRESTORE_EMULATOR_HOST='127.0.0.1:8080';
+ delete process.env.URAI_PRIVACY_ACK_TEST_ID_TOKEN;
+ await assert.rejects(jobsPrivacyIdToken(),/privacy-ack-emulator-config-denied/);
+});
+
+test('incomplete emulator configuration rejected before custom token issuance',async()=>{
+ restore();
+ process.env.URAI_PRIVACY_ACK_PROJECT_ID='urai-r1586-policy-disposable';
+ process.env.URAI_PRIVACY_ACK_SERVICE_UID='synthetic-jobs-test';
+ process.env.URAI_PRIVACY_ACK_FIREBASE_API_KEY='SyntheticOnlyApiKey12345';
+ process.env.FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9099';
+ delete process.env.FIRESTORE_EMULATOR_HOST;
+ delete process.env.URAI_PRIVACY_ACK_TEST_ID_TOKEN;
+ await assert.rejects(jobsPrivacyIdToken(),/privacy-ack-emulator-config-denied/);
+});
+
+test('remote Firestore emulator host rejected before custom token issuance',async()=>{
+ restore();
+ process.env.URAI_PRIVACY_ACK_PROJECT_ID='urai-r1586-policy-disposable';
+ process.env.URAI_PRIVACY_ACK_SERVICE_UID='synthetic-jobs-test';
+ process.env.URAI_PRIVACY_ACK_FIREBASE_API_KEY='SyntheticOnlyApiKey12345';
+ process.env.FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9099';
+ process.env.FIRESTORE_EMULATOR_HOST='untrusted.example.test:8080';
+ delete process.env.URAI_PRIVACY_ACK_TEST_ID_TOKEN;
+ await assert.rejects(jobsPrivacyIdToken(),/privacy-ack-emulator-config-denied/);
+});
