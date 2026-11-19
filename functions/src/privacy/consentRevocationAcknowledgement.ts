@@ -22,13 +22,20 @@ export async function jobsPrivacyIdToken():Promise<string> {
   const actual=getApp().options.projectId || process.env.GCLOUD_PROJECT || '';
   if(actual!==project)throw new Error('privacy-ack-project-mismatch');
 
-  const emulator=Boolean(process.env.FIREBASE_AUTH_EMULATOR_HOST)
-    && Boolean(process.env.FIRESTORE_EMULATOR_HOST);
+  const authEmulatorHost=process.env.FIREBASE_AUTH_EMULATOR_HOST || '';
+  const firestoreEmulatorHost=process.env.FIRESTORE_EMULATOR_HOST || '';
+  const emulatorConfigured=Boolean(authEmulatorHost || firestoreEmulatorHost);
+  const localEmulatorHost=(host:string)=>/^127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(host);
+  const emulator=localEmulatorHost(authEmulatorHost)
+    && localEmulatorHost(firestoreEmulatorHost);
+  // Never sign and exchange a Firebase custom token with an arbitrary host
+  // supplied through an emulator variable. Reject incomplete/remote emulator
+  // configuration before minting any token, even without a test-token override.
+  if(emulatorConfigured&&!emulator)
+    throw new Error('privacy-ack-emulator-config-denied');
   const testToken=process.env.URAI_PRIVACY_ACK_TEST_ID_TOKEN || '';
   if(testToken) {
-    if(!emulator ||
-      process.env.FIREBASE_AUTH_EMULATOR_HOST!=='127.0.0.1:9099' ||
-      !process.env.FIRESTORE_EMULATOR_HOST?.startsWith('127.0.0.1:'))
+    if(!emulator || authEmulatorHost!=='127.0.0.1:9099')
       throw new Error('privacy-ack-test-token-production-denied');
     return testToken;
   }
@@ -38,7 +45,7 @@ export async function jobsPrivacyIdToken():Promise<string> {
     throw new Error('privacy-ack-firebase-api-key-unconfigured');
   const customToken=await getAuth().createCustomToken(uid,{system:true,consumerId:'urai-jobs'});
   const endpoint=emulator
-    ? new URL('http://'+process.env.FIREBASE_AUTH_EMULATOR_HOST+'/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken')
+    ? new URL('http://'+authEmulatorHost+'/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken')
     : new URL('https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken');
   endpoint.searchParams.set('key',apiKey);
   const response=await fetch(endpoint,{
