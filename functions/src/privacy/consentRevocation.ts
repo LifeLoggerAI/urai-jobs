@@ -3,6 +3,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import { onRequest } from 'firebase-functions/v2/https';
 import { z } from 'zod';
+import { acknowledgeJobsRevocationToPrivacy } from './consentRevocationAcknowledgement.js';
 import {
   canonicalConsentAckHash,
   consentBlockRef,
@@ -190,6 +191,23 @@ export const ingestConsentRevocation = onRequest({
       derivativeInvalidation,
       derivativeInvalidationCompletedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+    // The transport receipt is NOT final Privacy acknowledgement. For native
+    // events, only an authenticated consumer-bound Privacy callable confirms
+    // completion; on any failure return retryable 503 after preserving the
+    // fail-closed Jobs consent block and durable derivative denial.
+    if (event.type === 'consent.revoked.v2') {
+      try {
+        await acknowledgeJobsRevocationToPrivacy(event.eventId, ack.integrityHash);
+        await receiptRef.set({privacyAckStatus:'applied',privacyAckReceiptHash:ack.integrityHash,
+          privacyAcknowledgedAt:FieldValue.serverTimestamp()}, {merge:true});
+      } catch (error) {
+        console.error('Authenticated Jobs to Privacy acknowledgement incomplete', {
+          eventId: event.eventId, error,
+        });
+        response.status(503).json({ok:false,error:'privacy-authenticated-ack-incomplete',acknowledgement:ack});
+        return;
+      }
+    }
     response.status(200).json({
       ok: true,
       acknowledgement: {
