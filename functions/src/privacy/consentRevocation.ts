@@ -32,6 +32,8 @@ export const NativeConsentRevokedEventSchema = z.object({
   consentTier: z.string().trim().min(1).max(160),
   policyVersion: z.string().trim().min(1).max(80),
   sourceReceiptHash: z.string().regex(/^[0-9a-f]{64}$/),
+  priorGrantReceiptHash: z.string().regex(/^[0-9a-f]{64}$/).nullable(),
+  priorGrantEvidenceState: z.enum(['present', 'missing_or_invalid', 'not_applicable']),
   integrityHash: z.string().regex(/^[0-9a-f]{64}$/),
   correlationId: z.string().regex(/^[0-9a-f]{64}$/),
   revokedAt: z.string().datetime(),
@@ -46,8 +48,15 @@ export function verifyNativeLineage(event: z.infer<typeof NativeConsentRevokedEv
     uid: event.uid, purpose: event.purpose, consentTier: event.consentTier,
     policyVersion: event.policyVersion, receiptHash: event.sourceReceiptHash,
   });
-  return event.eventId === eventId && event.correlationId === eventId
-    && event.integrityHash === sha({ eventId, recordId: event.consentRecordId, uid: event.uid, purpose: event.purpose });
+  const evidenceConsistent = event.priorGrantEvidenceState === 'present'
+    ? event.priorGrantReceiptHash !== null
+    : event.priorGrantReceiptHash === null;
+  return evidenceConsistent && event.eventId === eventId && event.correlationId === eventId
+    && event.integrityHash === sha({
+      eventId, recordId: event.consentRecordId, uid: event.uid, purpose: event.purpose,
+      priorGrantReceiptHash: event.priorGrantReceiptHash,
+      priorGrantEvidenceState: event.priorGrantEvidenceState,
+    });
 }
 
 function expectedBearer(): string {
@@ -113,7 +122,10 @@ export const ingestConsentRevocation = onRequest({
         || prior.correlationId !== event.correlationId
         || (event.type === 'consent.revoked.v2' && prior.revokedAt !== event.revokedAt)
         || prior.schemaVersion !== event.type
-        || (event.type === 'consent.revoked.v2' && prior.sourceReceiptHash !== event.sourceReceiptHash)) {
+        || (event.type === 'consent.revoked.v2'
+          && (prior.sourceReceiptHash !== event.sourceReceiptHash
+            || prior.priorGrantReceiptHash !== event.priorGrantReceiptHash
+            || prior.priorGrantEvidenceState !== event.priorGrantEvidenceState))) {
         return { conflict: 'event-id-collision', ack: null };
       }
       transaction.set(blockRef, { active: true, ...prior, schemaVersion: event.type, revokedAt: event.revokedAt, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -142,7 +154,12 @@ export const ingestConsentRevocation = onRequest({
       schemaVersion: event.type,
       revokedAt: event.revokedAt,
       ...(event.type === 'consent.revoked.v2'
-        ? { sourceReceiptHash: event.sourceReceiptHash, consentRecordId: event.consentRecordId }
+        ? {
+          sourceReceiptHash: event.sourceReceiptHash,
+          consentRecordId: event.consentRecordId,
+          priorGrantReceiptHash: event.priorGrantReceiptHash,
+          priorGrantEvidenceState: event.priorGrantEvidenceState,
+        }
         : {}),
       status,
       integrityHash,
