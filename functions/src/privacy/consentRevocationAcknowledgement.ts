@@ -48,8 +48,10 @@ export async function jobsPrivacyIdToken():Promise<string> {
     ? new URL('http://'+authEmulatorHost+'/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken')
     : new URL('https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken');
   endpoint.searchParams.set('key',apiKey);
+  // A redirected identity exchange must never forward the signed custom token
+  // (or Firebase API key) to a second, unverified endpoint.
   const response=await fetch(endpoint,{
-    method:'POST',headers:{'content-type':'application/json'},
+    method:'POST',redirect:'error',headers:{'content-type':'application/json'},
     body:JSON.stringify({token:customToken,returnSecureToken:true}),
     signal:AbortSignal.timeout(10000)
   });
