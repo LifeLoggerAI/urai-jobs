@@ -42,7 +42,7 @@ test('untrusted URLs fail closed',()=>{
  'https://user:pw@allowed.cloudfunctions.net/acknowledgeConsentRevocation',
  'https://allowed.cloudfunctions.net/acknowledgeConsentRevocation?debug=1'
  ]){process.env.URAI_PRIVACY_ACK_CALLABLE_URL=bad;
-  assert.throws(privacyAckUrl,/url-denied/,bad);}
+  assert.throws(()=>privacyAckUrl(),/url-denied/,bad);}
 });
 test('approved provider HTTPS path is parsed without network',()=>{
  restore();process.env.URAI_PRIVACY_ACK_CALLABLE_URL=
