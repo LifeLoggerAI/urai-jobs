@@ -1,5 +1,5 @@
 import { ulid } from 'ulid';
-import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, Timestamp, type Transaction } from 'firebase-admin/firestore';
 import { HttpsError, type CallableContext } from 'firebase-functions/v1/https';
 import { z } from 'zod';
 import { Job, JobQueueEntry, type JobConsentContext } from '@urai-jobs/shared-types';
@@ -123,16 +123,66 @@ async function assertCreateRateLimit(uid: string) {
   }
 }
 
-function resolveExistingBinding(
+async function assertPurposesNotRevoked(
+  transaction: Transaction,
+  ownerUid: string,
+  purposes: readonly string[]
+): Promise<void> {
+  const snapshots = await Promise.all(
+    [...new Set(purposes)].map((purpose) => transaction.get(consentBlockRef(ownerUid, purpose)))
+  );
+  if (snapshots.some((snapshot) => snapshot.exists && snapshot.data()?.active === true)) {
+    throw httpsError('failed-precondition', 'Required consent is revoked; new jobs and idempotent admission are denied.');
+  }
+}
+
+function storedConsentPurposes(job: Job): string[] {
+  const purposes: string[] = [];
+  if (Object.prototype.hasOwnProperty.call(job, 'consent')) {
+    const parsed = JobConsentSchema.safeParse(job.consent);
+    if (!parsed.success) {
+      throw httpsError('failed-precondition', 'The bound job has invalid stored consent authority.');
+    }
+    purposes.push(parsed.data.purpose);
+  }
+  if (Object.prototype.hasOwnProperty.call(job, 'consents')) {
+    const parsed = z.array(JobConsentSchema).min(1).max(8).safeParse(job.consents);
+    if (!parsed.success) {
+      throw httpsError('failed-precondition', 'The bound job has invalid stored consent authority.');
+    }
+    purposes.push(...parsed.data.map((entry) => entry.purpose));
+  }
+  return purposes;
+}
+
+async function resolveExistingBinding(
+  transaction: Transaction,
   binding: Partial<IdempotencyBinding>,
-  expected: Omit<IdempotencyBinding, 'jobId'>
-): { jobId: string; deduplicated: true } {
-  if (!bindingMatches(binding, expected) || typeof binding.jobId !== 'string' || !binding.jobId) {
+  expected: Omit<IdempotencyBinding, 'jobId'>,
+  incomingPurposes: readonly string[]
+): Promise<{ jobId: string; deduplicated: true }> {
+  if (!bindingMatches(binding, expected)
+    || typeof binding.jobId !== 'string' || !binding.jobId || binding.jobId.includes('/')) {
     throw httpsError(
       'already-exists',
       'The idempotency key is already bound to a different job request.'
     );
   }
+
+  // The request may omit or replace consent; the stored job remains authoritative.
+  const jobSnapshot = await transaction.get(jobDoc(binding.jobId));
+  const job = jobSnapshot.data();
+  const storedTypes = job ? [job.jobType, job.type].filter((value) => value !== undefined) : [];
+  if (!jobSnapshot.exists || !job
+    || job.jobId !== binding.jobId || job.ownerUid !== expected.ownerUid
+    || storedTypes.length === 0 || storedTypes.some((value) => value !== expected.jobType)) {
+    throw httpsError('failed-precondition', 'The bound job identity is unavailable or inconsistent.');
+  }
+
+  await assertPurposesNotRevoked(transaction, expected.ownerUid, [
+    ...incomingPurposes,
+    ...storedConsentPurposes(job),
+  ]);
   return { jobId: binding.jobId, deduplicated: true };
 }
 
@@ -291,35 +341,23 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     ...(canonicalConsent ? [canonicalConsent.purpose] : []),
     ...(canonicalConsents || []).map((entry) => entry.purpose),
   ])];
-  const blockRefs = requiredPurposes.map((purpose) => consentBlockRef(uid, purpose));
-  // Admission and existing-idempotency responses must honor owner-wide deletion.
   const deletionFenceRefs = [
     db.collection('accountDeletionFences').doc(uid),
     db.collection('privacyDeletionTombstones').doc(uid),
   ];
   const assertNotDeleted = (snapshots: readonly { exists: boolean }[]) => {
-    // Even a malformed or apparently inactive fence is not a reauthorization.
     if (snapshots.some((snapshot) => snapshot.exists)) {
       throw httpsError('failed-precondition', 'Owner deletion fence is present; job admission is denied.');
     }
   };
-  const assertNotRevoked = (snapshots: readonly { exists: boolean; data(): { active?: unknown } | undefined }[]) => {
-    if (snapshots.some((snapshot) => snapshot.exists && snapshot.data()?.active === true)) {
-      throw httpsError('failed-precondition', 'Required consent is revoked; new jobs and idempotent admission are denied.');
-    }
-  };
-
-  // Idempotency never bypasses durable revocation or deletion. Read under one
-  // transaction so a concurrent fence update cannot return an old job binding.
+  // Owner deletion is checked with the binding in this same transaction.
   if (bindingRef) {
     const existing = await db.runTransaction(async (transaction) => {
       const deletionSnapshots = await Promise.all(deletionFenceRefs.map((ref) => transaction.get(ref)));
-      const blockSnapshots = await Promise.all(blockRefs.map((ref) => transaction.get(ref)));
       const bindingSnapshot = await transaction.get(bindingRef);
       assertNotDeleted(deletionSnapshots);
-      assertNotRevoked(blockSnapshots);
       return bindingSnapshot.exists
-        ? resolveExistingBinding(bindingSnapshot.data() as Partial<IdempotencyBinding>, expectedBinding)
+        ? resolveExistingBinding(transaction, bindingSnapshot.data() as Partial<IdempotencyBinding>, expectedBinding, requiredPurposes)
         : null;
     });
     if (existing) return existing;
@@ -357,15 +395,15 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
 
   try {
     return await db.runTransaction(async (transaction) => {
-      // Firestore transaction retries if a revocation races admission.
+      // Firestore retries if owner deletion or consent revocation races admission.
       const deletionSnapshots = await Promise.all(deletionFenceRefs.map((ref) => transaction.get(ref)));
-      const blockSnapshots = await Promise.all(blockRefs.map((ref) => transaction.get(ref)));
       const bindingSnapshot = bindingRef ? await transaction.get(bindingRef) : null;
       assertNotDeleted(deletionSnapshots);
-      assertNotRevoked(blockSnapshots);
       if (bindingSnapshot?.exists) {
-        return resolveExistingBinding(bindingSnapshot.data() as Partial<IdempotencyBinding>, expectedBinding);
+        return resolveExistingBinding(transaction, bindingSnapshot.data() as Partial<IdempotencyBinding>, expectedBinding, requiredPurposes);
       }
+      // Read all incoming-purpose blocks before any admission writes.
+      await assertPurposesNotRevoked(transaction, uid, requiredPurposes);
 
       const jobRef = jobDoc(jobId);
       const queueRef = jobQueueEntryDoc(jobId);
