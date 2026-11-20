@@ -101,6 +101,7 @@ function fixture(job = baseJob, { exists = true } = {}) {
       buildRequestFingerprint() { throw Error('unexpected request mutation') },
     }
     if (name.endsWith('/consentBlocks.js')) return { consentBlockRef() { throw Error('unexpected consent mutation') } }
+    if (name.endsWith('/ownerDeletionFence.js')) return { ownerDeletionFenceRefs() { throw Error('unexpected owner fence read during delete hold') }, ownerDeletionFenced() { throw Error('unexpected owner fence decision during delete hold') } }
     throw Error('unmapped dependency: ' + name)
   }
   vm.runInNewContext(compiled, {
