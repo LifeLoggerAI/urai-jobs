@@ -6,6 +6,7 @@ import type { Job, JobQueueEntry, JobQueueStatus, JobLease } from '@urai-jobs/sh
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { canRequeueUnstartedLease, isTerminalJobStatus } from './executionGuards.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { ownerDeletionFenceRefs, ownerDeletionFenced } from '../privacy/ownerDeletionFence.js';
 
 const MAX_JOBS_TO_LEASE_PER_TICK = 10;
 const MAX_DISPATCH_RETRIES = 3;
@@ -269,6 +270,16 @@ export const processQueueTick = onSchedule('every 1 minutes', async () => {
       if (job.status !== 'PENDING') return null;
 
       const consentContexts = jobConsentContexts(job);
+      if (job.ownerUid) {
+        const fences=await Promise.all(ownerDeletionFenceRefs(job.ownerUid).map(ref=>transaction.get(ref)));
+        if (ownerDeletionFenced(fences)) {
+          transaction.update(masterJobRef,{status:'CANCELLED',lease:FieldValue.delete(),updatedAt:now,
+            completedAt:now,error:{message:'Owner deletion fence active before queue lease.'}});
+          transaction.update(queueRef,{status:'CANCELLED',lease:FieldValue.delete(),updatedAt:now,
+            'dispatch.lastError':'Owner deletion fence active before queue lease.'});
+          return null;
+        }
+      }
       if (job.ownerUid && consentContexts.length > 0) {
         const blockSnapshots = await Promise.all(
           consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))

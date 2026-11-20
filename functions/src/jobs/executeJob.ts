@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { Job } from '@urai-jobs/shared-types';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { ownerDeletionFenceRefs, ownerDeletionFenced } from '../privacy/ownerDeletionFence.js';
 import { workerEnvKeyForJobType, workerRouteForJobType } from '../core/runtimeJobTypes.js';
 import { executeTinyFishJob, isTinyFishJobType, tinyFishApiKeySecret } from '../providers/tinyfish.js';
 import { canFinalizeExecution, decideExecutionStart, isTerminalJobStatus } from './executionGuards.js';
@@ -268,6 +269,18 @@ async function handleJobFailure(jobId: string, leaseToken: string, error: unknow
     if (current.status !== 'RUNNING' || current.execution?.leaseToken !== leaseToken) {
       return 'ignored';
     }
+    const fences = current.ownerUid ? await Promise.all(ownerDeletionFenceRefs(current.ownerUid).map(ref=>transaction.get(ref))) : [];
+    const contexts = jobConsentContexts(current);
+    const blocks = current.ownerUid ? await Promise.all(contexts.map(ctx=>transaction.get(consentBlockRef(current.ownerUid!,ctx.purpose)))) : [];
+    if (ownerDeletionFenced(fences) || blocks.some(snapshot=>snapshot.exists && snapshot.data()?.active===true)) {
+      const now=FieldValue.serverTimestamp();
+      transaction.update(jobRef,{status:'CANCELLED',lease:FieldValue.delete(),updatedAt:now,completedAt:now,
+        'execution.leaseToken':FieldValue.delete(),'execution.completedAt':now,
+        'execution.asyncCallbackPending':false,'execution.callbackTokenHash':FieldValue.delete(),
+        'execution.callbackLeaseToken':FieldValue.delete(),'execution.callbackDeadlineAt':FieldValue.delete()});
+      transaction.set(queueRef,{jobId,status:'CANCELLED',lease:FieldValue.delete(),updatedAt:now},{merge:true});
+      return 'ignored';
+    }
     if (activeAsyncCallbackForLease(current, leaseToken, Date.now())) {
       return 'callback-pending';
     }
@@ -383,6 +396,16 @@ export const executeJob = onMessagePublished({
     }
 
     const consentContexts = jobConsentContexts(job);
+    if (job.ownerUid) {
+      const deletion = await Promise.all(ownerDeletionFenceRefs(job.ownerUid).map(ref => transaction.get(ref)));
+      if (ownerDeletionFenced(deletion)) {
+        const now = FieldValue.serverTimestamp();
+        transaction.update(jobRef, {status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: now,
+          completedAt: now, 'execution.leaseToken': FieldValue.delete(), 'execution.completedAt': now});
+        transaction.set(queueRef, {jobId, status: 'CANCELLED', lease: FieldValue.delete(), updatedAt: now}, {merge:true});
+        return {action:'ignore' as const, reason:'owner-deleted' as const};
+      }
+    }
     if (job.ownerUid && consentContexts.length > 0) {
       const blockSnapshots = await Promise.all(
         consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))
@@ -468,6 +491,23 @@ export const executeJob = onMessagePublished({
       });
       result = await executeTinyFishJob(jobType, getPayloadRecord(job));
     } else if (target) {
+      if (job.ownerUid) {
+        const deletion = await Promise.all(ownerDeletionFenceRefs(job.ownerUid).map(ref=>ref.get()));
+        if (ownerDeletionFenced(deletion)) {
+          await db.runTransaction(async transaction=>{
+            const snapshot=await transaction.get(jobRef);
+            if (!snapshot.exists) return;
+            const current=snapshot.data() as Job;
+            const fences=await Promise.all(ownerDeletionFenceRefs(job.ownerUid!).map(ref=>transaction.get(ref)));
+            if (!ownerDeletionFenced(fences) || current.status!=='RUNNING' || current.execution?.leaseToken!==leaseToken) return;
+            const now=FieldValue.serverTimestamp();
+            transaction.update(jobRef,{status:'CANCELLED',lease:FieldValue.delete(),updatedAt:now,completedAt:now,
+              'execution.leaseToken':FieldValue.delete(),'execution.completedAt':now});
+            transaction.set(queueRef,{jobId,status:'CANCELLED',lease:FieldValue.delete(),updatedAt:now},{merge:true});
+          });
+          return;
+        }
+      }
       const dispatchConsentContexts = jobConsentContexts(job);
       if (job.ownerUid && dispatchConsentContexts.length > 0) {
         const blockSnapshots = await Promise.all(
@@ -575,10 +615,19 @@ export const executeJob = onMessagePublished({
       if (!currentSnapshot.exists) return false;
 
       const current = currentSnapshot.data() as Job;
-      if (!canFinalizeExecution(current, leaseToken)) {
+      if (!canFinalizeExecution(current, leaseToken)) return false;
+      const fences=current.ownerUid ? await Promise.all(ownerDeletionFenceRefs(current.ownerUid).map(ref=>transaction.get(ref))) : [];
+      const consents=jobConsentContexts(current);
+      const blocks=current.ownerUid ? await Promise.all(consents.map(ctx=>transaction.get(consentBlockRef(current.ownerUid!,ctx.purpose)))) : [];
+      if (ownerDeletionFenced(fences) || blocks.some(ref=>ref.exists && ref.data()?.active===true)) {
+        const now=FieldValue.serverTimestamp();
+        transaction.update(jobRef,{status:'CANCELLED',lease:FieldValue.delete(),updatedAt:now,completedAt:now,
+          'execution.leaseToken':FieldValue.delete(),'execution.completedAt':now,
+          'execution.asyncCallbackPending':false,'execution.callbackTokenHash':FieldValue.delete(),
+          'execution.callbackLeaseToken':FieldValue.delete(),'execution.callbackDeadlineAt':FieldValue.delete()});
+        transaction.set(queueRef,{jobId,status:'CANCELLED',lease:FieldValue.delete(),updatedAt:now},{merge:true});
         return false;
       }
-
       const now = FieldValue.serverTimestamp();
       transaction.update(jobRef, {
         status: 'SUCCESS',
