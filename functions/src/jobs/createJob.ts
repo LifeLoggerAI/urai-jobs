@@ -292,23 +292,31 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     ...(canonicalConsents || []).map((entry) => entry.purpose),
   ])];
   const blockRefs = requiredPurposes.map((purpose) => consentBlockRef(uid, purpose));
+  // Admission and existing-idempotency responses must honor owner-wide deletion.
+  const deletionFenceRefs = [
+    db.collection('accountDeletionFences').doc(uid),
+    db.collection('privacyDeletionTombstones').doc(uid),
+  ];
+  const assertNotDeleted = (snapshots: readonly { exists: boolean }[]) => {
+    // Even a malformed or apparently inactive fence is not a reauthorization.
+    if (snapshots.some((snapshot) => snapshot.exists)) {
+      throw httpsError('failed-precondition', 'Owner deletion fence is present; job admission is denied.');
+    }
+  };
   const assertNotRevoked = (snapshots: readonly { exists: boolean; data(): { active?: unknown } | undefined }[]) => {
     if (snapshots.some((snapshot) => snapshot.exists && snapshot.data()?.active === true)) {
       throw httpsError('failed-precondition', 'Required consent is revoked; new jobs and idempotent admission are denied.');
     }
   };
 
-  // A consent-bearing idempotent request cannot skip revocation checking.
-  // Both the binding and current block are read within one transaction.
-  if (bindingRef && blockRefs.length === 0) {
-    const existing = await bindingRef.get();
-    if (existing.exists) {
-      return resolveExistingBinding(existing.data() as Partial<IdempotencyBinding>, expectedBinding);
-    }
-  } else if (bindingRef) {
+  // Idempotency never bypasses durable revocation or deletion. Read under one
+  // transaction so a concurrent fence update cannot return an old job binding.
+  if (bindingRef) {
     const existing = await db.runTransaction(async (transaction) => {
+      const deletionSnapshots = await Promise.all(deletionFenceRefs.map((ref) => transaction.get(ref)));
       const blockSnapshots = await Promise.all(blockRefs.map((ref) => transaction.get(ref)));
       const bindingSnapshot = await transaction.get(bindingRef);
+      assertNotDeleted(deletionSnapshots);
       assertNotRevoked(blockSnapshots);
       return bindingSnapshot.exists
         ? resolveExistingBinding(bindingSnapshot.data() as Partial<IdempotencyBinding>, expectedBinding)
@@ -350,8 +358,10 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   try {
     return await db.runTransaction(async (transaction) => {
       // Firestore transaction retries if a revocation races admission.
+      const deletionSnapshots = await Promise.all(deletionFenceRefs.map((ref) => transaction.get(ref)));
       const blockSnapshots = await Promise.all(blockRefs.map((ref) => transaction.get(ref)));
       const bindingSnapshot = bindingRef ? await transaction.get(bindingRef) : null;
+      assertNotDeleted(deletionSnapshots);
       assertNotRevoked(blockSnapshots);
       if (bindingSnapshot?.exists) {
         return resolveExistingBinding(bindingSnapshot.data() as Partial<IdempotencyBinding>, expectedBinding);
