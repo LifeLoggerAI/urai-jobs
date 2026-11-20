@@ -341,10 +341,23 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
     ...(canonicalConsent ? [canonicalConsent.purpose] : []),
     ...(canonicalConsents || []).map((entry) => entry.purpose),
   ])];
+  // Durable owner-wide deletion remains authoritative for every admission/replay.
+  const deletionFenceRefs = [
+    db.collection('accountDeletionFences').doc(uid),
+    db.collection('privacyDeletionTombstones').doc(uid),
+  ];
+  const assertNotDeleted = (snapshots: readonly { exists: boolean }[]) => {
+    if (snapshots.some((snapshot) => snapshot.exists)) {
+      throw httpsError('failed-precondition', 'Owner deletion fence is present; job admission is denied.');
+    }
+  };
+
   // Every replay reads the binding, stored job authority, and blocks in one transaction.
   if (bindingRef) {
     const existing = await db.runTransaction(async (transaction) => {
+      const deletionSnapshots = await Promise.all(deletionFenceRefs.map((ref) => transaction.get(ref)));
       const bindingSnapshot = await transaction.get(bindingRef);
+      assertNotDeleted(deletionSnapshots);
       return bindingSnapshot.exists
         ? resolveExistingBinding(transaction, bindingSnapshot.data() as Partial<IdempotencyBinding>, expectedBinding, requiredPurposes)
         : null;
@@ -385,7 +398,9 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   try {
     return await db.runTransaction(async (transaction) => {
       // A binding may have appeared since the preliminary transaction.
+      const deletionSnapshots = await Promise.all(deletionFenceRefs.map((ref) => transaction.get(ref)));
       const bindingSnapshot = bindingRef ? await transaction.get(bindingRef) : null;
+      assertNotDeleted(deletionSnapshots);
       if (bindingSnapshot?.exists) {
         return resolveExistingBinding(transaction, bindingSnapshot.data() as Partial<IdempotencyBinding>, expectedBinding, requiredPurposes);
       }

@@ -7,6 +7,7 @@ import { returnLeaseAfterPublishFailure } from '../core/dispatchRecovery.js';
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { isTerminalJobStatus } from './executionGuards.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { ownerDeletionFenceRefs, ownerDeletionFenced } from '../privacy/ownerDeletionFence.js';
 
 const JOB_EXECUTION_TOPIC = process.env.PUBSUB_JOB_EXECUTION_TOPIC || 'job-execution';
 const LEASE_DURATION_MS = 60 * 1000;
@@ -145,6 +146,15 @@ export const processQueueNow = onCall(callableOptions, async (request) => {
       }
 
       const consentContexts = jobConsentContexts(job);
+      if (job.ownerUid) {
+        const fences=await Promise.all(ownerDeletionFenceRefs(job.ownerUid).map(ref=>transaction.get(ref)));
+        if (ownerDeletionFenced(fences)) {
+          const now=FieldValue.serverTimestamp();
+          transaction.update(masterJobRef,{status:'CANCELLED',lease:FieldValue.delete(),updatedAt:now,completedAt:now});
+          transaction.update(queueRef,{status:'CANCELLED',lease:FieldValue.delete(),updatedAt:now});
+          return {lease:null,outcome:'owner-deleted' as const};
+        }
+      }
       if (job.ownerUid && consentContexts.length > 0) {
         const blockSnapshots = await Promise.all(
           consentContexts.map((context) => transaction.get(consentBlockRef(job.ownerUid!, context.purpose)))

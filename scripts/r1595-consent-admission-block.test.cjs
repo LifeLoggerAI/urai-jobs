@@ -236,3 +236,34 @@ test('valid legacy binding appearing in creation transaction returns the stored 
   assert.equal(result.jobId, 'job-old'); assert.equal(result.deduplicated, true)
   assert.equal(transactions, 2); assert.equal(created.length, 0)
 })
+
+const accountFence = (uid = 'owner-a') => records.set('accountDeletionFences/' + uid, { state: 'revoked' })
+const privacyTombstone = (uid = 'owner-a', value = { active: true }) => records.set('privacyDeletionTombstones/' + uid, value)
+test('account deletion fence denies new consent-bearing job', async () => {
+  reset(); accountFence(); await denied(request(), 'deletion fence')
+})
+test('Privacy deletion tombstone denies new job', async () => {
+  reset(); privacyTombstone(); await denied(request(), 'deletion fence')
+})
+test('inactive deletion tombstone cannot regrant admission', async () => {
+  reset(); privacyTombstone('owner-a', { active: false }); await denied(request(), 'deletion fence')
+})
+test('deletion fence prevents valid consent-free legacy replay', async () => {
+  reset(); bind({}); accountFence(); await denied(request({ consent: undefined, idempotencyKey: 'key' }), 'deletion fence')
+})
+test('deletion fence prevents stored-consent idempotent replay', async () => {
+  reset(); bind(); privacyTombstone(); await denied(request({ consent: undefined, idempotencyKey: 'key' }), 'deletion fence')
+})
+test('another owner deletion fence preserves this owner admission', async () => {
+  reset(); accountFence('owner-b'); assert.ok((await handler(request(), auth, user)).jobId)
+})
+test('deletion fence appearing between transactions prevents new admission', async () => {
+  reset(); afterFirstTransaction = () => accountFence()
+  await assert.rejects(handler(request({ idempotencyKey: 'key' }), auth, user), e => e.code === 'failed-precondition' && e.message.includes('deletion fence'))
+  assert.equal(transactions, 2); assert.equal(created.length, 0)
+})
+test('valid stored binding and deletion fence arriving together cannot return stale replay', async () => {
+  reset(); afterFirstTransaction = () => { bind(); accountFence() }
+  await assert.rejects(handler(request({ consent: undefined, idempotencyKey: 'key' }), auth, user), e => e.code === 'failed-precondition' && e.message.includes('deletion fence'))
+  assert.equal(transactions, 2); assert.equal(created.length, 0)
+})
