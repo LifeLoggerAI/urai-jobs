@@ -14,6 +14,7 @@ import {
 } from '../core/jobsReliability.js';
 import { StudioLifeMovieRenderPayloadSchema } from './studioLifeMovieContract.js';
 import { isActiveRuntimeJobType, RUNTIME_JOB_REGISTRY } from '../core/runtimeJobTypes.js';
+import { consentBlockRef } from '../privacy/consentBlocks.js';
 
 const MAX_PAYLOAD_BYTES = parseInt(process.env.URAI_JOBS_MAX_PAYLOAD_BYTES || '', 10) || 32768;
 const MAX_CREATE_PER_MINUTE = parseInt(process.env.URAI_JOBS_CREATE_RATE_LIMIT_PER_MINUTE || '', 10) || 10;
@@ -285,12 +286,35 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
   const bindingRef = idempotencyKey
     ? db.collection(IDEMPOTENCY_COLLECTION).doc(buildIdempotencyBindingId(uid, jobType, idempotencyKey))
     : null;
+  // A new client grant never clears Jobs' durable revocation block.
+  const requiredPurposes = [...new Set([
+    ...(canonicalConsent ? [canonicalConsent.purpose] : []),
+    ...(canonicalConsents || []).map((entry) => entry.purpose),
+  ])];
+  const blockRefs = requiredPurposes.map((purpose) => consentBlockRef(uid, purpose));
+  const assertNotRevoked = (snapshots: readonly { exists: boolean; data(): { active?: unknown } | undefined }[]) => {
+    if (snapshots.some((snapshot) => snapshot.exists && snapshot.data()?.active === true)) {
+      throw httpsError('failed-precondition', 'Required consent is revoked; new jobs and idempotent admission are denied.');
+    }
+  };
 
-  if (bindingRef) {
+  // A consent-bearing idempotent request cannot skip revocation checking.
+  // Both the binding and current block are read within one transaction.
+  if (bindingRef && blockRefs.length === 0) {
     const existing = await bindingRef.get();
     if (existing.exists) {
       return resolveExistingBinding(existing.data() as Partial<IdempotencyBinding>, expectedBinding);
     }
+  } else if (bindingRef) {
+    const existing = await db.runTransaction(async (transaction) => {
+      const blockSnapshots = await Promise.all(blockRefs.map((ref) => transaction.get(ref)));
+      const bindingSnapshot = await transaction.get(bindingRef);
+      assertNotRevoked(blockSnapshots);
+      return bindingSnapshot.exists
+        ? resolveExistingBinding(bindingSnapshot.data() as Partial<IdempotencyBinding>, expectedBinding)
+        : null;
+    });
+    if (existing) return existing;
   }
 
   await assertCreateRateLimit(uid);
@@ -325,11 +349,12 @@ const handler = async (data: any, context: CallableContext, user: unknown) => {
 
   try {
     return await db.runTransaction(async (transaction) => {
-      if (bindingRef) {
-        const existing = await transaction.get(bindingRef);
-        if (existing.exists) {
-          return resolveExistingBinding(existing.data() as Partial<IdempotencyBinding>, expectedBinding);
-        }
+      // Firestore transaction retries if a revocation races admission.
+      const blockSnapshots = await Promise.all(blockRefs.map((ref) => transaction.get(ref)));
+      const bindingSnapshot = bindingRef ? await transaction.get(bindingRef) : null;
+      assertNotRevoked(blockSnapshots);
+      if (bindingSnapshot?.exists) {
+        return resolveExistingBinding(bindingSnapshot.data() as Partial<IdempotencyBinding>, expectedBinding);
       }
 
       const jobRef = jobDoc(jobId);
