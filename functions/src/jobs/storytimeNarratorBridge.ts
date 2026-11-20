@@ -285,17 +285,13 @@ async function playback(input: z.infer<typeof JobActionSchema>) {
 }
 
 async function deleteOutput(input: z.infer<typeof JobActionSchema>) {
-  const { location } = await artifactLocation(input);
-  await getStorage().bucket(location.bucket).file(location.objectPath).delete({ ignoreNotFound: true });
-  const now = FieldValue.serverTimestamp();
-  await jobDoc(input.jobId).update({
-    output: FieldValue.delete(),
-    result: FieldValue.delete(),
-    outputDeletedAt: now,
-    outputDeletedBy: input.userId,
-    updatedAt: now,
-  });
-  return { deleted: true };
+  await artifactLocation(input);
+  // The current narrator worker records an artifact path, but no trusted GCS
+  // generation receipt. A caller-supplied generation or a fresh metadata read
+  // cannot establish which object version this job produced. Preserve the
+  // artifact and job state until generation-bound deletion and atomic job
+  // reconciliation are implemented; never acknowledge an unverified deletion.
+  throw new Error('narrator_output_generation_unverified');
 }
 
 export const storytimeNarratorBridge = onRequest({
@@ -352,6 +348,7 @@ export const storytimeNarratorBridge = onRequest({
       : code === 'idempotency_conflict' ? 409
       : code === 'job_not_ready_for_playback' ? 409
       : code === 'narrator_artifact_boundary_mismatch' ? 403
+      : code === 'narrator_output_generation_unverified' ? 409
       : code === 'narrator_artifact_missing' ? 409
       : code === 'elevenlabs_voice_id_required' ? 400
       : 400;
