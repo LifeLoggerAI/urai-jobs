@@ -9,6 +9,7 @@ import type { Job, JobConsentContext, JobQueueEntry } from '@urai-jobs/shared-ty
 import { jobDoc, jobQueueEntryDoc } from '../core/firestore-paths.js';
 import { bindingMatches, buildIdempotencyBindingId, buildRequestFingerprint, type IdempotencyBinding } from '../core/jobsReliability.js';
 import { consentBlockRef } from '../privacy/consentBlocks.js';
+import { ownerDeletionFenceRefs, ownerDeletionFenced } from '../privacy/ownerDeletionFence.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STORYTIME_JOBS_BRIDGE_TOKEN');
 const IDEMPOTENCY_COLLECTION = 'storytimeNarratorBridgeBindings';
@@ -109,6 +110,20 @@ async function loadBoundJob(input: z.infer<typeof JobActionSchema>) {
   const snapshot = await jobDoc(input.jobId).get();
   if (!snapshot.exists) throw new Error('job_not_found');
   return assertBoundJob(snapshot.data() as BoundJob, input);
+}
+
+// Check live owner and purpose fences before showing narrator status or signing
+// an audio URL. Stored SUCCESS is not perpetual playback authority.
+async function assertNarratorReadAuthority(job: BoundJob): Promise<void> {
+  if (!job.ownerUid || !job.consent || job.consent.purpose !== 'storytime.voiceover') {
+    throw new Error('storytime_voiceover_consent_unverified');
+  }
+  const [fences, consent] = await Promise.all([
+    Promise.all(ownerDeletionFenceRefs(job.ownerUid).map(ref => ref.get())),
+    consentBlockRef(job.ownerUid, 'storytime.voiceover').get(),
+  ]);
+  if (ownerDeletionFenced(fences)) throw new Error('storytime_owner_deleted');
+  if (consent.exists && consent.data()?.active === true) throw new Error('storytime_voiceover_consent_revoked');
 }
 
 function safeProjection(job: BoundJob) {
@@ -266,7 +281,8 @@ async function artifactLocation(input: z.infer<typeof JobActionSchema>) {
 }
 
 async function playback(input: z.infer<typeof JobActionSchema>) {
-  const { output, location } = await artifactLocation(input);
+  const { job, output, location } = await artifactLocation(input);
+  await assertNarratorReadAuthority(job);
   const expiresAtMs = Date.now() + 5 * 60 * 1000;
   const [url] = await getStorage().bucket(location.bucket).file(location.objectPath).getSignedUrl({
     action: 'read',
@@ -327,6 +343,7 @@ export const storytimeNarratorBridge = onRequest({
     }
     if (parsed.data.action === 'status') {
       const job = await loadBoundJob(parsed.data);
+      await assertNarratorReadAuthority(job);
       res.status(200).json({ ok: true, job: safeProjection(job) });
       return;
     }
@@ -345,6 +362,8 @@ export const storytimeNarratorBridge = onRequest({
     const status = code === 'job_not_found' ? 404
       : code === 'storytime_narrator_boundary_mismatch' ? 403
       : code === 'storytime_voiceover_consent_revoked' ? 409
+      : code === 'storytime_voiceover_consent_unverified' ? 409
+      : code === 'storytime_owner_deleted' ? 409
       : code === 'idempotency_conflict' ? 409
       : code === 'job_not_ready_for_playback' ? 409
       : code === 'narrator_artifact_boundary_mismatch' ? 403
