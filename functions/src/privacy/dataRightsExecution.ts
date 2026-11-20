@@ -128,10 +128,12 @@ async function buildExport(db: Firestore, requestId: string, ownerUid: string) {
   return { payload, recordCount: exportedJobs.length + (userSnap.exists ? 1 : 0), sha256, gcsRef };
 }
 
-async function executeDelete(db: Firestore, requestId: string, ownerUid: string) {
+/** Jobs-scope only. The public callable enforces protected staging authorization. */
+export async function executeJobsScopedDelete(db: Firestore, requestId: string, ownerUid: string) {
   const jobs = await ownedJobs(db, ownerUid);
   const ownerHash = createHash('sha256').update(ownerUid).digest('hex');
   let queueDeletes = 0;
+  let jobResultDeletes = 0;
   let logDeletes = 0;
   let jobsAnonymized = 0;
 
@@ -146,10 +148,19 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
       logDeletes += 1;
     }
     const queueRef = db.collection('jobQueue').doc(document.id);
-    const queueSnap = await queueRef.get();
+    const [queueSnap, resultSnap] = await Promise.all([
+      queueRef.get(),
+      db.collection('jobResults').doc(document.id).get(),
+    ]);
     if (queueSnap.exists) {
       batch.delete(queueRef);
       queueDeletes += 1;
+    }
+    if (resultSnap.exists) {
+      // Jobs results can contain provider output and playback references.
+      // Purge the job-ID-linked artifact in the same bounded batch.
+      batch.delete(resultSnap.ref);
+      jobResultDeletes += 1;
     }
     batch.set(document.ref, {
       ownerUid: `deleted:${ownerHash}`,
@@ -181,11 +192,13 @@ async function executeDelete(db: Firestore, requestId: string, ownerUid: string)
   return {
     jobsAnonymized,
     queueDeletes,
+    jobResultDeletes,
     logDeletes,
     unresolvedDomains: [
       'firebase-auth-account',
       'provider-side-derivatives',
       'external-artifacts-not-bound-to-jobs-storage',
+      'orphan-job-results-without-parent-job',
       'cross-system-data-owned-by-other-urai-services',
     ],
   };
@@ -255,7 +268,7 @@ const handler = async (data: unknown, _context: CallableContext) => {
   try {
     const result = record.requestType === 'EXPORT'
       ? await buildExport(db, parsed.data.requestId, ownerUid)
-      : await executeDelete(db, parsed.data.requestId, ownerUid);
+      : await executeJobsScopedDelete(db, parsed.data.requestId, ownerUid);
     const resultDigest = canonicalDigest(result);
     const terminalState = record.requestType === 'EXPORT'
       ? 'PROTECTED_STAGING_EXPORT_READY_CENTRAL_DELIVERY_REQUIRED'
