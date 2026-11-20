@@ -16,6 +16,7 @@ import {
 import { StudioLifeMovieRenderPayloadSchema, assertLifeMovieTenantPaths } from './studioLifeMovieContract.js';
 import { assertSceneTruthReceiptValue } from './sceneTruthReceipt.js';
 import { consentBlockRef, isConsentContext } from '../privacy/consentBlocks.js';
+import { ownerDeletionFenceRefs, ownerDeletionFenced } from '../privacy/ownerDeletionFence.js';
 
 const bridgeTokenSecret = defineSecret('URAI_STUDIO_JOBS_BRIDGE_TOKEN');
 const sceneTruthReceiptSecret = defineSecret('URAI_SCENE_TRUTH_RECEIPT_HMAC');
@@ -314,15 +315,25 @@ function parseGcsRef(ref: unknown) {
   return { bucket, objectPath };
 }
 
+/** A prior successful render is not a standing authorization to read media. */
+async function assertCurrentMovieReadAuthority(job: Job, ownerUid: string): Promise<void> {
+  if (!isConsentContext(job.consent) || job.consent.purpose !== 'life-movie.render') {
+    throw new Error('life_movie_consent_missing');
+  }
+  const [deletion, consent] = await Promise.all([
+    Promise.all(ownerDeletionFenceRefs(ownerUid).map(ref => ref.get())),
+    consentBlockRef(ownerUid, job.consent.purpose).get(),
+  ]);
+  if (ownerDeletionFenced(deletion)) throw new Error('life_movie_owner_deleted');
+  if (consent.exists && consent.data()?.active === true) throw new Error('life_movie_consent_revoked');
+}
+
 async function signedMovieAccess(tenantId: string, userId: string, jobId: string, disposition: 'inline' | 'attachment') {
   const job = await loadBoundJob(tenantId, userId, jobId);
   if (!isConsentContext(job.consent) || job.consent.purpose !== 'life-movie.render') {
     throw new Error('life_movie_consent_missing');
   }
-  const consentSnapshot = await consentBlockRef(userId, job.consent.purpose).get();
-  if (consentSnapshot.exists && consentSnapshot.data()?.active === true) {
-    throw new Error('life_movie_consent_revoked');
-  }
+  await assertCurrentMovieReadAuthority(job, userId);
   if (String(job.status) !== 'SUCCESS') throw new Error('job_not_ready_for_playback');
   const output = job.output as WorkerOutput | undefined;
   const artifacts = Array.isArray(output?.outputs) ? output!.outputs! : [];
@@ -355,6 +366,9 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
     subtitleText = bytes.toString('utf8');
   }
 
+  // Signing and subtitle download are asynchronous: do not release a URL or
+  // private subtitles if revocation/deletion landed during either operation.
+  await assertCurrentMovieReadAuthority(job, userId);
   return {
     expiresAt: new Date(expiresAtMs).toISOString(),
     disposition,
@@ -489,6 +503,7 @@ export const studioLifeMovieBridge = onRequest({
 
     if (parsed.data.action === 'status') {
       const job = await loadBoundJob(parsed.data.tenantId, parsed.data.userId, parsed.data.jobId);
+      await assertCurrentMovieReadAuthority(job, parsed.data.userId);
       res.status(200).json({ ok: true, job: safeJobProjection(job) });
       return;
     }
@@ -521,6 +536,7 @@ export const studioLifeMovieBridge = onRequest({
       : code === 'job_not_ready_for_playback' ? 409
       : code === 'life_movie_consent_missing' ? 409
       : code === 'life_movie_consent_revoked' ? 409
+      : code === 'life_movie_owner_deleted' ? 409
       : code === 'output_delete_boundary_mismatch' ? 403
       : code === 'life_movie_output_boundary_mismatch' ? 403
       : code === 'life_movie_output_bucket_authority_unavailable' ? 503

@@ -1,0 +1,22 @@
+{
+  "emulators": {
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8709
+    },
+    "hub": {
+      "host": "127.0.0.1",
+      "port": 8710
+    },
+    "logging": {
+      "host": "127.0.0.1",
+      "port": 8711
+    },
+    "ui": {
+      "enabled": false
+    }
+  },
+  "firestore": {
+    "rules": "firebase.r1603-studio-read.rules"
+  }
+}
