@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { uploadToGcs } from '../core/gcs.js';
+import { isCompletedDataRightsReplayReceipt } from './dataRightsReplayPolicy.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
 const MAX_OWNED_JOBS = 2_000;
@@ -206,7 +207,23 @@ const handler = async (data: unknown, _context: CallableContext) => {
       transaction.get(executionRef),
     ]);
     if (!requestSnap.exists) throw httpsError('not-found', 'Data-rights request was not found.');
-    if (priorExecution.exists) return { replay: priorExecution.data(), record: requestSnap.data() as RequestRecord };
+    if (priorExecution.exists) {
+      const record = requestSnap.data() as RequestRecord;
+      if (!record.ownerUid || (record.requestType !== 'EXPORT' && record.requestType !== 'DELETE') ||
+          record.status !== 'IN_REVIEW' ||
+          record.executionState !== priorExecution.data()?.terminalState ||
+          !isCompletedDataRightsReplayReceipt(priorExecution.data(), {
+            requestId: parsed.data.requestId,
+            ownerUid: record.ownerUid,
+            requestType: record.requestType,
+          })) {
+        throw httpsError(
+          'failed-precondition',
+          'Prior data-rights execution is unfinished or its receipt does not match the owner and request. Reconcile before retrying.'
+        );
+      }
+      return { replay: priorExecution.data(), record };
+    }
 
     const record = requestSnap.data() as RequestRecord;
     if (!record.ownerUid || !['EXPORT', 'DELETE'].includes(String(record.requestType))) {
@@ -246,7 +263,9 @@ const handler = async (data: unknown, _context: CallableContext) => {
     const receipt = {
       event: 'DATA_RIGHTS_EXECUTION_FINISHED',
       schemaVersion: EXECUTION_SCHEMA,
+      requestId: parsed.data.requestId,
       requestType: record.requestType,
+      ownerHash: createHash('sha256').update(ownerUid).digest('hex'),
       resultDigest,
       terminalState,
       result,
