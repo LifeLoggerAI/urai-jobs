@@ -9,6 +9,7 @@ import { isCompletedDataRightsReplayReceipt } from './dataRightsReplayPolicy.js'
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
 const MAX_OWNED_JOBS = 2_000;
+const MAX_OWNER_TAGGED_ORPHAN_RESULTS = 2_000;
 const EXECUTION_MODE = 'protected-staging';
 const EXECUTION_SCHEMA = 'urai-jobs-data-rights-execution-v1';
 
@@ -179,6 +180,31 @@ export async function executeJobsScopedDelete(db: Firestore, requestId: string, 
     }, { merge: true });
     await batch.commit();
     jobsAnonymized += 1;
+  }
+
+  // New result writer tags trusted owners. Recover tagged results whose parent
+  // job was already removed, but never guess ownership for legacy untagged data.
+  // Query is bounded: overflow requires an operator reconciliation, never a
+  // partially successful completion receipt.
+  const remainingTagged = await db.collection('jobResults')
+    .where('ownerUid', '==', ownerUid)
+    .orderBy(FieldPath.documentId())
+    .limit(MAX_OWNER_TAGGED_ORPHAN_RESULTS + 1).get();
+  if (remainingTagged.size > MAX_OWNER_TAGGED_ORPHAN_RESULTS) {
+    throw httpsError('resource-exhausted', 'Owner-tagged job results exceed bounded deletion limit.');
+  }
+  for (const result of remainingTagged.docs) {
+    if (result.data().ownerUid !== ownerUid) {
+      throw httpsError('permission-denied', 'Owner-tagged result query returned an authority mismatch.');
+    }
+    const parent = await db.collection('jobs').doc(result.id).get();
+    const currentParentOwner = parent.exists ? parent.data()?.ownerUid : null;
+    if (currentParentOwner !== null && currentParentOwner !== ownerUid &&
+        currentParentOwner !== `deleted:${ownerHash}`) {
+      throw httpsError('failed-precondition', 'Result parent owner differs; reconcile before deletion.');
+    }
+    await result.ref.delete();
+    jobResultDeletes += 1;
   }
 
   // Jobs does not own Firebase Auth deletion, external provider derivatives, or
