@@ -1,13 +1,12 @@
 'use strict';
+const { requireEmulatorContext } = require('./r1629-emulator-context.cjs');
+const jobsRoot = requireEmulatorContext('jobs');
 const assert=require('node:assert/strict');
 const {createHash}=require('node:crypto');
-const jobsRoot='/workspace/r1629-jobs-owner-origin-review/functions';
 const {initializeApp,getApp,getApps,deleteApp}=require(require.resolve('firebase-admin/app',{paths:[jobsRoot]}));
 const {getFirestore}=require(require.resolve('firebase-admin/firestore',{paths:[jobsRoot]}));
 const {processDataRightsRequest}=require(jobsRoot+'/lib/functions/privacy/dataRightsExecution.js');
 const sha=v=>createHash('sha256').update(v).digest('hex');
-assert.equal(process.env.GCLOUD_PROJECT,'urai-jobs-r1624-disposable');
-assert.equal(process.env.FIRESTORE_EMULATOR_HOST,'127.0.0.1:8080');
 assert.equal(process.env.URAI_JOBS_DATA_RIGHTS_EXECUTION_MODE,'protected-staging');
 assert.equal(process.env.URAI_JOBS_DATA_RIGHTS_ALLOWED_PROJECT,process.env.GCLOUD_PROJECT);
 assert.notEqual(process.env.URAI_JOBS_DATA_RIGHTS_PRODUCTION_AUTHORIZED,'true');

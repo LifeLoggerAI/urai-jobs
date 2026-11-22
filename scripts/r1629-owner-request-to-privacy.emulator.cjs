@@ -1,20 +1,17 @@
 'use strict';
+const { requireEmulatorContext } = require('./r1629-emulator-context.cjs');
+const jobsDep = requireEmulatorContext('privacy');
 const assert=require('node:assert/strict');
 const {randomBytes,createHash,generateKeyPairSync}=require('node:crypto');
 const {spawnSync}=require('node:child_process');
 const {initializeApp,deleteApp}=require('firebase/app');
 const {getAuth,connectAuthEmulator,signInWithCustomToken}=require('firebase/auth');
 const {getFunctions,connectFunctionsEmulator,httpsCallable}=require('firebase/functions');
-const jobsDep='/workspace/r1629-jobs-owner-origin-review/functions';
 const {initializeApp:adminInit,deleteApp:adminDelete,cert}=require(require.resolve('firebase-admin/app',{paths:[jobsDep]}));
 const {getAuth:adminAuth}=require(require.resolve('firebase-admin/auth',{paths:[jobsDep]}));
 const {getFirestore}=require(require.resolve('firebase-admin/firestore',{paths:[jobsDep]}));
 const project='urai-privacy-r1512-disposable';
-assert.equal(process.env.GCLOUD_PROJECT,project);
-assert.equal(process.env.FIREBASE_AUTH_EMULATOR_HOST,'127.0.0.1:9099');
-assert.equal(process.env.FIRESTORE_EMULATOR_HOST,'127.0.0.1:8080');
 assert.equal(process.env.URAI_JOBS_PRIVACY_DELETION_SERVICE_UID,'r1622-jobs-service');
-for(const n of ['GOOGLE_APPLICATION_CREDENTIALS','FIREBASE_TOKEN','GITHUB_TOKEN','RUNPOD_API_KEY'])assert.equal(process.env[n],undefined);
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const hash=v=>sha(JSON.stringify(v));
 const nonce=randomBytes(5).toString('hex'),uid='r1622-owner-'+nonce;
@@ -50,7 +47,7 @@ assert.equal(canonicalOwner.scope,'account');
 assert.ok(canonicalOwner.createdAt);
 check('actual_authenticated_owner_created_Privacy_account_deletion_request');
 const submit=spawnSync(process.execPath,[
- '/workspace/r1629-jobs-owner-origin-review/scripts/r1629-owner-jobs-submission.cjs',uid,idempotencyKey
+ require.resolve('./r1629-owner-jobs-submission.cjs'),uid,idempotencyKey
 ],{env:{...process.env,GCLOUD_PROJECT:'urai-jobs-r1624-disposable',
  GOOGLE_CLOUD_PROJECT:'urai-jobs-r1624-disposable',
  FIREBASE_CONFIG:JSON.stringify({projectId:'urai-jobs-r1624-disposable'})},
@@ -128,7 +125,7 @@ await assert.rejects(bind({centralRequestId,jobsRequestId:conflictingId}),e=>{
 check('Privacy_binding_conflicting_second_Jobs_request_denied');
 const jobId='r1625-job-'+nonce;
 const worker=spawnSync(process.execPath,[
- '/workspace/r1629-jobs-owner-origin-review/scripts/r1629-jobs-handler-worker.cjs',
+ require.resolve('./r1629-jobs-handler-worker.cjs'),
  uid,jobsRequestId,jobId,centralRequestId
 ],{
  env:{...process.env,GCLOUD_PROJECT:'urai-jobs-r1624-disposable',
@@ -167,7 +164,7 @@ await signInWithCustomToken(auth,token);
 await reject(payload,'failed-precondition');check('missing_independent_jobs_origin_denied');
 await jobsDb.doc(sourcePath).set(receipt);
 const nativeDispatch=spawnSync(process.execPath,[
- '/workspace/r1629-jobs-owner-origin-review/scripts/r1629-jobs-delivery-worker.cjs',
+ require.resolve('./r1629-jobs-delivery-worker.cjs'),
  uid,jobsRequestId,centralRequestId
 ],{env:{...process.env,GCLOUD_PROJECT:'urai-jobs-r1624-disposable',
  GOOGLE_CLOUD_PROJECT:'urai-jobs-r1624-disposable',
