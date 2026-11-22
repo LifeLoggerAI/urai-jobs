@@ -5,8 +5,9 @@ import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { isCompletedDataRightsReplayReceipt } from './dataRightsReplayPolicy.js';
 import { jobsPrivacyIdToken } from './consentRevocationAcknowledgement.js';
+import { readPrivacyAuthorizedJobsBinding } from './centralDeletionBinding.js';
 
-const Input=z.object({requestId:z.string().min(8).max(160).regex(/^[A-Za-z0-9._:-]+$/)}).strict();
+const Input=z.object({requestId:z.string().min(8).max(160).regex(/^[A-Za-z0-9._:-]+$/),centralRequestId:z.string().min(8).max(160).regex(/^[A-Za-z0-9._:-]+$/)}).strict();
 const Ident=/^[A-Za-z0-9._:-]{8,160}$/;
 const HASH=/^[a-f0-9]{64}$/;
 const TERMINAL='PROTECTED_STAGING_JOBS_SCOPE_APPLIED_CENTRAL_PRIVACY_REQUIRED';
@@ -54,7 +55,7 @@ async function dispatch(data:unknown,_context:CallableContext) {
  if (!request.exists)throw httpsError('not-found','Jobs request missing.');
  const row=request.data() || {};
  const ownerUid=row.ownerUid;
- const centralRequestId=row.privacyCentralDeletionRequestId;
+ const centralRequestId=parsed.data.centralRequestId;
  const path=row.executionReceiptPath;
  if (typeof ownerUid!=='string' || !Ident.test(ownerUid) ||
    typeof centralRequestId!=='string' || !Ident.test(centralRequestId) ||
@@ -65,6 +66,8 @@ async function dispatch(data:unknown,_context:CallableContext) {
    !path.startsWith(requestRef.path+'/audit/'))
   throw httpsError('failed-precondition','Jobs-to-Privacy deletion source is not server-bound and complete.');
 
+ if (!await readPrivacyAuthorizedJobsBinding(ownerUid,centralRequestId,request.id))
+  throw httpsError('failed-precondition','Canonical Privacy-owned Jobs deletion binding denied.');
  const snap=await db.doc(path).get();
  const receipt=snap.data();
  if (!snap.exists || !isCompletedDataRightsReplayReceipt(receipt,{
