@@ -27,3 +27,5 @@ export { submitDataRightsRequest, getDataRightsRequest, listDataRightsRequests }
 export { processDataRightsRequest } from "./privacy/dataRightsExecution.js";
 
 export { storytimeNarratorBridge } from "./jobs/storytimeNarratorBridge.js";
+
+export { dispatchJobsDeletionEvidence } from "./privacy/deletionEvidenceDelivery.js";
