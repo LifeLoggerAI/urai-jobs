@@ -1,12 +1,12 @@
 'use strict';
+const { requireEmulatorContext } = require('./r1629-emulator-context.cjs');
+const root = requireEmulatorContext('jobs');
 const assert=require('node:assert/strict');
-const root='/workspace/r1629-jobs-owner-origin-review/functions';
 const {getApp,getApps,initializeApp,deleteApp}=require(require.resolve('firebase-admin/app',{paths:[root]}));
 const {getFirestore}=require(require.resolve('firebase-admin/firestore',{paths:[root]}));
 const {dispatchJobsDeletionEvidence}=require(root+'/lib/functions/privacy/deletionEvidenceDelivery.js');
 const [uid,jobsRequestId,centralRequestId]=process.argv.slice(2);
 assert.ok(uid && jobsRequestId && centralRequestId);
-assert.equal(process.env.GCLOUD_PROJECT,'urai-jobs-r1624-disposable');
 const app=getApps().length ? getApp() : initializeApp();
 const db=getFirestore(app);
 (async()=>{
