@@ -6,6 +6,7 @@ import { withAuthenticatedRole } from '../core/auth.js';
 import { httpsError } from '../core/errors.js';
 import { uploadToGcs } from '../core/gcs.js';
 import { isCompletedDataRightsReplayReceipt } from './dataRightsReplayPolicy.js';
+import { canonicalDataRightsDigest } from './dataRightsDigest.js';
 
 const DATA_RIGHTS_COLLECTION = 'dataRightsRequests';
 const MAX_OWNED_JOBS = 2_000;
@@ -81,7 +82,7 @@ async function ownedJobs(db: Firestore, ownerUid: string): Promise<QueryDocument
 }
 
 function canonicalDigest(value: unknown) {
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  return canonicalDataRightsDigest(value);
 }
 
 async function buildExport(db: Firestore, requestId: string, ownerUid: string) {

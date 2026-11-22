@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { canonicalDataRightsDigest } from './dataRightsDigest.js';
 
 export const DATA_RIGHTS_EXECUTION_RECEIPT_SCHEMA = 'urai-jobs-data-rights-execution-v1';
 
@@ -26,6 +27,5 @@ export function isCompletedDataRightsReplayReceipt(
       typeof r.resultDigest !== 'string' ||
       !/^[a-f0-9]{64}$/.test(r.resultDigest) ||
       !r.result || typeof r.result !== 'object' || Array.isArray(r.result)) return false;
-  return r.resultDigest === createHash('sha256')
-    .update(JSON.stringify(r.result)).digest('hex');
+  return r.resultDigest === canonicalDataRightsDigest(r.result);
 }
