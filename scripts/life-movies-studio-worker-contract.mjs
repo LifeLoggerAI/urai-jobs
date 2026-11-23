@@ -66,9 +66,12 @@ assert.ok(readGuard.includes('ownerDeletionFenced(deletion)'), 'Movie access mus
 assert.ok(readGuard.includes('consentBlockRef(ownerUid, job.consent.purpose)'), 'Movie access must consult current purpose revocation');
 assert.ok(readGuard.includes('life_movie_consent_revoked'), 'Movie access must fail closed on revoked purpose');
 assert.ok(signedAccess.includes('await assertCurrentMovieReadAuthority(job, userId)'), 'Movie access must invoke the live deletion/revocation guard');
-assert.ok(signedAccess.split('await assertCurrentMovieReadAuthority(job, userId)').length === 3, 'Movie URL/subtitle return must revalidate after asynchronous Storage access');
+assert.ok(signedAccess.includes('await assertCurrentMovieReadAuthority(currentJob, userId)'), 'Movie URL/subtitle return must revalidate current job after asynchronous Storage access');
+assert.ok(signedAccess.includes('const currentJob = await loadBoundJob(tenantId, userId, jobId)'), 'Signed access must re-fetch owner-bound job after signing');
+assert.ok(signedAccess.includes('JSON.stringify(currentJob.output) !== JSON.stringify(job.output)'), 'Signed access must reject replaced or deleted output');
+assert.ok(signedAccess.includes('life_movie_output_changed_during_signing'), 'Signed access must fail closed if output state changes');
 assert.ok(signedAccess.indexOf('await assertCurrentMovieReadAuthority(job, userId)') < signedAccess.indexOf('getSignedUrl('), 'Movie read authority must precede Storage URL signing');
-assert.ok(signedAccess.lastIndexOf('await assertCurrentMovieReadAuthority(job, userId)') > signedAccess.indexOf('getSignedUrl('), 'Movie access must recheck before returning a signed URL');
+assert.ok(signedAccess.lastIndexOf('await assertCurrentMovieReadAuthority(currentJob, userId)') > signedAccess.indexOf('getSignedUrl('), 'Movie access must recheck before returning a signed URL');
 assert.ok(signedAccess.indexOf('await loadBoundJob(tenantId, userId, jobId)') >= 0, 'Playback/download must validate owner/tenant/job boundary');
 assert.ok(signedAccess.indexOf('await loadBoundJob(tenantId, userId, jobId)') < signedAccess.indexOf('getSignedUrl('), 'Boundary validation must occur before any signed playback/download URL is issued');
 assert.ok(signedAccess.includes("String(job.status) !== 'SUCCESS'"), 'Playback must require a successful render');
