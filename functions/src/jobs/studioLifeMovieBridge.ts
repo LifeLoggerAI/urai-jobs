@@ -288,7 +288,7 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
 async function loadBoundJob(tenantId: string, userId: string, jobId: string) {
   const snapshot = await jobDoc(jobId).get();
   if (!snapshot.exists) throw new Error('job_not_found');
-  const job = snapshot.data() as Job & { sourceSystem?: string };
+  const job = snapshot.data() as Job & { sourceSystem?: string; outputDeletedAt?: unknown };
   if (job.sourceSystem !== 'urai-studio' || job.tenantId !== tenantId || job.ownerUid !== userId || (job.jobType || job.type) !== 'studio.render.video') {
     throw new Error('job_boundary_mismatch');
   }
