@@ -21,6 +21,7 @@ export type RenderMemoryBindingEvidence = Readonly<{
   manifestVersion: number;
   renderPlanDigest: string;
   decisionReceiptId: string;
+  policyVersion: string;
   revoked: false;
 }>;
 export type RenderJobEvidence = Readonly<{
@@ -38,6 +39,8 @@ type Result = Readonly<{status:'unavailable'} | {status:'consistent'}>;
 const ID=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const JOB=/^[A-Za-z0-9_-]{10,64}$/;
 const HASH=/^[a-f0-9]{64}$/;
+const POLICY=/^\S(?:.{0,78}\S)?$/;
+const RECEIPT=/^\S(?:.{0,158}\S)?$/;
 const deny=():Result=>({status:'unavailable'});
 const valid=(v:unknown,re=ID):v is string=>typeof v==='string'&&re.test(v);
 function record(value:unknown):value is Record<string,unknown>{
@@ -62,7 +65,8 @@ export function checkProtectedMemoryRenderProvenance(input:{
   const b=input.protectedBinding,j=input.currentJobsReadback;
   if(!record(b)||!record(j)||!record(j.consent)||!record(j.output))return deny();
   if(b.source!=='jobs-protected-record'||b.revoked!==false
-    ||!valid(b.jobId,JOB)||!valid(b.renderPlanDigest,HASH)||!valid(b.decisionReceiptId,HASH)
+    ||!valid(b.jobId,JOB)||!valid(b.renderPlanDigest,HASH)
+    ||!valid(b.policyVersion,POLICY)||!valid(b.decisionReceiptId,RECEIPT)
     ||b.ownerUid!==input.verifiedOwnerUid||b.tenantId!==input.verifiedTenantId
     ||b.memoryId!==input.selectedMemoryId||b.replayManifestId!==input.selectedManifestId
     ||b.manifestVersion!==input.selectedManifestVersion)return deny();
@@ -70,7 +74,7 @@ export function checkProtectedMemoryRenderProvenance(input:{
     ||j.tenantId!==input.verifiedTenantId||j.jobId!==b.jobId
     ||j.jobType!=='studio.render.video'||j.status!=='SUCCESS'
     ||j.outputDeletedAt!=null||j.consent.purpose!=='life-movie.render'
-    ||j.consent.policyVersion!=='1.1.0'
+    ||j.consent.policyVersion!==b.policyVersion
     ||j.consent.decisionReceiptId!==b.decisionReceiptId
     ||j.output.renderPlanDigest!==b.renderPlanDigest)return deny();
   return {status:'consistent'};
