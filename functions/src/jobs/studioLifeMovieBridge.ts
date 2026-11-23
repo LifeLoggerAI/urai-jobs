@@ -288,7 +288,7 @@ async function createLifeMovieJob(input: z.infer<typeof CreateSchema>) {
 async function loadBoundJob(tenantId: string, userId: string, jobId: string) {
   const snapshot = await jobDoc(jobId).get();
   if (!snapshot.exists) throw new Error('job_not_found');
-  const job = snapshot.data() as Job & { sourceSystem?: string };
+  const job = snapshot.data() as Job & { sourceSystem?: string; outputDeletedAt?: unknown };
   if (job.sourceSystem !== 'urai-studio' || job.tenantId !== tenantId || job.ownerUid !== userId || (job.jobType || job.type) !== 'studio.render.video') {
     throw new Error('job_boundary_mismatch');
   }
@@ -366,9 +366,17 @@ async function signedMovieAccess(tenantId: string, userId: string, jobId: string
     subtitleText = bytes.toString('utf8');
   }
 
-  // Signing and subtitle download are asynchronous: do not release a URL or
-  // private subtitles if revocation/deletion landed during either operation.
-  await assertCurrentMovieReadAuthority(job, userId);
+  // Signing and subtitle download are asynchronous. A previously authorized
+  // job can also be deleted, replaced, or moved out of SUCCESS during either
+  // operation. Re-read the owner-bound job and match the exact artifact record
+  // before releasing the capability, not just the earlier consent snapshot.
+  const currentJob = await loadBoundJob(tenantId, userId, jobId);
+  if (String(currentJob.status) !== 'SUCCESS' || currentJob.outputDeletedAt
+      || JSON.stringify(currentJob.output) !== JSON.stringify(job.output)
+      || JSON.stringify(currentJob.consent) !== JSON.stringify(job.consent)) {
+    throw new Error('life_movie_output_changed_during_signing');
+  }
+  await assertCurrentMovieReadAuthority(currentJob, userId);
   return {
     expiresAt: new Date(expiresAtMs).toISOString(),
     disposition,
@@ -534,6 +542,7 @@ export const studioLifeMovieBridge = onRequest({
       : code === 'job_boundary_mismatch' ? 403
       : code === 'idempotency_conflict' ? 409
       : code === 'job_not_ready_for_playback' ? 409
+      : code === 'life_movie_output_changed_during_signing' ? 409
       : code === 'life_movie_consent_missing' ? 409
       : code === 'life_movie_consent_revoked' ? 409
       : code === 'life_movie_owner_deleted' ? 409
