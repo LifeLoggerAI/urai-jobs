@@ -568,6 +568,8 @@ async function sha256File(filePath) {
 }
 
 async function assembleLifeMovie(job) {
+  // Fail closed until private storage broker IAM and upload-drain are certified.
+  throw new Error('private_output_broker_required');
   const input = parseAssemblyPayload(job);
   const bucketName = process.env.GCS_BUCKET_NAME;
   if (!bucketName) throw new Error('GCS_BUCKET_NAME_not_configured');
@@ -601,12 +603,9 @@ async function assembleLifeMovie(job) {
     return bytes;
   }
 
-  async function uploadPrivateFile(localPath, destination, contentType) {
+  async function uploadPrivateFile(_localPath, _destination, _contentType) {
     await control.check();
-    writtenObjects.push(destination);
-    await pipeline(fs.createReadStream(localPath), bucket.file(destination).createWriteStream({
-      resumable: false, metadata: { contentType, cacheControl: 'private, no-store' },
-    }), { signal: control.signal });
+    throw new Error('private_output_broker_required');
   }
 
   try {
@@ -731,6 +730,8 @@ async function assembleLifeMovie(job) {
 }
 
 async function renderLifeMovie(job) {
+  // Fail closed until private storage broker IAM and upload-drain are certified.
+  throw new Error('private_output_broker_required');
   const input = parsePayload(job);
   const bucketName = process.env.GCS_BUCKET_NAME;
   if (!bucketName) throw new Error('GCS_BUCKET_NAME_not_configured');
@@ -860,12 +861,9 @@ async function renderLifeMovie(job) {
       srt: `${attemptPrefix}/life-movie.srt`,
       manifest: `${attemptPrefix}/life-movie.render-manifest.json`,
     };
-    async function uploadPrivateFile(localPath, destination, contentType) {
+    async function uploadPrivateFile(_localPath, _destination, _contentType) {
       await control.check();
-      writtenObjects.push(destination);
-      await pipeline(fs.createReadStream(localPath), bucket.file(destination).createWriteStream({
-        resumable: false, metadata: { contentType, cacheControl: 'private, no-store' },
-      }), { signal: control.signal });
+      throw new Error('private_output_broker_required');
     }
     await uploadPrivateFile(moviePath, outputPaths.mp4, 'video/mp4');
     await uploadPrivateFile(subtitlePath, outputPaths.srt, 'application/x-subrip');

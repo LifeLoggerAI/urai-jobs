@@ -91,19 +91,20 @@ for (const value of [
 }
 console.log('[PASS] Synchronous render budget parity, exact boundaries, gaps, source/item counts and long-form rejection');
 
-// R1731 intentionally RED review-only regression: no GCS write after revocation ACK.
+// R1732 broker-only fail-closed security regression (R1731 prior RED): no GCS write after revocation ACK.
 // Synthetic Firestore/storage mocks only; no customer media or cloud access.
 async function checkNoPostAckWrite() {
   const src=fs.readFileSync(new URL('../workers/studio-worker/index.js',import.meta.url),'utf8');
   const slice=(a,b)=>src.slice(src.indexOf(a),src.indexOf(b,src.indexOf(a)));
-  const render=/^  async function uploadPrivateFile\(localPath, destination, contentType\) \{[\s\S]*?^  \}/m.exec(src);
-  const assembly=/^    async function uploadPrivateFile\(localPath, destination, contentType\) \{[\s\S]*?^    \}/m.exec(src);
+  const render=/^  async function uploadPrivateFile\([^\n)]*\) \{[\s\S]*?^  \}/m.exec(src);
+  const assembly=/^    async function uploadPrivateFile\([^\n)]*\) \{[\s\S]*?^    \}/m.exec(src);
   assert.ok(render&&assembly,'both direct writer paths present');
   const normalized=s=>s.split('\n').map(x=>x.trim()).join('\n');
   assert.equal(normalized(render[0]),normalized(assembly[0]),'same unprotected upload on both paths');
-  const code=slice('function canonicalJson(value)','function timingSafeTokenMatch')+
-    slice('function safeSegment(value, field)','function safeObjectPath')+'\n'+render[0];
-  for(const jobType of ['studio.render.video','studio.assemble.video']) {
+  const definitions=[render[0],assembly[0]];
+  for(const [i,jobType] of ['studio.render.video','studio.assemble.video'].entries()) {
+    const code=slice('function canonicalJson(value)','function timingSafeTokenMatch')+
+      slice('function safeSegment(value, field)','function safeObjectPath')+'\n'+definitions[i];
     const job={jobId:'job1',jobType,leaseToken:'lease1',tenantId:'tenant1',
       ownerUid:'owner1',payload:{x:1},status:'RUNNING',execution:{leaseToken:'lease1'},
       consent:{purpose:'life-movie.render'}};
@@ -125,11 +126,20 @@ async function checkNoPostAckWrite() {
       await control.start();
       const write=vm.runInContext('uploadPrivateFile',context)(
         'synthetic','tenants/tenant1/life-movies/test.mp4','video/mp4');
-      await started;
+      const outcome=await Promise.race([
+        started.then(()=>({kind:'started'})),
+        write.then(()=>({kind:'fulfilled'}),error=>({kind:'rejected',error})),
+      ]);
+      assert.notEqual(outcome.kind,'fulfilled',jobType+': direct private write succeeded');
       job.status='CANCELLED';job.execution.leaseToken='revoked';revoked=true;ack=true;
       finish();
-      await assert.rejects(write,/revok|fenc|denied|unauthoriz/i,
-        jobType+': in-flight write completed after revocation ACK');
+      if(outcome.kind==='started') {
+        await assert.rejects(write,/revok|fenc|denied|unauthoriz|broker_required/i,
+          jobType+': in-flight write completed after revocation ACK');
+      } else {
+        assert.match(outcome.error.message,/private_output_broker_required/,
+          jobType+': safe early denial must identify missing broker');
+      }
       assert.equal(committed.length,0,jobType+': post-ACK object persisted');
     } finally {finish();control.stop();}
   }
