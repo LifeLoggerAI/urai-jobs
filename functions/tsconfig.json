@@ -3,6 +3,9 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "paths": {
+      "@urai-jobs/shared-types": ["../packages/shared-types/dist/index.d.ts", "./lib/urai-jobs-shared-types.d.ts"]
+    },
     "outDir": "lib/functions",
     "rootDir": "src",
     "strict": false,
