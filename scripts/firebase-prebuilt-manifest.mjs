@@ -9,6 +9,8 @@ const sourceRoot = path.resolve(process.env.URAI_FIREBASE_PREBUILT_ROOT || repos
 const manifestRelativePath = 'docs/release-evidence/firebase-prebuilt-manifest.json';
 const manifestPath = path.join(sourceRoot, manifestRelativePath);
 const roots = ['packages/shared-types/dist', 'functions/lib', 'web/dist'];
+const canonicalDeclaration = 'packages/shared-types/dist/index.d.ts';
+const functionsDeclaration = 'functions/lib/urai-jobs-shared-types.d.ts';
 const shaPattern = /^[0-9a-f]{40}$/;
 const writeMode = process.argv.includes('--write');
 const verifyMode = process.argv.includes('--verify');
@@ -56,7 +58,11 @@ function collectFiles(baseRoot) {
     }
   }
   files.sort((left, right) => left.path.localeCompare(right.path));
-  if (!files.length) throw new Error('Firebase prebuilt output is empty.');
+  const canonical = files.find(file => file.path === canonicalDeclaration);
+  const packaged = files.find(file => file.path === functionsDeclaration);
+  if (!canonical || !packaged || canonical.sha256 !== packaged.sha256) {
+    throw new Error('Firebase Functions must include the canonical shared types declaration.');
+  }
   return files;
 }
 
@@ -98,6 +104,19 @@ const sourceSha = exactSourceSha();
 
 if (writeMode) {
   if (sourceRoot !== repositoryRoot) throw new Error('--write must run from the repository output root.');
+  const source = path.join(repositoryRoot, canonicalDeclaration);
+  const destination = path.join(repositoryRoot, functionsDeclaration);
+  if (fs.realpathSync(source) !== source || fs.realpathSync(path.dirname(destination)) !== path.dirname(destination)) {
+    throw new Error('Firebase shared types declaration must use the built output directories.');
+  }
+  const tempDirectory = fs.mkdtempSync(path.join(repositoryRoot, '.firebase-shared-types-'));
+  try {
+    const temporary = path.join(tempDirectory, 'index.d.ts');
+    copyDirectory(source, temporary);
+    fs.renameSync(temporary, destination);
+  } finally {
+    fs.rmSync(tempDirectory, { recursive: true, force: true });
+  }
   const files = collectFiles(repositoryRoot);
   const totals = {
     fileCount: files.length,
