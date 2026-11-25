@@ -156,7 +156,12 @@ async function harness({ jobs = 1, plans = 1 } = {}) {
       assert.equal(job.lease, undefined); assert.equal(job.execution.leaseToken, undefined);
       assert.equal(job.execution.asyncCallbackPending, false); assert.equal(job.execution.callbackTokenHash, undefined);
       assert.equal(job.execution.callbackLeaseToken, undefined); assert.equal(job.execution.callbackDeadlineAt, undefined);
-      assert.equal(queue.status, 'CANCELLED'); assert.equal(queue.lease, undefined);
+      // A terminal cleanup trigger may remove the queue document before this
+      // revocation assertion reads it. The durable cancelled/revoked master
+      // remains the fence in either valid state.
+      if (queue) {
+        assert.equal(queue.status, 'CANCELLED'); assert.equal(queue.lease, undefined);
+      }
     }
     for (const id of planIds) {
       const plan = await get(`studioLifeMovieLongformPlans/${id}`);
