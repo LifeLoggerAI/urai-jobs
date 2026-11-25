@@ -140,46 +140,61 @@ export async function executeJobsScopedDelete(db: Firestore, requestId: string, 
   let jobsAnonymized = 0;
 
   for (const document of jobs) {
-    const logs = await document.ref.collection('logs').limit(500).get();
-    if (logs.size >= 500) {
-      throw httpsError('resource-exhausted', `Job ${document.id} has too many logs for bounded deletion; reconcile before retry.`);
-    }
-    const batch = db.batch();
-    for (const log of logs.docs) {
-      batch.delete(log.ref);
-      logDeletes += 1;
-    }
-    const queueRef = db.collection('jobQueue').doc(document.id);
-    const [queueSnap, resultSnap] = await Promise.all([
-      queueRef.get(),
-      db.collection('jobResults').doc(document.id).get(),
-    ]);
-    if (queueSnap.exists) {
-      batch.delete(queueRef);
-      queueDeletes += 1;
-    }
-    if (resultSnap.exists) {
-      // Jobs results can contain provider output and playback references.
-      // Purge the job-ID-linked artifact in the same bounded batch.
-      batch.delete(resultSnap.ref);
-      jobResultDeletes += 1;
-    }
-    batch.set(document.ref, {
-      ownerUid: `deleted:${ownerHash}`,
-      payload: FieldValue.delete(),
-      output: FieldValue.delete(),
-      consent: FieldValue.delete(),
-      consents: FieldValue.delete(),
-      error: FieldValue.delete(),
-      deletionReceipt: {
-        schemaVersion: EXECUTION_SCHEMA,
-        requestId,
-        ownerHash,
-        deletedAt: FieldValue.serverTimestamp(),
-      },
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    await batch.commit();
+    // An inventory snapshot is not continuing ownership authority. Re-read the
+    // job and all linked records in the transaction that applies the mutation.
+    const counts = await db.runTransaction(async transaction => {
+      const queueRef = db.collection('jobQueue').doc(document.id);
+      const resultRef = db.collection('jobResults').doc(document.id);
+      const [current, logs, queueSnap, resultSnap] = await Promise.all([
+        transaction.get(document.ref),
+        transaction.get(document.ref.collection('logs').limit(500)),
+        transaction.get(queueRef),
+        transaction.get(resultRef),
+      ]);
+      if (!current.exists || current.data()?.ownerUid !== ownerUid) {
+        throw httpsError('failed-precondition', 'Job ownership changed before deletion.');
+      }
+      for (const linked of [queueSnap, resultSnap]) {
+        const linkedOwner = linked.data()?.ownerUid;
+        if (linked.exists && linkedOwner !== undefined && linkedOwner !== ownerUid) {
+          throw httpsError('failed-precondition', 'Linked job record ownership requires reconciliation.');
+        }
+      }
+      if (logs.size >= 500) {
+        throw httpsError('resource-exhausted', `Job ${document.id} has too many logs for bounded deletion; reconcile before retry.`);
+      }
+      for (const log of logs.docs) {
+        transaction.delete(log.ref);
+      }
+      if (queueSnap.exists) {
+        transaction.delete(queueRef);
+      }
+      if (resultSnap.exists) {
+        // Jobs results can contain provider output and playback references.
+        // Purge the job-ID-linked artifact in the same ownership transaction.
+        transaction.delete(resultSnap.ref);
+      }
+      transaction.set(document.ref, {
+        ownerUid: `deleted:${ownerHash}`,
+        payload: FieldValue.delete(),
+        output: FieldValue.delete(),
+        consent: FieldValue.delete(),
+        consents: FieldValue.delete(),
+        error: FieldValue.delete(),
+        deletionReceipt: {
+          schemaVersion: EXECUTION_SCHEMA,
+          requestId,
+          ownerHash,
+          deletedAt: FieldValue.serverTimestamp(),
+        },
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return { logs: logs.size, queue: Number(queueSnap.exists), results: Number(resultSnap.exists) };
+    });
+    // Transaction callbacks may retry. Count only the committed attempt.
+    logDeletes += counts.logs;
+    queueDeletes += counts.queue;
+    jobResultDeletes += counts.results;
     jobsAnonymized += 1;
   }
 
@@ -198,14 +213,23 @@ export async function executeJobsScopedDelete(db: Firestore, requestId: string, 
     if (result.data().ownerUid !== ownerUid) {
       throw httpsError('permission-denied', 'Owner-tagged result query returned an authority mismatch.');
     }
-    const parent = await db.collection('jobs').doc(result.id).get();
-    const currentParentOwner = parent.exists ? parent.data()?.ownerUid : null;
-    if (currentParentOwner !== null && currentParentOwner !== ownerUid &&
-        currentParentOwner !== `deleted:${ownerHash}`) {
-      throw httpsError('failed-precondition', 'Result parent owner differs; reconcile before deletion.');
-    }
-    await result.ref.delete();
-    jobResultDeletes += 1;
+    const deleted = await db.runTransaction(async transaction => {
+      const [currentResult, parent] = await Promise.all([
+        transaction.get(result.ref), transaction.get(db.collection('jobs').doc(result.id)),
+      ]);
+      if (!currentResult.exists) return false;
+      if (currentResult.data()?.ownerUid !== ownerUid) {
+        throw httpsError('failed-precondition', 'Result ownership changed before deletion.');
+      }
+      const currentParentOwner = parent.exists ? parent.data()?.ownerUid : null;
+      if (currentParentOwner !== null && currentParentOwner !== ownerUid &&
+          currentParentOwner !== `deleted:${ownerHash}`) {
+        throw httpsError('failed-precondition', 'Result parent owner differs; reconcile before deletion.');
+      }
+      transaction.delete(result.ref);
+      return true;
+    });
+    jobResultDeletes += Number(deleted);
   }
 
   // Jobs does not own Firebase Auth deletion, external provider derivatives, or
