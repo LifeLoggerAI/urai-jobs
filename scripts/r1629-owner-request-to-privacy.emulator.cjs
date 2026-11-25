@@ -232,10 +232,22 @@ assert.equal(evidence.sourceProject,'urai-jobs-r1624-disposable');
 assert.equal(evidence.acknowledgmentState,'evidence-received-verification-pending');
 assert.equal((await db.collection('deletionRequests').doc(centralRequestId).get()).data().status,'processing');
 check('actual_firestore_receipt_persists_without_global_completion');
+await signInWithCustomToken(auth,adminToken);
+const reconciled=(await httpsCallable(fn,'reconcileDeletionParticipants',{timeout:30000})({centralRequestId})).data;
+assert.equal(reconciled.globalDeletionComplete,false);
+assert.equal(reconciled.participants.length,8);
+assert.equal(reconciled.participants.find(p=>p.participantId==='urai-jobs').state,'source-partial-verified');
+assert.ok(reconciled.participants.filter(p=>p.participantId!=='urai-jobs').every(p=>p.state==='pending'));
+const progress=(await db.doc(`deletionRequests/${centralRequestId}/participantVerification/urai-jobs`).get()).data();
+assert.equal(progress.state,'source-partial-verified');
+assert.equal(progress.globalDeletionComplete,false);
+assert.equal(progress.leaseUntilMillis,0);
+assert.equal((await db.collection('deletionRequests').doc(centralRequestId).get()).data().status,'processing');
+check('actual_durable_reconciliation_rechecks_source_without_terminal_promotion');
 console.log('R1629_OWNER_REQUEST_PROVENANCE_PASS',JSON.stringify({checks:checks.length,globalDeletionCertified:false,source:'compiled-protected-Jobs-handler-and-authenticated-Privacy-callable'}));
 }
 main().catch(e=>{console.error('R1629_FAIL',e.stack||e);process.exitCode=1}).finally(async()=>{
-for(const path of ['deletionRequests/'+centralRequestId+'/participantBindings/urai-jobs','deletionRequests/'+centralRequestId+'/participantEvidence/urai-jobs','deletionRequests/'+centralRequestId,'jobs/r1622-job-'+nonce,'jobResults/r1622-job-'+nonce,'users/'+uid])await db.doc(path).delete().catch(()=>{});
+for(const path of ['deletionRequests/'+centralRequestId+'/participantVerification/urai-jobs','deletionRequests/'+centralRequestId+'/participantBindings/urai-jobs','deletionRequests/'+centralRequestId+'/participantEvidence/urai-jobs','deletionRequests/'+centralRequestId,'jobs/r1622-job-'+nonce,'jobResults/r1622-job-'+nonce,'users/'+uid])await db.doc(path).delete().catch(()=>{});
 for(const path of ['dataRightsRequests/'+conflictingId+'/audit/submitted','dataRightsRequests/'+conflictingId,'dataRightsRequests/'+jobsRequestId+'/audit/submitted','dataRightsRequests/'+jobsRequestId+'/delivery/privacy-evidence','dataRightsRequests/'+jobsRequestId+'/audit/'+executionId,'dataRightsRequests/'+jobsRequestId,'jobs/r1622-job-'+nonce,'jobResults/r1622-job-'+nonce,'users/'+uid,'users/r1625-operator-'+sha(uid).slice(0,12)])await jobsDb.doc(path).delete().catch(()=>{});
 await deleteApp(app);await adminDelete(jobsApp);await adminDelete(sdk);
 });

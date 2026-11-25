@@ -6,6 +6,7 @@ import { httpsError } from '../core/errors.js';
 import { isCompletedDataRightsReplayReceipt } from './dataRightsReplayPolicy.js';
 import { jobsPrivacyIdToken } from './consentRevocationAcknowledgement.js';
 import { readPrivacyAuthorizedJobsBinding } from './centralDeletionBinding.js';
+import { isBoundDeletionAcknowledgment } from './deletionEvidenceAcknowledgment.js';
 
 const Input=z.object({requestId:z.string().min(8).max(160).regex(/^[A-Za-z0-9._:-]+$/),centralRequestId:z.string().min(8).max(160).regex(/^[A-Za-z0-9._:-]+$/)}).strict();
 const Ident=/^[A-Za-z0-9._:-]{8,160}$/;
@@ -92,12 +93,7 @@ async function dispatch(data:unknown,_context:CallableContext) {
  if (!response.ok)throw httpsError('unavailable','Jobs deletion evidence delivery not acknowledged.');
  const body=await response.json() as {result?:Record<string,unknown>};
  const result=body.result;
- if (!result || result.accepted!==true || result.participant!=='urai-jobs' ||
-   result.globalDeletionComplete!==false ||
-   result.acknowledgmentState!=='evidence-received-verification-pending' ||
-   result.originVerificationState!=='independent-source-readback-matched' ||
-   typeof result.idempotent!=='boolean' ||
-   typeof result.evidenceHash!=='string' || !HASH.test(result.evidenceHash))
+ if (!isBoundDeletionAcknowledgment(result, immutable))
   throw httpsError('unavailable','Jobs deletion evidence acknowledgment invalid.');
 
  // Do not mutate canonical request or mark a deleted account completed.
