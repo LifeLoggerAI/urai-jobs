@@ -1,0 +1,116 @@
+{
+  "beforePaidExecution": [
+    "Refresh factory authority",
+    "Obtain explicit bounded provider/credit approval",
+    "Quote current provider cost",
+    "Resolve credential using existing governed boundary",
+    "Select governed references if targeting final production art"
+  ],
+  "executionBoundary": {
+    "adapterId": "meshy",
+    "entrypoint": "model_forge/forge.mjs",
+    "owner": "LifeLoggerAI/asset-factory",
+    "resolverModified": false
+  },
+  "expectedOutputs": {
+    "actualOutputCount": 0,
+    "cleanup": [
+      "lod0.glb",
+      "lod1.glb",
+      "lod2.glb"
+    ],
+    "embeddedPbrTextures": true,
+    "format": "GLB",
+    "model": "candidate.glb",
+    "provenance": "provenance.json",
+    "provenanceTemplate": {
+      "path": "provenance-templates/gwjob-f61171dcbee3d6117d8cbbdcab1bb17bf00796fee5cd865b0f2f6330f25eb748.json",
+      "sha256": "df5d1e5c04157fdc7c2636ed318f652edb7ee29260cbbed283d7154574303f4b"
+    },
+    "structuralValidation": "validation.json"
+  },
+  "expectedResourceNeed": {
+    "approximateComputeSeconds": "UNKNOWN",
+    "costQuoteRequired": true,
+    "credits": "UNKNOWN",
+    "maxProviderAttempts": 1,
+    "priceSource": null
+  },
+  "id": "gwjob-f61171dcbee3d6117d8cbbdcab1bb17bf00796fee5cd865b0f2f6330f25eb748",
+  "idempotencyKey": "f61171dcbee3d6117d8cbbdcab1bb17bf00796fee5cd865b0f2f6330f25eb748",
+  "neverAutomaticallyGranted": [
+    "autobiographical-truth",
+    "asset-accepted",
+    "runtime-integrated",
+    "launch-integrated",
+    "production-deployed",
+    "independently-approved",
+    "XR-certified"
+  ],
+  "operation": "asset.generate",
+  "operationContract": "Existing legacy asset-worker operation; offline proposal only",
+  "postGeneration": [
+    "Import into quarantine",
+    "Validate and clean via Model Forge",
+    "Resolve commercial rights",
+    "Produce actual scene previews and performance evidence",
+    "Obtain explicit visual and asset acceptance",
+    "Request separate runtime integration and release acceptance"
+  ],
+  "provider": "meshy",
+  "providerAlternatives": [
+    "tripo",
+    "rodin",
+    "replicate"
+  ],
+  "providerSpec": {
+    "path": "provider-specs/kit-gw-rural-house-porch-vegetation-1-v1-323ae3b8dbb61544.json",
+    "sha256": "ee2af88737eee0ebb1a531e1f163c2c4e4df4e45a291147dc08b4429a0edee6c"
+  },
+  "runtimeAdmission": {
+    "admitted": false,
+    "reason": "Current live Asset worker dispatch does not carry this per-kit spec; no runtime or repository_dispatch submission",
+    "submissionId": null,
+    "submitted": false
+  },
+  "schemaVersion": "urai-generic-world-provider-job-v1",
+  "sourceInputs": {
+    "finalProductionAuthority": false,
+    "kit": {
+      "createdAt": "2026-10-07T00:16:23Z",
+      "creator": "UrAi production brief authored with Codex",
+      "externalAssets": [],
+      "kind": "original-generic-design-spec",
+      "promptVersion": "1.0.0",
+      "provider": null
+    },
+    "mode": "TEXT_EXPLORATION",
+    "referenceImages": [],
+    "rights": {
+      "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+      "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+      "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+      "thirdPartySourceUsed": false
+    }
+  },
+  "sourceKitId": "kit:gw-rural-house-porch-vegetation-1:v1",
+  "sourceKitSha256": "323ae3b8dbb6154401558dd9040113a76a336b34e706ee0a0c4fbed1ad4c8453",
+  "spend": {
+    "approvalRequired": true,
+    "authorized": false,
+    "credentialInspected": false,
+    "currency": null,
+    "providerSubmissionId": null,
+    "totalSpent": 0
+  },
+  "status": "READY_FOR_PROVIDER",
+  "truthClassification": "GENERIC",
+  "worldSpecBindings": [
+    {
+      "batch": 2,
+      "id": "gw-rural-house-porch",
+      "specSha256": "a120bd15740676e7ff286bed1efdf88936bd4382b1d6638f859b5a1c8ea466d8",
+      "version": "1.0.0"
+    }
+  ]
+}

@@ -14,8 +14,10 @@ const fixture = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', '
 assert.equal(fixture.status, 0, fixture.stderr);
 const code = fs.readFileSync(new URL('../workers/studio-worker/index.js', import.meta.url), 'utf8');
 const outputs = new Map();
+const metadata = new Map();
 const jobs = Array.from({ length: 2 }, (_, i) => ({
   jobId: `job-${i}`, tenantId: 'synthetic', ownerUid: 'synthetic', type: 'studio.render.video', leaseToken: `lease-${i}`,
+  consent: { purpose: 'life-movie.render', policyVersion: 'fixture-v1', decisionReceiptId: 'fixture-receipt' },
   payload: {
     schemaVersion: 'urai-life-movie-render-v1', projectId: 'proof', renderPlanDigest: 'a'.repeat(64),
     sceneTruthReceiptRef: `str_fixturefixture1234_zzzzzzzz_${'A'.repeat(40)}`,
@@ -29,18 +31,31 @@ const jobs = Array.from({ length: 2 }, (_, i) => ({
 }));
 const admin = {
   initializeApp() {},
-  firestore: () => ({ collection: () => ({ doc: id => ({ get: async () => {
-    const job = jobs.find(j => j.jobId === id);
-    return { exists: Boolean(job), data: () => ({ ...job, status: 'RUNNING', execution: { leaseToken: job.leaseToken } }) };
+  firestore: () => ({ runTransaction: callback => callback({ get: ref => ref.get() }),
+    collection: collection => ({ doc: id => ({ get: async () => {
+    const job = collection === 'jobs' ? jobs.find(j => j.jobId === id) : null;
+    return { exists: Boolean(job), data: () => job && ({ ...job, status: 'RUNNING', execution: { leaseToken: job.leaseToken } }) };
   } }) }) }),
   storage: () => ({ bucket: () => ({ file: name => ({
     createReadStream: () => fs.createReadStream(source),
-    createWriteStream: () => {
+    createWriteStream(options) {
+      const uploadFile = this;
+      assert.equal(options.preconditionOpts.ifGenerationMatch, 0);
+      metadata.set(name, { generation: String(outputs.size + 100), ...options.metadata });
       const file = path.join(root, `output-${outputs.size}`);
       outputs.set(name, file);
-      return fs.createWriteStream(file);
+      const output = fs.createWriteStream(file);
+      output.once('finish', () => {
+        uploadFile.metadata = metadata.get(name);
+        output.emit('response', { statusCode: 200 });
+      });
+      return output;
     },
-    delete: async () => { if (outputs.has(name)) fs.rmSync(outputs.get(name), { force: true }); },
+    getMetadata: async () => [metadata.get(name)],
+    delete: async options => {
+      assert.equal(options.ifGenerationMatch, metadata.get(name).generation);
+      if (outputs.has(name)) fs.rmSync(outputs.get(name), { force: true });
+    },
   }) }) }),
 };
 const app = { use() {}, get() {}, post() {}, listen() {} };

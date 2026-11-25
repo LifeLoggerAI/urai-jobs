@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-college-dorm-campus-shell:v1",
+    "sourceKitSha256": "34cf66a29487bd188a9b3bc13c00250a1f66eb3e2e7aa4b89a736e6296472ff4",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 1,
+        "id": "gw-college-dorm-campus",
+        "specSha256": "3f8b52efe5f435f688c0ce29111fb6f1c3686d9ef67e8f161723c34875ea531a",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 886007458
+  },
+  "id": "kit-gw-college-dorm-campus-shell-v1-34cf66a29487bd18",
+  "prompt": "Original generic modular architecture-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Central entry with 1.1 m nominal opening, large north-wall window, no loft or top bunk by default. Furniture stays along sides so return path is visible. Target bounding dimensions 6.6m wide x 2.65m high x 5m deep. Materials: paint-warm-off-white. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 6.6,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

@@ -2,6 +2,8 @@ import { getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
+import { currentJobActor, requireJobOperator } from "../core/currentJobActor.js";
+
 if (getApps().length === 0) initializeApp();
 
 type JobStatus =
@@ -32,31 +34,6 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
-function hasOperatorAccess(auth: unknown): boolean {
-  const authRecord = asRecord(auth);
-  const token = asRecord(authRecord.token);
-  const role = token.role;
-  const roles = Array.isArray(token.roles) ? token.roles : [];
-
-  return (
-    role === "admin" ||
-    role === "operator" ||
-    token.uraiJobsAdmin === true ||
-    roles.includes("admin") ||
-    roles.includes("operator")
-  );
-}
-
-function requireOperator(auth: unknown): void {
-  if (!auth) {
-    throw new HttpsError("unauthenticated", "Authentication is required.");
-  }
-
-  if (!hasOperatorAccess(auth)) {
-    throw new HttpsError("permission-denied", "Admin/operator access is required.");
-  }
-}
-
 function normalizeLimit(value: unknown, fallback = 50): number {
   const raw = Number(value);
   if (!Number.isFinite(raw)) return fallback;
@@ -72,7 +49,7 @@ function serializeDoc(id: string, data: FirebaseFirestore.DocumentData): Record<
 }
 
 export const listJobsV2 = onCall(callableOptions, async (request) => {
-  requireOperator(request.auth);
+  requireJobOperator(await currentJobActor(request));
 
   const input = asRecord(request.data);
   const statusRaw = String(input.status || "").trim();
@@ -89,13 +66,14 @@ export const listJobsV2 = onCall(callableOptions, async (request) => {
   }
 
   const snap = await query.limit(limit).get();
+  requireJobOperator(await currentJobActor(request));
   const jobs = snap.docs.map((doc) => serializeDoc(doc.id, doc.data()));
 
   return { jobs };
 });
 
 export const listJobLogsV2 = onCall(callableOptions, async (request) => {
-  requireOperator(request.auth);
+  requireJobOperator(await currentJobActor(request));
 
   const input = asRecord(request.data);
   const jobId = String(input.jobId || "").trim();
@@ -112,6 +90,7 @@ export const listJobLogsV2 = onCall(callableOptions, async (request) => {
     .limit(limit)
     .get();
 
+  requireJobOperator(await currentJobActor(request));
   const logs = snap.docs.map((doc) => ({
     id: doc.id,
     ...doc.data()
@@ -121,7 +100,7 @@ export const listJobLogsV2 = onCall(callableOptions, async (request) => {
 });
 
 export const retryJobV2 = onCall(callableOptions, async (request) => {
-  requireOperator(request.auth);
+  requireJobOperator(await currentJobActor(request));
 
   const input = asRecord(request.data);
   const jobId = String(input.jobId || "").trim();
@@ -135,6 +114,7 @@ export const retryJobV2 = onCall(callableOptions, async (request) => {
   const queueRef = db.collection("jobQueue").doc(jobId);
 
   await db.runTransaction(async (transaction) => {
+    requireJobOperator(await currentJobActor(request, transaction));
     const jobSnap = await transaction.get(jobRef);
 
     if (!jobSnap.exists) {
@@ -147,6 +127,8 @@ export const retryJobV2 = onCall(callableOptions, async (request) => {
     if (status !== "FAILED") {
       throw new HttpsError("failed-precondition", `Job ${jobId} cannot be retried from status ${status}.`);
     }
+
+    requireJobOperator(await currentJobActor(request, transaction));
 
     transaction.set(
       jobRef,

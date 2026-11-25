@@ -1,0 +1,154 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:door-interior-accessible-neutral:v1",
+    "sourceKitSha256": "cb4990c40d0b3edc76ad143fa10c2e0c6814addf9ded360ab86aef8a0a6a111d",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-airport-concourse",
+        "specSha256": "594fdc25053fca03788e5bd09f18711fcbdc5dd75e9672a3715d6c2f19d9ddcb",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-apartment-living",
+        "specSha256": "be1d87488467924f4a870d71df43c1d78f2b701d780327d184b102cf89320f0a",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-bedroom-era",
+        "specSha256": "5e1cc357f63a41d719e5f1e982d4ba8e57beabd5346d9bf1b2c741e77fb6c496",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 1,
+        "id": "gw-church-sanctuary-fellowship",
+        "specSha256": "3f00153258a34f902d5237b9dc5917bf79081596ae0ff5c8c3ab1fc4260a0b48",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-clinic-waiting-room",
+        "specSha256": "306dfda86046a954415a5936a4a8d6913c45b7e4a064fcb14717c6f0804dbab0",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 1,
+        "id": "gw-college-dorm-campus",
+        "specSha256": "3f8b52efe5f435f688c0ce29111fb6f1c3686d9ef67e8f161723c34875ea531a",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-courthouse-public-hall",
+        "specSha256": "604cc513d720caa358a55e78a378d993838cd80e885a08b9ce9b95932c19d962",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 1,
+        "id": "gw-diner-cafe",
+        "specSha256": "974021af1b7d57ea01219027abf813b576d6ef094b02538dd36c01c43e507f15",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 1,
+        "id": "gw-east-texas-living-room",
+        "specSha256": "faa57ef86a9d1d5629aacf1ee6ad03280546a73e60d9b760f33ca726122b0857",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-factory-floor",
+        "specSha256": "9b2feb2aafbe95d7bdf6ebe1018581316a7f3daf3b2e6f1fe046719babdbd431",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 1,
+        "id": "gw-family-kitchen-dining",
+        "specSha256": "14dd8392b2b9589f4d6d6145ff065e160003df31bd4e27cbde48cf7ad46a3037",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-grocery-store",
+        "specSha256": "a8a7382bde860263e0a7e8e86cc86f0345a5000adc50f549cdb45bf3a6231510",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 1,
+        "id": "gw-hospital-room-corridor",
+        "specSha256": "882565ad9641d9df900d64a86ee685e13bf5c5b5fbafb7df386c1580db1bf3fa",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 1,
+        "id": "gw-military-admin-operations",
+        "specSha256": "64754f87113e68c7b2b4ee729b8ea4e1161963f070efd181428d55561466c992",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-military-barracks",
+        "specSha256": "04ac8f734291497b091cd67d07ad02d93728af396e3bdf73b7f092db7c9ec48e",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 1,
+        "id": "gw-motel-room-walkway",
+        "specSha256": "ba6c87fbf8bfc9421428699852d759e4a49c79203c9b18819c9982ee12b57ab8",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-office-workplace",
+        "specSha256": "73e6887aac79b33f9e0df93cb701985fcaac9d62f86720e78c9688022dd30688",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-rural-house-porch",
+        "specSha256": "a120bd15740676e7ff286bed1efdf88936bd4382b1d6638f859b5a1c8ea466d8",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 1,
+        "id": "gw-school-classroom-hallway",
+        "specSha256": "1ca5e0ac9db50cce43872e1debaac1a66c3197baa1538f7d51a24ef0e10c3e11",
+        "version": "1.0.0"
+      },
+      {
+        "batch": 2,
+        "id": "gw-warehouse",
+        "specSha256": "25dce089395052787b26dccbddff761fa6bc3118e0b84fe365f54436ae874bb6",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 3410596036
+  },
+  "id": "kit-door-interior-accessible-neutral-v1-cb4990c40d0b3edc",
+  "prompt": "Original generic modular door; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Unbranded door leaf and frame with 1.0 m clear opening target; edge radius, hinges and handle need detailed mesh review Target bounding dimensions 1.08m wide x 2.08m high x 0.045m deep. Materials: wood-oak-satin. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 2.08,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

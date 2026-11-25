@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-bedroom-era-bed:v1",
+    "sourceKitSha256": "175bb826c7c6f4e90a65e5e45a3fb85095a32e9b7985c5e5a13c4ac2cd4fa052",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-bedroom-era",
+        "specSha256": "5e1cc357f63a41d719e5f1e982d4ba8e57beabd5346d9bf1b2c741e77fb6c496",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 391886886
+  },
+  "id": "kit-gw-bedroom-era-bed-v1-175bb826c7c6f4e9",
+  "prompt": "Original generic modular furniture; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Generic double bed; unbranded and identity-free. Bank bounds are composition envelopes: generate submodules, not a solid block. Target bounding dimensions 1.55m wide x 0.6m high x 2.05m deep. Materials: woven-cloth-cool. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 2.05,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

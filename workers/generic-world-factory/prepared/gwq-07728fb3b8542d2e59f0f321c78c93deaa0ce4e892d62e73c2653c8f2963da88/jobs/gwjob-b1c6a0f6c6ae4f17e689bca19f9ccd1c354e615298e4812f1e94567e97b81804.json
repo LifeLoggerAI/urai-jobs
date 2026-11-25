@@ -1,0 +1,116 @@
+{
+  "beforePaidExecution": [
+    "Refresh factory authority",
+    "Obtain explicit bounded provider/credit approval",
+    "Quote current provider cost",
+    "Resolve credential using existing governed boundary",
+    "Select governed references if targeting final production art"
+  ],
+  "executionBoundary": {
+    "adapterId": "meshy",
+    "entrypoint": "model_forge/forge.mjs",
+    "owner": "LifeLoggerAI/asset-factory",
+    "resolverModified": false
+  },
+  "expectedOutputs": {
+    "actualOutputCount": 0,
+    "cleanup": [
+      "lod0.glb",
+      "lod1.glb",
+      "lod2.glb"
+    ],
+    "embeddedPbrTextures": true,
+    "format": "GLB",
+    "model": "candidate.glb",
+    "provenance": "provenance.json",
+    "provenanceTemplate": {
+      "path": "provenance-templates/gwjob-b1c6a0f6c6ae4f17e689bca19f9ccd1c354e615298e4812f1e94567e97b81804.json",
+      "sha256": "c0a7095666d51e6a089230d1311c712e594ba89d1802fed2eb5a57b988696c01"
+    },
+    "structuralValidation": "validation.json"
+  },
+  "expectedResourceNeed": {
+    "approximateComputeSeconds": "UNKNOWN",
+    "costQuoteRequired": true,
+    "credits": "UNKNOWN",
+    "maxProviderAttempts": 1,
+    "priceSource": null
+  },
+  "id": "gwjob-b1c6a0f6c6ae4f17e689bca19f9ccd1c354e615298e4812f1e94567e97b81804",
+  "idempotencyKey": "b1c6a0f6c6ae4f17e689bca19f9ccd1c354e615298e4812f1e94567e97b81804",
+  "neverAutomaticallyGranted": [
+    "autobiographical-truth",
+    "asset-accepted",
+    "runtime-integrated",
+    "launch-integrated",
+    "production-deployed",
+    "independently-approved",
+    "XR-certified"
+  ],
+  "operation": "asset.generate",
+  "operationContract": "Existing legacy asset-worker operation; offline proposal only",
+  "postGeneration": [
+    "Import into quarantine",
+    "Validate and clean via Model Forge",
+    "Resolve commercial rights",
+    "Produce actual scene previews and performance evidence",
+    "Obtain explicit visual and asset acceptance",
+    "Request separate runtime integration and release acceptance"
+  ],
+  "provider": "meshy",
+  "providerAlternatives": [
+    "tripo",
+    "rodin",
+    "replicate"
+  ],
+  "providerSpec": {
+    "path": "provider-specs/kit-gw-office-workplace-storage-v1-5740aa010d335773.json",
+    "sha256": "673989f822ca464a8c6c92acf899d5aab92108fc512f6ab5f48c77e8bf667f1c"
+  },
+  "runtimeAdmission": {
+    "admitted": false,
+    "reason": "Current live Asset worker dispatch does not carry this per-kit spec; no runtime or repository_dispatch submission",
+    "submissionId": null,
+    "submitted": false
+  },
+  "schemaVersion": "urai-generic-world-provider-job-v1",
+  "sourceInputs": {
+    "finalProductionAuthority": false,
+    "kit": {
+      "createdAt": "2026-10-07T00:16:23Z",
+      "creator": "UrAi production brief authored with Codex",
+      "externalAssets": [],
+      "kind": "original-generic-design-spec",
+      "promptVersion": "1.0.0",
+      "provider": null
+    },
+    "mode": "TEXT_EXPLORATION",
+    "referenceImages": [],
+    "rights": {
+      "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+      "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+      "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+      "thirdPartySourceUsed": false
+    }
+  },
+  "sourceKitId": "kit:gw-office-workplace-storage:v1",
+  "sourceKitSha256": "5740aa010d335773f591449242fe79c58c7aaf06a9e71c862dcaa8d1c1de36b5",
+  "spend": {
+    "approvalRequired": true,
+    "authorized": false,
+    "credentialInspected": false,
+    "currency": null,
+    "providerSubmissionId": null,
+    "totalSpent": 0
+  },
+  "status": "READY_FOR_PROVIDER",
+  "truthClassification": "GENERIC",
+  "worldSpecBindings": [
+    {
+      "batch": 2,
+      "id": "gw-office-workplace",
+      "specSha256": "73e6887aac79b33f9e0df93cb701985fcaac9d62f86720e78c9688022dd30688",
+      "version": "1.0.0"
+    }
+  ]
+}

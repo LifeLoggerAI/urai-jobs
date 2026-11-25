@@ -1,6 +1,6 @@
 import type { Query } from 'firebase-admin/firestore';
-import { initializeMarketplaceAdminRuntime } from './firebase-admin-runtime';
-import { marketplaceCollections } from './collections';
+import { initializeMarketplaceAdminRuntime } from './firebase-admin-runtime.js';
+import { marketplaceCollections } from './collections.js';
 
 export type JobSearchInput = {
   search?: string;
@@ -25,7 +25,7 @@ export const createJobSearchRuntime = () => {
   return {
     async listPublishedJobs(input: JobSearchInput = {}) {
       let query: Query = db
-        .collection(marketplaceCollections.jobs)
+        .collection(marketplaceCollections.publicJobs)
         .where('status', '==', 'published')
         .where('moderationStatus', '==', 'approved');
 
@@ -48,7 +48,7 @@ export const createJobSearchRuntime = () => {
 
       const normalizedSearch = input.search?.trim().toLowerCase();
       const jobs = snapshot.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .map((doc): Record<string, unknown> => ({ id: doc.id, ...doc.data() }))
         .filter((job) => {
           if (!normalizedSearch) {
             return true;

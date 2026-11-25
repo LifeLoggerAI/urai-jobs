@@ -2,7 +2,7 @@ import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
-import { readMarketplaceEnv } from './env';
+import { readMarketplaceEnv } from './env.js';
 
 const FORBIDDEN_LONG_LIVED_FIREBASE_ENV = [
   'FIREBASE_CLIENT_EMAIL',

@@ -1,6 +1,6 @@
-import { marketplaceRoutes } from './http-routes';
-import { verifyMarketplaceToken } from './token-verification';
-import { fromError, ok } from './responses';
+import { marketplaceRoutes } from './http-routes.js';
+import { verifyMarketplaceToken } from './token-verification.js';
+import { fromError, ok } from './responses.js';
 
 export const dispatchMarketplaceRequest = async (request: {
   method: string;

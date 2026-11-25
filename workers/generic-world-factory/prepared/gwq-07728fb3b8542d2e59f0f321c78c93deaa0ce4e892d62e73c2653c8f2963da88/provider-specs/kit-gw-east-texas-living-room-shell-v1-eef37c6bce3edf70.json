@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-east-texas-living-room-shell:v1",
+    "sourceKitSha256": "eef37c6bce3edf7011d8249c8e1edbff6174189ad0c67f81c9b83647bfa07583",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 1,
+        "id": "gw-east-texas-living-room",
+        "specSha256": "faa57ef86a9d1d5629aacf1ee6ad03280546a73e60d9b760f33ca726122b0857",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 4008934507
+  },
+  "id": "kit-gw-east-texas-living-room-shell-v1-eef37c6bce3edf70",
+  "prompt": "Original generic modular architecture-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Simple rectangular shell; one broad entry opening, two residential windows on the north wall, optional non-operational masonry fireplace on the east wall. Ceiling fan is optional and disabled in reduced-motion mode. Target bounding dimensions 7.2m wide x 2.55m high x 5.8m deep. Materials: paint-warm-off-white. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 7.2,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

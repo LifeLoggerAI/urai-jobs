@@ -1,4 +1,4 @@
-import type { MarketplaceJob } from './types';
+import type { MarketplaceJob } from './types.js';
 
 export const seedJobs: MarketplaceJob[] = [
   {

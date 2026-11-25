@@ -1,7 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomUUID } from 'node:crypto';
-import { initializeMarketplaceAdminRuntime } from './firebase-admin-runtime';
-import { marketplaceCollections } from './collections';
+import { initializeMarketplaceAdminRuntime } from './firebase-admin-runtime.js';
+import { marketplaceCollections } from './collections.js';
 
 export type MarketplaceAuditAction =
   | 'application.status_updated'

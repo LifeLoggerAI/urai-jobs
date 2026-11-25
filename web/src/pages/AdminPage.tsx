@@ -177,20 +177,20 @@ export function AdminPage() {
       </header>
 
       {error && (
-        <section className="notice error">
+        <section className="notice error" role="alert">
           <strong>Error</strong>
           <p>{error}</p>
         </section>
       )}
 
       {notice && (
-        <section className="notice success">
+        <section className="notice success" role="status">
           <strong>Success</strong>
           <p>{notice}</p>
         </section>
       )}
 
-      {loading && <p className="muted">Loading live job data...</p>}
+      {loading && <p className="muted" role="status">Loading live job data...</p>}
       {!loading && totalJobs === 0 && (
         <section className="empty-state">
           <div className="eyebrow">No jobs yet</div>

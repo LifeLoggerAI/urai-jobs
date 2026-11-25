@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "urai-generic-world-batch1-preflight-receipt-v1",
+  "generatedAt": "2026-10-07T00:37:00Z",
+  "authorities": {
+    "studioSpecCommit": "38a07269009fc5a8b34946ecc0fa2a9566c4727a",
+    "studioProviderPacketsCommit": "310cd01a3860b8e0002aa64d1b7e313e7024aabd",
+    "studioBatch2CatalogCommit": "8bbe7c98d3f5ddf0830e2c983ff84740e69f304b",
+    "jobsQueueCommit": "f189404f39beaccd299fe9e0838f474e5e46a4d8"
+  },
+  "counts": {
+    "batch1Families": 12,
+    "providerPackets": 12,
+    "batch2Families": 37,
+    "eraPacks": 9
+  },
+  "validation": {
+    "deterministicIds": true,
+    "truthClass": "GENERIC",
+    "spatialCandidateTouched": false,
+    "paidProviderCalls": 0,
+    "generatedModels": 0,
+    "generatedPreviews": 0,
+    "literalVisualReviews": 0,
+    "acceptedWorlds": 0
+  },
+  "providerReadiness": {
+    "meshy": {
+      "billingEvidence": "paid Premium subscription evidence exists",
+      "apiAuth": "NOT_VERIFIED",
+      "execution": "BLOCKED"
+    },
+    "tripo": {
+      "billingEvidence": "20 purchased API credits evidence exists",
+      "apiAuth": "NOT_VERIFIED",
+      "execution": "BLOCKED"
+    }
+  },
+  "promotion": "NONE",
+  "blockers": [
+    "Provider API credential/auth readback unavailable in current execution surface",
+    "Expected per-job provider cost not yet verified",
+    "Literal visual review requires generated outputs"
+  ],
+  "nextSafeActions": [
+    "Run provider preflight when credentials are available without exposing secret values",
+    "Generate challenger assets only after spend authority/cost verification",
+    "Hash every returned binary and run GLB/material/LOD/collision/nav checks",
+    "Retain required preview views and route to human visual review"
+  ]
+}

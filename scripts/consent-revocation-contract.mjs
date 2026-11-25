@@ -20,6 +20,7 @@ const endpoint = read("functions/src/privacy/consentRevocation.ts");
 const derivativeRevocation = read("functions/src/privacy/lifeMovieDerivativeRevocation.ts");
 const shortMovieBridge = read("functions/src/jobs/studioLifeMovieBridge.ts");
 const longMovieBridge = read("functions/src/jobs/studioLifeMovieLongformBridge.ts");
+const narratorBridge = read("functions/src/jobs/storytimeNarratorBridge.ts");
 const index = read("functions/src/index.ts");
 
 ok("shared Job contract includes consent context", shared.includes("JobConsentContext") && shared.includes("consent?: JobConsentContext"));
@@ -72,6 +73,16 @@ ok(
     && shortMovieBridge.includes("consent,")
     && shortMovieBridge.includes("life_movie_consent_missing")
     && shortMovieBridge.includes("life_movie_consent_revoked")
+);
+ok(
+  "Storytime narrator creation checks revoked consent in the same transaction as idempotency and queue admission",
+  narratorBridge.includes("purpose: z.literal('storytime.voiceover')")
+    && narratorBridge.includes("transaction.get(consentBlockRef(input.userId, consent.purpose))")
+    && narratorBridge.includes("currentConsentBlock.data()?.active === true")
+    && !narratorBridge.includes("const existing = await bindingRef.get()")
+    && narratorBridge.indexOf("transaction.get(consentBlockRef(input.userId, consent.purpose))")
+      < narratorBridge.indexOf("transaction.create(jobDoc(jobId)")
+    && narratorBridge.includes("return { jobId: binding.jobId, deduplicated: true }")
 );
 ok(
   "manual generated-output deletion removes result aliases in short and long-form Life Movies",

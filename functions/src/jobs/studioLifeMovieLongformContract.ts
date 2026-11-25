@@ -43,8 +43,12 @@ export const StudioLifeMovieLongformPayloadSchema = z.object({
     if (!sourceIds.has(item.sourceId)) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index, 'sourceId'], message: 'Timeline source must exist in sources.' });
     }
+    const source = value.sources.find((candidate) => candidate.id === item.sourceId);
+    if (source?.mimeType.startsWith('image/') && (item.sourceStartMs ?? 0) !== 0) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index, 'sourceStartMs'], message: 'Still-image source time must be zero.' });
+    }
     if (item.endMs - item.startMs > LIFE_MOVIE_LONGFORM_BUDGET.maxSegmentDurationMs) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index], message: 'Long-form source clips must already be cut to 15 seconds or less; the planner never hides an unbounded transcode inside segmentation.' });
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index], message: 'Long-form source intervals must be 15 seconds or less; the planner never hides an unbounded transcode inside segmentation.' });
     }
     if (index > 0 && item.startMs < ordered[index - 1].endMs) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['timeline', index], message: 'Overlapping timeline items are not supported.' });

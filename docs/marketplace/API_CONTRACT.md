@@ -65,6 +65,16 @@ Requirements:
 
 Returns only applications owned by the authenticated candidate.
 
+Returns `{ ok, applications, nextCursor }` with at most50 records per page.
+The optional `after` query parameter is the exact previous `nextCursor`, a
+document ID ordered ascending. The cursor must still belong to the current
+candidate and tenant; missing, foreign, malformed or duplicate cursors require
+a fresh reload. Caller subject/tenant and arbitrary limits are not admitted.
+`nextCursor: null` means that no further page was found in that read, not a
+snapshot guarantee against subsequent changes. Existing consumers retain the
+`applications` array. Each page rechecks current account, Auth and applicable
+consent authority; withdrawn entries remain minimal stop receipts.
+
 ### PATCH /api/marketplace/applications/:applicationId/withdraw
 
 Allows the authenticated candidate to withdraw a pending application.
@@ -133,3 +143,4 @@ Do not mark the marketplace production-ready until every route above has:
 - integration tests
 - smoke checks
 - QA evidence
+

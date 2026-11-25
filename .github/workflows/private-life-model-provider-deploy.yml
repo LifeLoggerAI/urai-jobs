@@ -1,0 +1,238 @@
+name: Private Life Model Provider Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Staging infrastructure only; production remains on the canonical approved release path
+        required: true
+        type: choice
+        options: [staging, production]
+      source_sha:
+        description: Exact repository SHA to deploy
+        required: true
+        type: string
+      rollback_sha:
+        description: Approved ancestor rollback SHA
+        required: true
+        type: string
+      authority_token_version:
+        description: Exact Secret Manager version for urai-private-source-authority-token
+        required: true
+        type: string
+      resolver_token_version:
+        description: Exact Secret Manager version for urai-private-source-ref-resolver-token
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: private-life-model-provider-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    timeout-minutes: 45
+    env:
+      TARGET_SHA: ${{ inputs.source_sha }}
+      ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+      URAI_ENV: ${{ inputs.target == 'production' && 'production' || 'staging' }}
+      GCLOUD_PROJECT: ${{ vars.URAI_JOBS_GCP_PROJECT }}
+      GCP_REGION: ${{ vars.URAI_JOBS_GCP_REGION || 'us-central1' }}
+      ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.URAI_JOBS_ARTIFACT_REGISTRY_REPOSITORY }}
+      RUNTIME_SERVICE_ACCOUNT: ${{ vars.URAI_JOBS_WORKER_RUNTIME_SERVICE_ACCOUNT }}
+      PROVIDER_SERVICE: private-life-model-index-provider
+      AUTHORITY_SECRET: urai-private-source-authority-token
+      RESOLVER_SECRET: urai-private-source-ref-resolver-token
+      AUTHORITY_TOKEN_VERSION: ${{ inputs.authority_token_version }}
+      RESOLVER_TOKEN_VERSION: ${{ inputs.resolver_token_version }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact deployment authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$TARGET_SHA" = "$GITHUB_SHA"
+          test "$TARGET_SHA" = "$(git rev-parse HEAD)"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$TARGET_SHA" != "$ROLLBACK_SHA"
+          git merge-base --is-ancestor "$ROLLBACK_SHA" "$TARGET_SHA"
+          case "$URAI_ENV" in
+            staging) ;;
+            production) echo "[BLOCKED] Production provider mutation requires the canonical frozen and independently approved release path." >&2; exit 1 ;;
+            *) exit 1 ;;
+          esac
+          [[ "$AUTHORITY_TOKEN_VERSION" =~ ^[1-9][0-9]*$ ]]
+          [[ "$RESOLVER_TOKEN_VERSION" =~ ^[1-9][0-9]*$ ]]
+
+      - name: Setup declared Node before cloud authority
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - name: Setup declared pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: '8.15.9'
+
+      - name: Verify native exact source before cloud authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          npm test
+          test "$TARGET_SHA" = "$(git rev-parse HEAD)"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Authenticate with Google Workload Identity Federation
+        uses: google-github-actions/auth@ba79af03959ebeac9769e648f473a284504d9193 # v2.1.10
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          create_credentials_file: true
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a # v2.1.2
+
+      - name: Verify protected configuration exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GCLOUD_PROJECT"
+          test -n "$GCP_REGION"
+          test -n "$ARTIFACT_REGISTRY_REPOSITORY"
+          test -n "$RUNTIME_SERVICE_ACCOUNT"
+          gcloud secrets versions describe "$AUTHORITY_TOKEN_VERSION" --secret "$AUTHORITY_SECRET" --project "$GCLOUD_PROJECT" --format='value(state)' | grep -qx ENABLED
+          gcloud secrets versions describe "$RESOLVER_TOKEN_VERSION" --secret "$RESOLVER_SECRET" --project "$GCLOUD_PROJECT" --format='value(state)' | grep -qx ENABLED
+
+      - name: Build immutable provider image
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE_BASE="$GCP_REGION-docker.pkg.dev/$GCLOUD_PROJECT/$ARTIFACT_REGISTRY_REPOSITORY/$PROVIDER_SERVICE"
+          IMAGE_TAG="$IMAGE_BASE:$TARGET_SHA"
+          BUILD_ID="$(gcloud builds submit workers/private-life-model-index-provider --project "$GCLOUD_PROJECT" --tag "$IMAGE_TAG" --async --format='value(id)')"
+          test -n "$BUILD_ID"
+          while :; do
+            STATUS="$(gcloud builds describe "$BUILD_ID" --project "$GCLOUD_PROJECT" --format='value(status)')"
+            case "$STATUS" in
+              SUCCESS) break ;;
+              FAILURE|CANCELLED|EXPIRED|TIMEOUT|INTERNAL_ERROR) echo "Build failed: $STATUS" >&2; exit 1 ;;
+              *) sleep 5 ;;
+            esac
+          done
+          DIGEST="$(gcloud builds describe "$BUILD_ID" --project "$GCLOUD_PROJECT" --format='value(results.images[0].digest)')"
+          DIGEST="${DIGEST#@}"
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          IMMUTABLE_IMAGE="$IMAGE_BASE@$DIGEST"
+          gcloud artifacts docker images describe "$IMMUTABLE_IMAGE" --project "$GCLOUD_PROJECT" >/dev/null
+          {
+            echo "image=$IMMUTABLE_IMAGE"
+            echo "digest=$DIGEST"
+            echo "build_id=$BUILD_ID"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Deploy authority and resolver surface with paid execution hard-off
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run deploy "$PROVIDER_SERVICE"             --project "$GCLOUD_PROJECT"             --region "$GCP_REGION"             --platform managed             --image "${{ steps.build.outputs.image }}"             --service-account "$RUNTIME_SERVICE_ACCOUNT"             --allow-unauthenticated             --memory 1Gi             --cpu 1             --min-instances 0             --max-instances 2             --concurrency 20             --timeout 300             --labels "urai-source-sha=$TARGET_SHA,urai-environment=$URAI_ENV,urai-paid-execution=disabled"             --set-env-vars "URAI_ENV=$URAI_ENV,FIREBASE_PROJECT_ID=$GCLOUD_PROJECT,GOOGLE_CLOUD_PROJECT=$GCLOUD_PROJECT,URAI_SOURCE_SHA=$TARGET_SHA,URAI_PRIVATE_SOURCE_CONTRACT=urai-private-source-receipt-v2,URAI_PRIVATE_SOURCE_TRANSCRIPTION_ENABLED=false,URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED=false"             --set-secrets "PRIVATE_SOURCE_AUTHORITY_TOKEN=$AUTHORITY_SECRET:$AUTHORITY_TOKEN_VERSION,PRIVATE_SOURCE_REF_RESOLVER_TOKEN=$RESOLVER_SECRET:$RESOLVER_TOKEN_VERSION"             --quiet
+
+      - name: Verify deployed source and hard-off posture
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="$(gcloud run services describe "$PROVIDER_SERVICE" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.url)')"
+          REVISION="$(gcloud run services describe "$PROVIDER_SERVICE" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format='value(status.latestReadyRevisionName)')"
+          test -n "$URL"
+          test -n "$REVISION"
+          REVISION_JSON="$(gcloud run revisions describe "$REVISION" --project "$GCLOUD_PROJECT" --region "$GCP_REGION" --format=json)"
+          REVISION_JSON="$REVISION_JSON" TARGET_SHA="$TARGET_SHA" EXPECTED_DIGEST="${{ steps.build.outputs.digest }}" node <<'NODE'
+          const r=JSON.parse(process.env.REVISION_JSON);
+          const env=Object.fromEntries((r.spec?.containers?.[0]?.env||[]).filter(v=>Object.prototype.hasOwnProperty.call(v,'value')).map(v=>[v.name,String(v.value)]));
+          const secret=Object.fromEntries((r.spec?.containers?.[0]?.env||[]).map(v=>[v.name,String(v.valueSource?.secretKeyRef?.key||v.valueFrom?.secretKeyRef?.key||'')]));
+          const labels=r.metadata?.labels||{};
+          const fail=[];
+          if(env.URAI_SOURCE_SHA!==process.env.TARGET_SHA) fail.push('source SHA');
+          if(env.URAI_PRIVATE_SOURCE_TRANSCRIPTION_ENABLED!=='false') fail.push('transcription hard-off');
+          if(env.URAI_PRIVATE_LIFE_MODEL_EXECUTION_ENABLED!=='false') fail.push('Life Model hard-off');
+          if(env.URAI_PRIVATE_SOURCE_CONTRACT!=='urai-private-source-receipt-v2') fail.push('source contract');
+          if(labels['urai-source-sha']!==process.env.TARGET_SHA) fail.push('source label');
+          if(labels['urai-paid-execution']!=='disabled') fail.push('paid execution label');
+          if(!/^[1-9][0-9]*$/.test(secret.PRIVATE_SOURCE_AUTHORITY_TOKEN||'')) fail.push('authority secret version');
+          if(!/^[1-9][0-9]*$/.test(secret.PRIVATE_SOURCE_REF_RESOLVER_TOKEN||'')) fail.push('resolver secret version');
+          const digest=String(r.status?.imageDigest||'').replace(/^@/,'');
+          if(digest!==process.env.EXPECTED_DIGEST) fail.push('image digest');
+          if(fail.length) throw new Error('provider deployment mismatch: '+fail.join(', '));
+          NODE
+          curl --fail-with-body --retry 6 --retry-delay 5 "$URL/healthz" >/dev/null
+          READY="$(curl -sS -o /tmp/ready.json -w '%{http_code}' "$URL/readyz")"
+          test "$READY" = 503
+          PRIVATE_READY="$(curl -sS -o /tmp/private-ready.json -w '%{http_code}' "$URL/private-source-readyz")"
+          test "$PRIVATE_READY" = 503
+          AUTH_CODE="$(curl -sS -o /dev/null -w '%{http_code}' -H 'content-type: application/json' -d '{}' "$URL/authorize")"
+          test "$AUTH_CODE" = 401
+          printf '%s\n' "Provider URL: $URL" "Revision: $REVISION"
+          {
+            echo "verified=true"
+            echo "source_sha=$TARGET_SHA"
+            echo "url=$URL"
+            echo "revision=$REVISION"
+            echo "image_digest=${{ steps.build.outputs.digest }}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Write bounded deployment receipt
+        if: always()
+        env:
+          DEPLOYMENT_VERIFY_SUCCEEDED: ${{ steps.verify.outputs.verified || 'false' }}
+          VERIFIED_SOURCE_SHA: ${{ steps.verify.outputs.source_sha }}
+          VERIFIED_URL: ${{ steps.verify.outputs.url }}
+          VERIFIED_REVISION: ${{ steps.verify.outputs.revision }}
+          VERIFIED_IMAGE_DIGEST: ${{ steps.verify.outputs.image_digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/release-evidence
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { createPrivateProviderDeploymentReceipt } from './scripts/private-life-model-provider-deployment-receipt.mjs';
+          fs.writeFileSync('docs/release-evidence/private-life-model-provider-deploy.json',
+            JSON.stringify(createPrivateProviderDeploymentReceipt(process.env),null,2)+'\n');
+          NODE
+
+      - name: Destroy cloud credentials
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          gcloud auth revoke --all --quiet >/dev/null 2>&1
+          for file in "${GOOGLE_GHA_CREDS_PATH:-}" "${GOOGLE_APPLICATION_CREDENTIALS:-}" "${CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE:-}"; do
+            [ -z "$file" ] || [ ! -f "$file" ] || rm -f "$file"
+          done
+          rm -rf "$HOME/.config/gcloud"
+
+      - name: Upload deployment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: private-life-model-provider-${{ inputs.target }}-${{ inputs.source_sha }}
+          path: docs/release-evidence/private-life-model-provider-deploy.json
+          if-no-files-found: error
+          retention-days: 90

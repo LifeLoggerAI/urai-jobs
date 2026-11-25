@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-lake-dock-shoreline-storage:v1",
+    "sourceKitSha256": "13e73e9970a28b72202f49d1bdcf0416c11c64c71c89c5488da208dbd4ddb0b7",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 1,
+        "id": "gw-lake-dock-shoreline",
+        "specSha256": "436f75fa4b110036b0e82708d8a6e79bf019c0c3de6280b5f8e50fedebd481ce",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 333921945
+  },
+  "id": "kit-gw-lake-dock-shoreline-storage-v1-13e73e9970a28b72",
+  "prompt": "Original generic modular furniture; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Small dock storage box; unbranded and identity-free. Bank bounds are composition envelopes: generate submodules, not a solid block. Target bounding dimensions 1.2m wide x 0.75m high x 0.65m deep. Materials: wood-weathered. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 1.2,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

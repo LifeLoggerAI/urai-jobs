@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-diner-cafe-table:v1",
+    "sourceKitSha256": "ad90a7a3502025343c608d2a62a24c6ffb1bfa9504f5bae4dc40cb13deaaefe0",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 1,
+        "id": "gw-diner-cafe",
+        "specSha256": "974021af1b7d57ea01219027abf813b576d6ef094b02538dd36c01c43e507f15",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 2911938467
+  },
+  "id": "kit-gw-diner-cafe-table-v1-ad90a7a350202534",
+  "prompt": "Original generic modular furniture; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Small accessible table; unbranded and identity-free. Bank bounds are composition envelopes: generate submodules, not a solid block. Target bounding dimensions 1m wide x 0.74m high x 0.65m deep. Materials: laminate-warm-neutral. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 1,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "beforePaidExecution": [
+    "Refresh factory authority",
+    "Obtain explicit bounded provider/credit approval",
+    "Quote current provider cost",
+    "Resolve credential using existing governed boundary",
+    "Select governed references if targeting final production art"
+  ],
+  "executionBoundary": {
+    "adapterId": "meshy",
+    "entrypoint": "model_forge/forge.mjs",
+    "owner": "LifeLoggerAI/asset-factory",
+    "resolverModified": false
+  },
+  "expectedOutputs": {
+    "actualOutputCount": 0,
+    "cleanup": [
+      "lod0.glb",
+      "lod1.glb",
+      "lod2.glb"
+    ],
+    "embeddedPbrTextures": true,
+    "format": "GLB",
+    "model": "candidate.glb",
+    "provenance": "provenance.json",
+    "provenanceTemplate": {
+      "path": "provenance-templates/gwjob-7233faa9f6dac9f205fed4b39b818db07e9af95a26aed052176ce24a8a108507.json",
+      "sha256": "1686d947e37e1d2d416ab643ac60a1b65e4282d01eab2f728d51493492c0863c"
+    },
+    "structuralValidation": "validation.json"
+  },
+  "expectedResourceNeed": {
+    "approximateComputeSeconds": "UNKNOWN",
+    "costQuoteRequired": true,
+    "credits": "UNKNOWN",
+    "maxProviderAttempts": 1,
+    "priceSource": null
+  },
+  "id": "gwjob-7233faa9f6dac9f205fed4b39b818db07e9af95a26aed052176ce24a8a108507",
+  "idempotencyKey": "7233faa9f6dac9f205fed4b39b818db07e9af95a26aed052176ce24a8a108507",
+  "neverAutomaticallyGranted": [
+    "autobiographical-truth",
+    "asset-accepted",
+    "runtime-integrated",
+    "launch-integrated",
+    "production-deployed",
+    "independently-approved",
+    "XR-certified"
+  ],
+  "operation": "asset.generate",
+  "operationContract": "Existing legacy asset-worker operation; offline proposal only",
+  "postGeneration": [
+    "Import into quarantine",
+    "Validate and clean via Model Forge",
+    "Resolve commercial rights",
+    "Produce actual scene previews and performance evidence",
+    "Obtain explicit visual and asset acceptance",
+    "Request separate runtime integration and release acceptance"
+  ],
+  "provider": "meshy",
+  "providerAlternatives": [
+    "tripo",
+    "rodin",
+    "replicate"
+  ],
+  "providerSpec": {
+    "path": "provider-specs/kit-gw-factory-floor-machine-right-v1-28d6d26b8faeaba8.json",
+    "sha256": "a80c4e4600a166503b17f7f626fed22a1f35e48f8b15dc3a3cd1daf30c913596"
+  },
+  "runtimeAdmission": {
+    "admitted": false,
+    "reason": "Current live Asset worker dispatch does not carry this per-kit spec; no runtime or repository_dispatch submission",
+    "submissionId": null,
+    "submitted": false
+  },
+  "schemaVersion": "urai-generic-world-provider-job-v1",
+  "sourceInputs": {
+    "finalProductionAuthority": false,
+    "kit": {
+      "createdAt": "2026-10-07T00:16:23Z",
+      "creator": "UrAi production brief authored with Codex",
+      "externalAssets": [],
+      "kind": "original-generic-design-spec",
+      "promptVersion": "1.0.0",
+      "provider": null
+    },
+    "mode": "TEXT_EXPLORATION",
+    "referenceImages": [],
+    "rights": {
+      "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+      "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+      "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+      "thirdPartySourceUsed": false
+    }
+  },
+  "sourceKitId": "kit:gw-factory-floor-machine-right:v1",
+  "sourceKitSha256": "28d6d26b8faeaba8f9481660dc5d312f943e642728cd1fe924da4a621b5bb03e",
+  "spend": {
+    "approvalRequired": true,
+    "authorized": false,
+    "credentialInspected": false,
+    "currency": null,
+    "providerSubmissionId": null,
+    "totalSpent": 0
+  },
+  "status": "READY_FOR_PROVIDER",
+  "truthClassification": "GENERIC",
+  "worldSpecBindings": [
+    {
+      "batch": 2,
+      "id": "gw-factory-floor",
+      "specSha256": "9b2feb2aafbe95d7bdf6ebe1018581316a7f3daf3b2e6f1fe046719babdbd431",
+      "version": "1.0.0"
+    }
+  ]
+}

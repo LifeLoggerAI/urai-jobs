@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-gas-station-pump-left:v1",
+    "sourceKitSha256": "88ad7c85a67fafb069373e6a6966705ac0182675909c2756bcb1993a9bee3d31",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-gas-station",
+        "specSha256": "fdac334d879acdf17fd7c541ac77e1c14dbe9a3e24e9debfd978b4a3e31e3a16",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 2293070981
+  },
+  "id": "kit-gw-gas-station-pump-left-v1-88ad7c85a67fafb0",
+  "prompt": "Original generic modular furniture; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Inactive unbranded pump island; unbranded and identity-free. Bank bounds are composition envelopes: generate submodules, not a solid block. Target bounding dimensions 2.4m wide x 1.8m high x 3m deep. Materials: painted-metal-muted. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 3,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

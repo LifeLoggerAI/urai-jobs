@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "urai-model-forge-plan-v1",
+  "dryRun": true,
+  "spendAuthorized": false,
+  "assetId": "kit-gw-college-dorm-campus-bed-right-v1-9e43f398be292e6b",
+  "providers": [
+    {
+      "provider": "meshy",
+      "requiredEnv": "MESHY_API_KEY",
+      "configured": false
+    }
+  ],
+  "target": {
+    "meters": 2.05,
+    "hero": true,
+    "maxTriangles": 120000,
+    "textureResolution": "4k",
+    "pbr": true
+  },
+  "generationPolicy": {
+    "maxProviderAttempts": 1,
+    "seed": 2655253400
+  },
+  "referenceCount": 0,
+  "next": "Provider execution remains blocked until URAI_MODEL_FORGE_SPEND_AUTHORIZED=1 and credentials are available."
+}

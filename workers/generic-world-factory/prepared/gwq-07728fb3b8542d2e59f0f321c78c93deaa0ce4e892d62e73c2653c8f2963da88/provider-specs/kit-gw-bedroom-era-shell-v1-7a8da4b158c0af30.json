@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-bedroom-era-shell:v1",
+    "sourceKitSha256": "7a8da4b158c0af30779757983665b59c35e354c2bd03b039fd79738a55d11adf",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-bedroom-era",
+        "specSha256": "5e1cc357f63a41d719e5f1e982d4ba8e57beabd5346d9bf1b2c741e77fb6c496",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 2056103089
+  },
+  "id": "kit-gw-bedroom-era-shell-v1-7a8da4b158c0af30",
+  "prompt": "Original generic modular architecture-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Window on north wall, generous entry, visible clear floor beside bed. Child-bedroom and bunk packages remain separately reviewed variants. Target bounding dimensions 6.4m wide x 2.6m high x 5.4m deep. Materials: paint-warm-off-white. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 6.4,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

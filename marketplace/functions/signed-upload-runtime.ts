@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { initializeMarketplaceAdminRuntime } from './firebase-admin-runtime';
+import { initializeMarketplaceAdminRuntime } from './firebase-admin-runtime.js';
 
 export const createSignedUploadRuntime = () => {
   const runtime = initializeMarketplaceAdminRuntime();

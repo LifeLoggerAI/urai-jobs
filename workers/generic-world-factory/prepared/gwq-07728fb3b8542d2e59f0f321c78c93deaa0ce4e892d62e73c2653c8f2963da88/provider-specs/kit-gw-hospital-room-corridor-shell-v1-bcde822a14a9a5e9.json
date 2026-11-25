@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-hospital-room-corridor-shell:v1",
+    "sourceKitSha256": "bcde822a14a9a5e9144476dad11f8c2ada53c9f80a99f17113dc0f127750cbd7",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 1,
+        "id": "gw-hospital-room-corridor",
+        "specSha256": "882565ad9641d9df900d64a86ee685e13bf5c5b5fbafb7df386c1580db1bf3fa",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 3168698922
+  },
+  "id": "kit-gw-hospital-room-corridor-shell-v1-bcde822a14a9a5e9",
+  "prompt": "Original generic modular architecture-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Wide room opening 1.3 m; corridor 2.6 m; privacy curtain recess does not cross movement path. Bed clearance remains on central aisle side; no flashing monitors or medical alarm audio. Target bounding dimensions 5.6m wide x 2.8m high x 4.6m deep. Materials: paint-institutional-soft. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 5.6,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

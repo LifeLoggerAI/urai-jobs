@@ -1,0 +1,1414 @@
+{
+  "$schema": "../schema/world-spec.schema.json",
+  "audio": {
+    "ambienceBriefs": [
+      "restrained rural insects and birds"
+    ],
+    "copyrightedRecordings": false,
+    "music": null,
+    "reducedStimulation": {
+      "defaultLevel": "restrained",
+      "muteSupported": true,
+      "suddenTransientSounds": false
+    },
+    "requiredSourceRights": "separate recording/generation receipt before runtime use",
+    "speech": null,
+    "status": "SPECIFIED_NO_AUDIO_BYTES"
+  },
+  "batch": 2,
+  "composition": {
+    "architectureBrief": "Broad front doorway, screened openings optional, porch level with room by default. Raised rural-house layouts require a specified ramp/grade successor, not assumed accessibility.",
+    "dressingRules": {
+      "empty": "Shell, openings, orientation landmark and required safety geometry only",
+      "light": "Specified furniture plus sparse neutral props on supporting surfaces; no real people",
+      "people": "Not generated in this lane; occupancy, character likeness, voices and animation require separate identity/consent authority",
+      "rich": "Add governed prop submodules within reserved placement envelopes; maintain clear route, readable exits and low visual stimulation"
+    },
+    "furniture": [
+      {
+        "anchorAllowed": true,
+        "collidable": true,
+        "dimensionsMeters": {
+          "depth": 0.9,
+          "height": 0.88,
+          "width": 2.3
+        },
+        "id": "sofa",
+        "label": "Plain household sofa",
+        "materialIntent": "woven-cloth-warm",
+        "positionMeters": [
+          -2.7,
+          0,
+          -0.9
+        ],
+        "role": "furniture",
+        "yawDegrees": 0,
+        "zone": "common-room"
+      },
+      {
+        "anchorAllowed": true,
+        "collidable": true,
+        "dimensionsMeters": {
+          "depth": 0.48,
+          "height": 1.7,
+          "width": 1.2
+        },
+        "id": "cabinet",
+        "label": "Storage hutch",
+        "materialIntent": "wood-oak-satin",
+        "positionMeters": [
+          2.85,
+          0,
+          -0.85
+        ],
+        "role": "furniture",
+        "yawDegrees": 0,
+        "zone": "common-room"
+      },
+      {
+        "anchorAllowed": true,
+        "collidable": true,
+        "dimensionsMeters": {
+          "depth": 0.65,
+          "height": 0.88,
+          "width": 1.7
+        },
+        "id": "porch-bench",
+        "label": "Porch bench",
+        "materialIntent": "wood-weathered",
+        "positionMeters": [
+          -2.4,
+          0,
+          0.15
+        ],
+        "role": "furniture",
+        "yawDegrees": 0,
+        "zone": "porch"
+      }
+    ],
+    "openings": [
+      {
+        "centerLocalMeters": [
+          0,
+          1.05,
+          3.2
+        ],
+        "clearWidthTargetMeters": 1.0,
+        "heightMeters": 2.1,
+        "id": "primary-entry",
+        "levelThreshold": true,
+        "nominalWidthMeters": 1.1,
+        "status": "SPECIFIED_NOT_GEOMETRY_VALIDATED",
+        "wall": "+Z",
+        "zone": "common-room"
+      }
+    ],
+    "propBriefs": [
+      "plain storage crock",
+      "unlabelled photograph placeholder",
+      "closed book"
+    ],
+    "vegetationBriefs": [
+      "yard grass",
+      "shade-tree profile"
+    ],
+    "zones": [
+      {
+        "dimensionsMeters": {
+          "depth": 6.4,
+          "height": 2.8,
+          "width": 8
+        },
+        "id": "common-room",
+        "kind": "interior",
+        "originMeters": [
+          0,
+          0,
+          0
+        ],
+        "purpose": "Domestic rural common room"
+      },
+      {
+        "dimensionsMeters": {
+          "depth": 2.8,
+          "height": 2.8,
+          "width": 8
+        },
+        "id": "porch",
+        "kind": "covered-exterior",
+        "originMeters": [
+          0,
+          0,
+          4.6
+        ],
+        "purpose": "Level accessible porch"
+      }
+    ]
+  },
+  "controlledVariants": {
+    "dressing": [
+      "empty",
+      "light",
+      "rich"
+    ],
+    "era": [
+      "era-1940s",
+      "era-1950s",
+      "era-1960s",
+      "era-1970s",
+      "era-1980s",
+      "era-1990s",
+      "era-2000s",
+      "era-2010s",
+      "era-2020s"
+    ],
+    "familyOptions": [
+      "screened-porch",
+      "open-porch",
+      "painted-interior"
+    ],
+    "finishLevel": [
+      "basic-maintained",
+      "modest-worn",
+      "middle-maintained",
+      "institutional-practical"
+    ],
+    "furniturePackage": [
+      "era-neutral",
+      "era-adapter-reviewed",
+      "personal-substitution-governed"
+    ],
+    "lightingProfile": [
+      "neutral",
+      "calm",
+      "reflective",
+      "energized",
+      "heavy",
+      "uncertain",
+      "hopeful"
+    ],
+    "lod": [
+      "desktop",
+      "mobile",
+      "xr"
+    ],
+    "navigation": [
+      "accessible-level-default",
+      "alternate-geometry-reviewed"
+    ],
+    "propPackage": [
+      "none",
+      "neutral-light",
+      "neutral-rich",
+      "personal-evidence-governed"
+    ],
+    "region": [
+      "us-tx-east",
+      "region-adapter-required"
+    ],
+    "season": [
+      "spring",
+      "summer",
+      "autumn",
+      "winter"
+    ],
+    "signage": [
+      "none",
+      "blank",
+      "neutral-authored-text-after-review"
+    ],
+    "timeOfDay": [
+      "dawn",
+      "morning",
+      "midday",
+      "afternoon",
+      "dusk",
+      "night"
+    ],
+    "vegetation": [
+      "none",
+      "exterior-window-view-only"
+    ],
+    "vehicles": [
+      "none"
+    ],
+    "wallFloorCeiling": [
+      "clapboard-painted-muted",
+      "wood-oak-satin",
+      "wood-weathered",
+      "woven-cloth-warm"
+    ],
+    "weather": [
+      "clear",
+      "overcast",
+      "light-rain-exterior-only"
+    ]
+  },
+  "coordinateConvention": {
+    "assetFront": "+Z",
+    "assetTransforms": "Apply mesh-specific transforms once and receipt them; root export may bake vertices. Do not apply a second axis conversion.",
+    "cameraForward": "-Z",
+    "handedness": "right-handed",
+    "origin": "primary-zone floor center",
+    "units": "meters",
+    "up": "+Y",
+    "worldZoneTransforms": "translation only, explicit originMeters",
+    "zoneLocalOrigin": "floor center"
+  },
+  "createdAt": "2026-10-07T00:16:23Z",
+  "dependencyManifest": {
+    "actualOutputArtifacts": [],
+    "assetFactoryAuthority": {
+      "integrationBinding": null,
+      "repository": "urai-asset-factory"
+    },
+    "brokenBinaryDependencyTest": "NOT_APPLICABLE_NO_BINARY_OUTPUT_BOUND",
+    "logicalKitIds": [
+      "kit:gw-rural-house-porch-shell:v1",
+      "kit:door-interior-accessible-neutral:v1",
+      "kit:window-residential-neutral:v1",
+      "kit:baseboard-painted-neutral:v1",
+      "kit:gw-rural-house-porch-sofa:v1",
+      "kit:gw-rural-house-porch-cabinet:v1",
+      "kit:gw-rural-house-porch-porch-bench:v1",
+      "kit:gw-rural-house-porch-vegetation-1:v1",
+      "kit:gw-rural-house-porch-vegetation-2:v1"
+    ],
+    "resolver": "existing Asset Factory governed resolution; no new runtime path",
+    "status": "LOGICAL_SPEC_REFERENCES_ONLY"
+  },
+  "designIntent": "A maintained rural domestic environment, allowing region-specific construction after evidence review.",
+  "era": {
+    "allowed": [
+      "era-1940s",
+      "era-1950s",
+      "era-1960s",
+      "era-1970s",
+      "era-1980s",
+      "era-1990s",
+      "era-2000s",
+      "era-2010s",
+      "era-2020s"
+    ],
+    "default": "era-1940s",
+    "packRefPattern": "../era-packs/{era}.json"
+  },
+  "historicalClaim": {
+    "designAssumptions": "Plausible design brief only. Era, species, equipment, road markings and regional detail need evidence-specific review before personalization.",
+    "isHistoricalReconstruction": false,
+    "isUniversalEraOrRegionClaim": false
+  },
+  "id": "gw-rural-house-porch",
+  "integrationBoundary": {
+    "activeSpatialCandidateModified": false,
+    "releaseCandidate": null,
+    "requiresSeparateIntegrationPRAndEvidence": true,
+    "runtimeAssetBinding": null
+  },
+  "knownLimitations": [
+    "Design intent alone does not meet AAA visual acceptance.",
+    "No geometry, texture, audio, navmesh or provider output bytes are produced by this Studio spec file.",
+    "Era/region detail is a generic creative assumption and requires user-source correction when attached to memory.",
+    "Requested budgets are targets and do not prove runtime FPS, device performance or certification.",
+    "Opening dimensions and navigation reserves need validation against actual generated geometry.",
+    "Shared kits are logical IDs; actual asset resolution must use existing Asset Factory authority."
+  ],
+  "lighting": {
+    "daylightCctKelvin": 5600,
+    "emotionalWeatherRef": "../taxonomy/emotional-weather.json",
+    "interiorFixtureCctKelvin": 3000,
+    "noStrobe": true,
+    "primary": "diffuse natural light plus restrained practical fixtures",
+    "reducedStimulation": {
+      "animatedWaterAmplitudeMeters": 0.015,
+      "exposureAdaptation": "slow optional, disableable",
+      "movingShadows": false,
+      "suddenLightning": false
+    },
+    "status": "CONFIGURATION_TARGET_NOT_RENDER_VALIDATED",
+    "targetIlluminanceLux": {
+      "navigation": 100,
+      "task": 250
+    },
+    "toneMappingIntent": "preserve midtone orientation and restrained highlights; no crushed blacks or blown window regions",
+    "weatherDrivenSaturation": false
+  },
+  "materialDefinitions": [
+    {
+      "description": "generic bark",
+      "id": "mat:bark-neutral:v1",
+      "lodFallback": "core glTF material with restrained base color and roughness; do not require unsupported shader",
+      "name": "bark-neutral",
+      "nonRepetitionPlan": "macro albedo/roughness variation plus deterministic masks; high-frequency repeated detail alone is insufficient",
+      "pbrIntent": {
+        "baseColorSpace": "sRGB",
+        "dataMapSpace": "linear",
+        "detail": "species-neutral until regional review",
+        "metallic": 0,
+        "roughness": 0.91,
+        "workflow": "metallic-roughness"
+      },
+      "source": "original parameter brief; no imported texture",
+      "textureScaleMeters": {
+        "macroTile": 2,
+        "microTile": 0.12
+      },
+      "textureStatus": "SPECIFIED_NOT_GENERATED"
+    },
+    {
+      "description": "painted domestic siding",
+      "id": "mat:clapboard-painted-muted:v1",
+      "lodFallback": "core glTF material with restrained base color and roughness; do not require unsupported shader",
+      "name": "clapboard-painted-muted",
+      "nonRepetitionPlan": "macro albedo/roughness variation plus deterministic masks; high-frequency repeated detail alone is insufficient",
+      "pbrIntent": {
+        "baseColorSpace": "sRGB",
+        "dataMapSpace": "linear",
+        "detail": "board scale .14 m is configurable",
+        "metallic": 0,
+        "roughness": 0.73,
+        "workflow": "metallic-roughness"
+      },
+      "source": "original parameter brief; no imported texture",
+      "textureScaleMeters": {
+        "macroTile": 2,
+        "microTile": 0.12
+      },
+      "textureStatus": "SPECIFIED_NOT_GENERATED"
+    },
+    {
+      "description": "clear glazing",
+      "id": "mat:glass-clear:v1",
+      "lodFallback": "core glTF material with restrained base color and roughness; do not require unsupported shader",
+      "name": "glass-clear",
+      "nonRepetitionPlan": "macro albedo/roughness variation plus deterministic masks; high-frequency repeated detail alone is insufficient",
+      "pbrIntent": {
+        "baseColorSpace": "sRGB",
+        "dataMapSpace": "linear",
+        "detail": "transparent glTF fallback; transmission extension optional",
+        "metallic": 0,
+        "roughness": 0.12,
+        "workflow": "metallic-roughness"
+      },
+      "source": "original parameter brief; no imported texture",
+      "textureScaleMeters": {
+        "macroTile": 2,
+        "microTile": 0.12
+      },
+      "textureStatus": "SPECIFIED_NOT_GENERATED"
+    },
+    {
+      "description": "generic broadleaf foliage",
+      "id": "mat:leaf-neutral:v1",
+      "lodFallback": "core glTF material with restrained base color and roughness; do not require unsupported shader",
+      "name": "leaf-neutral",
+      "nonRepetitionPlan": "macro albedo/roughness variation plus deterministic masks; high-frequency repeated detail alone is insufficient",
+      "pbrIntent": {
+        "baseColorSpace": "sRGB",
+        "dataMapSpace": "linear",
+        "detail": "no alpha-sorted volumetric filler; quality needs visual review",
+        "metallic": 0,
+        "roughness": 0.84,
+        "workflow": "metallic-roughness"
+      },
+      "source": "original parameter brief; no imported texture",
+      "textureScaleMeters": {
+        "macroTile": 2,
+        "microTile": 0.12
+      },
+      "textureStatus": "SPECIFIED_NOT_GENERATED"
+    },
+    {
+      "description": "warm low-chroma painted plaster",
+      "id": "mat:paint-warm-off-white:v1",
+      "lodFallback": "core glTF material with restrained base color and roughness; do not require unsupported shader",
+      "name": "paint-warm-off-white",
+      "nonRepetitionPlan": "macro albedo/roughness variation plus deterministic masks; high-frequency repeated detail alone is insufficient",
+      "pbrIntent": {
+        "baseColorSpace": "sRGB",
+        "dataMapSpace": "linear",
+        "detail": "fine plaster grain",
+        "metallic": 0,
+        "roughness": 0.74,
+        "workflow": "metallic-roughness"
+      },
+      "source": "original parameter brief; no imported texture",
+      "textureScaleMeters": {
+        "macroTile": 2,
+        "microTile": 0.12
+      },
+      "textureStatus": "SPECIFIED_NOT_GENERATED"
+    },
+    {
+      "description": "unbranded warm wood",
+      "id": "mat:wood-oak-satin:v1",
+      "lodFallback": "core glTF material with restrained base color and roughness; do not require unsupported shader",
+      "name": "wood-oak-satin",
+      "nonRepetitionPlan": "macro albedo/roughness variation plus deterministic masks; high-frequency repeated detail alone is insufficient",
+      "pbrIntent": {
+        "baseColorSpace": "sRGB",
+        "dataMapSpace": "linear",
+        "detail": "grain direction follows joinery",
+        "metallic": 0,
+        "roughness": 0.52,
+        "workflow": "metallic-roughness"
+      },
+      "source": "original parameter brief; no imported texture",
+      "textureScaleMeters": {
+        "macroTile": 2,
+        "microTile": 0.12
+      },
+      "textureStatus": "SPECIFIED_NOT_GENERATED"
+    },
+    {
+      "description": "weathered timber",
+      "id": "mat:wood-weathered:v1",
+      "lodFallback": "core glTF material with restrained base color and roughness; do not require unsupported shader",
+      "name": "wood-weathered",
+      "nonRepetitionPlan": "macro albedo/roughness variation plus deterministic masks; high-frequency repeated detail alone is insufficient",
+      "pbrIntent": {
+        "baseColorSpace": "sRGB",
+        "dataMapSpace": "linear",
+        "detail": "broad grain, mild wear masks",
+        "metallic": 0,
+        "roughness": 0.82,
+        "workflow": "metallic-roughness"
+      },
+      "source": "original parameter brief; no imported texture",
+      "textureScaleMeters": {
+        "macroTile": 2,
+        "microTile": 0.12
+      },
+      "textureStatus": "SPECIFIED_NOT_GENERATED"
+    },
+    {
+      "description": "warm neutral woven upholstery",
+      "id": "mat:woven-cloth-warm:v1",
+      "lodFallback": "core glTF material with restrained base color and roughness; do not require unsupported shader",
+      "name": "woven-cloth-warm",
+      "nonRepetitionPlan": "macro albedo/roughness variation plus deterministic masks; high-frequency repeated detail alone is insufficient",
+      "pbrIntent": {
+        "baseColorSpace": "sRGB",
+        "dataMapSpace": "linear",
+        "detail": "thread normal; restrained pattern",
+        "metallic": 0,
+        "roughness": 0.9,
+        "workflow": "metallic-roughness"
+      },
+      "source": "original parameter brief; no imported texture",
+      "textureScaleMeters": {
+        "macroTile": 2,
+        "microTile": 0.12
+      },
+      "textureStatus": "SPECIFIED_NOT_GENERATED"
+    }
+  ],
+  "modularKit": [
+    {
+      "candidateProviders": [
+        "meshy",
+        "tripo",
+        "rodin",
+        "replicate"
+      ],
+      "description": "Broad front doorway, screened openings optional, porch level with room by default. Raised rural-house layouts require a specified ramp/grade successor, not assumed accessibility.",
+      "dimensionsMeters": {
+        "depth": 6.4,
+        "height": 2.8,
+        "width": 8
+      },
+      "generationScope": "visual-geometry",
+      "id": "kit:gw-rural-house-porch-shell:v1",
+      "materialIntent": "clapboard-painted-muted",
+      "output": {
+        "format": "GLB",
+        "requirements": [
+          "realistic meter scale",
+          "PBR material bindings",
+          "UVs without stretch",
+          "mesh naming",
+          "triangle counts",
+          "LODs",
+          "collision proxy",
+          "no branding",
+          "no real-person likeness"
+        ],
+        "separateComponents": true
+      },
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "role": "architecture-shell",
+      "shared": false,
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "SPECIFIED",
+      "truthClassification": "GENERIC",
+      "version": "1.0.0"
+    },
+    {
+      "candidateProviders": [
+        "meshy",
+        "tripo",
+        "rodin",
+        "replicate"
+      ],
+      "description": "Unbranded door leaf and frame with 1.0 m clear opening target; edge radius, hinges and handle need detailed mesh review",
+      "dimensionsMeters": {
+        "depth": 0.045,
+        "height": 2.08,
+        "width": 1.08
+      },
+      "generationScope": "visual-geometry",
+      "id": "kit:door-interior-accessible-neutral:v1",
+      "materialIntent": "wood-oak-satin",
+      "output": {
+        "format": "GLB",
+        "requirements": [
+          "realistic meter scale",
+          "PBR material bindings",
+          "UVs without stretch",
+          "mesh naming",
+          "triangle counts",
+          "LODs",
+          "collision proxy",
+          "no branding",
+          "no real-person likeness"
+        ],
+        "separateComponents": true
+      },
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "role": "door",
+      "shared": true,
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "SPECIFIED",
+      "truthClassification": "GENERIC",
+      "version": "1.0.0"
+    },
+    {
+      "candidateProviders": [
+        "meshy",
+        "tripo",
+        "rodin",
+        "replicate"
+      ],
+      "description": "Unbranded rectangular frame with .06 m depth; window style and mullions are era-swappable",
+      "dimensionsMeters": {
+        "depth": 0.06,
+        "height": 1.2,
+        "width": 1.4
+      },
+      "generationScope": "visual-geometry",
+      "id": "kit:window-residential-neutral:v1",
+      "materialIntent": "glass-clear",
+      "output": {
+        "format": "GLB",
+        "requirements": [
+          "realistic meter scale",
+          "PBR material bindings",
+          "UVs without stretch",
+          "mesh naming",
+          "triangle counts",
+          "LODs",
+          "collision proxy",
+          "no branding",
+          "no real-person likeness"
+        ],
+        "separateComponents": true
+      },
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "role": "window",
+      "shared": true,
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "SPECIFIED",
+      "truthClassification": "GENERIC",
+      "version": "1.0.0"
+    },
+    {
+      "candidateProviders": [
+        "meshy",
+        "tripo",
+        "rodin",
+        "replicate"
+      ],
+      "description": "Reusable one-meter painted baseboard segment; corners and miters assembled deterministically",
+      "dimensionsMeters": {
+        "depth": 0.018,
+        "height": 0.09,
+        "width": 1
+      },
+      "generationScope": "visual-geometry",
+      "id": "kit:baseboard-painted-neutral:v1",
+      "materialIntent": "paint-warm-off-white",
+      "output": {
+        "format": "GLB",
+        "requirements": [
+          "realistic meter scale",
+          "PBR material bindings",
+          "UVs without stretch",
+          "mesh naming",
+          "triangle counts",
+          "LODs",
+          "collision proxy",
+          "no branding",
+          "no real-person likeness"
+        ],
+        "separateComponents": true
+      },
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "role": "trim",
+      "shared": true,
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "SPECIFIED",
+      "truthClassification": "GENERIC",
+      "version": "1.0.0"
+    },
+    {
+      "candidateProviders": [
+        "meshy",
+        "tripo",
+        "rodin",
+        "replicate"
+      ],
+      "description": "Plain household sofa; unbranded and identity-free. Bank bounds are composition envelopes: generate submodules, not a solid block.",
+      "dimensionsMeters": {
+        "depth": 0.9,
+        "height": 0.88,
+        "width": 2.3
+      },
+      "generationScope": "visual-geometry",
+      "id": "kit:gw-rural-house-porch-sofa:v1",
+      "materialIntent": "woven-cloth-warm",
+      "output": {
+        "format": "GLB",
+        "requirements": [
+          "realistic meter scale",
+          "PBR material bindings",
+          "UVs without stretch",
+          "mesh naming",
+          "triangle counts",
+          "LODs",
+          "collision proxy",
+          "no branding",
+          "no real-person likeness"
+        ],
+        "separateComponents": true
+      },
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "role": "furniture",
+      "shared": false,
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "SPECIFIED",
+      "truthClassification": "GENERIC",
+      "version": "1.0.0"
+    },
+    {
+      "candidateProviders": [
+        "meshy",
+        "tripo",
+        "rodin",
+        "replicate"
+      ],
+      "description": "Storage hutch; unbranded and identity-free. Bank bounds are composition envelopes: generate submodules, not a solid block.",
+      "dimensionsMeters": {
+        "depth": 0.48,
+        "height": 1.7,
+        "width": 1.2
+      },
+      "generationScope": "visual-geometry",
+      "id": "kit:gw-rural-house-porch-cabinet:v1",
+      "materialIntent": "wood-oak-satin",
+      "output": {
+        "format": "GLB",
+        "requirements": [
+          "realistic meter scale",
+          "PBR material bindings",
+          "UVs without stretch",
+          "mesh naming",
+          "triangle counts",
+          "LODs",
+          "collision proxy",
+          "no branding",
+          "no real-person likeness"
+        ],
+        "separateComponents": true
+      },
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "role": "furniture",
+      "shared": false,
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "SPECIFIED",
+      "truthClassification": "GENERIC",
+      "version": "1.0.0"
+    },
+    {
+      "candidateProviders": [
+        "meshy",
+        "tripo",
+        "rodin",
+        "replicate"
+      ],
+      "description": "Porch bench; unbranded and identity-free. Bank bounds are composition envelopes: generate submodules, not a solid block.",
+      "dimensionsMeters": {
+        "depth": 0.65,
+        "height": 0.88,
+        "width": 1.7
+      },
+      "generationScope": "visual-geometry",
+      "id": "kit:gw-rural-house-porch-porch-bench:v1",
+      "materialIntent": "wood-weathered",
+      "output": {
+        "format": "GLB",
+        "requirements": [
+          "realistic meter scale",
+          "PBR material bindings",
+          "UVs without stretch",
+          "mesh naming",
+          "triangle counts",
+          "LODs",
+          "collision proxy",
+          "no branding",
+          "no real-person likeness"
+        ],
+        "separateComponents": true
+      },
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "role": "furniture",
+      "shared": false,
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "SPECIFIED",
+      "truthClassification": "GENERIC",
+      "version": "1.0.0"
+    },
+    {
+      "candidateProviders": [
+        "meshy",
+        "tripo",
+        "rodin",
+        "replicate"
+      ],
+      "description": "yard grass; region/species assumption, visual review required; use proper silhouette and leaf geometry, not low-quality filler",
+      "dimensionsMeters": {
+        "depth": 1.2,
+        "height": 0.22,
+        "width": 1.2
+      },
+      "generationScope": "visual-geometry",
+      "id": "kit:gw-rural-house-porch-vegetation-1:v1",
+      "materialIntent": "leaf-neutral",
+      "output": {
+        "format": "GLB",
+        "requirements": [
+          "realistic meter scale",
+          "PBR material bindings",
+          "UVs without stretch",
+          "mesh naming",
+          "triangle counts",
+          "LODs",
+          "collision proxy",
+          "no branding",
+          "no real-person likeness"
+        ],
+        "separateComponents": true
+      },
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "role": "vegetation",
+      "shared": false,
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "SPECIFIED",
+      "truthClassification": "GENERIC",
+      "version": "1.0.0"
+    },
+    {
+      "candidateProviders": [
+        "meshy",
+        "tripo",
+        "rodin",
+        "replicate"
+      ],
+      "description": "shade-tree profile; region/species assumption, visual review required; use proper silhouette and leaf geometry, not low-quality filler",
+      "dimensionsMeters": {
+        "depth": 5,
+        "height": 8,
+        "width": 5
+      },
+      "generationScope": "visual-geometry",
+      "id": "kit:gw-rural-house-porch-vegetation-2:v1",
+      "materialIntent": "leaf-neutral",
+      "output": {
+        "format": "GLB",
+        "requirements": [
+          "realistic meter scale",
+          "PBR material bindings",
+          "UVs without stretch",
+          "mesh naming",
+          "triangle counts",
+          "LODs",
+          "collision proxy",
+          "no branding",
+          "no real-person likeness"
+        ],
+        "separateComponents": true
+      },
+      "rights": {
+        "attributionRequirement": "none identified for authored source brief; provider output terms pending",
+        "commercialUseStatus": "NO_THIRD_PARTY_SOURCE_IN_SPEC; provider output rights require separate review",
+        "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+        "thirdPartySourceUsed": false
+      },
+      "role": "vegetation",
+      "shared": false,
+      "source": {
+        "createdAt": "2026-10-07T00:16:23Z",
+        "creator": "UrAi production brief authored with Codex",
+        "externalAssets": [],
+        "kind": "original-generic-design-spec",
+        "promptVersion": "1.0.0",
+        "provider": null
+      },
+      "status": "SPECIFIED",
+      "truthClassification": "GENERIC",
+      "version": "1.0.0"
+    }
+  ],
+  "navigation": {
+    "accessibleDefault": {
+      "doorsAutomaticOrFixedOpen": true,
+      "legalAccessibilityCertification": false,
+      "levelThreshold": true,
+      "seatedEyeHeightMeters": 1.2,
+      "stairsRequired": false,
+      "standingEyeHeightMeters": 1.65
+    },
+    "connections": [
+      {
+        "clearWidthMeters": 1.4,
+        "from": "common-room",
+        "status": "SPECIFIED_NOT_BAKED",
+        "stepHeightMeters": 0,
+        "to": "porch"
+      }
+    ],
+    "controls": {
+      "keyboard": true,
+      "noForcedVisibleHands": true,
+      "reducedMotion": true,
+      "snapTurnOptional": true,
+      "touch": true,
+      "uiTargetMinimumCssPixels": 48
+    },
+    "requiredBeforeIntegration": [
+      "baked navigation polygons",
+      "collision/navmesh consistency test",
+      "connected exit route",
+      "door-state traversal test",
+      "teleport valid/invalid surface tests",
+      "seated and standing camera clearance",
+      "device verification where claimed"
+    ],
+    "status": "DESIGN_REQUIREMENTS_ONLY_NOT_BAKED",
+    "targetClearRouteWidthMeters": 1.2,
+    "targetDoorClearWidthMeters": 1.0,
+    "targetTurningDiameterMeters": 1.5,
+    "xr": {
+      "edgeMarginMeters": 0.45,
+      "physicalDeviceVerified": false,
+      "safeTeleport": "Navmesh-constrained valid polygons; no water, roadway, dock edge, machinery or insert void destinations",
+      "teleportSpacingMeters": 1.5
+    },
+    "zones": [
+      {
+        "obstacleEnvelopes": [
+          "sofa",
+          "cabinet"
+        ],
+        "pathLocalMeters": [
+          [
+            0,
+            0,
+            2.85
+          ],
+          [
+            0,
+            0,
+            -2.85
+          ]
+        ],
+        "routeKind": "reserved-center-corridor",
+        "turningArea": {
+          "centerLocalMeters": [
+            0,
+            0,
+            0
+          ],
+          "diameterMeters": 1.5
+        },
+        "widthMeters": 1.8,
+        "zone": "common-room"
+      },
+      {
+        "obstacleEnvelopes": [
+          "porch-bench"
+        ],
+        "pathLocalMeters": [
+          [
+            0,
+            0,
+            1.0499999999999998
+          ],
+          [
+            0,
+            0,
+            -1.0499999999999998
+          ]
+        ],
+        "routeKind": "reserved-center-corridor",
+        "turningArea": {
+          "centerLocalMeters": [
+            0,
+            0,
+            0
+          ],
+          "diameterMeters": 1.5
+        },
+        "widthMeters": 1.8,
+        "zone": "porch"
+      }
+    ]
+  },
+  "performanceProfiles": {
+    "basis": "initial conservative content targets; runtime/device metrics remain unmeasured",
+    "desktop": {
+      "drawCallsTarget": 220,
+      "maxSingleTextureEdge": 2048,
+      "targetFps": 60,
+      "textureMemoryMiBTarget": 384,
+      "visibleTriangleTarget": 750000
+    },
+    "lodRules": {
+      "mobile": "merge static kit surfaces where governed resolver allows, reduce texture edge and secondary props, retain route and exits",
+      "preserve": [
+        "silhouette",
+        "doorway clearance",
+        "orientation landmarks",
+        "collision topology"
+      ],
+      "switching": "screen-space thresholds with hysteresis, tested under camera motion; no runtime switching implemented by this spec",
+      "xr": "stable silhouettes and low draw overhead; no aggressive near-field popping; headroom validated on physical devices"
+    },
+    "mobile": {
+      "drawCallsTarget": 85,
+      "maxSingleTextureEdge": 1024,
+      "targetFps": 30,
+      "textureMemoryMiBTarget": 96,
+      "visibleTriangleTarget": 120000
+    },
+    "status": "DESIGN_BUDGETS_NOT_MEASUREMENTS",
+    "xr": {
+      "drawCallsTarget": 95,
+      "maxSingleTextureEdge": 1024,
+      "targetFps": 72,
+      "textureMemoryMiBTarget": 128,
+      "visibleTriangleTarget": 180000
+    }
+  },
+  "personalization": {
+    "accepts": [
+      "authorized photos",
+      "real-family-object substitutions",
+      "era corrections",
+      "region adapter",
+      "named-location association after evidence review",
+      "vehicles",
+      "personal audio and voices through consent gate",
+      "characters through identity gate",
+      "memory anchors",
+      "emotional state",
+      "narrative beats",
+      "captured subspaces"
+    ],
+    "anchors": [
+      {
+        "id": "entry-floor-center",
+        "orientationYawDegrees": 0,
+        "positionLocalMeters": [
+          0,
+          0,
+          2.6
+        ],
+        "purpose": "return continuity and coordinate alignment",
+        "zone": "common-room"
+      },
+      {
+        "id": "neutral-display-wall",
+        "orientationYawDegrees": 90,
+        "positionLocalMeters": [
+          -3.97,
+          1.5,
+          0
+        ],
+        "purpose": "authorized photo/object placement; empty by default",
+        "zone": "common-room"
+      },
+      {
+        "id": "captured-insert-slot",
+        "orientationYawDegrees": 0,
+        "positionLocalMeters": [
+          2.8,
+          0,
+          -2.1333333333333333
+        ],
+        "purpose": "reviewed captured reality replacement boundary; disabled in generic spec",
+        "zone": "common-room"
+      }
+    ],
+    "enabledByDefault": false,
+    "recordedInsert": {
+      "alignmentRequires": [
+        "source coordinate convention",
+        "unit scale receipt",
+        "at least three reviewed noncollinear alignment anchors",
+        "transform residuals",
+        "bounding volume",
+        "collision authority",
+        "occlusion shell",
+        "lighting blend parameters",
+        "source truth and consent receipts"
+      ],
+      "boundingVolume": {
+        "doNotIntersectReservedRoute": true,
+        "extentMeters": [
+          2,
+          2.2,
+          2
+        ],
+        "kind": "AABB",
+        "placement": "captured-insert-slot"
+      },
+      "collision": "Use a separately validated proxy; a splat is not walkable collision or navigation evidence",
+      "defaultTransform": {
+        "rotationQuaternionXyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "translationMeters": [
+          0,
+          0,
+          0
+        ]
+      },
+      "formats": [
+        "Gaussian splat",
+        "photogrammetry",
+        "NeRF/splat hybrid",
+        "GLB reconstructed subspace"
+      ],
+      "privacy": "Opaque revocable source references only; no private coordinates, identities or raw media in public specs",
+      "replaceNotOverlay": "Disable covered generic geometry after accepted alignment to avoid double walls, z-fighting and false occlusion",
+      "status": "UNBOUND"
+    },
+    "truthRulesRef": "../taxonomy/truth-rules.json"
+  },
+  "previewPlan": {
+    "requiredReceiptFields": [
+      "sourceSpecSha256",
+      "assetSha256",
+      "renderer/version",
+      "camera matrix",
+      "tier",
+      "seed",
+      "lighting",
+      "imageSha256",
+      "visualReviewer",
+      "knownLimitations"
+    ],
+    "shots": [
+      {
+        "aspect": "16:9",
+        "fovDegrees": 64,
+        "id": "wide",
+        "kind": "wide",
+        "lookAtLocalMeters": [
+          0,
+          1.1,
+          -1.6
+        ],
+        "positionLocalMeters": [
+          0,
+          1.65,
+          2.75
+        ]
+      },
+      {
+        "aspect": "16:9",
+        "fovDegrees": 62,
+        "id": "eye-height",
+        "kind": "first-person",
+        "lookAtLocalMeters": [
+          0,
+          1.65,
+          -2.8000000000000003
+        ],
+        "positionLocalMeters": [
+          0,
+          1.65,
+          0.6
+        ]
+      },
+      {
+        "aspect": "16:9",
+        "fovDegrees": 58,
+        "id": "doorway",
+        "kind": "navigation",
+        "lookAtLocalMeters": [
+          0,
+          1.65,
+          0
+        ],
+        "positionLocalMeters": [
+          0,
+          1.65,
+          3.5
+        ]
+      },
+      {
+        "aspect": "4:3",
+        "fovDegrees": 38,
+        "id": "material-detail",
+        "kind": "detail",
+        "lookAtLocalMeters": [
+          -3.9,
+          1.0,
+          2.1
+        ],
+        "positionLocalMeters": [
+          -3.15,
+          1.4,
+          2.1
+        ]
+      },
+      {
+        "aspect": "16:9",
+        "id": "mobile-budget",
+        "kind": "tier-comparison",
+        "sameCameraAs": "wide",
+        "tier": "mobile"
+      },
+      {
+        "aspect": "1:1",
+        "fovDegrees": 70,
+        "id": "xr-seated",
+        "kind": "xr-relevant",
+        "lookAtLocalMeters": [
+          0,
+          1.2,
+          -2.8000000000000003
+        ],
+        "physicalHeadsetCapture": false,
+        "positionLocalMeters": [
+          0,
+          1.2,
+          0.6
+        ]
+      }
+    ],
+    "status": "NOT_RENDERED_BY_SPEC_LANE"
+  },
+  "productionStatus": {
+    "collision": "SPECIFIED_NOT_VALIDATED",
+    "independentlyApproved": false,
+    "lighting": "SPECIFIED",
+    "lods": "SPECIFIED",
+    "modelPackage": "NOT_GENERATED_BY_SPEC_LANE",
+    "navmesh": "SPECIFIED_NOT_BAKED",
+    "performanceMeasurements": "NOT_MEASURED",
+    "previews": "NOT_RENDERED_BY_SPEC_LANE",
+    "productionDeployed": false,
+    "runtimeIntegrated": false,
+    "sourceSpecification": "SPECIFIED",
+    "spatialAccepted": false,
+    "textures": "SPECIFIED_NOT_GENERATED",
+    "xrCertified": false
+  },
+  "provenance": {
+    "createdAt": "2026-10-07T00:16:23Z",
+    "creator": "UrAi production brief authored with Codex",
+    "generationDate": null,
+    "generationProvider": null,
+    "licensing": {
+      "attributionRequired": "none identified for authored brief",
+      "commercialUseStatus": "No third-party source bytes in these specifications; provider/artifact commercial rights not established by a source brief",
+      "license": "UNASSIGNED_PROJECT_AUTHORED_SPECIFICATION",
+      "repositoryLicenseFound": false,
+      "restrictions": [
+        "no autobiographical truth claim",
+        "no real-person identity",
+        "no licensed brands without explicit record",
+        "no private source media"
+      ]
+    },
+    "promptSpecVersion": "1.0.0",
+    "references": [
+      {
+        "issue": 153,
+        "repository": "urai-studio"
+      },
+      {
+        "issue": 152,
+        "repository": "urai-jobs"
+      }
+    ],
+    "sourceKind": "original-generic-design-specification",
+    "sourceMedia": [],
+    "thirdPartyAssets": []
+  },
+  "qa": {
+    "aaaAccepted": false,
+    "assetValidation": "NOT_RUN_NO_ASSET_BYTES",
+    "requiredAssetChecks": [
+      "GLB structure",
+      "geometry integrity",
+      "normals",
+      "UVs",
+      "texture/material binding",
+      "triangles",
+      "file bytes",
+      "texture memory",
+      "bounds",
+      "scale",
+      "orientation",
+      "origin",
+      "collisions",
+      "baked navmesh",
+      "LOD switching",
+      "missing dependencies",
+      "duplicate hashes"
+    ],
+    "requiredVisualChecks": [
+      "believable proportions",
+      "door/window construction",
+      "no floating or intersecting furniture",
+      "material scale",
+      "non-repeated wear",
+      "foliage silhouette",
+      "readable exits",
+      "lighting",
+      "era/regional suitability without truth inflation",
+      "seated and standing eye-height quality"
+    ],
+    "specValidation": "machine-check dimensions, zone references, naming, truth boundary, navigation reservations and deterministic hashes",
+    "visualAcceptance": "NOT_REVIEWED"
+  },
+  "region": {
+    "default": "us-tx-east",
+    "exactAddress": null,
+    "namedLocation": null,
+    "taxonomyRef": "../taxonomy/regions.json"
+  },
+  "schemaVersion": "urai-generic-world-spec/1.0.0",
+  "status": "SPECIFIED",
+  "title": "Rural house common room and porch",
+  "truthClassification": "GENERIC",
+  "variantAxesRef": "../taxonomy/variant-axes.json",
+  "version": "1.0.0"
+}

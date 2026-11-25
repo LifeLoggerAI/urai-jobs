@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-military-admin-operations-shell:v1",
+    "sourceKitSha256": "c084859bff5eebd9edba950b59382bab33bba33b53ca10639f6a01febf896d67",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 1,
+        "id": "gw-military-admin-operations",
+        "specSha256": "64754f87113e68c7b2b4ee729b8ea4e1161963f070efd181428d55561466c992",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 3229910427
+  },
+  "id": "kit-gw-military-admin-operations-shell-v1-c084859bff5eebd9",
+  "prompt": "Original generic modular architecture-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Two rectangular spaces with a 1.4 m connection and clear exit. No secure-site plans, real launch controls, classified labels, or authentic restricted equipment layouts. Target bounding dimensions 9m wide x 2.9m high x 7m deep. Materials: paint-institutional-soft. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 9,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

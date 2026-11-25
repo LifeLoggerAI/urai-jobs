@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-warehouse-shell:v1",
+    "sourceKitSha256": "dd45fa8b6c44ddf62a7c34a191841178cdfa130cc7ecabbd260c1f3b6d20aea7",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 2,
+        "id": "gw-warehouse",
+        "specSha256": "25dce089395052787b26dccbddff761fa6bc3118e0b84fe365f54436ae874bb6",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 3712350859
+  },
+  "id": "kit-gw-warehouse-shell-v1-dd45fa8b6c44ddf6",
+  "prompt": "Original generic modular architecture-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Central route at least 3 m; rack modules use conservative collision envelopes and no reachable unstable stacks. Raised loading dock variants stay non-navigable until an alternate safe route is specified. Target bounding dimensions 20m wide x 6m high x 18m deep. Materials: concrete-weathered. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 20,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

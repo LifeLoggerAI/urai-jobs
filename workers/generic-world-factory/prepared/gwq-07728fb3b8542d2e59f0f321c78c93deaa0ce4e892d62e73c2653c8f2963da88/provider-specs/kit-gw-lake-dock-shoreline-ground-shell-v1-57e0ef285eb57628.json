@@ -1,0 +1,40 @@
+{
+  "authority": {
+    "assetAcceptance": "NOT_ACCEPTED",
+    "authorityInputSha256": "a22c4b8bc9cd66f9623c577b865a84e08268bbe9e05d704f27d2590fc75a2013",
+    "autobiographicalTruth": false,
+    "independentlyApproved": false,
+    "productionIntegrated": false,
+    "releaseAcceptance": "NOT_ACCEPTED",
+    "runtimeAcceptance": "NOT_INTEGRATED",
+    "source": "UrAi Generic World Library governed modular specification; generic exploration candidate",
+    "sourceKitId": "kit:gw-lake-dock-shoreline-ground-shell:v1",
+    "sourceKitSha256": "57e0ef285eb57628cc7acd507705cc285ca3d31c9ce5002d92d4dcae585ea41a",
+    "truthClassification": "GENERIC",
+    "worldSpecBindings": [
+      {
+        "batch": 1,
+        "id": "gw-lake-dock-shoreline",
+        "specSha256": "436f75fa4b110036b0e82708d8a6e79bf019c0c3de6280b5f8e50fedebd481ce",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "generation": {
+    "maxProviderAttempts": 1,
+    "seed": 1474359080
+  },
+  "id": "kit-gw-lake-dock-shoreline-ground-shell-v1-57e0ef285eb57628",
+  "prompt": "Original generic modular ground-shell; one separable asset, not a whole environment. No real place/person, brands, logos, visible text, sci-fi, low-poly filler, floating parts or intersecting geometry. Physically plausible PBR, believable wear, correct UVs/normals; meter scale, +Y up, reusable grounded pivot. Dock centerline aligns with shore route. Dock deck is level with shore in default navigable variant; water, banks, and edge zones are non-walkable. Railings or conservative movement bounds protect exposed edges; no diving/jumping path. Target bounding dimensions 24m wide x 0.3m high x 22m deep. Materials: wood-weathered. Clear passage where applicable; no arms/hands, forced characters or inaccessible hazards. GLB with embedded PBR textures. Generic exploration candidate only; visual/rights review required.",
+  "providers": [
+    "meshy"
+  ],
+  "referenceImages": [],
+  "target": {
+    "hero": true,
+    "maxTriangles": 120000,
+    "meters": 24,
+    "pbr": true,
+    "textureResolution": "4k"
+  }
+}

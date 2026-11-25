@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "urai-model-forge-plan-v1",
+  "dryRun": true,
+  "spendAuthorized": false,
+  "assetId": "kit-gw-diner-cafe-counter-v1-7d5c9cc0fe7465b9",
+  "providers": [
+    {
+      "provider": "meshy",
+      "requiredEnv": "MESHY_API_KEY",
+      "configured": false
+    }
+  ],
+  "target": {
+    "meters": 5.4,
+    "hero": true,
+    "maxTriangles": 120000,
+    "textureResolution": "4k",
+    "pbr": true
+  },
+  "generationPolicy": {
+    "maxProviderAttempts": 1,
+    "seed": 2103221440
+  },
+  "referenceCount": 0,
+  "next": "Provider execution remains blocked until URAI_MODEL_FORGE_SPEND_AUTHORIZED=1 and credentials are available."
+}

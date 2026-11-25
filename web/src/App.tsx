@@ -1,5 +1,5 @@
 import { Component, useEffect, useState, type ReactNode } from "react";
-import { onAuthStateChanged, type User } from "firebase/auth";
+import { type User } from "firebase/auth";
 import { LoginPage } from "./pages/LoginPage";
 import { LandingPage } from "./pages/LandingPage";
 import { CreateJobPage } from "./pages/CreateJobPage";
@@ -7,6 +7,7 @@ import { AdminPage } from "./pages/AdminPage";
 import { PrivacyPage, TermsPage, TrustSafetyPage } from "./pages/LegalPages";
 import { trackJobsEvent } from "./lib/analytics";
 import { auth } from "./lib/firebase";
+import { observeCurrentAuth } from "./lib/currentAuth";
 import { authStatusLabel, hasJobCreateAccess, hasOperatorAccess, type AuthClaims } from "./lib/authz";
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -68,7 +69,7 @@ function routeForPath(pathname: string, user: User | null, claims: AuthClaims, a
   if (pathname.startsWith("/login")) return <LoginPage />;
   if (pathname.startsWith("/admin")) {
     if (authLoading) return <main className="page-shell"><section className="panel"><p>Checking operator access...</p></section></main>;
-    if (!hasOperatorAccess(claims)) return <AccessDeniedPage required="Admin dashboard access requires an admin/operator claim." />;
+    if (!user || !hasOperatorAccess(claims)) return <AccessDeniedPage required="Admin dashboard access requires an admin/operator claim." />;
     return <AdminPage />;
   }
   if (pathname.startsWith("/create")) {
@@ -100,19 +101,14 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, async (nextUser) => {
-      setUser(nextUser);
-      if (nextUser) {
-        const token = await nextUser.getIdTokenResult(true);
-        setClaims(token.claims);
-      } else {
-        setClaims(null);
-      }
-      setAuthLoading(false);
+    return observeCurrentAuth(auth, (state) => {
+      setUser(state.user);
+      setClaims(state.claims);
+      setAuthLoading(state.loading);
     });
   }, []);
 
-  const canOperate = hasOperatorAccess(claims);
+  const canOperate = Boolean(user) && hasOperatorAccess(claims);
   const canCreate = hasJobCreateAccess(user, claims);
 
   return (
